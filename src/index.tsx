@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { serveStatic } from 'hono/cloudflare-pages';
 import Stripe from 'stripe';
 import { generateId, hashPassword, verifyPassword, createSessionToken, generateEmailToken } from './lib/auth';
 import { parseCreditReportText } from './engine/parser';
@@ -30,6 +31,10 @@ const getStripe = (env: Bindings) => new Stripe(env.STRIPE_API_KEY, {
 });
 
 app.use('/api/*', cors());
+
+// Serve static assets in local development and production
+app.use('/static/*', serveStatic());
+app.use('/content/*', serveStatic());
 
 // Request logging middleware
 app.use('/api/*', async (c, next) => {
