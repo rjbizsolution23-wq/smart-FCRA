@@ -1,4 +1,4 @@
-name = "smart-fcra"
+name = "fcra-detector"
 compatibility_date = "2026-04-13"
 pages_build_output_dir = "./dist"
 compatibility_flags = ["nodejs_compat"]
