@@ -231,3 +231,163 @@ function stripMarkdown(text: string): string {
     .trim();
 }
 
+/**
+ * Normalizes unicode quotes, hyphens, and bullet marks to standard printable ASCII characters
+ * and strips markdown syntax for court-ready clean typography.
+ */
+function cleanTextForPDF(text: string): string {
+  if (!text) return '';
+  
+  // 1. Unicode transliteration map
+  let clean = text
+    .replace(/’/g, "'")
+    .replace(/‘/g, "'")
+    .replace(/“/g, '"')
+    .replace(/”/g, '"')
+    .replace(/—/g, '--')
+    .replace(/–/g, '-')
+    .replace(/□/g, '[ ]')
+    .replace(/■/g, '[*]')
+    .replace(/•/g, '*')
+    .replace(/✔/g, '[x]')
+    .replace(/─/g, '-')
+    .replace(/═/g, '=');
+
+  // 2. Strip Markdown Elements
+  clean = clean
+    .replace(/\*\*([^*]+)\*\*/g, '$1')        // Bold double asterisks
+    .replace(/\*([^*]+)\*/g, '$1')            // Italic single asterisk
+    .replace(/_([^_]+)_/g, '$1')              // Italic single underscore
+    .replace(/`([^`]+)`/g, '$1')              // Monospace backticks
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1'); // Markdown links [text](url) -> text
+
+  // Handle headers and divider lines line-by-line
+  const lines = clean.split(/\r?\n/);
+  const processedLines = lines.map(line => {
+    // Check if line is a header
+    const headerMatch = line.match(/^(#+)\s*(.*)$/);
+    if (headerMatch) {
+      return headerMatch[2];
+    }
+    // Check if line is a divider e.g. --- or ===
+    if (/^[-=]{3,}$/.test(line.trim())) {
+      return '';
+    }
+    return line;
+  });
+
+  return processedLines.join('\n');
+}
+
+/**
+ * Compiles a long text-based document template into a clean, premium, and multi-page PDF.
+ * It uses Helvetica layout, a custom deep blue header band, and adds a custom footer on every page.
+ */
+export function generatePDFFromText(title: string, text: string): Uint8Array {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+  });
+
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const margin = 20;
+  const contentWidth = pageWidth - 2 * margin;
+
+  let y = 55; // Start text below the header band
+
+  const deepBlue = [0, 59, 143];      // #003B8F
+  const darkGray = [11, 18, 32];      // #0B1220
+  const borderGray = [220, 225, 230]; // #DCE1E6
+
+  const setTextColor = (color: number[]) => {
+    doc.setTextColor(color[0], color[1], color[2]);
+  };
+
+  const setDrawColor = (color: number[]) => {
+    doc.setDrawColor(color[0], color[1], color[2]);
+  };
+
+  const setFillColor = (color: number[]) => {
+    doc.setFillColor(color[0], color[1], color[2]);
+  };
+
+  // Helper to draw the header on a page
+  const drawHeader = () => {
+    setFillColor(deepBlue);
+    doc.rect(0, 0, pageWidth, 40, 'F');
+
+    // Title
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(255, 255, 255);
+    doc.text(title.toUpperCase(), margin, 18);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('Built by Rick Jefferson | Powered by RJ Business Solutions', margin, 26);
+  };
+
+  // Render first page header
+  drawHeader();
+
+  // Transliterate and clean text
+  const cleanedText = cleanTextForPDF(text);
+  const paragraphs = cleanedText.split(/\r?\n/);
+  
+  doc.setFont('Helvetica', 'normal');
+  doc.setFontSize(9.5);
+  setTextColor(darkGray);
+
+  const lineSpacing = 5.5;
+
+  for (const para of paragraphs) {
+    if (para.trim() === '') {
+      y += lineSpacing;
+      if (y > pageHeight - margin - 15) {
+        doc.addPage();
+        drawHeader();
+        y = 55;
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(9.5);
+        setTextColor(darkGray);
+      }
+      continue;
+    }
+
+    const lines = doc.splitTextToSize(para, contentWidth);
+    for (const line of lines) {
+      if (y > pageHeight - margin - 15) {
+        doc.addPage();
+        drawHeader();
+        y = 55;
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(9.5);
+        setTextColor(darkGray);
+      }
+
+      doc.text(line, margin, y);
+      y += lineSpacing;
+    }
+  }
+
+  // Draw Footer on all pages
+  const totalPages = (doc as any).internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    setDrawColor(borderGray);
+    doc.setLineWidth(0.2);
+    doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    setTextColor(darkGray);
+    doc.text('Built by Rick Jefferson | Powered by RJ Business Solutions', margin, pageHeight - 10);
+    doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
+  }
+
+  return new Uint8Array(doc.output('arraybuffer'));
+}
+
+

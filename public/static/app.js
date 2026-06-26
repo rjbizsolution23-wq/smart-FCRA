@@ -72,7 +72,15 @@
           </div>
           <div id="auth-login"><form id="login-form" class="space-y-4">
             <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Email</label><input type="email" name="email" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="you@company.com"></div>
-            <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Password</label><input type="password" name="password" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="••••••••"></div>
+            <div>
+              <label class="block text-xs font-medium text-gray-400 mb-1.5">Password</label>
+              <div class="relative">
+                <input type="password" id="login-password" name="password" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-3.5 pr-10 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="••••••••">
+                <button type="button" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-white" onclick="const input = document.getElementById('login-password'); if (input.type === 'password') { input.type = 'text'; this.innerHTML = '<i class=\'fas fa-eye-slash\'></i>'; } else { input.type = 'password'; this.innerHTML = '<i class=\'fas fa-eye\'></i>'; }">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </div>
+            </div>
             <div class="p-3 bg-amber-900/20 border border-amber-600/30 rounded-lg mt-2">
               <p class="text-[10px] text-amber-300 leading-relaxed">
                 <strong>⚠️ FCRA NOTICE:</strong> We prepare dispute documents only. NOT legal advice. See <a href="/compliance/disclaimers" class="underline hover:text-amber-200">disclaimers</a>.
@@ -84,7 +92,15 @@
             <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Organization Name</label><input type="text" name="orgName" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="Your Firm Name"></div>
             <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Full Name</label><input type="text" name="name" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="John Doe"></div>
             <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Email</label><input type="email" name="email" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="you@company.com"></div>
-            <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Password</label><input type="password" name="password" required minlength="6" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="Minimum 6 characters"></div>
+            <div>
+              <label class="block text-xs font-medium text-gray-400 mb-1.5">Password</label>
+              <div class="relative">
+                <input type="password" id="register-password" name="password" required minlength="6" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-3.5 pr-10 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="Minimum 6 characters">
+                <button type="button" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-white" onclick="const input = document.getElementById('register-password'); if (input.type === 'password') { input.type = 'text'; this.innerHTML = '<i class=\'fas fa-eye-slash\'></i>'; } else { input.type = 'password'; this.innerHTML = '<i class=\'fas fa-eye\'></i>'; }">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </div>
+            </div>
             <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition text-sm">Create Account</button>
           </form></div>
           <div class="mt-4 p-3 bg-amber-900/20 border border-amber-600/30 rounded-lg">
@@ -122,6 +138,7 @@
       { id:'report-history', icon:'fa-history', label:'Report History' },
       { id:'violations', icon:'fa-exclamation-triangle', label:'Violations' },
       { id:'documents', icon:'fa-file-contract', label:'Documents' },
+      { id:'founder-os', icon:'fa-briefcase', label:'Founder OS' },
       { id:'team', icon:'fa-user-friends', label:'Team' },
       { id:'billing', icon:'fa-credit-card', label:'Billing' },
       { id:'legal', icon:'fa-gavel', label:'Legal' },
@@ -167,6 +184,7 @@
         case 'report-detail': await pgReportDetail(el, state.pageData); break;
         case 'violations': await pgViolations(el); break;
         case 'documents': await pgDocuments(el); break;
+        case 'founder-os': await pgFounderOS(el); break;
         case 'team': await pgTeam(el); break;
         case 'billing': await pgBilling(el); break;
         case 'legal': await pgLegal(el); break;
@@ -336,8 +354,15 @@
         <div class="grid grid-cols-2 gap-4">
           <div><label class="block text-xs text-gray-400 mb-1.5">API Username (Email)</label>
           <input type="text" name="username" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="apiuser@test.com"></div>
-          <div><label class="block text-xs text-gray-400 mb-1.5">API Password</label>
-          <input type="password" name="password" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="Password"></div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1.5">API Password</label>
+            <div class="relative">
+              <input type="password" id="mfsn-password" name="password" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-3 pr-10 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="Password">
+              <button type="button" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white" onclick="const input = document.getElementById('mfsn-password'); if (input.type === 'password') { input.type = 'text'; this.innerHTML = '<i class=\'fas fa-eye-slash\'></i>'; } else { input.type = 'password'; this.innerHTML = '<i class=\'fas fa-eye\'></i>'; }">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
+          </div>
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div><label class="block text-xs text-gray-400 mb-1.5">Client Email</label>
@@ -355,8 +380,15 @@
         <div class="grid grid-cols-2 gap-4">
           <div><label class="block text-xs text-gray-400 mb-1.5">SmartCredit Username (Email)</label>
           <input type="text" name="username" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="test_smartcredit@rjbusinesssolutions.com"></div>
-          <div><label class="block text-xs text-gray-400 mb-1.5">SmartCredit Password</label>
-          <input type="password" name="password" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="Password"></div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1.5">SmartCredit Password</label>
+            <div class="relative">
+              <input type="password" id="smartcredit-password" name="password" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-3 pr-10 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="Password">
+              <button type="button" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white" onclick="const input = document.getElementById('smartcredit-password'); if (input.type === 'password') { input.type = 'text'; this.innerHTML = '<i class=\'fas fa-eye-slash\'></i>'; } else { input.type = 'password'; this.innerHTML = '<i class=\'fas fa-eye\'></i>'; }">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
+          </div>
         </div>
         <div class="flex gap-3">
           <button type="submit" id="smartcredit-btn" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition shadow-lg"><i class="fas fa-lock mr-2"></i>Authenticate & Fetch SmartCredit</button>
@@ -828,7 +860,7 @@ Status: Discharged`;
     el.innerHTML = `<div class="fade-in">
       <button onclick="window._nav('documents')" class="text-gray-400 hover:text-white text-sm mb-4 inline-flex items-center gap-1.5 transition"><i class="fas fa-arrow-left text-xs"></i>Back</button>
       <div class="flex items-center justify-between mb-4"><h1 class="text-xl font-bold text-white">${dc.title}</h1>
-        <div class="flex gap-2"><button onclick="window._copyDoc()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-copy mr-1"></i>Copy</button><button onclick="window._emailDoc()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-envelope mr-1"></i>Email</button><button onclick="window._mailDoc('${dc.id}','${encodeURIComponent(client.first_name||'')}','${encodeURIComponent(client.last_name||'')}','${encodeURIComponent(client.address_line1||'')}','${encodeURIComponent(client.city||'')}','${encodeURIComponent(client.state||'')}','${encodeURIComponent(client.zip||'')}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-paper-plane mr-1"></i>Mail</button><button onclick="window._printDoc()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-print mr-1"></i>Print</button></div>
+        <div class="flex gap-2"><button id="ai-rewrite-btn" onclick="window._aiRewrite('${dc.id}')" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-robot mr-1"></i>AI Rewrite</button><button onclick="window._copyDoc()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-copy mr-1"></i>Copy</button><button onclick="window._emailDoc()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-envelope mr-1"></i>Email</button><button onclick="window._mailDoc('${dc.id}','${encodeURIComponent(client.first_name||'')}','${encodeURIComponent(client.last_name||'')}','${encodeURIComponent(client.address_line1||'')}','${encodeURIComponent(client.city||'')}','${encodeURIComponent(client.state||'')}','${encodeURIComponent(client.zip||'')}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-paper-plane mr-1"></i>Mail</button><button onclick="window._printDoc()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-print mr-1"></i>Print</button></div>
       </div>
       <div class="glass rounded-xl p-6"><pre id="doc-content" class="whitespace-pre-wrap text-sm text-gray-200 font-mono leading-relaxed">${dc.content}</pre></div>
     </div>`;
@@ -837,6 +869,35 @@ Status: Discharged`;
   window._copyDoc = function() { const c = $('#doc-content')?.textContent; if (c) { navigator.clipboard.writeText(c); toast('Copied!','success'); } };
   window._printDoc = function() { const c = $('#doc-content')?.textContent; if (c) { const w = window.open('','_blank'); w.document.write(`<html><head><title>Document</title><style>body{font-family:monospace;white:pre-wrap;padding:40px;font-size:12px;line-height:1.6;}</style></head><body>${c}</body></html>`); w.document.close(); w.print(); } };
   window._emailDoc = function() { const c = $('#doc-content')?.textContent; if (!c) return; const subject = encodeURIComponent('FCRA Legal Document'); const body = encodeURIComponent(c); window.open(`mailto:?subject=${subject}&body=${body}`, '_self'); };
+
+  window._aiRewrite = async function(id) {
+    const btn = $('#ai-rewrite-btn');
+    if (!btn) return;
+    const originalHtml = btn.innerHTML;
+    
+    if (!confirm('Are you sure you want to dynamically rewrite this dispute letter using Cloudflare Workers AI?\n\nThis will semantically modify the layout and sentence structure to bypass credit bureau OCR scanners while fully preserving account details and statutes.')) return;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Rewriting...';
+    
+    try {
+      const res = await api(`/documents/${id}/ai-rewrite`, { method: 'POST' });
+      if (res.content) {
+        const contentEl = $('#doc-content');
+        if (contentEl) {
+          contentEl.textContent = res.content;
+        }
+        toast('Document successfully rewritten by Cloudflare Workers AI!', 'success');
+      } else {
+        throw new Error('No content returned from server.');
+      }
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  };
   window._mailDoc = async function(id, firstName, lastName, address, city, state, zip) {
     const recipientName = `${decodeURIComponent(firstName || '')} ${decodeURIComponent(lastName || '')}`.trim();
     const recipientAddress = decodeURIComponent(address || '');
@@ -943,7 +1004,15 @@ Status: Discharged`;
           <form id="team-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><label class="block text-xs text-gray-400 mb-1">Name *</label><input type="text" name="name" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div>
             <div><label class="block text-xs text-gray-400 mb-1">Email *</label><input type="email" name="email" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div>
-            <div><label class="block text-xs text-gray-400 mb-1">Password *</label><input type="password" name="password" required minlength="6" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Password *</label>
+              <div class="relative">
+                <input type="password" id="team-password" name="password" required minlength="6" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-3 pr-10 py-2 text-white text-sm focus:border-blue-500 outline-none">
+                <button type="button" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white" onclick="const input = document.getElementById('team-password'); if (input.type === 'password') { input.type = 'text'; this.innerHTML = '<i class=\'fas fa-eye-slash\'></i>'; } else { input.type = 'password'; this.innerHTML = '<i class=\'fas fa-eye\'></i>'; }">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </div>
+            </div>
             <div><label class="block text-xs text-gray-400 mb-1">Role</label><select name="role" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"><option value="member">Member</option><option value="admin">Admin</option></select></div>
             <div class="md:col-span-2 flex gap-2"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition">Add</button><button type="button" onclick="$('#invite-form').classList.add('hidden')" class="bg-gray-700 text-white px-5 py-2 rounded-lg text-sm">Cancel</button></div>
           </form></div>
@@ -1148,6 +1217,295 @@ Status: Discharged`;
       </div>`;
     } catch(err) {
       el.innerHTML = `<div class="fade-in"><div class="glass rounded-xl p-8 border border-red-500/30 text-center"><i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i><h3 class="text-lg font-bold text-white mb-1">Failed to load report history</h3><p class="text-sm text-gray-400">${err.message}</p><button onclick="window._nav('report-history')" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Retry</button></div></div>`;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // FOUNDER OS SUITE INTERFACE
+  // ═══════════════════════════════════════════════════════════════
+  async function pgFounderOS(el) {
+    el.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-center"><i class="fas fa-spinner fa-spin text-3xl text-blue-400 mb-3"></i><div class="text-sm text-gray-400">Loading Founder OS Suite...</div></div></div>`;
+    try {
+      const [clientsData, templatesData] = await Promise.all([
+        api('/clients'),
+        api('/founder-templates')
+      ]);
+
+      const clients = clientsData.clients || [];
+      const templates = templatesData.templates || [];
+
+      el.innerHTML = `
+        <div class="fade-in space-y-6 h-full flex flex-col">
+          <!-- Premium Branded Header -->
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-gray-800">
+            <div>
+              <h1 class="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center gap-2.5">
+                <i class="fas fa-briefcase text-blue-500"></i>Founder OS Suite
+              </h1>
+              <p class="text-sm text-gray-400 mt-1">High-fidelity corporate agreements and custom operational templates by Rick Jefferson</p>
+            </div>
+            <div class="text-right shrink-0">
+              <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-blue-950/40 border border-blue-500/30 text-blue-300">
+                <span class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+                NEL-20260626-947291
+              </span>
+            </div>
+          </div>
+
+          <!-- Glassmorphic Two-Pane Layout -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0 overflow-hidden items-stretch">
+            <!-- Left Pane: Configuration Controls (40%) -->
+            <div class="lg:col-span-5 flex flex-col gap-6 overflow-y-auto pr-2 h-full max-h-[calc(100vh-14rem)]">
+              <!-- Document Selector Card -->
+              <div class="glass rounded-xl p-5 border border-gray-800/80 space-y-4 font-sans text-white">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                  <i class="fas fa-sliders-h text-blue-500"></i>Document Settings
+                </h3>
+                
+                <div>
+                  <label class="block text-xs font-medium text-gray-400 mb-1.5">Select Client</label>
+                  <select id="select-client" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition">
+                    <option value="">-- Choose Client --</option>
+                    \${clients.map(c => \`<option value="\${c.id}">\${c.first_name} \${c.last_name}</option>\`).join('')}
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-medium text-gray-400 mb-1.5">Select Document Template</label>
+                  <select id="select-template" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition">
+                    <option value="">-- Choose Template --</option>
+                    \${templates.map(t => \`<option value="\${t.id}">\${t.name}</option>\`).join('')}
+                  </select>
+                  <p id="template-desc" class="text-xs text-gray-500 mt-1.5 italic"></p>
+                </div>
+              </div>
+
+              <!-- Fields Configurator Form -->
+              <div class="glass rounded-xl p-5 border border-gray-800/80 flex-1 flex flex-col font-sans text-white">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <i class="fas fa-edit text-blue-500"></i>Dynamic Configuration Fields
+                </h3>
+                <form id="founder-fields-form" class="space-y-4 flex-1">
+                  <div class="text-center py-8 text-gray-500 text-sm">
+                    <i class="fas fa-file-signature text-3xl text-gray-700 mb-2 block"></i>
+                    Choose a template above to generate input fields
+                  </div>
+                </form>
+              </div>
+
+              <!-- Actions Controls Card -->
+              <div class="glass rounded-xl p-5 border border-gray-800/80 space-y-4 shrink-0 font-sans text-white">
+                <div class="flex gap-3">
+                  <button id="btn-save-draft" class="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-all transform hover:scale-[1.01] active:scale-[0.99] text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-900/30" disabled>
+                    <i class="fas fa-save"></i>Save Draft
+                  </button>
+                  <button id="btn-download-pdf" class="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-all transform hover:scale-[1.01] active:scale-[0.99] text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 opacity-50 cursor-not-allowed" disabled>
+                    <i class="fas fa-file-pdf"></i>Download PDF
+                  </button>
+                </div>
+                <div id="status-display" class="hidden text-center text-xs text-emerald-400 bg-emerald-950/30 border border-emerald-500/20 py-2 rounded-lg"></div>
+              </div>
+            </div>
+
+            <!-- Right Pane: Live Text Preview (60%) -->
+            <div class="lg:col-span-7 flex flex-col h-full bg-gray-950/80 border border-gray-800 rounded-xl overflow-hidden shadow-2xl h-full max-h-[calc(100vh-14rem)]">
+              <!-- Window style Header -->
+              <div class="bg-gray-900 px-4 py-3 border-b border-gray-800 flex items-center justify-between shrink-0 font-sans">
+                <div class="flex items-center gap-2">
+                  <div class="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+                  <div class="w-2.5 h-2.5 rounded-full bg-yellow-500"></div>
+                  <div class="w-2.5 h-2.5 rounded-full bg-green-500"></div>
+                  <span class="text-xs font-mono text-gray-400 ml-2">PREVIEW_ENGINE.TXT</span>
+                </div>
+                <div class="text-[10px] font-mono text-gray-500 font-medium">RJ Business Solutions</div>
+              </div>
+
+              <!-- Main Monospace content -->
+              <div class="flex-1 overflow-auto p-6 font-mono text-xs text-gray-300 leading-relaxed whitespace-pre-wrap select-all selection:bg-blue-600/30 bg-gray-950" id="preview-text-box">Select a template and start typing to see the real-time compiled legal preview here.</div>
+
+              <!-- Signature standard footer -->
+              <div class="bg-gray-900/60 px-4 py-3 border-t border-gray-800 text-[10px] text-gray-500 text-center shrink-0 font-sans">
+                Built by Rick Jefferson | Powered by RJ Business Solutions
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // DOM Elements Cache
+      const selClient = $('#select-client');
+      const selTemplate = $('#select-template');
+      const tempDesc = $('#template-desc');
+      const fieldsForm = $('#founder-fields-form');
+      const btnSave = $('#btn-save-draft');
+      const btnDownload = $('#btn-download-pdf');
+      const statusDisp = $('#status-display');
+      const previewBox = $('#preview-text-box');
+
+      let currentDocId = null;
+      let previewTimeout = null;
+
+      // Render fields and trigger pre-fill
+      function renderFields(templateId) {
+        const template = templates.find(t => t.id === templateId);
+        if (!template) {
+          fieldsForm.innerHTML = `
+            <div class="text-center py-8 text-gray-500 text-sm">
+              <i class="fas fa-file-signature text-3xl text-gray-700 mb-2 block"></i>
+              Choose a template above to generate input fields
+            </div>`;
+          btnSave.disabled = true;
+          return;
+        }
+
+        tempDesc.textContent = template.description;
+        btnSave.disabled = !selClient.value;
+
+        fieldsForm.innerHTML = template.fields.map(f => {
+          return `
+            <div class="space-y-1">
+              <label class="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider">\${f.label}</label>
+              <input type="text" name="\${f.name}" data-default="\${f.defaultVal || ''}" placeholder="\${f.placeholder || ''}" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition">
+            </div>
+          `;
+        }).join('');
+
+        applyPreFills();
+      }
+
+      function applyPreFills() {
+        const clientId = selClient.value;
+        const templateId = selTemplate.value;
+        if (!templateId) return;
+
+        const template = templates.find(t => t.id === templateId);
+        if (!template) return;
+
+        const client = clients.find(c => c.id === clientId);
+
+        // Prepare matching attributes
+        const fullName = client ? \`\${client.first_name} \${client.last_name}\` : '';
+        const address = client ? \`\${client.address_line1 || ''}\${client.address_line2 ? ', ' + client.address_line2 : ''}, \${client.city || ''}, \${client.state || ''} \${client.zip || ''}\` : '';
+        const clientState = client?.state || '';
+        const formattedToday = "June 26, 2026";
+
+        template.fields.forEach(f => {
+          const input = fieldsForm.querySelector(\`input[name="\${f.name}"]\`);
+          if (!input) return;
+
+          let val = f.defaultVal || '';
+
+          // Heuristic auto-mapping
+          if (client) {
+            const nameLower = f.name.toLowerCase();
+            if (['founder2name', 'founder3name', 'employeename', 'candidatename', 'consultantname', 'shareholdername', 'indemniteename', 'incorporatorname', 'counterpartyname', 'clientname'].some(k => nameLower === k.toLowerCase())) {
+              val = fullName;
+            } else if (['counterpartyaddress', 'founder2address', 'founder3address', 'clientaddress'].some(k => nameLower === k.toLowerCase())) {
+              val = address;
+            } else if (nameLower === 'state' && clientState) {
+              val = clientState;
+            } else if (['effectivedate', 'startdate'].some(k => nameLower === k.toLowerCase())) {
+              val = formattedToday;
+            }
+          }
+
+          input.value = val;
+        });
+
+        triggerPreview();
+      }
+
+      function getFieldsObject() {
+        const obj = {};
+        const inputs = fieldsForm.querySelectorAll('input');
+        inputs.forEach(input => {
+          obj[input.name] = input.value;
+        });
+        return obj;
+      }
+
+      function triggerPreview() {
+        clearTimeout(previewTimeout);
+        previewTimeout = setTimeout(async () => {
+          const templateId = selTemplate.value;
+          if (!templateId) {
+            previewBox.textContent = 'Select a template and start typing to see the real-time compiled legal preview here.';
+            return;
+          }
+
+          previewBox.innerHTML = '<div class="flex items-center justify-center h-40"><i class="fas fa-spinner fa-spin text-blue-400 text-xl"></i></div>';
+          try {
+            const fields = getFieldsObject();
+            const res = await api('/documents/preview-founder', {
+              method: 'POST',
+              body: JSON.stringify({ templateId, fields })
+            });
+            previewBox.textContent = res.content || '';
+          } catch (err) {
+            previewBox.textContent = 'Preview error: ' + err.message;
+          }
+        }, 300);
+      }
+
+      selClient.onchange = () => {
+        btnSave.disabled = !selClient.value || !selTemplate.value;
+        applyPreFills();
+      };
+
+      selTemplate.onchange = () => {
+        btnSave.disabled = !selClient.value || !selTemplate.value;
+        renderFields(selTemplate.value);
+      };
+
+      fieldsForm.oninput = () => {
+        if (currentDocId) {
+          currentDocId = null;
+          btnDownload.disabled = true;
+          btnDownload.className = "flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-all transform hover:scale-[1.01] active:scale-[0.99] text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 opacity-50 cursor-not-allowed";
+          statusDisp.classList.add('hidden');
+        }
+        triggerPreview();
+      };
+
+      btnSave.onclick = async () => {
+        const clientId = selClient.value;
+        const templateId = selTemplate.value;
+        if (!clientId || !templateId) return;
+
+        btnSave.disabled = true;
+        btnSave.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+
+        try {
+          const fields = getFieldsObject();
+          const res = await api('/documents/generate-founder', {
+            method: 'POST',
+            body: JSON.stringify({ clientId, templateId, fields })
+          });
+
+          currentDocId = res.id;
+          toast('Document draft saved successfully!', 'success');
+
+          btnDownload.disabled = false;
+          btnDownload.className = "flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-all transform hover:scale-[1.02] active:scale-[0.98] text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30";
+
+          statusDisp.textContent = `Draft saved with ID: \${res.id}`;
+          statusDisp.classList.remove('hidden');
+        } catch (err) {
+          toast('Save failed: ' + err.message, 'error');
+        } finally {
+          btnSave.disabled = false;
+          btnSave.innerHTML = '<i class="fas fa-save"></i>Save Draft';
+        }
+      };
+
+      btnDownload.onclick = () => {
+        if (!currentDocId) return;
+        const cleanUrl = \`/api/documents/\${currentDocId}/pdf?token=\${encodeURIComponent(state.token)}\`;
+        window.open(cleanUrl, '_blank');
+      };
+
+    } catch (err) {
+      el.innerHTML = \`<div class="fade-in"><div class="glass rounded-xl p-8 border border-red-500/30 text-center"><i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i><h3 class="text-lg font-bold text-white mb-1">Failed to initialize Founder OS Suite</h3><p class="text-sm text-gray-400">\${err.message}</p></div></div>\`;
     }
   }
 

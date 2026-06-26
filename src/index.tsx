@@ -7,7 +7,8 @@ import { detectViolations, calculateLitigationScore } from './engine/violations'
 import { mapMfsnToInternal } from './engine/mfsn-mapper';
 import { mapSmartCreditToInternal } from './engine/smartcredit-mapper';
 import { DOCUMENT_TYPES, type DocumentData } from './engine/documents';
-import { generatePDFReport, type PDFReportData } from './engine/pdf-generator';
+import { generatePDFReport, type PDFReportData, generatePDFFromText } from './engine/pdf-generator';
+import { FOUNDER_TEMPLATES } from './engine/founder-templates';
 
 type Bindings = {
   DB: D1Database;
@@ -17,6 +18,7 @@ type Bindings = {
   CLICK2MAIL_USERNAME: string;
   CLICK2MAIL_AUTH_BASIC: string;
   CLICK2MAIL_API_URL: string;
+  AI: any;
 };
 type Variables = { user?: any; org?: any; session?: any };
 
@@ -814,127 +816,30 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
 
   try {
     if (username && password) {
-      if (username === 'test_smartcredit@rjbusinesssolutions.com') {
-        payload = {
-          bureauReports: [
-            {
-              bureau: 'Experian',
-              reportDate: '2026-06-25',
-              personalInfo: {
-                names: ['SALISHA MCDOWELL'],
-                addresses: ['1342 NM 333, Tijeras, NM 87059'],
-                ssn: 'XXX-XX-1642',
-                dob: '03/22/1982'
-              },
-              accounts: [
-                {
-                  creditorName: 'CHIME/STRIDE BANK NA',
-                  accountNumber: '468127XXXXXX',
-                  accountType: 'Revolving',
-                  accountStatus: 'Open/Never late',
-                  dateOpened: '2022-04-29',
-                  currentBalance: 0,
-                  originalAmount: 500,
-                  paymentStatus: 'Current',
-                  paymentHistory: ['C', 'C', 'C', 'C']
-                },
-                {
-                  creditorName: 'AUTONATION FINANCE',
-                  accountNumber: '222XXXX',
-                  accountType: 'Installment',
-                  accountStatus: 'Paid, Closed/Never late',
-                  dateOpened: '2018-05-01',
-                  currentBalance: 0,
-                  paymentStatus: 'Paid',
-                  paymentHistory: ['C', 'C', 'C']
-                }
-              ],
-              collections: [
-                {
-                  creditorName: 'CREDENCE RESOURCE MANAGE',
-                  accountNumber: '287361XXX',
-                  originalCreditor: 'AT T',
-                  currentBalance: 6077,
-                  status: 'Collection account. $6,077 past due as of Jun 2026.',
-                  accountType: 'Collection',
-                  isCollection: true
-                }
-              ],
-              inquiries: [
-                {
-                  creditorName: 'CHIME FINANCIAL',
-                  inquiryDate: '2026-06-22',
-                  inquiryType: 'Hard'
-                }
-              ]
-            },
-            {
-              bureau: 'Equifax',
-              reportDate: '2026-06-25',
-              personalInfo: {
-                names: ['SALISHA MCDOWELL'],
-                addresses: ['1342 NM 333, Tijeras, NM 87059'],
-                ssn: 'XXX-XX-1642',
-                dob: '03/22/1982'
-              },
-              accounts: [
-                {
-                  creditorName: 'FAST AUTO CREDIT',
-                  accountNumber: '*9801',
-                  accountType: 'Installment',
-                  accountStatus: 'Pays As Agreed',
-                  dateOpened: '2025-10-01',
-                  currentBalance: 13988,
-                  paymentStatus: 'Current'
-                }
-              ],
-              collections: [
-                {
-                  creditorName: 'GMFNANCIAL',
-                  accountNumber: '*7999',
-                  currentBalance: 10541,
-                  status: 'Charge Off',
-                  accountType: 'Collection',
-                  isCollection: true
-                }
-              ],
-              inquiries: [
-                {
-                  creditorName: 'FAST AUTO CREDIT',
-                  inquiryDate: '2025-10-01',
-                  inquiryType: 'Hard'
-                }
-              ]
-            }
-          ]
-        };
-        resolvedTrackingToken = 'test-token-123';
-      } else {
-        const clientKey = '19343205-b3a9-4143-8bef-2cb5da0c731f';
-        const clientSecret = 'WE_9tIrlwv0yvLW83CNmqlkyCIJVaxV5ouVu2sJ7QYQ';
-        const authHeader = 'Basic ' + btoa(`${clientKey}:${clientSecret}`);
+      const clientKey = '19343205-b3a9-4143-8bef-2cb5da0c731f';
+      const clientSecret = 'WE_9tIrlwv0yvLW83CNmqlkyCIJVaxV5ouVu2sJ7QYQ';
+      const authHeader = 'Basic ' + btoa(`${clientKey}:${clientSecret}`);
 
-        const authRes = await fetch('https://api.consumerdirect.com/v1.1/member/authenticate', {
-          method: 'POST',
-          headers: {
-            'Authorization': authHeader,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify({ username, password })
-        });
+      const authRes = await fetch('https://api.consumerdirect.com/v1.1/member/authenticate', {
+        method: 'POST',
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ username, password })
+      });
 
-        if (!authRes.ok) {
-          const errText = await authRes.text();
-          return c.json({ error: `SmartCredit Authentication Failed (${authRes.status}): ${errText}` }, authRes.status);
-        }
+      if (!authRes.ok) {
+        const errText = await authRes.text();
+        return c.json({ error: `SmartCredit Authentication Failed (${authRes.status}): ${errText}` }, authRes.status);
+      }
 
-        const authData: any = await authRes.json();
-        resolvedTrackingToken = authData.trackingToken || authData.data?.trackingToken || authData.member?.trackingToken || authData.token;
+      const authData: any = await authRes.json();
+      resolvedTrackingToken = authData.trackingToken || authData.data?.trackingToken || authData.member?.trackingToken || authData.token;
 
-        if (!resolvedTrackingToken) {
-          return c.json({ error: 'Failed to resolve trackingToken from authentication response' }, 500);
-        }
+      if (!resolvedTrackingToken) {
+        return c.json({ error: 'Failed to resolve trackingToken from authentication response' }, 500);
       }
     }
 
@@ -1220,6 +1125,122 @@ app.get('/api/documents/:id', authMiddleware, async (c) => {
   const doc = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ? AND org_id = ?').bind(id, user.org_id).first();
   if (!doc) return c.json({ error: 'Not found' }, 404);
   return c.json({ document: doc });
+});
+
+app.post('/api/documents/:id/ai-rewrite', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const id = c.req.param('id');
+
+  // 1. Fetch document and verify authorization
+  const doc = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
+  if (!doc) return c.json({ error: 'Document not found' }, 404);
+  if (!doc.content) return c.json({ error: 'Document has no text content to rewrite' }, 400);
+
+  try {
+    // 2. Build system instructions for OCR bypass
+    const systemPrompt = `You are an expert consumer advocate and legal drafting specialist.
+Your task is to rewrite the provided credit bureau dispute letter to completely bypass automatic Optical Character Recognition (OCR) template-matching scanners.
+To do this, you must dynamically and semantically restructure the sentences, headers, list styles, and overall format so that the letter appears completely custom, natural, and unique, as if written by a consumer themselves.
+
+CRITICAL INSTRUCTIONS:
+1. You MUST preserve all vital factual information exactly as-is. DO NOT change, omit, or modify any of the following:
+   - Full Name, Mailing Address, SSN Last 4, Date of Birth (DOB).
+   - Creditor/Furnisher Names, Account Names, and Account Numbers.
+   - Specific inaccuracies, dates, disputed amounts, or dollar figures.
+   - Statutory citations (e.g., Fair Credit Reporting Act, 15 U.S.C. § 1681i, 15 U.S.C. § 1681s-2(b), etc.).
+2. You MUST totally rewrite all other prose, transition sentences, and introductory/concluding paragraphs. Use alternative phrasing, vary sentence lengths, and restructure bullet points or tables.
+3. The tone must remain professional, firm, assertive, yet authentic.
+4. Return ONLY the rewritten plain text document, with no introductory text, no conversational remarks, and no markdown formatting (like asterisks for bolding). Preserve a clean, professional letter layout.`;
+
+    // 3. Call Cloudflare Workers AI
+    const aiResult = await c.env.AI.run('@cf/meta/llama-3.2-3b-instruct', {
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Here is the dispute letter to rewrite:\n\n${doc.content}` }
+      ]
+    }) as any;
+
+    const rewrittenText = aiResult?.response;
+    if (!rewrittenText) {
+      return c.json({ error: 'Failed to rewrite document using Cloudflare Workers AI. No response returned.' }, 500);
+    }
+
+    // 4. Update the document in D1
+    await c.env.DB.prepare('UPDATE documents SET content = ?, updated_at = datetime("now") WHERE id = ? AND org_id = ?').bind(rewrittenText, id, user.org_id).run();
+
+    // 5. Append to Activity Log
+    const activityId = generateId();
+    await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(activityId, user.org_id, doc.client_id, id, user.id, 'document_ai_rewritten', `Dynamically rewrote document "${doc.title}" via AI`).run();
+
+    return c.json({ success: true, content: rewrittenText });
+  } catch (err: any) {
+    console.error('[AI REWRITE ERROR]', err);
+    return c.json({ error: `Cloudflare Workers AI Error: ${err.message}` }, 500);
+  }
+});
+
+
+// ═══════════════════════════════════════════════════════════════
+// FOUNDER OS SUITE INTEGRATION ENDPOINTS
+// ═══════════════════════════════════════════════════════════════
+app.get('/api/founder-templates', authMiddleware, async (c) => {
+  const templates = Object.entries(FOUNDER_TEMPLATES).map(([key, val]) => ({
+    id: key,
+    name: val.name,
+    description: val.description,
+    fields: val.fields,
+  }));
+  return c.json({ templates });
+});
+
+app.post('/api/documents/preview-founder', authMiddleware, async (c) => {
+  const { templateId, fields } = await c.req.json();
+  const template = FOUNDER_TEMPLATES[templateId];
+  if (!template) {
+    return c.json({ error: 'Template not found' }, 404);
+  }
+  const content = template.fn(fields || {});
+  return c.json({ content });
+});
+
+app.post('/api/documents/generate-founder', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const { clientId, templateId, fields } = await c.req.json();
+
+  const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first() as any;
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+
+  const template = FOUNDER_TEMPLATES[templateId];
+  if (!template) return c.json({ error: 'Template not found' }, 404);
+
+  const content = template.fn(fields || {});
+  const docId = generateId();
+  const title = `${template.name} - ${client.first_name} ${client.last_name}`;
+
+  await c.env.DB.prepare(
+    'INSERT INTO documents (id, org_id, client_id, doc_type, doc_subtype, title, content, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(docId, user.org_id, clientId, templateId, 'founder_os', title, content, 'draft', user.id).run();
+
+  await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, clientId, docId, user.id, 'document_generated', `Generated Founder OS: ${template.name}`).run();
+
+  return c.json({ id: docId, title, content, docType: templateId, doc_subtype: 'founder_os' });
+});
+
+app.get('/api/documents/:id/pdf', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const id = c.req.param('id');
+
+  const doc = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
+  if (!doc) return c.json({ error: 'Document not found' }, 404);
+
+  const pdfBytes = generatePDFFromText(doc.title, doc.content);
+
+  return new Response(pdfBytes, {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="FounderOS-${id}.pdf"`,
+    },
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════
