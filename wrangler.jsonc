@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "smart-fcra",
+  "compatibility_date": "2026-04-13",
+  "pages_build_output_dir": "./dist",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "fcra-detector-production",
+      "database_id": "a15111fa-b730-4d1a-81a5-d8201c1dab8d"
+    }
+  ]
+}

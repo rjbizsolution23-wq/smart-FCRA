@@ -1,0 +1,1155 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// FCRA SUPREME VIOLATION DETECTOR v3.0 — FULL SPA
+// Multi-tenant SaaS | Full-Process Upload | 10 Document Types
+// ═══════════════════════════════════════════════════════════════════════════
+(function() {
+  'use strict';
+
+  const state = {
+    token: localStorage.getItem('fcra_token') || null,
+    user: JSON.parse(localStorage.getItem('fcra_user') || 'null'),
+    org: JSON.parse(localStorage.getItem('fcra_org') || 'null'),
+    currentPage: 'dashboard',
+    pageData: null,
+    loading: false,
+  };
+
+  function setState(u) {
+    Object.assign(state, u);
+    if (u.token !== undefined) { u.token ? localStorage.setItem('fcra_token', u.token) : localStorage.removeItem('fcra_token'); }
+    if (u.user !== undefined) { u.user ? localStorage.setItem('fcra_user', JSON.stringify(u.user)) : localStorage.removeItem('fcra_user'); }
+    if (u.org !== undefined) { u.org ? localStorage.setItem('fcra_org', JSON.stringify(u.org)) : localStorage.removeItem('fcra_org'); }
+  }
+
+  async function api(path, opts = {}) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
+    const res = await fetch(`/api${path}`, { ...opts, headers });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+    return data;
+  }
+
+  function toast(msg, type = 'info') {
+    const colors = { success: 'bg-emerald-600', error: 'bg-red-600', info: 'bg-blue-600', warning: 'bg-amber-600' };
+    const icons = { success: 'fa-check-circle', error: 'fa-exclamation-circle', info: 'fa-info-circle', warning: 'fa-exclamation-triangle' };
+    const el = document.createElement('div');
+    el.className = `fixed top-4 right-4 z-[9999] ${colors[type]} text-white px-5 py-3 rounded-lg shadow-2xl flex items-center gap-3 text-sm font-medium fade-in max-w-md`;
+    el.innerHTML = `<i class="fas ${icons[type]}"></i><span>${msg}</span>`;
+    document.body.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 4000);
+  }
+
+  function $(s) { return document.querySelector(s); }
+  window.$ = $; // Expose for inline onclick handlers
+  function money(n) { return '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
+  function shortDate(d) { if (!d) return '—'; try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return d; } }
+  function sevColor(s) { return { critical: 'red-500', high: 'orange-500', medium: 'yellow-500', low: 'green-500' }[s] || 'gray-400'; }
+  function sevBg(s) { return { critical: 'bg-red-900/30 border-red-500', high: 'bg-orange-900/30 border-orange-500', medium: 'bg-yellow-900/30 border-yellow-500', low: 'bg-green-900/30 border-green-500' }[s] || 'bg-gray-800 border-gray-600'; }
+  function navigate(page, data) { state.currentPage = page; state.pageData = data; render(); }
+
+  function render() {
+    const app = document.getElementById('app');
+    if (!state.token) { app.innerHTML = renderAuth(); bindAuth(); }
+    else { app.innerHTML = renderShell(); loadPage(state.currentPage); }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // AUTH
+  // ═══════════════════════════════════════════════════════════════
+  function renderAuth() {
+    return `<div class="min-h-screen flex items-center justify-center p-4">
+      <div class="w-full max-w-md">
+        <div class="text-center mb-8">
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600/20 border border-blue-500/30 mb-4"><i class="fas fa-shield-alt text-2xl text-blue-400"></i></div>
+          <h1 class="text-2xl font-bold text-white">FCRA Supreme Detector</h1>
+          <p class="text-gray-400 mt-1 text-sm">Multi-tenant credit report violation analysis SaaS</p>
+        </div>
+        <div class="glass rounded-2xl p-6">
+          <div class="flex border-b border-gray-700 mb-5">
+            <button id="tab-login" class="flex-1 pb-3 text-sm font-semibold text-blue-400 border-b-2 border-blue-400" onclick="window._switchTab('login')">Sign In</button>
+            <button id="tab-register" class="flex-1 pb-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent" onclick="window._switchTab('register')">Create Account</button>
+          </div>
+          <div id="auth-login"><form id="login-form" class="space-y-4">
+            <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Email</label><input type="email" name="email" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="you@company.com"></div>
+            <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Password</label><input type="password" name="password" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="••••••••"></div>
+            <div class="p-3 bg-amber-900/20 border border-amber-600/30 rounded-lg mt-2">
+              <p class="text-[10px] text-amber-300 leading-relaxed">
+                <strong>⚠️ FCRA NOTICE:</strong> We prepare dispute documents only. NOT legal advice. See <a href="/compliance/disclaimers" class="underline hover:text-amber-200">disclaimers</a>.
+              </p>
+            </div>
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition text-sm">Sign In</button>
+          </form></div>
+          <div id="auth-register" class="hidden"><form id="register-form" class="space-y-4">
+            <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Organization Name</label><input type="text" name="orgName" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="Your Firm Name"></div>
+            <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Full Name</label><input type="text" name="name" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="John Doe"></div>
+            <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Email</label><input type="email" name="email" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="you@company.com"></div>
+            <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Password</label><input type="password" name="password" required minlength="6" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="Minimum 6 characters"></div>
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition text-sm">Create Account</button>
+          </form></div>
+          <div class="mt-4 p-3 bg-amber-900/20 border border-amber-600/30 rounded-lg">
+            <p class="text-[10px] text-amber-300 leading-relaxed">
+              <strong>⚠️ NOTICE:</strong> This service prepares dispute documents. We are NOT a law firm and do NOT provide legal advice.
+              FCRA rights are governed by 15 U.S.C. § 1681 et seq. For legal advice, consult an attorney.
+              <a href="/compliance/disclaimers" class="underline hover:text-amber-200">View Full Disclaimers →</a>
+            </p>
+          </div>
+        </div>
+        <p class="text-center text-gray-600 text-xs mt-4">FCRA Supreme Detection Engine v3.0 | RJ Business Solutions</p>
+      </div></div>`;
+  }
+
+  window._switchTab = function(tab) {
+    const ll = $('#auth-login'), rr = $('#auth-register'), tl = $('#tab-login'), tr = $('#tab-register');
+    if (tab === 'login') { ll.classList.remove('hidden'); rr.classList.add('hidden'); tl.className = 'flex-1 pb-3 text-sm font-semibold text-blue-400 border-b-2 border-blue-400'; tr.className = 'flex-1 pb-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent'; }
+    else { ll.classList.add('hidden'); rr.classList.remove('hidden'); tr.className = 'flex-1 pb-3 text-sm font-semibold text-blue-400 border-b-2 border-blue-400'; tl.className = 'flex-1 pb-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent'; }
+  };
+
+  function bindAuth() {
+    const lf = $('#login-form'), rf = $('#register-form');
+    if (lf) lf.onsubmit = async (e) => { e.preventDefault(); const fd = new FormData(e.target); try { const d = await api('/auth/login', { method:'POST', body:JSON.stringify({email:fd.get('email'),password:fd.get('password')})}); setState({token:d.token,user:d.user,org:d.org}); toast('Welcome back!','success'); render(); } catch(err) { toast(err.message,'error'); } };
+    if (rf) rf.onsubmit = async (e) => { e.preventDefault(); const fd = new FormData(e.target); try { const d = await api('/auth/register', { method:'POST', body:JSON.stringify({orgName:fd.get('orgName'),name:fd.get('name'),email:fd.get('email'),password:fd.get('password')})}); setState({token:d.token,user:d.user,org:d.org}); toast('Account created!','success'); render(); } catch(err) { toast(err.message,'error'); } };
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // SHELL
+  // ═══════════════════════════════════════════════════════════════
+  function renderShell() {
+    const navItems = [
+      { id:'dashboard', icon:'fa-chart-line', label:'Dashboard' },
+      { id:'clients', icon:'fa-users', label:'Clients' },
+      { id:'reports', icon:'fa-file-alt', label:'Reports' },
+      { id:'report-history', icon:'fa-history', label:'Report History' },
+      { id:'violations', icon:'fa-exclamation-triangle', label:'Violations' },
+      { id:'documents', icon:'fa-file-contract', label:'Documents' },
+      { id:'team', icon:'fa-user-friends', label:'Team' },
+      { id:'billing', icon:'fa-credit-card', label:'Billing' },
+      { id:'legal', icon:'fa-gavel', label:'Legal' },
+    ];
+    // Branding URLs - replace with actual image URLs
+    const RJ_LOGO = 'https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg';
+    const MFSN_BANNER = '/static/logos/mfsn-banner.png';
+    const FCRA_LOGO = '/static/logos/Professional_logo_design_for_FCRA_DETECTOR_mode-1776629301082.png';
+    return `<div class="flex h-screen overflow-hidden flex-col">
+      <!-- Top Branding Header -->
+      ${MFSN_BANNER ? `<div class="h-16 bg-gray-900 border-b border-gray-800 flex items-center px-4 shrink-0"><img src="${MFSN_BANNER}" alt="MyFreeScoreNow" class="h-14 object-contain"></div>` : ''}
+            <div class="flex flex-1 overflow-hidden">
+      <aside class="w-56 bg-gray-900/80 border-r border-gray-800 flex flex-col shrink-0">
+        <div class="p-4 border-b border-gray-800"><div class="flex items-center gap-2.5">
+          ${FCRA_LOGO ? `<img src="${FCRA_LOGO}" alt="FCRA" class="w-12 h-12 rounded-lg object-contain">` : `<div class="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center"><i class="fas fa-shield-alt text-blue-400 text-xs"></i></div>`}
+          <div class="min-w-0"><div class="text-xs font-bold text-white truncate">FCRA Detector</div><div class="text-[10px] text-gray-500 truncate">${state.org?.name||'Org'}</div></div>
+        </div></div>
+        <nav class="flex-1 p-3 space-y-1 overflow-y-auto">${navItems.map(n=>`<button onclick="window._nav('${n.id}')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${state.currentPage===n.id?'bg-blue-600/20 text-blue-400':'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}"><i class="fas ${n.icon} w-5 text-center text-xs"></i><span>${n.label}</span></button>`).join('')}</nav>
+        <div class="p-3 border-t border-gray-800">
+          <div class="flex items-center gap-2.5 px-2 mb-3"><div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold">${(state.user?.name||'U')[0].toUpperCase()}</div><div class="min-w-0"><div class="text-xs font-medium text-gray-300 truncate">${state.user?.name||'User'}</div><div class="text-[10px] text-gray-500 truncate">${state.user?.role||'member'}</div></div></div>
+          <button onclick="window._logout()" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-gray-500 hover:bg-red-900/20 hover:text-red-400 transition"><i class="fas fa-sign-out-alt"></i>Sign Out</button>
+        </div>
+      </aside>
+      <main class="flex-1 overflow-y-auto"><div class="p-6" id="page-content"><div class="flex items-center justify-center h-40"><i class="fas fa-spinner fa-spin text-blue-400 text-xl"></i></div></div></main>
+      </div>
+    </div>`;
+  }
+
+  window._nav = (p, data) => navigate(p, data);
+  window._logout = async () => { try { await api('/auth/logout',{method:'POST'}); } catch {} setState({token:null,user:null,org:null}); toast('Signed out','info'); render(); };
+
+  async function loadPage(page) {
+    const el = $('#page-content');
+    if (!el) return;
+    el.innerHTML = '<div class="flex items-center justify-center h-40"><i class="fas fa-spinner fa-spin text-blue-400 text-xl"></i></div>';
+    try {
+      switch(page) {
+        case 'dashboard': await pgDashboard(el); break;
+        case 'clients': await pgClients(el); break;
+        case 'client-detail': await pgClientDetail(el, state.pageData); break;
+        case 'reports': await pgReports(el); break;
+        case 'report-history': await pgReportHistory(el); break;
+        case 'report-detail': await pgReportDetail(el, state.pageData); break;
+        case 'violations': await pgViolations(el); break;
+        case 'documents': await pgDocuments(el); break;
+        case 'team': await pgTeam(el); break;
+        case 'billing': await pgBilling(el); break;
+        case 'legal': await pgLegal(el); break;
+        case 'upload-report': await pgUploadReport(el, state.pageData); break;
+        case 'generate-doc': await pgGenerateDoc(el, state.pageData); break;
+        case 'full-analysis': await pgFullAnalysis(el, state.pageData); break;
+        default: el.innerHTML = '<p class="text-gray-400">Page not found.</p>';
+      }
+    } catch(err) { el.innerHTML = `<div class="text-red-400 p-4"><i class="fas fa-exclamation-triangle mr-2"></i>${err.message}</div>`; }
+  }
+
+  function statCard(icon,label,value,color) {
+    return `<div class="glass rounded-xl p-4 card-hover"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-lg bg-${color}-600/20 flex items-center justify-center"><i class="fas ${icon} text-${color}-400"></i></div><div><div class="text-xs text-gray-400">${label}</div><div class="text-xl font-bold text-white">${value}</div></div></div></div>`;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // DASHBOARD
+  // ═══════════════════════════════════════════════════════════════
+  async function pgDashboard(el) {
+    const d = await api('/dashboard');
+    el.innerHTML = `<div class="fade-in">
+      <div class="bg-blue-900/20 border border-blue-600/30 rounded-xl p-4 mb-6">
+        <h3 class="text-sm font-semibold text-blue-300 mb-2"><i class="fas fa-scale mr-2"></i>Your Rights Under the FCRA</h3>
+        <p class="text-xs text-blue-200/80 leading-relaxed">
+          Under 15 U.S.C. § 1681 et seq., you have the right to: (1) receive a free annual credit report from Equifax, Experian & TransUnion at <a href="https://annualfreecreditreport.com" target="_blank" class="underline hover:text-blue-100">annualfreecreditreport.com</a>; (2) dispute inaccurate information with consumer reporting agencies; (3) seek damages for FCRA violations.
+          <a href="/compliance/disclaimers" target="_blank" class="underline hover:text-blue-100 ml-1">View Full Disclaimers →</a>
+        </p>
+      </div>
+      <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">Dashboard</h1><p class="text-sm text-gray-400">Credit dispute operations overview</p></div>
+        <button onclick="window._nav('clients')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"><i class="fas fa-plus mr-1.5"></i>New Client</button>
+      </div>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        ${statCard('fa-users','Clients',d.totalClients,'blue')}
+        ${statCard('fa-file-alt','Reports',d.totalReports,'purple')}
+        ${statCard('fa-exclamation-triangle','Violations',d.totalViolations,'red')}
+        ${statCard('fa-file-contract','Documents',d.totalDocuments,'emerald')}
+      </div>
+      <div class="glass rounded-xl p-5 mb-6"><h3 class="text-sm font-semibold text-white mb-3"><i class="fas fa-dollar-sign mr-2 text-green-400"></i>Total Recovery Potential</h3>
+        <div class="grid grid-cols-2 gap-4"><div class="bg-gray-800/60 rounded-lg p-4"><div class="text-xs text-gray-400 mb-1">Minimum</div><div class="text-2xl font-bold text-green-400">${money(d.totalDamagesMin)}</div></div><div class="bg-gray-800/60 rounded-lg p-4"><div class="text-xs text-gray-400 mb-1">Maximum</div><div class="text-2xl font-bold text-green-300">${money(d.totalDamagesMax)}</div></div></div></div>
+      ${d.violationsBySeverity.length?`<div class="glass rounded-xl p-5 mb-6"><h3 class="text-sm font-semibold text-white mb-3"><i class="fas fa-chart-bar mr-2 text-orange-400"></i>By Severity</h3><div class="grid grid-cols-2 lg:grid-cols-4 gap-3">${d.violationsBySeverity.map(v=>`<div class="bg-gray-800/60 rounded-lg p-3 border-l-4 border-${sevColor(v.severity)}"><div class="text-xs text-gray-400 uppercase">${v.severity}</div><div class="text-lg font-bold text-${sevColor(v.severity)}">${v.count}</div></div>`).join('')}</div></div>`:''}
+      ${d.recentViolations.length?`<div class="glass rounded-xl p-5"><h3 class="text-sm font-semibold text-white mb-3"><i class="fas fa-history mr-2 text-blue-400"></i>Recent Violations</h3><div class="space-y-2">${d.recentViolations.map(v=>`<div class="bg-gray-800/40 rounded-lg p-3 flex items-center gap-3 border-l-4 border-${sevColor(v.severity)}"><div class="flex-1 min-w-0"><div class="text-sm font-medium text-white truncate">${v.subcategory}</div><div class="text-xs text-gray-400">${v.first_name} ${v.last_name} &bull; ${v.statute}</div></div><span class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-${sevColor(v.severity)}/20 text-${sevColor(v.severity)}">${v.severity}</span></div>`).join('')}</div></div>`:`<div class="glass rounded-xl p-8 text-center"><i class="fas fa-rocket text-4xl text-blue-500/40 mb-4"></i><h3 class="text-lg font-semibold text-white mb-2">Ready to Start</h3><p class="text-sm text-gray-400 mb-4">Add a client and upload a credit report to begin</p><button onclick="window._nav('clients')" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition">Add Your First Client</button></div>`}
+    </div>`;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CLIENTS
+  // ═══════════════════════════════════════════════════════════════
+  async function pgClients(el) {
+    const d = await api('/clients');
+    el.innerHTML = `<div class="fade-in">
+      <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">Clients</h1><p class="text-sm text-gray-400">${d.clients.length} total</p></div>
+        <button onclick="$('#add-client-form').classList.toggle('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"><i class="fas fa-plus mr-1.5"></i>Add Client</button>
+      </div>
+      <div id="add-client-form" class="hidden glass rounded-xl p-5 mb-6 fade-in"><h3 class="text-sm font-semibold text-white mb-4">New Client</h3>
+        <form id="client-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><label class="block text-xs text-gray-400 mb-1">First Name *</label><input type="text" name="firstName" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div>
+          <div><label class="block text-xs text-gray-400 mb-1">Last Name *</label><input type="text" name="lastName" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div>
+          <div><label class="block text-xs text-gray-400 mb-1">Email</label><input type="email" name="email" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div>
+          <div><label class="block text-xs text-gray-400 mb-1">Phone</label><input type="tel" name="phone" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div>
+          <div><label class="block text-xs text-gray-400 mb-1">Address</label><input type="text" name="addressLine1" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div>
+          <div class="grid grid-cols-3 gap-2"><div><label class="block text-xs text-gray-400 mb-1">City</label><input type="text" name="city" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div><div><label class="block text-xs text-gray-400 mb-1">State</label><input type="text" name="state" maxlength="2" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div><div><label class="block text-xs text-gray-400 mb-1">ZIP</label><input type="text" name="zip" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div></div>
+          <div><label class="block text-xs text-gray-400 mb-1">DOB</label><input type="date" name="dob" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div>
+          <div><label class="block text-xs text-gray-400 mb-1">SSN Last 4</label><input type="text" name="ssnLast4" maxlength="4" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none" placeholder="1234"></div>
+          <div class="md:col-span-2 flex gap-2"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition">Save Client</button><button type="button" onclick="$('#add-client-form').classList.add('hidden')" class="bg-gray-700 hover:bg-gray-600 text-white px-5 py-2 rounded-lg text-sm transition">Cancel</button></div>
+        </form></div>
+      ${d.clients.length?`<div class="space-y-2">${d.clients.map(c=>`<div onclick="window._nav('client-detail',{clientId:'${c.id}'})" class="glass rounded-xl p-4 card-hover cursor-pointer"><div class="flex items-center gap-4"><div class="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 font-bold text-sm">${(c.first_name||'?')[0]}${(c.last_name||'?')[0]}</div><div class="flex-1 min-w-0"><div class="text-sm font-semibold text-white">${c.first_name} ${c.last_name}</div><div class="text-xs text-gray-400">${c.email||'No email'} ${c.phone?'&bull; '+c.phone:''}</div></div><div class="text-right shrink-0"><div class="text-xs text-gray-400">${c.report_count||0} reports &bull; ${c.violation_count||0} violations</div>${c.damages_max?`<div class="text-xs text-green-400">${money(c.damages_min)} - ${money(c.damages_max)}</div>`:''}<span class="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-medium ${c.status==='active'?'bg-green-900/30 text-green-400':'bg-gray-700 text-gray-400'}">${c.status||'active'}</span></div><i class="fas fa-chevron-right text-gray-600 text-xs"></i></div></div>`).join('')}</div>`:`<div class="glass rounded-xl p-8 text-center"><i class="fas fa-users text-4xl text-gray-600 mb-4"></i><p class="text-gray-400 mb-3">No clients yet</p><button onclick="$('#add-client-form').classList.toggle('hidden')" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">Add First Client</button></div>`}
+    </div>`;
+    const f = $('#client-form');
+    if (f) f.onsubmit = async (e) => { e.preventDefault(); const fd = new FormData(e.target); const b = {}; for (const [k,v] of fd.entries()) b[k]=v; try { await api('/clients',{method:'POST',body:JSON.stringify(b)}); toast('Client created!','success'); await pgClients(el); } catch(err) { toast(err.message,'error'); } };
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CLIENT DETAIL
+  // ═══════════════════════════════════════════════════════════════
+  async function pgClientDetail(el, data) {
+    const res = await api(`/clients/${data.clientId}`);
+    const c = res.client;
+    const totalMin = (res.violations||[]).reduce((s,v) => s + (v.total_damages_min||0), 0);
+    const totalMax = (res.violations||[]).reduce((s,v) => s + (v.total_damages_max||0), 0);
+
+    el.innerHTML = `<div class="fade-in">
+      <button onclick="window._nav('clients')" class="text-gray-400 hover:text-white text-sm mb-4 inline-flex items-center gap-1.5 transition"><i class="fas fa-arrow-left text-xs"></i>Back</button>
+      <div class="flex items-start justify-between mb-6">
+        <div class="flex items-center gap-4"><div class="w-14 h-14 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 font-bold text-xl">${(c.first_name||'?')[0]}${(c.last_name||'?')[0]}</div>
+          <div><h1 class="text-xl font-bold text-white">${c.first_name} ${c.last_name}</h1><div class="text-sm text-gray-400">${c.email||''} ${c.phone?'&bull; '+c.phone:''}</div>${c.address_line1?`<div class="text-xs text-gray-500">${c.address_line1}${c.city?', '+c.city:''} ${c.state||''} ${c.zip||''}</div>`:''}</div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="window._nav('upload-report',{clientId:'${c.id}',clientName:'${c.first_name} ${c.last_name}'})" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"><i class="fas fa-upload mr-1.5"></i>Upload Report</button>
+          <button onclick="window._nav('generate-doc',{clientId:'${c.id}',clientName:'${c.first_name} ${c.last_name}'})" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"><i class="fas fa-file-contract mr-1.5"></i>Generate Docs</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        ${statCard('fa-file-alt','Reports',res.reports.length,'blue')}
+        ${statCard('fa-exclamation-triangle','Violations',res.violations.length,'red')}
+        ${statCard('fa-dollar-sign','Min Recovery',money(totalMin),'green')}
+        ${statCard('fa-file-contract','Documents',res.documents.length,'purple')}
+      </div>
+      <div class="flex border-b border-gray-800 mb-4">${['reports','violations','documents','activity'].map((t,i)=>`<button class="client-tab pb-2.5 px-4 text-sm font-medium ${i===0?'text-blue-400 border-b-2 border-blue-400':'text-gray-500 border-b-2 border-transparent hover:text-gray-300'}" data-tab="${t}">${t[0].toUpperCase()+t.slice(1)} (${t==='activity'?res.activity.length:res[t].length})</button>`).join('')}</div>
+      <div id="client-tab-content">${renderViolationsList(res.violations)}</div>
+    </div>`;
+    // Show violations first since that's the money view
+    document.querySelectorAll('.client-tab').forEach(tab => {
+      tab.onclick = () => {
+        document.querySelectorAll('.client-tab').forEach(t => { t.className = 'client-tab pb-2.5 px-4 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-gray-300'; });
+        tab.className = 'client-tab pb-2.5 px-4 text-sm font-medium text-blue-400 border-b-2 border-blue-400';
+        const ct = $('#client-tab-content');
+        switch(tab.dataset.tab) {
+          case 'reports': ct.innerHTML = renderReportsList(res.reports); break;
+          case 'violations': ct.innerHTML = renderViolationsList(res.violations); break;
+          case 'documents': ct.innerHTML = renderDocsList(res.documents); break;
+          case 'activity': ct.innerHTML = renderActivityList(res.activity); break;
+        }
+      };
+    });
+  }
+
+  function renderReportsList(reports) {
+    if (!reports.length) return '<div class="text-center py-8 text-gray-500"><i class="fas fa-file-alt text-3xl mb-3"></i><p>No reports yet</p></div>';
+    return `<div class="space-y-2">${reports.map(r=>`<div onclick="window._nav('report-detail',{reportId:'${r.id}'})" class="glass rounded-lg p-4 card-hover cursor-pointer"><div class="flex items-center justify-between"><div><div class="text-sm font-medium text-white"><i class="fas fa-file-alt mr-2 text-blue-400"></i>${r.bureau||'Unknown'}</div><div class="text-xs text-gray-400">${r.file_name} &bull; ${shortDate(r.created_at)}</div></div><div class="text-right"><div class="text-xs text-gray-400">${r.total_accounts||0} accounts</div><span class="px-2 py-0.5 rounded text-[10px] font-medium ${r.status==='analyzed'?'bg-green-900/30 text-green-400':'bg-yellow-900/30 text-yellow-400'}">${r.status}</span></div></div></div>`).join('')}</div>`;
+  }
+
+  function renderViolationsList(violations) {
+    if (!violations.length) return '<div class="text-center py-8 text-gray-500"><i class="fas fa-check-circle text-3xl mb-3"></i><p>No violations</p></div>';
+    return `<div class="space-y-2">${violations.map(v=>`<details class="group"><summary class="cursor-pointer list-none"><div class="glass rounded-lg p-4 border-l-4 border-${sevColor(v.severity)} card-hover"><div class="flex items-start justify-between"><div class="flex-1 min-w-0"><div class="flex items-center gap-2 mb-1"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-${sevColor(v.severity)}/20 text-${sevColor(v.severity)}">${v.severity}</span><span class="text-xs text-gray-400">${v.category} &bull; ${v.statute}</span><i class="fas fa-chevron-down text-[10px] text-gray-500 group-open:rotate-180 transition-transform"></i></div><div class="text-sm font-medium text-white">${v.subcategory}</div>${v.account_name||v.accountName?`<div class="text-xs text-gray-500">Account: ${v.account_name||v.accountName}</div>`:''}</div><div class="text-right shrink-0 ml-4"><div class="text-xs text-green-400 font-medium">${money(v.total_damages_min||v.totalDamagesMin)} &ndash; ${money(v.total_damages_max||v.totalDamagesMax)}</div></div></div></div></summary>
+      <div class="mt-2 ml-4 space-y-2 text-sm fade-in">
+        <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-blue-400 mb-1">STATUTE</div><div class="text-xs text-gray-300">${v.statute_text||v.statuteText||''}</div></div>
+        <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-red-400 mb-1">EVIDENCE</div><div class="text-xs text-gray-300">${v.evidence||''}</div></div>
+        <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-purple-400 mb-1">LEGAL STANDARD</div><div class="text-xs text-gray-300">${v.legal_standard||v.legalStandard||''}</div></div>
+        <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-yellow-400 mb-1">EXPLANATION</div><div class="text-xs text-gray-300">${v.explanation||''}</div></div>
+        <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-cyan-400 mb-1">CASE LAW</div><div class="text-xs text-gray-300">${v.case_law||v.caseLaw||''}</div></div>
+        <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-green-400 mb-1">DAMAGES</div><div class="grid grid-cols-2 gap-2 text-xs text-gray-300">
+          <div>Statutory: ${money(v.statutory_damages_min||v.statutoryDamagesMin)} &ndash; ${money(v.statutory_damages_max||v.statutoryDamagesMax)}</div>
+          <div>Actual: ${money(v.actual_damages_est||v.actualDamagesEst)}</div>
+          <div>Punitive: ${money(v.punitive_damages_est||v.punitiveDamagesEst)}</div>
+          <div>Attorney Fees: ${money(v.attorney_fees_est||v.attorneyFeesEst)}</div>
+        </div><div class="mt-1 text-xs font-medium text-green-400">Defendant: ${v.defendant_type||v.defendantType||''} &mdash; ${v.defendant_name||v.defendantName||''}</div></div>
+      </div></details>`).join('')}</div>`;
+  }
+
+  function renderDocsList(docs) {
+    if (!docs.length) return '<div class="text-center py-8 text-gray-500"><i class="fas fa-file-contract text-3xl mb-3"></i><p>No documents yet</p></div>';
+    return `<div class="space-y-2">${docs.map(d=>`<div onclick="window._viewDoc('${d.id}')" class="glass rounded-lg p-4 card-hover cursor-pointer"><div class="flex items-center justify-between"><div><div class="text-sm font-medium text-white"><i class="fas fa-file-contract mr-2 text-purple-400"></i>${d.title}</div><div class="text-xs text-gray-400">${d.doc_type} &bull; ${shortDate(d.created_at)}</div></div><span class="px-2 py-0.5 rounded text-[10px] font-medium ${d.status==='draft'?'bg-yellow-900/30 text-yellow-400':'bg-green-900/30 text-green-400'}">${d.status}</span></div></div>`).join('')}</div>`;
+  }
+
+  function renderActivityList(activity) {
+    if (!activity.length) return '<div class="text-center py-8 text-gray-500"><i class="fas fa-history text-3xl mb-3"></i><p>No activity</p></div>';
+    return `<div class="space-y-2">${activity.map(a=>`<div class="flex items-start gap-3 py-2"><div class="w-7 h-7 rounded-full bg-gray-800 flex items-center justify-center shrink-0 mt-0.5"><i class="fas fa-${a.action.includes('report')?'file-alt':a.action.includes('document')?'file-contract':'clock'} text-[10px] text-gray-400"></i></div><div class="min-w-0"><div class="text-sm text-gray-300">${a.description}</div><div class="text-xs text-gray-500">${a.user_name||'System'} &bull; ${shortDate(a.created_at)}</div></div></div>`).join('')}</div>`;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // UPLOAD REPORT — FULL PROCESS FLOW
+  // ═══════════════════════════════════════════════════════════════
+  async function pgUploadReport(el, data) {
+    el.innerHTML = `<div class="fade-in max-w-4xl">
+      <button onclick="window._nav('client-detail',{clientId:'${data.clientId}'})" class="text-gray-400 hover:text-white text-sm mb-4 inline-flex items-center gap-1.5 transition"><i class="fas fa-arrow-left text-xs"></i>Back to ${data.clientName}</button>
+      <h1 class="text-xl font-bold text-white mb-1"><i class="fas fa-radar mr-2 text-blue-400"></i>Full Credit Report Analysis</h1>
+      <p class="text-sm text-gray-400 mb-6">Import via MyFreeScoreNow, SmartCredit, or upload raw text. The system will parse, detect ALL violations, and calculate litigation value.</p>
+
+      <div class="mb-4 border-b border-gray-700 pb-2">
+        <button id="tab-mfsn" class="px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-500 mr-4 transition"><i class="fas fa-cloud-download-alt mr-2"></i>MyFreeScoreNow Integration</button>
+        <button id="tab-smartcredit" class="px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-4 transition"><i class="fas fa-lock mr-2"></i>SmartCredit Integration</button>
+        <button id="tab-manual" class="px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white transition"><i class="fas fa-file-alt mr-2"></i>Manual Raw File Text</button>
+      </div>
+
+      <!-- MFSN IMPORT TAB -->
+      <form id="mfsn-form" class="space-y-5">
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-xs text-gray-400 mb-1.5">API Username (Email)</label>
+          <input type="text" name="username" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="apiuser@test.com"></div>
+          <div><label class="block text-xs text-gray-400 mb-1.5">API Password</label>
+          <input type="password" name="password" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="Password"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-xs text-gray-400 mb-1.5">Client Email</label>
+          <input type="text" name="clientEmail" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="david_webber2@gmail.com"></div>
+          <div><label class="block text-xs text-gray-400 mb-1.5">Client Token</label>
+          <input type="text" name="secretWord" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="MAPIK#FIecvELvhBslHkKzxBKPaABghn"></div>
+        </div>
+        <div class="flex gap-3">
+          <button type="submit" id="mfsn-btn" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition shadow-lg"><i class="fas fa-cloud-download-alt mr-2"></i>Authenticate & Import Report</button>
+        </div>
+      </form>
+
+      <!-- SMARTCREDIT IMPORT TAB -->
+      <form id="smartcredit-form" class="space-y-5 hidden">
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-xs text-gray-400 mb-1.5">SmartCredit Username (Email)</label>
+          <input type="text" name="username" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="test_smartcredit@rjbusinesssolutions.com"></div>
+          <div><label class="block text-xs text-gray-400 mb-1.5">SmartCredit Password</label>
+          <input type="password" name="password" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="Password"></div>
+        </div>
+        <div class="flex gap-3">
+          <button type="submit" id="smartcredit-btn" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition shadow-lg"><i class="fas fa-lock mr-2"></i>Authenticate & Fetch SmartCredit</button>
+        </div>
+      </form>
+
+      <!-- MANUAL IMPORT TAB -->
+      <form id="upload-form" class="space-y-5 hidden">
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-xs text-gray-400 mb-1.5">Bureau</label><select name="bureau" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none"><option value="Equifax">Equifax</option><option value="Experian">Experian</option><option value="TransUnion">TransUnion</option><option value="Unknown">Auto-detect</option></select></div>
+          <div><label class="block text-xs text-gray-400 mb-1.5">File Name</label><input type="text" name="fileName" value="credit-report.txt" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none"></div>
+        </div>
+        <div><label class="block text-xs text-gray-400 mb-1.5">Credit Report Text *</label>
+          <textarea name="rawText" required rows="14" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-3 text-white text-sm font-mono focus:border-blue-500 outline-none resize-y" placeholder="Paste the complete credit report text here..."></textarea></div>
+        <div class="flex gap-3">
+          <button type="submit" id="analyze-btn" class="bg-gray-600 hover:bg-gray-500 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition shadow-lg"><i class="fas fa-file-import mr-2"></i>Run Manual Analysis</button>
+          <button type="button" onclick="window._loadSample()" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition">Load Sample Text</button>
+        </div>
+      </form>
+
+      <div id="analysis-results" class="hidden mt-8"></div>
+    </div>`;
+
+    const tabMfsn = $('#tab-mfsn');
+    const tabSmartcredit = $('#tab-smartcredit');
+    const tabMan = $('#tab-manual');
+    const formMfsn = $('#mfsn-form');
+    const formSmartcredit = $('#smartcredit-form');
+    const formMan = $('#upload-form');
+
+    tabMfsn.onclick = () => {
+      tabMfsn.className = 'px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-500 mr-4 transition';
+      tabSmartcredit.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-4 transition';
+      tabMan.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white transition';
+      formMfsn.classList.remove('hidden');
+      formSmartcredit.classList.add('hidden');
+      formMan.classList.add('hidden');
+    };
+    tabSmartcredit.onclick = () => {
+      tabSmartcredit.className = 'px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-500 mr-4 transition';
+      tabMfsn.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-4 transition';
+      tabMan.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white transition';
+      formSmartcredit.classList.remove('hidden');
+      formMfsn.classList.add('hidden');
+      formMan.classList.add('hidden');
+    };
+    tabMan.onclick = () => {
+      tabMan.className = 'px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-500 transition';
+      tabMfsn.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-4 transition';
+      tabSmartcredit.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-4 transition';
+      formMan.classList.remove('hidden');
+      formMfsn.classList.add('hidden');
+      formSmartcredit.classList.add('hidden');
+    };
+
+    // Shared execution runner
+    async function runAnalysisPipeline(endpoint, payload, isIntegration = false, integrationName = 'MyFreeScoreNow') {
+      const resEl = $('#analysis-results');
+      resEl.classList.remove('hidden');
+      
+      if (isIntegration) {
+        resEl.innerHTML = renderProcessStepsCustom(`Authenticating with ${integrationName}...`, 'fas fa-spinner fa-spin');
+        await sleep(1000);
+        resEl.innerHTML = renderProcessStepsCustom(`Downloading Credit Report Data from ${integrationName}...`, 'fas fa-cloud-download-alt text-blue-400 progress-pulse');
+      } else {
+        resEl.innerHTML = renderProcessSteps('parsing');
+      }
+
+      try {
+        const result = await api(endpoint, { method:'POST', body:JSON.stringify(payload) });
+
+        resEl.innerHTML = renderProcessSteps('detecting');
+        await sleep(400);
+
+        resEl.innerHTML = renderProcessSteps('scoring');
+        await sleep(400);
+
+        resEl.innerHTML = renderProcessSteps('complete');
+        await sleep(300);
+
+        renderFullResults(resEl, result, data);
+        toast(`COMPLETE: ${result.violationsFound} violations found! Litigation score: ${result.litigationScore.score}/100`, result.violationsFound > 0 ? 'warning' : 'success');
+      } catch(err) {
+        resEl.innerHTML = `<div class="glass rounded-xl p-6 border border-red-500/30"><i class="fas fa-exclamation-triangle text-red-400 mr-2"></i><span class="text-red-300">${err.message}</span></div>`;
+        toast(err.message, 'error');
+      }
+    }
+
+    formMfsn.onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const btn = $('#mfsn-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Connecting...';
+
+      await runAnalysisPipeline('/reports/import-mfsn', {
+        clientId: data.clientId,
+        username: fd.get('username'),
+        password: fd.get('password'),
+        clientEmail: fd.get('clientEmail'),
+        secretWord: fd.get('secretWord')
+      }, true, 'MyFreeScoreNow');
+
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-cloud-download-alt mr-2"></i>Authenticate & Import Report';
+    };
+
+    formSmartcredit.onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const btn = $('#smartcredit-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Connecting...';
+
+      await runAnalysisPipeline('/reports/import-smartcredit', {
+        clientId: data.clientId,
+        username: fd.get('username'),
+        password: fd.get('password')
+      }, true, 'SmartCredit');
+
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-lock mr-2"></i>Authenticate & Fetch SmartCredit';
+    };
+
+    formMan.onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const btn = $('#analyze-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analyzing...';
+
+      await runAnalysisPipeline('/reports/upload', {
+        clientId: data.clientId, 
+        bureau: fd.get('bureau'), 
+        rawText: fd.get('rawText'), 
+        fileName: fd.get('fileName')
+      }, false);
+
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-file-import mr-2"></i>Run Manual Analysis';
+    };
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  function renderProcessStepsCustom(label, iconClass) {
+    return `<div class="glass rounded-xl p-6 mb-6 flex justify-center items-center py-10">
+      <div class="text-center">
+        <i class="${iconClass} text-4xl mb-4 text-blue-400"></i>
+        <h3 class="text-lg font-bold text-white">${label}</h3>
+        <p class="text-sm text-gray-400 mt-2">Please do not close this window...</p>
+      </div>
+    </div>`;
+  }
+
+  function renderProcessSteps(activeStep) {
+    const steps = [
+      { id: 'parsing', icon: 'fa-file-alt', label: 'Parsing Report', desc: 'Extracting accounts, inquiries, public records' },
+      { id: 'detecting', icon: 'fa-search', label: 'Detecting Violations', desc: 'Scanning 15+ violation categories across FCRA/FDCPA/ECOA' },
+      { id: 'scoring', icon: 'fa-calculator', label: 'Calculating Litigation Value', desc: 'Computing damages, settlement ranges, litigation score' },
+      { id: 'complete', icon: 'fa-check-circle', label: 'Analysis Complete', desc: 'Full results ready' },
+    ];
+    const stepOrder = ['parsing','detecting','scoring','complete'];
+    const activeIdx = stepOrder.indexOf(activeStep);
+
+    return `<div class="glass rounded-xl p-6 mb-6">
+      <h3 class="text-sm font-bold text-white mb-4"><i class="fas fa-cogs mr-2 text-blue-400"></i>Analysis Pipeline</h3>
+      <div class="space-y-3">${steps.map((s,i) => {
+        const isDone = i < activeIdx;
+        const isActive = i === activeIdx;
+        const cls = isDone ? 'step-done' : isActive ? 'step-active' : 'step-pending';
+        return `<div class="flex items-center gap-4 p-3 rounded-lg border ${cls} transition-all">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isDone?'bg-green-600':'isActive'?'bg-blue-600':'bg-gray-700'}">
+            ${isDone?'<i class="fas fa-check text-white text-xs"></i>':isActive?`<i class="fas ${s.icon} text-white text-xs progress-pulse"></i>`:`<i class="fas ${s.icon} text-gray-400 text-xs"></i>`}
+          </div>
+          <div class="flex-1"><div class="text-sm font-medium ${isDone?'text-green-400':isActive?'text-blue-300':'text-gray-500'}">${s.label}</div><div class="text-xs ${isDone?'text-green-400/70':isActive?'text-blue-400/70':'text-gray-600'}">${s.desc}</div></div>
+          ${isDone?'<i class="fas fa-check-circle text-green-400 text-sm"></i>':isActive?'<i class="fas fa-spinner fa-spin text-blue-400 text-sm"></i>':''}
+        </div>`;
+      }).join('')}</div></div>`;
+  }
+
+  function renderFullResults(el, result, data) {
+    const ls = result.litigationScore;
+    const scoreColor = ls.score >= 70 ? 'green' : ls.score >= 40 ? 'yellow' : 'gray';
+
+    el.innerHTML = `<div class="fade-in space-y-6">
+      ${renderProcessSteps('complete')}
+
+      <!-- SCORE HERO -->
+      <div class="glass rounded-2xl p-6 border ${ls.score>=70?'border-green-500/30':ls.score>=40?'border-yellow-500/30':'border-gray-600/30'}">
+        <div class="flex items-center gap-6">
+          <div class="text-center"><div class="w-24 h-24 rounded-full bg-${scoreColor}-600/20 border-4 border-${scoreColor}-500/50 flex items-center justify-center"><div><div class="text-3xl font-black text-${scoreColor}-400">${ls.score}</div><div class="text-[10px] text-${scoreColor}-400/70">/100</div></div></div><div class="text-xs font-bold text-${scoreColor}-400 mt-2">Grade: ${ls.grade}</div></div>
+          <div class="flex-1">
+            <h2 class="text-lg font-bold text-white mb-1">Litigation Analysis Complete</h2>
+            <p class="text-sm text-${scoreColor}-300 font-medium mb-3">${ls.recommendation}</p>
+            <div class="grid grid-cols-3 gap-3 text-center">
+              <div class="bg-gray-800/60 rounded-lg p-2"><div class="text-[10px] text-gray-400">Pre-Lit Settlement</div><div class="text-sm font-bold text-green-400">${money(ls.preLitSettlement.min)} &ndash; ${money(ls.preLitSettlement.max)}</div></div>
+              <div class="bg-gray-800/60 rounded-lg p-2"><div class="text-[10px] text-gray-400">Post-Filing</div><div class="text-sm font-bold text-green-400">${money(ls.postFilingSettlement.min)} &ndash; ${money(ls.postFilingSettlement.max)}</div></div>
+              <div class="bg-gray-800/60 rounded-lg p-2"><div class="text-[10px] text-gray-400">Trial Verdict</div><div class="text-sm font-bold text-green-300">${money(ls.trialVerdict.min)} &ndash; ${money(ls.trialVerdict.max)}</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUMMARY GRID -->
+      <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div class="glass rounded-lg p-3 text-center"><div class="text-2xl font-bold text-white">${result.totalAccounts}</div><div class="text-xs text-gray-400">Accounts</div></div>
+        <div class="glass rounded-lg p-3 text-center"><div class="text-2xl font-bold text-orange-400">${result.totalCollections}</div><div class="text-xs text-gray-400">Collections</div></div>
+        <div class="glass rounded-lg p-3 text-center"><div class="text-2xl font-bold text-yellow-400">${result.totalInquiries}</div><div class="text-xs text-gray-400">Inquiries</div></div>
+        <div class="glass rounded-lg p-3 text-center"><div class="text-2xl font-bold text-purple-400">${result.totalPublicRecords}</div><div class="text-xs text-gray-400">Public Records</div></div>
+        <div class="glass rounded-lg p-3 text-center"><div class="text-2xl font-bold text-red-400">${result.violationsFound}</div><div class="text-xs text-gray-400">Violations</div></div>
+      </div>
+
+      <!-- LITIGATION PLAN -->
+      ${ls.litigationPlan.length?`<div class="glass rounded-xl p-5">
+        <h3 class="text-sm font-bold text-white mb-3"><i class="fas fa-route mr-2 text-blue-400"></i>Recommended Litigation Plan</h3>
+        <div class="space-y-2">${ls.litigationPlan.map((step,i) => `<div class="flex items-start gap-3"><div class="w-6 h-6 rounded-full bg-blue-600/20 flex items-center justify-center shrink-0 mt-0.5"><span class="text-[10px] font-bold text-blue-400">${i+1}</span></div><div class="text-sm text-gray-300">${step}</div></div>`).join('')}</div>
+      </div>`:''}
+
+      <!-- BY DEFENDANT -->
+      ${Object.keys(ls.byDefendant).length?`<div class="glass rounded-xl p-5">
+        <h3 class="text-sm font-bold text-white mb-3"><i class="fas fa-building mr-2 text-orange-400"></i>Defendants &amp; Damages</h3>
+        <div class="space-y-2">${Object.entries(ls.byDefendant).map(([name,info]) => `<div class="bg-gray-800/40 rounded-lg p-3 flex items-center justify-between"><div><div class="text-sm font-medium text-white">${name}</div><div class="text-xs text-gray-400">${info.count} violation(s)</div></div><div class="text-sm font-bold text-green-400">${money(info.damages)}</div></div>`).join('')}</div>
+      </div>`:''}
+
+      <!-- ALL VIOLATIONS -->
+      ${result.violations.length?`<div class="glass rounded-xl p-5">
+        <h3 class="text-sm font-bold text-white mb-3"><i class="fas fa-exclamation-triangle mr-2 text-red-400"></i>All Violations Detected (${result.violations.length})</h3>
+        ${renderViolationsList(result.violations)}
+      </div>`:''}
+
+      <!-- ACTION BUTTONS -->
+      <div class="glass rounded-xl p-5">
+        <h3 class="text-sm font-bold text-white mb-3"><i class="fas fa-paper-plane mr-2 text-purple-400"></i>Next Steps</h3>
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <button onclick="window._nav('generate-doc',{clientId:'${data.clientId}',clientName:'${data.clientName}',reportId:'${result.reportId}'})" class="bg-purple-600/20 border border-purple-500/30 hover:bg-purple-600/30 text-purple-300 px-4 py-3 rounded-lg text-sm font-medium transition text-center"><i class="fas fa-file-contract text-lg mb-1 block"></i>Generate Documents</button>
+          <button onclick="window._bulkGenerate('${data.clientId}','${result.reportId}')" class="bg-blue-600/20 border border-blue-500/30 hover:bg-blue-600/30 text-blue-300 px-4 py-3 rounded-lg text-sm font-medium transition text-center"><i class="fas fa-layer-group text-lg mb-1 block"></i>Bulk Generate All</button>
+          <button onclick="window._exportViolations('${data.clientId}','${result.reportId}')" class="bg-green-600/20 border border-green-500/30 hover:bg-green-600/30 text-green-300 px-4 py-3 rounded-lg text-sm font-medium transition text-center"><i class="fas fa-download text-lg mb-1 block"></i>Export Report</button>
+          <button onclick="window._nav('client-detail',{clientId:'${data.clientId}'})" class="bg-gray-600/20 border border-gray-500/30 hover:bg-gray-600/30 text-gray-300 px-4 py-3 rounded-lg text-sm font-medium transition text-center"><i class="fas fa-user text-lg mb-1 block"></i>Client Profile</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  window._bulkGenerate = async function(clientId, reportId) {
+    try {
+      toast('Generating all dispute documents...', 'info');
+      const result = await api('/documents/generate-bulk', { method:'POST', body:JSON.stringify({
+        clientId, reportId,
+        docTypes: ['bureau-dispute','furnisher-dispute','debt-validation','609-disclosure','method-of-verification','cease-desist','intent-to-sue','cfpb-complaint','state-ag-complaint','goodwill-letter'],
+        bureau: 'Equifax',
+      })});
+      toast(`Generated ${result.count} documents!`, 'success');
+    } catch(err) { toast(err.message, 'error'); }
+  };
+
+  window._exportViolations = async function(clientId, reportId) {
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
+      const res = await fetch(`/api/violations/export?clientId=${clientId}${reportId?'&reportId='+reportId:''}`, { headers });
+      const text = await res.text();
+      const blob = new Blob([text], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `violation-report-${new Date().toISOString().split('T')[0]}.txt`;
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      toast('Report exported!', 'success');
+    } catch(err) { toast(err.message, 'error'); }
+  };
+
+  window._exportPDF = async function(reportId) {
+    try {
+      const headers = {};
+      if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
+      const res = await fetch(`/api/reports/${reportId}/pdf`, { headers });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Export failed'); }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `FCRA-Report-${reportId}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      toast('PDF report downloaded!', 'success');
+    } catch(err) { toast(err.message, 'error'); }
+  };
+
+  window._loadSample = function() {
+    const ta = $('textarea[name="rawText"]');
+    if (ta) ta.value = `EQUIFAX CREDIT REPORT
+Report Date: 01/15/2026
+Consumer Name: SAMPLE CONSUMER
+SSN: XXX-XX-4589
+
+ACCOUNT INFORMATION:
+
+Account Name: CAPITAL ONE BANK
+Account Number: ****5678
+Account Type: Revolving
+Account Status: Charged Off
+Date Opened: 02/10/2017
+Date of First Delinquency: 03/15/2018
+Date Charged Off: 09/15/2018
+Current Balance: $3,245
+High Balance: $5,000
+Original Amount: $5,000
+Payment Status: 180+ Days Past Due
+Payment History: CCCC1234566XXXXXXXXXX
+
+Account Name: MIDLAND CREDIT MANAGEMENT
+Account Number: ****9012
+Account Type: Collection
+Account Status: Collection
+Date Opened: 01/05/2019
+Current Balance: $3,245
+Original Amount: $2,800
+Original Creditor: CAPITAL ONE BANK
+
+Account Name: DISCOVER BANK
+Account Number: ****3456
+Account Type: Revolving
+Account Status: Paid/Closed
+Date Opened: 05/20/2020
+Current Balance: $1,200
+High Balance: $8,000
+Credit Limit: $8,000
+Payment Status: Current
+
+Account Name: PORTFOLIO RECOVERY ASSOCIATES
+Account Number: ****7890
+Account Type: Collection
+Account Status: Collection
+Date Opened: 06/01/2021
+Current Balance: $892
+Payment Status: Past Due
+
+Account Name: WELLS FARGO BANK
+Account Number: ****2345
+Account Type: Installment
+Account Status: Current
+Payment Status: Past Due 60 Days
+Date Opened: 08/15/2022
+Current Balance: $15,400
+Original Amount: $22,000
+High Balance: $22,000
+Monthly Payment: $450
+
+Account Name: SYNCHRONY BANK
+Account Number: ****6789
+Account Type: Revolving
+Account Status: Current
+Date Opened: 11/01/2023
+Current Balance: $4,500
+Credit Limit: 0
+High Balance: $3,000
+
+INQUIRIES:
+
+AMERICAN EXPRESS 01/10/2024
+CHASE BANK 06/15/2023
+LENDING TREE 03/20/2023
+CAPITAL ONE 08/01/2023
+DISCOVER 09/15/2023
+CITI BANK 10/20/2023
+WELLS FARGO 11/05/2023
+
+PUBLIC RECORDS:
+
+Chapter 7 Bankruptcy
+Filed: 02/14/2015
+Status: Discharged`;
+    toast('Sample loaded with extra violations', 'info');
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // REPORT DETAIL
+  // ═══════════════════════════════════════════════════════════════
+  async function pgReportDetail(el, data) {
+    el.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-center"><i class="fas fa-spinner fa-spin text-3xl text-blue-400 mb-3"></i><div class="text-sm text-gray-400">Loading report...</div></div></div>`;
+    try {
+      const res = await api(`/reports/${data.reportId}`);
+      const r = res.report;
+      const ls = res.litigationScore;
+      el.innerHTML = `<div class="fade-in">
+        <button onclick="window._nav('reports')" class="text-gray-400 hover:text-white text-sm mb-4 inline-flex items-center gap-1.5 transition"><i class="fas fa-arrow-left text-xs"></i>Back</button>
+        <div class="flex items-start justify-between mb-6"><div><h1 class="text-xl font-bold text-white">${r.bureau} Report</h1><div class="text-sm text-gray-400">${r.file_name} &bull; ${shortDate(r.created_at)}</div></div>
+          <div class="flex gap-2">
+            <button onclick="window._exportPDF('${r.id}')" class="bg-blue-600/20 border border-blue-500/30 text-blue-300 px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-file-pdf mr-1"></i>Download PDF</button>
+            <button onclick="window._exportViolations('','${r.id}')" class="bg-green-600/20 border border-green-500/30 text-green-300 px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-download mr-1"></i>Export</button>
+            <span class="px-3 py-1 rounded-lg text-xs font-medium ${r.status==='analyzed'?'bg-green-900/30 text-green-400':'bg-yellow-900/30 text-yellow-400'}">${r.status}</span>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+          <div class="glass rounded-lg p-3 text-center"><div class="text-lg font-bold text-white">${r.total_accounts||0}</div><div class="text-xs text-gray-400">Accounts</div></div>
+          <div class="glass rounded-lg p-3 text-center"><div class="text-lg font-bold text-white">${r.total_collections||0}</div><div class="text-xs text-gray-400">Collections</div></div>
+          <div class="glass rounded-lg p-3 text-center"><div class="text-lg font-bold text-white">${r.total_inquiries||0}</div><div class="text-xs text-gray-400">Inquiries</div></div>
+          <div class="glass rounded-lg p-3 text-center"><div class="text-lg font-bold text-red-400">${(res.violations||[]).length}</div><div class="text-xs text-gray-400">Violations</div></div>
+          <div class="glass rounded-lg p-3 text-center"><div class="text-lg font-bold text-${ls.score>=60?'green':ls.score>=40?'yellow':'gray'}-400">${ls.score}/100</div><div class="text-xs text-gray-400">Score (${ls.grade})</div></div>
+        </div>
+        ${(res.violations||[]).length?`<div class="glass rounded-xl p-5 mb-6"><h3 class="text-sm font-bold text-white mb-2">${ls.recommendation}</h3><div class="text-xs text-gray-400">Total: ${money(ls.totalDamagesMin)} &ndash; ${money(ls.totalDamagesMax)}</div></div>${renderViolationsList(res.violations)}`:'<div class="glass rounded-xl p-8 text-center text-gray-500">No violations in this report</div>'}
+      </div>`;
+    } catch(err) {
+      el.innerHTML = `<div class="fade-in"><button onclick="window._nav('reports')" class="text-gray-400 hover:text-white text-sm mb-4 inline-flex items-center gap-1.5 transition"><i class="fas fa-arrow-left text-xs"></i>Back</button><div class="glass rounded-xl p-8 border border-red-500/30 text-center"><i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i><h3 class="text-lg font-bold text-white mb-1">Failed to load report</h3><p class="text-sm text-gray-400">${err.message}</p></div></div>`;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // REPORTS LIST
+  // ═══════════════════════════════════════════════════════════════
+  async function pgReports(el) {
+    el.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-center"><i class="fas fa-spinner fa-spin text-3xl text-blue-400 mb-3"></i><div class="text-sm text-gray-400">Loading reports...</div></div></div>`;
+    try {
+      const clients = await api('/clients');
+      const withReports = clients.clients.filter(c => c.report_count > 0);
+      el.innerHTML = `<div class="fade-in">
+        <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">Credit Reports</h1><p class="text-sm text-gray-400">${withReports.length} client${withReports.length!==1?'s':''} with reports</p></div></div>
+        ${withReports.length?`<div class="space-y-2">${withReports.map(c=>`<div onclick="window._nav('client-detail',{clientId:'${c.id}'})" class="glass rounded-xl p-4 card-hover cursor-pointer"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 font-bold text-sm">${(c.first_name||'?')[0]}${(c.last_name||'?')[0]}</div><div class="flex-1"><div class="text-sm font-medium text-white">${c.first_name} ${c.last_name}</div><div class="text-xs text-gray-400">${c.report_count} report(s) &bull; ${c.violation_count} violation(s)</div></div>${c.damages_max?`<div class="text-sm font-bold text-green-400">${money(c.damages_max)}</div>`:''}</div></div>`).join('')}</div>`:'<div class="glass rounded-xl p-8 text-center text-gray-500"><i class="fas fa-file-alt text-3xl mb-3"></i><p>No reports yet</p><p class="text-xs text-gray-600 mt-2">Upload a credit report to get started</p></div>'}
+      </div>`;
+    } catch(err) {
+      el.innerHTML = `<div class="fade-in"><div class="glass rounded-xl p-8 border border-red-500/30 text-center"><i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i><h3 class="text-lg font-bold text-white mb-1">Failed to load reports</h3><p class="text-sm text-gray-400">${err.message}</p><button onclick="window._nav('reports')" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Retry</button></div></div>`;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // VIOLATIONS LIST
+  // ═══════════════════════════════════════════════════════════════
+  async function pgViolations(el) {
+    el.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-center"><i class="fas fa-spinner fa-spin text-3xl text-red-400 mb-3"></i><div class="text-sm text-gray-400">Loading violations...</div></div></div>`;
+    try {
+      const d = await api('/violations');
+      const totalMin = d.violations.reduce((s,v) => s + (v.total_damages_min||0), 0);
+      const totalMax = d.violations.reduce((s,v) => s + (v.total_damages_max||0), 0);
+      el.innerHTML = `<div class="fade-in">
+        <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">All Violations</h1><p class="text-sm text-gray-400">${d.violations.length} total &bull; ${money(totalMin)} &ndash; ${money(totalMax)}</p></div>
+          <div class="flex gap-2">
+            <select id="f-sev" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-xs outline-none"><option value="">All Severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+            <select id="f-cat" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-xs outline-none"><option value="">All Categories</option><option value="FCRA">FCRA</option><option value="FDCPA">FDCPA</option><option value="ECOA">ECOA</option></select>
+          </div>
+        </div><div id="v-list">${renderViolationsList(d.violations)}</div></div>`;
+      const reload = async () => { const sev = $('#f-sev').value; const cat = $('#f-cat').value; const f = await api(`/violations?${sev?'severity='+sev+'&':''}${cat?'category='+cat:''}`); $('#v-list').innerHTML = renderViolationsList(f.violations); };
+      $('#f-sev').onchange = reload;
+      $('#f-cat').onchange = reload;
+    } catch(err) {
+      el.innerHTML = `<div class="fade-in"><div class="glass rounded-xl p-8 border border-red-500/30 text-center"><i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i><h3 class="text-lg font-bold text-white mb-1">Failed to load violations</h3><p class="text-sm text-gray-400">${err.message}</p><button onclick="window._nav('violations')" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Retry</button></div></div>`;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // DOCUMENTS
+  // ═══════════════════════════════════════════════════════════════
+  async function pgDocuments(el) {
+    el.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-center"><i class="fas fa-spinner fa-spin text-3xl text-blue-400 mb-3"></i><div class="text-sm text-gray-400">Loading documents...</div></div></div>`;
+    try {
+      const d = await api('/documents');
+      el.innerHTML = `<div class="fade-in">
+        <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">Documents</h1><p class="text-sm text-gray-400">${d.documents.length} generated</p></div></div>
+        ${d.documents.length?`<div class="space-y-2">${d.documents.map(dc=>`<div onclick="window._viewDoc('${dc.id}')" class="glass rounded-xl p-4 card-hover cursor-pointer"><div class="flex items-center justify-between"><div><div class="text-sm font-medium text-white"><i class="fas fa-file-contract mr-2 text-purple-400"></i>${dc.title}</div><div class="text-xs text-gray-400">${dc.first_name} ${dc.last_name} &bull; ${dc.doc_type} &bull; ${shortDate(dc.created_at)}</div></div><span class="px-2 py-0.5 rounded text-[10px] font-medium ${dc.status==='draft'?'bg-yellow-900/30 text-yellow-400':'bg-green-900/30 text-green-400'}">${dc.status}</span></div></div>`).join('')}</div>`:'<div class="glass rounded-xl p-8 text-center border border-gray-700"><i class="fas fa-folder-open text-3xl text-gray-600 mb-3"></i><h3 class="text-sm font-semibold text-white mb-1">No documents yet</h3><p class="text-xs text-gray-500">Generate your first legal document from a client profile</p></div>'}
+      </div>`;
+    } catch(err) {
+      el.innerHTML = `<div class="fade-in"><div class="glass rounded-xl p-8 border border-red-500/30 text-center"><i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i><h3 class="text-lg font-bold text-white mb-1">Failed to load documents</h3><p class="text-sm text-gray-400">${err.message}</p><button onclick="window._nav('documents')" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Retry</button></div></div>`;
+    }
+  }
+
+  window._viewDoc = async function(id) {
+    const el = $('#page-content');
+    const d = await api(`/documents/${id}`);
+    const dc = d.document;
+    const clientRes = await api(`/clients/${dc.client_id}`).catch(() => null);
+    const client = clientRes?.client || {};
+    el.innerHTML = `<div class="fade-in">
+      <button onclick="window._nav('documents')" class="text-gray-400 hover:text-white text-sm mb-4 inline-flex items-center gap-1.5 transition"><i class="fas fa-arrow-left text-xs"></i>Back</button>
+      <div class="flex items-center justify-between mb-4"><h1 class="text-xl font-bold text-white">${dc.title}</h1>
+        <div class="flex gap-2"><button onclick="window._copyDoc()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-copy mr-1"></i>Copy</button><button onclick="window._emailDoc()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-envelope mr-1"></i>Email</button><button onclick="window._mailDoc('${dc.id}','${encodeURIComponent(client.first_name||'')}','${encodeURIComponent(client.last_name||'')}','${encodeURIComponent(client.address_line1||'')}','${encodeURIComponent(client.city||'')}','${encodeURIComponent(client.state||'')}','${encodeURIComponent(client.zip||'')}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-paper-plane mr-1"></i>Mail</button><button onclick="window._printDoc()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-print mr-1"></i>Print</button></div>
+      </div>
+      <div class="glass rounded-xl p-6"><pre id="doc-content" class="whitespace-pre-wrap text-sm text-gray-200 font-mono leading-relaxed">${dc.content}</pre></div>
+    </div>`;
+  };
+
+  window._copyDoc = function() { const c = $('#doc-content')?.textContent; if (c) { navigator.clipboard.writeText(c); toast('Copied!','success'); } };
+  window._printDoc = function() { const c = $('#doc-content')?.textContent; if (c) { const w = window.open('','_blank'); w.document.write(`<html><head><title>Document</title><style>body{font-family:monospace;white:pre-wrap;padding:40px;font-size:12px;line-height:1.6;}</style></head><body>${c}</body></html>`); w.document.close(); w.print(); } };
+  window._emailDoc = function() { const c = $('#doc-content')?.textContent; if (!c) return; const subject = encodeURIComponent('FCRA Legal Document'); const body = encodeURIComponent(c); window.open(`mailto:?subject=${subject}&body=${body}`, '_self'); };
+  window._mailDoc = async function(id, firstName, lastName, address, city, state, zip) {
+    const recipientName = `${decodeURIComponent(firstName || '')} ${decodeURIComponent(lastName || '')}`.trim();
+    const recipientAddress = decodeURIComponent(address || '');
+    const recipientCity = decodeURIComponent(city || '');
+    const recipientState = decodeURIComponent(state || '');
+    const recipientZip = decodeURIComponent(zip || '');
+    if (!recipientAddress || !recipientCity || !recipientState || !recipientZip) {
+      toast('Client address incomplete — please fill address in client profile first','error');
+      return;
+    }
+    if (!confirm(`Mail "${decodeURIComponent(id)}"?\n\nTo: ${recipientName}\n${recipientAddress}\n${recipientCity}, ${recipientState} ${recipientZip}\n\nThis will send via Click2Mail.`)) return;
+    try {
+      const res = await fetch(`/api/documents/${id}/send`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ recipientName, recipientAddress, recipientCity, recipientState, recipientZip }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Send failed');
+      toast(`Mailed successfully! Mailing ID: ${data.mailingId}`,'success');
+    } catch(err) { toast(err.message,'error'); }
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // GENERATE DOCUMENT
+  // ═══════════════════════════════════════════════════════════════
+  async function pgGenerateDoc(el, data) {
+    const typesRes = await api('/document-types');
+    // Group by category
+    const categories = {};
+    typesRes.types.forEach(t => { if (!categories[t.category]) categories[t.category] = []; categories[t.category].push(t); });
+
+    el.innerHTML = `<div class="fade-in max-w-3xl">
+      <button onclick="window._nav('client-detail',{clientId:'${data.clientId}'})" class="text-gray-400 hover:text-white text-sm mb-4 inline-flex items-center gap-1.5 transition"><i class="fas fa-arrow-left text-xs"></i>Back to ${data.clientName}</button>
+      <h1 class="text-xl font-bold text-white mb-1">Generate Legal Document</h1>
+      <p class="text-sm text-gray-400 mb-6">10 court-ready templates for ${data.clientName}</p>
+
+      <div class="bg-blue-900/30 border border-blue-600/40 rounded-xl p-4 mb-6">
+        <h3 class="text-sm font-semibold text-blue-300 mb-2"><i class="fas fa-gavel mr-2"></i>Legal Disclaimer</h3>
+        <p class="text-xs text-blue-200/80 leading-relaxed">
+          <strong>NOT LEGAL ADVICE:</strong> Documents generated here are prepared by a document preparation service, NOT an attorney.
+          Under FCRA § 1681 et seq., you have rights to dispute inaccurate information. This service does not guarantee dispute outcomes.
+          For legal advice about your specific situation, consult a qualified attorney. See our
+          <a href="/compliance/disclaimers" target="_blank" class="underline hover:text-blue-100">full disclaimers</a>.
+        </p>
+      </div>
+
+      <form id="gen-doc-form" class="space-y-4">
+        <div><label class="block text-xs text-gray-400 mb-1.5">Document Type *</label>
+          <select name="docType" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none">
+            ${Object.entries(categories).map(([cat, types]) => `<optgroup label="${cat}">${types.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}</optgroup>`).join('')}
+          </select>
+          <div id="doc-desc" class="text-xs text-gray-500 mt-1"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="block text-xs text-gray-400 mb-1.5">Bureau</label><select name="bureau" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none"><option value="Equifax">Equifax</option><option value="Experian">Experian</option><option value="TransUnion">TransUnion</option></select></div>
+          <div><label class="block text-xs text-gray-400 mb-1.5">Creditor Name</label><input type="text" name="creditorName" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="e.g., Midland Credit"></div>
+        </div>
+        <div><label class="block text-xs text-gray-400 mb-1.5">Creditor Address</label><input type="text" name="creditorAddress" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="P.O. Box..."></div>
+        <div class="flex gap-3">
+          <button type="submit" id="gen-btn" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition"><i class="fas fa-magic mr-2"></i>Generate</button>
+          <button type="button" onclick="window._bulkGenerate('${data.clientId}','${data.reportId||''}')" class="bg-blue-600/20 border border-blue-500/30 text-blue-300 px-4 py-2.5 rounded-lg text-sm font-medium transition"><i class="fas fa-layer-group mr-1"></i>Generate All 10</button>
+        </div>
+      </form>
+      <div id="gen-result" class="hidden mt-6"></div>
+    </div>`;
+
+    // Show description on type change
+    const docTypeMap = {};
+    typesRes.types.forEach(t => docTypeMap[t.id] = t);
+    const sel = $('select[name="docType"]');
+    const desc = $('#doc-desc');
+    sel.onchange = () => { const t = docTypeMap[sel.value]; if (t) desc.textContent = t.description; };
+    sel.dispatchEvent(new Event('change'));
+
+    $('#gen-doc-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const btn = $('#gen-btn');
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating...';
+      try {
+        const result = await api('/documents/generate', { method:'POST', body:JSON.stringify({ clientId:data.clientId, reportId:data.reportId||null, docType:fd.get('docType'), bureau:fd.get('bureau'), creditorName:fd.get('creditorName'), creditorAddress:fd.get('creditorAddress') })});
+        const resEl = $('#gen-result');
+        resEl.classList.remove('hidden');
+        resEl.innerHTML = `<div class="glass rounded-xl p-5 fade-in">
+          <div class="flex items-center justify-between mb-3"><h3 class="text-sm font-bold text-white">${result.title}</h3><div class="flex gap-2"><button onclick="navigator.clipboard.writeText($('#gen-doc-content').textContent);window._toast('Copied!','success')" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg text-xs transition"><i class="fas fa-copy mr-1"></i>Copy</button><button onclick="window._viewDoc('${result.id}')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs transition"><i class="fas fa-external-link-alt mr-1"></i>View</button></div></div>
+          <pre id="gen-doc-content" class="whitespace-pre-wrap text-xs text-gray-300 font-mono bg-gray-800/60 rounded-lg p-4 max-h-96 overflow-y-auto">${result.content}</pre></div>`;
+        toast('Document generated!', 'success');
+      } catch(err) { toast(err.message, 'error'); }
+      finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-magic mr-2"></i>Generate'; }
+    };
+  }
+
+  window._toast = toast;
+
+  // ═══════════════════════════════════════════════════════════════
+  // TEAM
+  // ═══════════════════════════════════════════════════════════════
+  async function pgTeam(el) {
+    el.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-center"><i class="fas fa-spinner fa-spin text-3xl text-blue-400 mb-3"></i><div class="text-sm text-gray-400">Loading team...</div></div></div>`;
+    try {
+      const d = await api('/team');
+      el.innerHTML = `<div class="fade-in">
+        <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">Team</h1><p class="text-sm text-gray-400">${d.members.length} members &bull; ${state.org?.plan||'free'} plan</p></div>
+          ${state.user?.role==='admin'?`<button onclick="$('#invite-form').classList.toggle('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"><i class="fas fa-user-plus mr-1.5"></i>Add Member</button>`:''}
+        </div>
+        <div id="invite-form" class="hidden glass rounded-xl p-5 mb-6 fade-in"><h3 class="text-sm font-semibold text-white mb-4">Add Team Member</h3>
+          <form id="team-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div><label class="block text-xs text-gray-400 mb-1">Name *</label><input type="text" name="name" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div>
+            <div><label class="block text-xs text-gray-400 mb-1">Email *</label><input type="email" name="email" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div>
+            <div><label class="block text-xs text-gray-400 mb-1">Password *</label><input type="password" name="password" required minlength="6" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div>
+            <div><label class="block text-xs text-gray-400 mb-1">Role</label><select name="role" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"><option value="member">Member</option><option value="admin">Admin</option></select></div>
+            <div class="md:col-span-2 flex gap-2"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition">Add</button><button type="button" onclick="$('#invite-form').classList.add('hidden')" class="bg-gray-700 text-white px-5 py-2 rounded-lg text-sm">Cancel</button></div>
+          </form></div>
+        ${d.members.length?`<div class="space-y-2">${d.members.map(m=>`<div class="glass rounded-xl p-4"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-full ${m.id===state.user?.id?'bg-blue-600':'bg-gray-700'} flex items-center justify-center text-white font-bold text-sm">${(m.name||'?')[0].toUpperCase()}</div><div class="flex-1"><div class="text-sm font-medium text-white">${m.name} ${m.id===state.user?.id?'<span class="text-xs text-blue-400">(you)</span>':''}</div><div class="text-xs text-gray-400">${m.email}</div></div><span class="px-2 py-0.5 rounded text-[10px] font-medium ${m.role==='admin'?'bg-purple-900/30 text-purple-400':'bg-gray-700 text-gray-400'}">${m.role}</span><span class="px-2 py-0.5 rounded text-[10px] font-medium ${m.is_active?'bg-green-900/30 text-green-400':'bg-red-900/30 text-red-400'}">${m.is_active?'Active':'Inactive'}</span></div></div>`).join('')}</div>`:'<div class="glass rounded-xl p-8 text-center border border-gray-700"><i class="fas fa-users text-3xl text-gray-600 mb-3"></i><h3 class="text-sm font-semibold text-white mb-1">No team members yet</h3><p class="text-xs text-gray-500">Invite your first team member to get started</p></div>'}
+      </div>`;
+      const f = $('#team-form');
+      if (f) f.onsubmit = async (e) => { e.preventDefault(); const fd = new FormData(e.target); try { await api('/team/invite',{method:'POST',body:JSON.stringify({name:fd.get('name'),email:fd.get('email'),password:fd.get('password'),role:fd.get('role')})}); toast('Member added!','success'); await pgTeam(el); } catch(err) { toast(err.message,'error'); } };
+    } catch(err) {
+      el.innerHTML = `<div class="fade-in"><div class="glass rounded-xl p-8 border border-red-500/30 text-center"><i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i><h3 class="text-lg font-bold text-white mb-1">Failed to load team</h3><p class="text-sm text-gray-400">${err.message}</p><button onclick="window._nav('team')" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Retry</button></div></div>`;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // LEGAL PAGES
+  // ═══════════════════════════════════════════════════════════════
+  async function pgLegal(el) {
+    el.innerHTML = `<div class="fade-in">
+      <div class="flex items-center justify-between mb-8">
+        <div><h1 class="text-xl font-bold text-white">Legal & Compliance</h1><p class="text-sm text-gray-400">Terms of service, privacy policy, and disclaimers</p></div>
+      </div>
+      <div class="space-y-6">
+        <div class="glass rounded-xl border border-gray-700 overflow-hidden">
+          <div class="bg-gray-800/50 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3"><i class="fas fa-gavel text-blue-400"></i><div><div class="text-sm font-semibold text-white">Terms of Service</div><div class="text-[10px] text-gray-500">Last updated April 22, 2026</div></div></div>
+            <a href="/legal/terms" target="_blank" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"><i class="fas fa-external-link-alt"></i>View full document</a>
+          </div>
+          <div class="p-6 text-sm text-gray-300 space-y-4">
+            <p>By using the FCRA Supreme Violation Detector service, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use our service.</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="bg-gray-800/40 rounded-lg p-4">
+                <div class="text-xs font-semibold text-blue-400 mb-2">Service Usage</div>
+                <ul class="text-xs text-gray-400 space-y-1">
+                  <li>• You must be 18 or older to use this service</li>
+                  <li>• You are responsible for maintaining account security</li>
+                  <li>• You agree to use the service only for lawful purposes</li>
+                  <li>• You may not reverse engineer or copy our software</li>
+                </ul>
+              </div>
+              <div class="bg-gray-800/40 rounded-lg p-4">
+                <div class="text-xs font-semibold text-purple-400 mb-2">Dispute Documents</div>
+                <ul class="text-xs text-gray-400 space-y-1">
+                  <li>• We prepare dispute documents only</li>
+                  <li>• We do not provide legal advice</li>
+                  <li>• Consult an attorney for legal representation</li>
+                  <li>• FCRA rights under 15 U.S.C. § 1681 et seq.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="glass rounded-xl border border-gray-700 overflow-hidden">
+          <div class="bg-gray-800/50 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3"><i class="fas fa-shield-alt text-purple-400"></i><div><div class="text-sm font-semibold text-white">Privacy Policy</div><div class="text-[10px] text-gray-500">Last updated April 22, 2026</div></div></div>
+            <a href="/legal/privacy" target="_blank" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"><i class="fas fa-external-link-alt"></i>View full document</a>
+          </div>
+          <div class="p-6 text-sm text-gray-300 space-y-4">
+            <p>We take your privacy seriously. This policy describes how we collect, use, and protect your personal information.</p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="bg-gray-800/40 rounded-lg p-4">
+                <div class="text-xs font-semibold text-green-400 mb-2">Data We Collect</div>
+                <ul class="text-xs text-gray-400 space-y-1">
+                  <li>• Name and email address</li>
+                  <li>• Credit report data (encrypted)</li>
+                  <li>• Usage and analytics data</li>
+                  <li>• Payment information via Stripe</li>
+                </ul>
+              </div>
+              <div class="bg-gray-800/40 rounded-lg p-4">
+                <div class="text-xs font-semibold text-amber-400 mb-2">How We Use It</div>
+                <ul class="text-xs text-gray-400 space-y-1">
+                  <li>• Provide and improve our services</li>
+                  <li>• Generate dispute documents</li>
+                  <li>• Process payments securely</li>
+                  <li>• Communicate about your account</li>
+                </ul>
+              </div>
+              <div class="bg-gray-800/40 rounded-lg p-4">
+                <div class="text-xs font-semibold text-red-400 mb-2">Your Rights</div>
+                <ul class="text-xs text-gray-400 space-y-1">
+                  <li>• Request data export (CCPA)</li>
+                  <li>• Request data deletion (GDPR)</li>
+                  <li>• Opt-out of communications</li>
+                  <li>• Secure account deletion</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="glass rounded-xl border border-amber-500/30 overflow-hidden">
+          <div class="bg-amber-900/20 border-b border-amber-600/30 px-6 py-4">
+            <div class="flex items-center gap-3"><i class="fas fa-exclamation-triangle text-amber-400"></i><div><div class="text-sm font-semibold text-amber-300">Important Disclaimers</div><div class="text-[10px] text-amber-500/70">Legal notices regarding our service</div></div></div>
+          </div>
+          <div class="p-6 text-sm text-gray-300 space-y-4">
+            <div class="p-4 bg-amber-900/20 border border-amber-600/30 rounded-lg">
+              <div class="text-xs font-bold text-amber-300 mb-2">⚠️ NOT LEGAL ADVICE</div>
+              <p class="text-xs text-gray-400 leading-relaxed">FCRA Supreme Detector prepares dispute documents only. We are NOT a law firm and do not provide legal advice. Nothing on this platform constitutes legal advice. For legal advice about your specific situation, consult a qualified attorney. FCRA rights are governed by 15 U.S.C. § 1681 et seq.</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="bg-gray-800/40 rounded-lg p-4">
+                <div class="text-xs font-semibold text-gray-300 mb-2">Accuracy of Credit Reports</div>
+                <p class="text-xs text-gray-400 leading-relaxed">We analyze credit reports provided by credit bureaus. We are not responsible for errors in the original credit reports issued by Equifax, Experian, or TransUnion. Always verify all information directly with the credit bureaus.</p>
+              </div>
+              <div class="bg-gray-800/40 rounded-lg p-4">
+                <div class="text-xs font-semibold text-gray-300 mb-2">No Guarantee of Results</div>
+                <p class="text-xs text-gray-400 leading-relaxed">We prepare documents based on FCRA guidelines, but we cannot guarantee any specific outcome from dispute filings. Results depend on many factors including bureau response times, accuracy of information, and applicable law.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // BILLING
+  // ═══════════════════════════════════════════════════════════════
+  async function pgBilling(el) {
+    const plans = [
+      { id: 'starter', name: 'Starter', price: 49, color: 'gray', badge: '', features: ['10 Clients/mo', '25 Report analyses/mo', 'Basic severity tags', 'Standard violation detection', 'PDF reports'], priceId: null },
+      { id: 'professional', name: 'Professional', price: 199, color: 'blue', badge: 'MOST POPULAR', features: ['100 Clients/mo', 'Unlimited report analyses', 'Litigation scoring', '15 FCRA letters (all templates)', '15-category violation engine', 'Case law database', 'SOL calculator', 'Priority email support'], priceId: 'price_PRO_199' },
+      { id: 'enterprise', name: 'Enterprise', price: 399, color: 'purple', badge: 'TEAM', features: ['Unlimited Clients', 'Unlimited everything', '38 legal document templates', 'Full case law database (300+ cases)', 'Expert consultation add-on', 'White-label reports', 'API access', 'Dedicated account manager'], priceId: 'price_ENT_399' },
+      { id: 'unlimited', name: 'Unlimited', price: 799, color: 'amber', badge: 'ENTERPRISE', features: ['Everything in Enterprise', 'Unlimited MFSN credit reports', 'Full FCRA knowledge base', 'Custom integrations', 'SLA guarantee', 'On-site training available', 'Quarterly business review', 'Multi-org management'], priceId: 'price_UNL_799' }
+    ];
+
+    el.innerHTML = `<div class="fade-in">
+      <div class="flex items-center justify-between mb-8"><div><h1 class="text-xl font-bold text-white">Billing & Subscription</h1><p class="text-sm text-gray-400">Manage your organization\'s plan</p></div>
+        <div class="px-3 py-1 bg-blue-600/20 border border-blue-500/30 rounded-full text-[10px] font-bold text-blue-400 uppercase tracking-wider">Current: ${state.org?.plan || 'Free'}</div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        ${plans.map(p => `
+          <div class="glass rounded-2xl p-5 flex flex-col border-2 ${state.org?.plan === p.id ? 'border-' + p.color + '-500 ring-4 ring-' + p.color + '-500/10' : 'border-gray-800'} relative overflow-hidden">
+            ${p.badge ? `<div class="absolute top-3 right-3 ${p.color === 'blue' ? 'bg-blue-600' : p.color === 'purple' ? 'bg-purple-600' : p.color === 'amber' ? 'bg-amber-600' : 'bg-gray-600'} px-2 py-0.5 rounded text-[9px] font-bold text-white uppercase tracking-wider">${p.badge}</div>` : ''}
+            <div class="mb-4 mt-2">
+              <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">${p.name}</div>
+              <div class="flex items-baseline"><span class="text-3xl font-bold text-white">$${p.price}</span><span class="text-gray-500 text-xs ml-1">/month</span></div>
+            </div>
+            <ul class="flex-1 space-y-2 mb-5">
+              ${p.features.map(f => `<li class="flex items-start gap-2 text-[11px] text-gray-300"><i class="fas fa-check text-${p.color}-500 mt-0.5"></i> <span>${f}</span></li>`).join('')}
+            </ul>
+            ${p.id === 'starter' ?
+              `<button disabled class="w-full py-2 rounded-lg text-sm font-semibold bg-gray-700 text-gray-500 cursor-not-allowed">Free Tier</button>` :
+              `<button onclick="window._checkout('${p.id}')" class="w-full py-2 rounded-lg text-sm font-semibold ${state.org?.plan === p.id ? 'bg-gray-700 text-white' : 'bg-' + p.color + '-600 hover:bg-' + p.color + '-700 text-white'} transition">${state.org?.plan === p.id ? 'Current Plan' : 'Upgrade'}</button>`
+            }
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CHECKOUT
+  // ═══════════════════════════════════════════════════════════════
+  window._checkout = async (planId) => {
+    const btn = $(`[onclick="window._checkout('${planId}')"]`);
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Redirecting...'; }
+    try {
+      const { url } = await api('/billing/checkout', { method: 'POST', body: JSON.stringify({ planId }) });
+      window.location.href = url;
+    } catch(err) {
+      toast(err.message, 'error');
+      if (btn) { btn.disabled = false; btn.innerHTML = 'Upgrade'; }
+    }
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // REPORT HISTORY
+  // ═══════════════════════════════════════════════════════════════
+  async function pgReportHistory(el) {
+    el.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-center"><i class="fas fa-spinner fa-spin text-3xl text-blue-400 mb-3"></i><div class="text-sm text-gray-400">Loading report history...</div></div></div>`;
+    try {
+      const d = await api('/reports');
+      el.innerHTML = `<div class="fade-in">
+        <div class="flex items-center justify-between mb-6">
+          <div><h1 class="text-xl font-bold text-white">Report History</h1><p class="text-sm text-gray-400">${d.total} total report${d.total!==1?'s':''}</p></div>
+        </div>
+        ${d.reports.length ? `<div class="space-y-2">${d.reports.map(r=>`<div onclick="window._nav('report-detail',{reportId:'${r.id}',clientId:'${r.client_id}'})" class="glass rounded-xl p-4 card-hover cursor-pointer">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 font-bold text-sm">${(r.first_name||'?')[0]}${(r.last_name||'?')[0]}</div>
+              <div>
+                <div class="text-sm font-medium text-white">${r.first_name} ${r.last_name}</div>
+                <div class="text-xs text-gray-400">
+                  <span class="inline-flex items-center gap-1"><i class="fas fa-calendar text-[10px]"></i>${shortDate(r.report_date||r.created_at)}</span>
+                  <span class="mx-1.5">&bull;</span>
+                  <span class="capitalize">${r.bureau||'Unknown'}</span>
+                  <span class="mx-1.5">&bull;</span>
+                  <span class="capitalize">${r.status||'unknown'}</span>
+                </div>
+              </div>
+            </div>
+            <div class="text-right">
+              <div class="text-sm font-medium ${r.violation_count>0?'text-red-400':'text-green-400'}">${r.violation_count} violation${r.violation_count!==1?'s':''}</div>
+              ${r.total_damages ? `<div class="text-xs text-gray-400">${money(r.total_damages)} est. damages</div>` : ''}
+            </div>
+          </div>
+        </div>`).join('')}</div>
+        ${d.total > d.limit ? `<div class="mt-6 flex justify-center"><div class="text-xs text-gray-500">Showing ${d.limit} of ${d.total} reports — paginated view coming soon</div></div>` : ''}
+        `:'<div class="glass rounded-xl p-8 text-center border border-gray-700"><i class="fas fa-file-alt text-3xl text-gray-600 mb-3"></i><h3 class="text-sm font-semibold text-white mb-1">No reports yet</h3><p class="text-xs text-gray-500">Upload a credit report from the Clients page to get started</p><button onclick="window._nav(\'clients\')" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Go to Clients</button></div>'}
+      </div>`;
+    } catch(err) {
+      el.innerHTML = `<div class="fade-in"><div class="glass rounded-xl p-8 border border-red-500/30 text-center"><i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i><h3 class="text-lg font-bold text-white mb-1">Failed to load report history</h3><p class="text-sm text-gray-400">${err.message}</p><button onclick="window._nav('report-history')" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Retry</button></div></div>`;
+    }
+  }
+
+  render();
+})();

@@ -1,0 +1,30 @@
+# prod
+dist/
+
+# dev
+.yarn/
+.vscode/
+!.vscode/launch.json
+!.vscode/*.code-snippets
+.idea/
+.wrangler/
+*.local
+
+# deps
+node_modules/
+.pnpm-store/
+
+# env (NEVER commit real .env files)
+.env
+.env.production
+.env.development
+.dev.vars
+.env.example
+
+# logs
+logs/
+*.log
+
+# misc
+.DS_Store
+*.pem
