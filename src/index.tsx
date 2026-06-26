@@ -825,7 +825,7 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
       const clientSecret = 'WE_9tIrlwv0yvLW83CNmqlkyCIJVaxV5ouVu2sJ7QYQ';
       const authHeader = 'Basic ' + btoa(`${clientKey}:${clientSecret}`);
 
-      const authRes = await fetch('https://api.consumerdirect.com/v1.1/member/authenticate', {
+      const authRes = await fetch('https://api.smartcredit.com/v1.1/member/authenticate', {
         method: 'POST',
         headers: {
           'Authorization': authHeader,
@@ -852,7 +852,7 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
     if (resolvedTrackingToken && !payload) {
       const clientKey = '19343205-b3a9-4143-8bef-2cb5da0c731f';
       const clientSecret = 'WE_9tIrlwv0yvLW83CNmqlkyCIJVaxV5ouVu2sJ7QYQ';
-      const url = `https://api.consumerdirect.com/v1.1/report/retrieve?clientKey=${clientKey}&trackingToken=${resolvedTrackingToken}`;
+      const url = `https://api.smartcredit.com/v1.1/report/retrieve?clientKey=${clientKey}&trackingToken=${resolvedTrackingToken}`;
       const authHeader = 'Basic ' + btoa(`${clientKey}:${clientSecret}`);
 
       const res = await fetch(url, {
