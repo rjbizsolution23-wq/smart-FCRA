@@ -141,8 +141,18 @@ export function generatePDFReport(data: PDFReportData): Uint8Array {
     doc.text('No statutory or regulatory violations were detected in this credit report segment.', margin, y + 5);
   } else {
     data.violations.forEach((violation: any, index: number) => {
-      // Check for page overflow
-      if (y + 40 > pageHeight - margin) {
+      // Clean raw markdown if present in any of the fields
+      const cleanCategory = stripMarkdown(violation.category || 'FCRA Inaccuracy');
+      const cleanAccount = stripMarkdown(violation.accountName || violation.creditorName || 'Inquiry / Demographic File');
+      const cleanDescription = stripMarkdown(violation.description || 'Statutory inaccuracy detected.');
+
+      // Split description text and calculate dynamic card size
+      const descLines = doc.splitTextToSize(cleanDescription, contentWidth - 15);
+      const lineCount = descLines.length;
+      const cardHeight = 18 + (lineCount * 4.0); // 26mm height if lineCount is 2, matching the premium spacing perfectly
+
+      // Check for page overflow dynamically based on calculated height
+      if (y + cardHeight + 10 > pageHeight - margin) {
         doc.addPage();
         y = margin + 10;
         doc.setFont('Helvetica', 'bold');
@@ -156,34 +166,33 @@ export function generatePDFReport(data: PDFReportData): Uint8Array {
 
       // Draw violation card background
       setFillColor(lightGray);
-      doc.rect(margin, y, contentWidth, 26, 'F');
+      doc.rect(margin, y, contentWidth, cardHeight, 'F');
       setDrawColor(borderGray);
-      doc.rect(margin, y, contentWidth, 26, 'D');
+      doc.rect(margin, y, contentWidth, cardHeight, 'D');
 
       // Violation Indicator Badge (Red bar)
       setFillColor(alertRed);
-      doc.rect(margin, y, 2, 26, 'F');
+      doc.rect(margin, y, 2, cardHeight, 'F');
 
       // Index and Category
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(10);
       setTextColor(alertRed);
-      doc.text(`Violation #${index + 1}: ${violation.category || 'FCRA Inaccuracy'}`, margin + 5, y + 6);
+      doc.text(`Violation #${index + 1}: ${cleanCategory}`, margin + 5, y + 6);
 
       // Account / Creditor Name
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(9);
       setTextColor(darkGray);
-      doc.text(`Account / Item: ${violation.accountName || violation.creditorName || 'Inquiry / Demographic File'}`, margin + 5, y + 12);
+      doc.text(`Account / Item: ${cleanAccount}`, margin + 5, y + 12);
 
       // Description text (Split long text to fit)
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(8.5);
       setTextColor(darkGray);
-      const descLines = doc.splitTextToSize(violation.description || 'Statutory inaccuracy detected.', contentWidth - 15);
       doc.text(descLines, margin + 5, y + 18);
 
-      y += 32;
+      y += cardHeight + 6; // Spacing of 6mm between cards
     });
   }
 
@@ -205,3 +214,20 @@ export function generatePDFReport(data: PDFReportData): Uint8Array {
   // Output Uint8Array
   return new Uint8Array(doc.output('arraybuffer'));
 }
+
+/**
+ * Robustly strips out standard markdown formatting syntax to ensure plain text accuracy.
+ */
+function stripMarkdown(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')        // Bold double asterisks
+    .replace(/\*([^*]+)\*/g, '$1')            // Italic single asterisk
+    .replace(/_([^_]+)_/g, '$1')              // Italic single underscore
+    .replace(/`([^`]+)`/g, '$1')              // Monospace backticks
+    .replace(/#+\s+/g, '')                    // Markdown Headers
+    .replace(/[-*+]\s+/g, '')                 // List bullet points at line starts
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1') // Markdown links [text](url) -> text
+    .trim();
+}
+

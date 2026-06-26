@@ -1,7 +1,7 @@
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // FCRA SUPREME DOCUMENT GENERATION ENGINE v3.0
-// 10 Court-Ready Document Templates | Dispute · Legal · Regulatory · Request
-// ═══════════════════════════════════════════════════════════════════════════
+// 10 Court-Ready Document Templates | Dispute - Legal - Regulatory - Request
+// ===========================================================================
 
 export interface DocumentData {
   clientName: string;
@@ -30,15 +30,15 @@ function clientBlock(data: DocumentData): string {
   return `${data.clientName}\n${data.clientAddress}\n${data.clientCity}, ${data.clientState} ${data.clientZip}`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 1. BUREAU DISPUTE LETTER (§ 611)
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateBureauDisputeLetter(data: DocumentData): string {
   const bureau = (data.bureau || 'equifax').toLowerCase();
   const address = BUREAU_ADDRESSES[bureau] || BUREAU_ADDRESSES.equifax;
 
   const violationItems = data.violations.map((v, i) => `
-ITEM ${i + 1}: ${v.accountName || v.account_name || v.defendantName || v.defendant_name} — Account #${v.accountNumber || v.account_number || 'N/A'}
+ITEM ${i + 1}: ${v.accountName || v.account_name || v.defendantName || v.defendant_name}  -  Account #${v.accountNumber || v.account_number || 'N/A'}
 
   INACCURACY: ${v.subcategory}
   
@@ -56,7 +56,7 @@ ${data.today}
 
 ${address}
 
-Re: FORMAL DISPUTE — Inaccurate Information on Consumer Report
+Re: FORMAL DISPUTE  -  Inaccurate Information on Consumer Report
     Consumer: ${data.clientName}
 ${data.clientSSNLast4 ? `    SSN Last 4: XXX-XX-${data.clientSSNLast4}` : ''}
 ${data.clientDOB ? `    DOB: ${data.clientDOB}` : ''}
@@ -71,7 +71,7 @@ ${'='.repeat(70)}
 ${violationItems}
 ${'='.repeat(70)}
 
-LEGAL REQUIREMENTS — YOUR OBLIGATIONS UPON RECEIPT:
+LEGAL REQUIREMENTS  -  YOUR OBLIGATIONS UPON RECEIPT:
 
 1. REINVESTIGATION (§ 1681i(a)(1)(A)): You must complete this investigation within 30 days of receipt.
 
@@ -86,10 +86,10 @@ LEGAL REQUIREMENTS — YOUR OBLIGATIONS UPON RECEIPT:
 6. FURNISHER NOTIFICATION (§ 1681i(a)(5)(C)): Notify all furnishers of deleted/modified information.
 
 NOTICE OF LIABILITY: Failure to conduct a reasonable reinvestigation or failure to respond within 30 days will result in legal action for violations of 15 U.S.C. § 1681i, with liability including:
-  — Statutory damages: $100 - $1,000 per violation (§ 1681n(a)(1)(A))
-  — Actual damages for credit denials, emotional distress (§ 1681n(a)(1))
-  — Punitive damages (§ 1681n(a)(2))
-  — Attorney fees and court costs (§ 1681n(a)(3))
+   -  Statutory damages: $100 - $1,000 per violation (§ 1681n(a)(1)(A))
+   -  Actual damages for credit denials, emotional distress (§ 1681n(a)(1))
+   -  Punitive damages (§ 1681n(a)(2))
+   -  Attorney fees and court costs (§ 1681n(a)(3))
 
 This letter was sent via Certified Mail, Return Receipt Requested.
 
@@ -99,26 +99,26 @@ ____________________________
 ${data.clientName}
 
 Enclosures:
-  — Copy of credit report with disputed items marked
-  — Supporting documentation for each disputed item
-  — Copy of government-issued photo ID
-  — Proof of current address (utility bill or bank statement)`;
+   -  Copy of credit report with disputed items marked
+   -  Supporting documentation for each disputed item
+   -  Copy of government-issued photo ID
+   -  Proof of current address (utility bill or bank statement)`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 2. FURNISHER DIRECT DISPUTE (§ 623)
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateFurnisherDisputeLetter(data: DocumentData): string {
   const v = data.violations[0];
   return `${clientBlock(data)}
 ${data.today}
 
-VIA CERTIFIED MAIL — RETURN RECEIPT REQUESTED
+VIA CERTIFIED MAIL  -  RETURN RECEIPT REQUESTED
 
 ${data.creditorName || v?.defendantName || v?.defendant_name || '[FURNISHER NAME]'}
 ${data.creditorAddress || '[FURNISHER ADDRESS]'}
 
-Re: DIRECT DISPUTE — Inaccurate Information Furnished to CRAs
+Re: DIRECT DISPUTE  -  Inaccurate Information Furnished to CRAs
     Account: #${data.accountNumber || v?.accountNumber || v?.account_number || '[ACCOUNT NUMBER]'}
     Consumer: ${data.clientName}
 
@@ -156,9 +156,9 @@ I DEMAND THAT YOU:
   4. If verification fails, CEASE reporting this information immediately
 
 NOTICE OF INTENT TO SUE: If you fail to comply within 30 days, I will pursue federal litigation for violations of:
-  — 15 U.S.C. § 1681s-2(b) — Duties after notice of dispute
-  — 15 U.S.C. § 1681n — Willful noncompliance ($100-$1,000 statutory + punitive + attorney fees)
-  — 15 U.S.C. § 1681o — Negligent noncompliance (actual damages + attorney fees)
+   -  15 U.S.C. § 1681s-2(b)  -  Duties after notice of dispute
+   -  15 U.S.C. § 1681n  -  Willful noncompliance ($100-$1,000 statutory + punitive + attorney fees)
+   -  15 U.S.C. § 1681o  -  Negligent noncompliance (actual damages + attorney fees)
 
 Sincerely,
 
@@ -168,20 +168,20 @@ ${data.clientName}
 Enclosures: Copy of credit report; supporting documentation`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 3. FDCPA DEBT VALIDATION LETTER (§ 809)
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateDebtValidationLetter(data: DocumentData): string {
   const v = data.violations[0];
   return `${clientBlock(data)}
 ${data.today}
 
-VIA CERTIFIED MAIL — RETURN RECEIPT REQUESTED
+VIA CERTIFIED MAIL  -  RETURN RECEIPT REQUESTED
 
 ${data.creditorName || v?.defendantName || v?.defendant_name || '[COLLECTION AGENCY]'}
 ${data.creditorAddress || '[AGENCY ADDRESS]'}
 
-Re: DEBT VALIDATION DEMAND — 15 U.S.C. § 1692g(b)
+Re: DEBT VALIDATION DEMAND  -  15 U.S.C. § 1692g(b)
     Alleged Account: #${data.accountNumber || v?.accountNumber || v?.account_number || '[ACCOUNT NUMBER]'}
 
 Dear Sir or Madam:
@@ -190,34 +190,34 @@ I DISPUTE THIS ALLEGED DEBT IN ITS ENTIRETY.
 
 Pursuant to 15 U.S.C. § 1692g(b) of the Fair Debt Collection Practices Act, I demand full validation of this alleged debt. Upon receipt of this letter, you must IMMEDIATELY CEASE ALL COLLECTION ACTIVITIES until proper validation is provided.
 
-REQUIRED VALIDATION — You must provide ALL of the following:
+REQUIRED VALIDATION  -  You must provide ALL of the following:
 
 1. VERIFICATION OF DEBT (§ 1692g(a)(1)-(4)):
-   — The exact amount of the alleged debt, itemized to show:
-     • Original principal balance
-     • All interest charges (with contractual authorization)
-     • All fees added (with contractual or statutory authorization)
-     • All payments or credits applied
-   — The name of the original creditor (§ 1692g(a)(2))
+    -  The exact amount of the alleged debt, itemized to show:
+     - Original principal balance
+     - All interest charges (with contractual authorization)
+     - All fees added (with contractual or statutory authorization)
+     - All payments or credits applied
+    -  The name of the original creditor (§ 1692g(a)(2))
 
 2. PROOF OF OWNERSHIP / AUTHORIZATION:
-   — Complete chain of title from the original creditor to your company
-   — Bill of sale or assignment agreement
-   — Proof that you are licensed to collect debts in the State of ${data.clientState || '[STATE]'}
+    -  Complete chain of title from the original creditor to your company
+    -  Bill of sale or assignment agreement
+    -  Proof that you are licensed to collect debts in the State of ${data.clientState || '[STATE]'}
 
 3. PROOF OF CONTRACTUAL OBLIGATION:
-   — Copy of the original signed credit agreement or application
-   — Terms and conditions showing authorization for all charges
-   — Original creditor's final account statement
+    -  Copy of the original signed credit agreement or application
+    -  Terms and conditions showing authorization for all charges
+    -  Original creditor's final account statement
 
 4. PROOF OF TIMELINESS:
-   — Documentation that the applicable statute of limitations has not expired
-   — Date of first delinquency
+    -  Documentation that the applicable statute of limitations has not expired
+    -  Date of first delinquency
 
 5. VERIFICATION OF REPORTING ACCURACY:
-   — Confirmation that dispute notation has been added to all credit bureau reports per § 1692e(8)
+    -  Confirmation that dispute notation has been added to all credit bureau reports per § 1692e(8)
 
-CEASE AND DESIST — 15 U.S.C. § 1692c(c):
+CEASE AND DESIST  -  15 U.S.C. § 1692c(c):
 
 Additionally, I demand that you CEASE ALL COMMUNICATION with me regarding this alleged debt except:
   (a) To notify me that collection efforts are being terminated;
@@ -242,9 +242,9 @@ ____________________________
 ${data.clientName}`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 4. INTENT TO SUE LETTER
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateIntentToSueLetter(data: DocumentData): string {
   const totalMin = data.violations.reduce((s: number, v: any) => s + (v.totalDamagesMin || v.total_damages_min || 0), 0);
   const totalMax = data.violations.reduce((s: number, v: any) => s + (v.totalDamagesMax || v.total_damages_max || 0), 0);
@@ -254,7 +254,7 @@ export function generateIntentToSueLetter(data: DocumentData): string {
   return `${clientBlock(data)}
 ${data.today}
 
-VIA CERTIFIED MAIL — RETURN RECEIPT REQUESTED
+VIA CERTIFIED MAIL  -  RETURN RECEIPT REQUESTED
 
 ${data.creditorName || '[DEFENDANT NAME]'}
 ${data.creditorAddress || '[DEFENDANT ADDRESS]'}
@@ -262,33 +262,33 @@ ${data.creditorAddress || '[DEFENDANT ADDRESS]'}
 Re: NOTICE OF INTENT TO FILE FEDERAL LAWSUIT
     Consumer: ${data.clientName}
     Violations: ${data.violations.length} identified (${critCount} Critical, ${highCount} High)
-    Estimated Damages: $${totalMin.toLocaleString()} — $${totalMax.toLocaleString()}
+    Estimated Damages: $${totalMin.toLocaleString()}  -  $${totalMax.toLocaleString()}
 
 Dear Sir or Madam:
 
 This letter constitutes FORMAL NOTICE of my intent to file a federal lawsuit against your organization for violations of:
 
-  □ Fair Credit Reporting Act, 15 U.S.C. § 1681 et seq.
-  □ Fair Debt Collection Practices Act, 15 U.S.C. § 1692 et seq.
-  □ Equal Credit Opportunity Act, 15 U.S.C. § 1691 et seq.
+  [ ] Fair Credit Reporting Act, 15 U.S.C. § 1681 et seq.
+  [ ] Fair Debt Collection Practices Act, 15 U.S.C. § 1692 et seq.
+  [ ] Equal Credit Opportunity Act, 15 U.S.C. § 1691 et seq.
 
-${'─'.repeat(60)}
+${'-'.repeat(60)}
 IDENTIFIED VIOLATIONS (${data.violations.length} Total):
-${'─'.repeat(60)}
+${'-'.repeat(60)}
 
-${data.violations.map((v, i) => `${i + 1}. [${(v.severity || '').toUpperCase()}] ${v.statute} — ${v.subcategory}
+${data.violations.map((v, i) => `${i + 1}. [${(v.severity || '').toUpperCase()}] ${v.statute}  -  ${v.subcategory}
    ${v.evidence}
-   Potential Damages: $${(v.totalDamagesMin || v.total_damages_min || 0).toLocaleString()} — $${(v.totalDamagesMax || v.total_damages_max || 0).toLocaleString()}
+   Potential Damages: $${(v.totalDamagesMin || v.total_damages_min || 0).toLocaleString()}  -  $${(v.totalDamagesMax || v.total_damages_max || 0).toLocaleString()}
 `).join('\n')}
-${'─'.repeat(60)}
+${'-'.repeat(60)}
 
 DAMAGES I INTEND TO SEEK:
 
-  — Statutory damages: $100 - $1,000 per violation (§ 1681n(a)(1)(A))
-  — Actual damages: Credit denials, higher interest rates, lost opportunities, emotional distress
-  — Punitive damages: For willful violations (§ 1681n(a)(2))
-  — Attorney fees and court costs: Recoverable under § 1681n(a)(3)
-  — TOTAL ESTIMATED: $${totalMin.toLocaleString()} — $${totalMax.toLocaleString()}
+   -  Statutory damages: $100 - $1,000 per violation (§ 1681n(a)(1)(A))
+   -  Actual damages: Credit denials, higher interest rates, lost opportunities, emotional distress
+   -  Punitive damages: For willful violations (§ 1681n(a)(2))
+   -  Attorney fees and court costs: Recoverable under § 1681n(a)(3)
+   -  TOTAL ESTIMATED: $${totalMin.toLocaleString()}  -  $${totalMax.toLocaleString()}
 
 SETTLEMENT OPPORTUNITY:
 
@@ -306,13 +306,13 @@ ${data.clientName}
 cc: File`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 5. CFPB COMPLAINT
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateCFPBComplaint(data: DocumentData): string {
-  return `${'═'.repeat(60)}
-CONSUMER FINANCIAL PROTECTION BUREAU — COMPLAINT
-${'═'.repeat(60)}
+  return `${'='.repeat(60)}
+CONSUMER FINANCIAL PROTECTION BUREAU  -  COMPLAINT
+${'='.repeat(60)}
 
 CONSUMER INFORMATION:
   Name: ${data.clientName}
@@ -327,9 +327,9 @@ COMPLAINT CATEGORY:
 COMPANY COMPLAINED ABOUT:
   ${data.creditorName || data.violations[0]?.defendantName || data.violations[0]?.defendant_name || '[COMPANY NAME]'}
 
-${'─'.repeat(60)}
+${'-'.repeat(60)}
 WHAT HAPPENED:
-${'─'.repeat(60)}
+${'-'.repeat(60)}
 
 I obtained my consumer report and discovered ${data.violations.length} violation(s) of federal consumer protection law. Despite my attempts to resolve these issues through the standard dispute process, the inaccuracies persist.
 
@@ -339,12 +339,12 @@ ${data.violations.map((v, i) => `Violation ${i + 1}: ${v.subcategory}
   Law Violated: ${v.statute} (${v.statuteText || v.statute_text})
   Evidence: ${v.evidence}
   Legal Standard: ${v.legalStandard || v.legal_standard}
-  Estimated Damages: $${(v.totalDamagesMin || v.total_damages_min || 0).toLocaleString()} — $${(v.totalDamagesMax || v.total_damages_max || 0).toLocaleString()}
+  Estimated Damages: $${(v.totalDamagesMin || v.total_damages_min || 0).toLocaleString()}  -  $${(v.totalDamagesMax || v.total_damages_max || 0).toLocaleString()}
 `).join('\n')}
 
-${'─'.repeat(60)}
+${'-'.repeat(60)}
 STEPS ALREADY TAKEN:
-${'─'.repeat(60)}
+${'-'.repeat(60)}
 
   1. Obtained and reviewed credit report for accuracy
   2. Identified ${data.violations.length} violation(s) of FCRA/FDCPA
@@ -352,9 +352,9 @@ ${'─'.repeat(60)}
   4. Sent direct dispute(s) to furnisher(s) under § 623(a)(8)
   5. Filed this CFPB complaint
 
-${'─'.repeat(60)}
+${'-'.repeat(60)}
 DESIRED RESOLUTION:
-${'─'.repeat(60)}
+${'-'.repeat(60)}
 
   1. Immediate investigation and correction of ALL inaccurate information
   2. Updated credit report reflecting all corrections
@@ -369,9 +369,9 @@ Filed by: ${data.clientName}
 Date: ${data.today}`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 6. SECTION 609 DISCLOSURE REQUEST
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generate609DisclosureRequest(data: DocumentData): string {
   const bureau = (data.bureau || 'equifax').toLowerCase();
   const address = BUREAU_ADDRESSES[bureau] || BUREAU_ADDRESSES.equifax;
@@ -391,29 +391,29 @@ Dear Sir or Madam:
 Pursuant to 15 U.S.C. § 1681g(a), I hereby request a COMPLETE disclosure of all information in my consumer file, including but not limited to:
 
 1. ALL INFORMATION IN FILE (§ 1681g(a)(1)):
-   — Every tradeline, account, and item in my file
-   — All information in my file at the time of the request
+    -  Every tradeline, account, and item in my file
+    -  All information in my file at the time of the request
 
 2. SOURCES OF INFORMATION (§ 1681g(a)(2)):
-   — The name, address, and telephone number of each person that furnished information in my file
+    -  The name, address, and telephone number of each person that furnished information in my file
 
 3. INQUIRIES (§ 1681g(a)(3)):
-   — Identification of each person who procured a consumer report during the prior 2-year period
-   — The date of each inquiry
-   — The permissible purpose stated for each inquiry
+    -  Identification of each person who procured a consumer report during the prior 2-year period
+    -  The date of each inquiry
+    -  The permissible purpose stated for each inquiry
 
 4. DATES, ORIGINAL PAYEES, AND AMOUNTS OF CHECKS (§ 1681g(a)(4)):
-   — If applicable, on any checks returned for insufficient funds in the prior 2 years
+    -  If applicable, on any checks returned for insufficient funds in the prior 2 years
 
 5. CREDIT SCORES (§ 1681g(f)):
-   — All credit scores currently in my file
-   — The range of possible scores under the scoring model used
-   — All key factors (up to 4) that adversely affected my score
-   — The date the score was created
-   — The name of the scoring model used
+    -  All credit scores currently in my file
+    -  The range of possible scores under the scoring model used
+    -  All key factors (up to 4) that adversely affected my score
+    -  The date the score was created
+    -  The name of the scoring model used
 
 6. SOFT INQUIRIES / PROMOTIONAL INQUIRIES:
-   — All soft inquiries and promotional inquiries on file
+    -  All soft inquiries and promotional inquiries on file
 
 LEGAL BASIS: Under 15 U.S.C. § 1681g(a), you must make this disclosure clearly and accurately within 15 days of receiving this request when sent by mail.
 
@@ -425,13 +425,13 @@ ____________________________
 ${data.clientName}
 
 Enclosures:
-  — Copy of government-issued photo ID
-  — Proof of current address`;
+   -  Copy of government-issued photo ID
+   -  Proof of current address`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 7. METHOD OF VERIFICATION REQUEST (§ 611)
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateMethodOfVerification(data: DocumentData): string {
   const bureau = (data.bureau || 'equifax').toLowerCase();
   const address = BUREAU_ADDRESSES[bureau] || BUREAU_ADDRESSES.equifax;
@@ -465,7 +465,7 @@ Pursuant to 15 U.S.C. § 1681i(a)(7), I hereby request that you provide a DESCRI
 
 LEGAL BASIS: 15 U.S.C. § 1681i(a)(7) requires you to provide, upon request, "a description of the procedure used to determine the accuracy and completeness of the information." This includes the specific documents and methods used, not merely a form letter stating the items were "verified."
 
-NOTE: A "rubber stamp" verification that merely parrots back the same inaccurate data without conducting an actual investigation violates § 1681i(a)(1)(A). See Cushman v. Trans Union Corp., 115 F.3d 220 (3d Cir. 1997) — CRA must conduct a reasonable reinvestigation, not merely pass information back and forth.
+NOTE: A "rubber stamp" verification that merely parrots back the same inaccurate data without conducting an actual investigation violates § 1681i(a)(1)(A). See Cushman v. Trans Union Corp., 115 F.3d 220 (3d Cir. 1997)  -  CRA must conduct a reasonable reinvestigation, not merely pass information back and forth.
 
 If you fail to provide this information within 15 days, I will consider this a failure to comply with § 1681i(a)(7) and will include this violation in any subsequent legal action.
 
@@ -475,16 +475,16 @@ ____________________________
 ${data.clientName}`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 8. STATE ATTORNEY GENERAL COMPLAINT
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateStateAGComplaint(data: DocumentData): string {
   const totalMin = data.violations.reduce((s: number, v: any) => s + (v.totalDamagesMin || v.total_damages_min || 0), 0);
   const totalMax = data.violations.reduce((s: number, v: any) => s + (v.totalDamagesMax || v.total_damages_max || 0), 0);
 
-  return `${'═'.repeat(60)}
-CONSUMER COMPLAINT — STATE ATTORNEY GENERAL
-${'═'.repeat(60)}
+  return `${'='.repeat(60)}
+CONSUMER COMPLAINT  -  STATE ATTORNEY GENERAL
+${'='.repeat(60)}
 
 TO: Office of the Attorney General
     State of ${data.clientState || '[STATE]'}
@@ -499,26 +499,26 @@ DATE: ${data.today}
 SUBJECT: Violations of Federal and State Consumer Protection Laws
          by ${data.creditorName || data.violations[0]?.defendantName || data.violations[0]?.defendant_name || '[COMPANY NAME]'}
 
-${'─'.repeat(60)}
+${'-'.repeat(60)}
 COMPLAINT SUMMARY:
-${'─'.repeat(60)}
+${'-'.repeat(60)}
 
 I am filing this complaint against the above-named company for violations of the Fair Credit Reporting Act (15 U.S.C. § 1681 et seq.), Fair Debt Collection Practices Act (15 U.S.C. § 1692 et seq.), and applicable state consumer protection statutes.
 
-I have identified ${data.violations.length} violations causing estimated damages of $${totalMin.toLocaleString()} — $${totalMax.toLocaleString()}.
+I have identified ${data.violations.length} violations causing estimated damages of $${totalMin.toLocaleString()}  -  $${totalMax.toLocaleString()}.
 
-${'─'.repeat(60)}
+${'-'.repeat(60)}
 SPECIFIC VIOLATIONS:
-${'─'.repeat(60)}
+${'-'.repeat(60)}
 
 ${data.violations.map((v, i) => `${i + 1}. [${(v.severity || '').toUpperCase()}] ${v.subcategory}
    Federal Law: ${v.statute}
    Details: ${v.evidence}
 `).join('\n')}
 
-${'─'.repeat(60)}
+${'-'.repeat(60)}
 ACTIONS TAKEN:
-${'─'.repeat(60)}
+${'-'.repeat(60)}
 
   1. Reviewed credit report and identified violations
   2. Sent dispute letters to credit reporting agencies
@@ -543,20 +543,20 @@ ${data.clientName}
 ${data.today}`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 9. CEASE AND DESIST LETTER (FDCPA § 1692c(c))
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateCeaseAndDesist(data: DocumentData): string {
   const v = data.violations[0];
   return `${clientBlock(data)}
 ${data.today}
 
-VIA CERTIFIED MAIL — RETURN RECEIPT REQUESTED
+VIA CERTIFIED MAIL  -  RETURN RECEIPT REQUESTED
 
 ${data.creditorName || v?.defendantName || v?.defendant_name || '[COLLECTION AGENCY]'}
 ${data.creditorAddress || '[AGENCY ADDRESS]'}
 
-Re: CEASE AND DESIST — ALL COMMUNICATION
+Re: CEASE AND DESIST  -  ALL COMMUNICATION
     Alleged Account: #${data.accountNumber || v?.accountNumber || v?.account_number || '[ACCOUNT NUMBER]'}
 
 Dear Sir or Madam:
@@ -569,9 +569,9 @@ Under § 1692c(c), upon receipt of this notice you may ONLY contact me to:
   (3) Notify me that you or the creditor intend to invoke a specified remedy.
 
 ANY OTHER COMMUNICATION AFTER RECEIPT OF THIS LETTER CONSTITUTES A VIOLATION of the FDCPA, carrying penalties of:
-  — Up to $1,000 in statutory damages per violation (§ 1692k(a)(2)(A))
-  — Actual damages (§ 1692k(a)(1))
-  — Attorney fees and costs (§ 1692k(a)(3))
+   -  Up to $1,000 in statutory damages per violation (§ 1692k(a)(2)(A))
+   -  Actual damages (§ 1692k(a)(1))
+   -  Attorney fees and costs (§ 1692k(a)(3))
 
 ADDITIONAL NOTICES:
 
@@ -589,9 +589,9 @@ ____________________________
 ${data.clientName}`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 10. GOODWILL ADJUSTMENT LETTER
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateGoodwillLetter(data: DocumentData): string {
   return `${clientBlock(data)}
 ${data.today}
@@ -615,17 +615,17 @@ I am respectfully asking that you consider removing or updating the negative rep
 
 WHY THIS MATTERS:
 This negative mark is significantly impacting my ability to:
-  — Obtain fair interest rates on loans
-  — Qualify for housing
-  — Secure employment (some employers check credit)
-  — Build a secure financial future
+   -  Obtain fair interest rates on loans
+   -  Qualify for housing
+   -  Secure employment (some employers check credit)
+   -  Build a secure financial future
 
 I have taken significant steps to improve my financial situation and would greatly appreciate your consideration of this goodwill request.
 
 WHAT I AM REQUESTING:
-  — Update the account to show "Paid as Agreed" or "Current"
-  — Or, remove the late payment notation(s) from the payment history
-  — Report the update to all three bureaus: Equifax, Experian, and TransUnion
+   -  Update the account to show "Paid as Agreed" or "Current"
+   -  Or, remove the late payment notation(s) from the payment history
+   -  Report the update to all three bureaus: Equifax, Experian, and TransUnion
 
 Thank you for your time and consideration. I look forward to continuing our positive relationship.
 
@@ -635,9 +635,9 @@ ____________________________
 ${data.clientName}`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 11. DATA FURNISHER DISPUTE LETTER
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateDataFurnisherDisputeLetter(data: DocumentData): string {
   const v = data.violations[0];
   const bureau = (data.bureau || 'equifax').toUpperCase();
@@ -646,45 +646,45 @@ export function generateDataFurnisherDisputeLetter(data: DocumentData): string {
   const balance = v?.currentBalance || v?.balance || '[BALANCE]';
   const creditor = data.creditorName || v?.defendantName || v?.defendant_name || v?.accountName || v?.account_name || '[FURNISHER NAME]';
 
-  return `================═══════════════════════════════════════════════════════
+  return `=======================================================================
 RJ BUSINESS SOLUTIONS PREMIUM DISPUTE TEMPLATE
 DESIGNED BY RICK JEFFERSON | POWERED BY RJ BUSINESS SOLUTIONS
-================═══════════════════════════════════════════════════════
+=======================================================================
 
 ${clientBlock(data)}
 ${data.today}
 
 ${address}
 
-Subject: Formal Dispute of Unauthorized Collection Account – Not a Legally Qualified Data Furnisher
+Subject: Formal Dispute of Unauthorized Collection Account - Not a Legally Qualified Data Furnisher
 
 To Whom It May Concern,
 
 I am disputing the following account(s) reported by ${creditor}:
 
-• Account #: ${acctNum}
-• Disputed Amount: $${balance}
-• Reason for Dispute: The entity reporting this account does not qualify as a legitimate data furnisher under the Fair Credit Reporting Act (FCRA) or your agency’s reporting guidelines.
+- Account #: ${acctNum}
+- Disputed Amount: $${balance}
+- Reason for Dispute: The entity reporting this account does not qualify as a legitimate data furnisher under the Fair Credit Reporting Act (FCRA) or your agency's reporting guidelines.
 
 Legal Basis for Dispute:
 Per the FCRA (§ 1681s-2) and your own furnisher requirements, a data furnisher must:
 1. Regularly report consumer credit data (e.g., active accounts, payment history) as part of its ordinary business operations;
-2. Maintain consistent reporting practices—not selectively report only derogatory or collection accounts.
+2. Maintain consistent reporting practices - not selectively report only derogatory or collection accounts.
 
 The entity reporting this account, ${creditor}:
-• Only reports accounts after they enter collections;
-• Does not report active accounts, payment history, or other consumer data;
-• Fails to meet the definition of a data furnisher and is instead acting as a collection agency.
+- Only reports accounts after they enter collections;
+- Does not report active accounts, payment history, or other consumer data;
+- Fails to meet the definition of a data furnisher and is instead acting as a collection agency.
 
 This violates:
-• FCRA § 1681s-2(a) (accuracy and completeness requirements);
-• Your agency’s contractual obligations with furnishers (requiring systematic reporting);
-• FTC guidance (furnishing must be routine, not ad hoc).
+- FCRA § 1681s-2(a) (accuracy and completeness requirements);
+- Your agency's contractual obligations with furnishers (requiring systematic reporting);
+- FTC guidance (furnishing must be routine, not ad hoc).
 
 Demand for Action:
 1. Immediately delete this account from my credit report, as it is unlawfully reported by a non-furnisher.
 2. Provide written confirmation of the deletion and an updated credit report.
-3. Investigate the furnisher’s reporting practices for systemic violations.
+3. Investigate the furnisher's reporting practices for systemic violations.
 
 Attached: Copies of my ID, proof of address, and any supporting documents.
 
@@ -706,9 +706,9 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 -----------------------------------------------------------------------`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 12. R1 COLLECTION DIRECT DISPUTE
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateR1CollectionDirectDispute(data: DocumentData): string {
   const v = data.violations[0];
   const acctNum = data.accountNumber || v?.accountNumber || v?.account_number || '[ACCOUNT NUMBER]';
@@ -716,10 +716,10 @@ export function generateR1CollectionDirectDispute(data: DocumentData): string {
   const creditor = data.creditorName || v?.defendantName || v?.defendant_name || v?.accountName || v?.account_name || '[COLLECTION AGENCY]';
   const creditorAddr = data.creditorAddress || '[COLLECTION AGENCY ADDRESS]';
 
-  return `================═══════════════════════════════════════════════════════
+  return `=======================================================================
 RJ BUSINESS SOLUTIONS PREMIUM DISPUTE TEMPLATE
 DESIGNED BY RICK JEFFERSON | POWERED BY RJ BUSINESS SOLUTIONS
-================═══════════════════════════════════════════════════════
+=======================================================================
 
 ${clientBlock(data)}
 ${data.today}
@@ -727,7 +727,7 @@ ${data.today}
 ${creditor}
 ${creditorAddr}
 
-RE: Credit Reporting – Account Number(s): ${acctNum}
+RE: Credit Reporting - Account Number(s): ${acctNum}
 
 On my consumer reports is a collection account from your company. I am trying to clean up my credit, and your collection is one of the items that I need to address. The collection does not identify an original creditor, account number, open date, payment history, pay status, or sufficient information about the debt that you are reporting.
 
@@ -752,10 +752,10 @@ The documentation must include:
 10. Proof that your company is legally authorized to collect in ${data.clientState || '[STATE]'}, including your correct legal name and licensing status.
 
 The following will not be accepted as proper validation:
-• A system screen print
-• A generic balance line
-• A statement that the account was "confirmed with the prior creditor" without supporting documents
-• A form letter that does not tie directly to this account with real, verifiable detail.
+- A system screen print
+- A generic balance line
+- A statement that the account was "confirmed with the prior creditor" without supporting documents
+- A form letter that does not tie directly to this account with real, verifiable detail.
 
 If your company has reported, or continues to report, invalidated or unverified information to any of the three major credit bureaus (Experian, Equifax, or TransUnion), that action may constitute fraud under both federal and state law. Should any negative mark appear on any of my credit reports as a result of your company or the company you represent, I will not hesitate to pursue legal action for violation of the Fair Credit Reporting Act, violation of the Fair Debt Collection Practices Act, and defamation of character.
 
@@ -772,7 +772,7 @@ The only communications I will accept from you are:
 
 If you do provide proper documentation as requested, I will require at least 30 days to review it, and all collection activity must cease during that period.
 
-Until you provide the requested information and documentation, I have no obligation to pay this alleged debt. If you cannot validate this debt, or fail to respond within 30 days, all references to this account must be deleted and completely removed from my credit reports, and written confirmation of that deletion — submitted to each of the three major credit reporting agencies — must be provided to me.
+Until you provide the requested information and documentation, I have no obligation to pay this alleged debt. If you cannot validate this debt, or fail to respond within 30 days, all references to this account must be deleted and completely removed from my credit reports, and written confirmation of that deletion  -  submitted to each of the three major credit reporting agencies  -  must be provided to me.
 
 Should you continue collection activity without validation, ignore my cease-communication notice, or continue reporting information that has not been properly verified, I will pursue my rights under the FDCPA and FCRA, including 15 U.S.C. § 1692k.
 
@@ -797,19 +797,19 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 -----------------------------------------------------------------------`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 13. EVICTIONS LETTER (RFI: EVICTIONS)
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateEvictionsLetter(data: DocumentData): string {
   const v = data.violations[0];
   const acctNum = data.accountNumber || v?.accountNumber || v?.account_number || '[ACCOUNT NUMBER]';
   const creditor = data.creditorName || v?.defendantName || v?.defendant_name || '[CREATIVE MANAGEMENT / PROPERTY / COURT]';
   const creditorAddr = data.creditorAddress || '[ADDRESS]';
 
-  return `================═══════════════════════════════════════════════════════
+  return `=======================================================================
 RJ BUSINESS SOLUTIONS PREMIUM DISPUTE TEMPLATE
 DESIGNED BY RICK JEFFERSON | POWERED BY RJ BUSINESS SOLUTIONS
-================═══════════════════════════════════════════════════════
+=======================================================================
 
 ${data.clientName}
 DOB: ${data.clientDOB || '[DOB]'}
@@ -848,19 +848,19 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 -----------------------------------------------------------------------`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 14. REPO LETTER (RFI REPO)
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateRepoLetter(data: DocumentData): string {
   const v = data.violations[0];
   const acctNum = data.accountNumber || v?.accountNumber || v?.account_number || '[ACCOUNT NUMBER]';
   const creditor = data.creditorName || v?.defendantName || v?.defendant_name || '[LENDER / AUTO FINANCE]';
   const creditorAddr = data.creditorAddress || '[ADDRESS]';
 
-  return `================═══════════════════════════════════════════════════════
+  return `=======================================================================
 RJ BUSINESS SOLUTIONS PREMIUM DISPUTE TEMPLATE
 DESIGNED BY RICK JEFFERSON | POWERED BY RJ BUSINESS SOLUTIONS
-================═══════════════════════════════════════════════════════
+=======================================================================
 
 ${data.clientName}
 ${data.clientAddress}
@@ -886,19 +886,19 @@ Year: [Year]
 Make: [Make]
 Model: [Model]
 
-If you have any other variations of the consumer’s name or address on file, please update your records to only reflect the correct name and address that have been provided above.
+If you have any other variations of the consumer's name or address on file, please update your records to only reflect the correct name and address that have been provided above.
 
 I also believe some of the information being reported to the consumer reporting agencies (CRAs) is inaccurate. For that reason, I am requesting all account-level documentation in addition to the following information:
 
-• Retail Installment Sales Contract / Lease Agreement;
-• Any Arbitration Provisions;
-• Complete Accounting and Payment History Ledger;
-• Notice of Sale / Notice of Default with proof of mailing;
-• Explanation of Calculation of Surplus or Deficiency with proof of mailing;
-• Notices regarding right to redeem personal property with proof of mailing;
-• Details regarding whether the sale was public or private;
-• Verification of the date of first delinquency;
-• Verification of the date of repossession.
+- Retail Installment Sales Contract / Lease Agreement;
+- Any Arbitration Provisions;
+- Complete Accounting and Payment History Ledger;
+- Notice of Sale / Notice of Default with proof of mailing;
+- Explanation of Calculation of Surplus or Deficiency with proof of mailing;
+- Notices regarding right to redeem personal property with proof of mailing;
+- Details regarding whether the sale was public or private;
+- Verification of the date of first delinquency;
+- Verification of the date of repossession.
 
 By law, you have 14 days to produce the information upon request. If you find that you are unable to comply with this request, I am requesting that you waive the balance on the account and delete the account with each credit reporting agency that you reported the unverifiable information to. Please return all correspondence to the address listed above.
 
@@ -915,9 +915,9 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 -----------------------------------------------------------------------`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 15. 1681I LETTER (1681 I LETTER TO CRA)
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generate1681iLetter(data: DocumentData): string {
   const v = data.violations[0];
   const acctNum = data.accountNumber || v?.accountNumber || v?.account_number || '[ACCOUNT NUMBER]';
@@ -925,10 +925,10 @@ export function generate1681iLetter(data: DocumentData): string {
   const bureau = (data.bureau || 'equifax').toUpperCase();
   const address = BUREAU_ADDRESSES[bureau.toLowerCase()] || BUREAU_ADDRESSES.equifax;
 
-  return `================═══════════════════════════════════════════════════════
+  return `=======================================================================
 RJ BUSINESS SOLUTIONS PREMIUM DISPUTE TEMPLATE
 DESIGNED BY RICK JEFFERSON | POWERED BY RJ BUSINESS SOLUTIONS
-================═══════════════════════════════════════════════════════
+=======================================================================
 
 My name is ${data.clientName}
 My address is ${data.clientAddress}, ${data.clientCity}, ${data.clientState} ${data.clientZip}
@@ -961,19 +961,19 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 -----------------------------------------------------------------------`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 16. CHARGEOFF / LATE PAYMENT LETTER (RFI)
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateChargeoffLatePaymentLetter(data: DocumentData): string {
   const v = data.violations[0];
   const acctNum = data.accountNumber || v?.accountNumber || v?.account_number || '[ACCOUNT NUMBER]';
   const creditor = data.creditorName || v?.defendantName || v?.defendant_name || '[CREDITOR NAME]';
   const creditorAddr = data.creditorAddress || '[ADDRESS]';
 
-  return `================═══════════════════════════════════════════════════════
+  return `=======================================================================
 RJ BUSINESS SOLUTIONS PREMIUM DISPUTE TEMPLATE
 DESIGNED BY RICK JEFFERSON | POWERED BY RJ BUSINESS SOLUTIONS
-================═══════════════════════════════════════════════════════
+=======================================================================
 
 ${data.clientName}
 ${data.clientAddress}
@@ -997,10 +997,10 @@ Consumer Name: ${data.clientName}
 Consumer Address: ${data.clientAddress}, ${data.clientCity}, ${data.clientState} ${data.clientZip}
 
 We are formally requesting complete and accurate documentation of the account's payment history, including but not limited to:
-• A full transaction and payment history ledger from account inception to present;
-• Dates and amounts of all payments received;
-• Application of payments (principal, interest, fees, credits, adjustments, or reversals);
-• Any internal records relied upon in furnishing payment history information to consumer reporting agencies.
+- A full transaction and payment history ledger from account inception to present;
+- Dates and amounts of all payments received;
+- Application of payments (principal, interest, fees, credits, adjustments, or reversals);
+- Any internal records relied upon in furnishing payment history information to consumer reporting agencies.
 
 For your reference, a copy of the account as it appears on the consumer credit report is also enclosed, reflecting the information currently being furnished.
 
@@ -1019,14 +1019,14 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 -----------------------------------------------------------------------`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 17. LEXISNEXIS CEASE AND DESIST
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateLexisNexisCeaseAndDesist(data: DocumentData): string {
-  return `================═══════════════════════════════════════════════════════
+  return `=======================================================================
 RJ BUSINESS SOLUTIONS PREMIUM DISPUTE TEMPLATE
 DESIGNED BY RICK JEFFERSON | POWERED BY RJ BUSINESS SOLUTIONS
-================═══════════════════════════════════════════════════════
+=======================================================================
 
 LexisNexis Risk Solutions
 P.O. Box 105108
@@ -1071,9 +1071,9 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 -----------------------------------------------------------------------`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 18. PACER INQUIRY EMAIL
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generatePacerInquiryEmail(data: DocumentData): string {
   return `Subject: PACER Verification Inquiry regarding consumer credit report verification procedures
 
@@ -1099,14 +1099,14 @@ https://rickjeffersonsolutions.com | support@rjbusinesssolutions.org
 -----------------------------------------------------------------------`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 19. BANKRUPTCY COURT INQUIRY LETTER
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateBankruptcyCourtInquiryLetter(data: DocumentData): string {
-  return `================═══════════════════════════════════════════════════════
+  return `=======================================================================
 RJ BUSINESS SOLUTIONS PREMIUM DISPUTE TEMPLATE
 DESIGNED BY RICK JEFFERSON | POWERED BY RJ BUSINESS SOLUTIONS
-================═══════════════════════════════════════════════════════
+=======================================================================
 
 [Name of the Bankruptcy Court]
 [Court Address]
@@ -1141,14 +1141,14 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 -----------------------------------------------------------------------`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 20. LEXISNEXIS FOLLOW UP
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateLexisNexisFollowUp(data: DocumentData): string {
-  return `================═══════════════════════════════════════════════════════
+  return `=======================================================================
 RJ BUSINESS SOLUTIONS PREMIUM DISPUTE TEMPLATE
 DESIGNED BY RICK JEFFERSON | POWERED BY RJ BUSINESS SOLUTIONS
-================═══════════════════════════════════════════════════════
+=======================================================================
 
 LexisNexis Risk Solutions
 P.O. Box 105108
@@ -1188,9 +1188,9 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 -----------------------------------------------------------------------`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 21. AUTHORIZED USER DISPUTE
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateAuthorizedUserDispute(data: DocumentData): string {
   const v = data.violations[0];
   const acctNum = data.accountNumber || v?.accountNumber || v?.account_number || '[ACCOUNT NUMBER]';
@@ -1198,10 +1198,10 @@ export function generateAuthorizedUserDispute(data: DocumentData): string {
   const bureau = (data.bureau || 'equifax').toUpperCase();
   const address = BUREAU_ADDRESSES[bureau.toLowerCase()] || BUREAU_ADDRESSES.equifax;
 
-  return `================═══════════════════════════════════════════════════════
+  return `=======================================================================
 RJ BUSINESS SOLUTIONS PREMIUM DISPUTE TEMPLATE
 DESIGNED BY RICK JEFFERSON | POWERED BY RJ BUSINESS SOLUTIONS
-================═══════════════════════════════════════════════════════
+=======================================================================
 
 ${clientBlock(data)}
 ${data.today}
@@ -1213,7 +1213,7 @@ Account: ${creditor} - #${acctNum}
 
 Dear Sir or Madam:
 
-My credit report shows account activity on ${creditor} — Account #${acctNum} that does not correspond to my usage on the account. I am an authorized user on the account and all account activity is being reported on my credit report. I am requesting that my credit report be updated to only include my account activity, or that this authorized user tradeline be deleted entirely.
+My credit report shows account activity on ${creditor}  -  Account #${acctNum} that does not correspond to my usage on the account. I am an authorized user on the account and all account activity is being reported on my credit report. I am requesting that my credit report be updated to only include my account activity, or that this authorized user tradeline be deleted entirely.
 
 Sincerely,
 
@@ -1226,14 +1226,14 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 -----------------------------------------------------------------------`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 22. LEXISNEXIS CONFIRMATION OF DELETION REQUEST
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function generateLexisNexisConfirmation(data: DocumentData): string {
-  return `================═══════════════════════════════════════════════════════
+  return `=======================================================================
 RJ BUSINESS SOLUTIONS PREMIUM DISPUTE TEMPLATE
 DESIGNED BY RICK JEFFERSON | POWERED BY RJ BUSINESS SOLUTIONS
-================═══════════════════════════════════════════════════════
+=======================================================================
 
 LexisNexis Risk Solutions
 P.O. Box 105108
@@ -1270,9 +1270,9 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 -----------------------------------------------------------------------`;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // DOCUMENT TYPE REGISTRY
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export const DOCUMENT_TYPES: Record<string, { name: string; fn: (data: DocumentData) => string; category: string; description: string }> = {
   'bureau-dispute': {
     name: 'Bureau Dispute Letter',

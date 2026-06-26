@@ -1,8 +1,8 @@
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 // FCRA SUPREME VIOLATION DETECTION ENGINE v7.0
-// 25+ violation categories | FCRA · FDCPA · ECOA · TILA · Metro 2
+// 25+ violation categories | FCRA - FDCPA - ECOA - TILA - Metro 2
 // Military-grade precision with exact statutory citations
-// ═══════════════════════════════════════════════════════════════════════════
+// ===========================================================================
 
 export interface ParsedAccount {
   creditorName: string;
@@ -121,9 +121,9 @@ function formatDate(d: Date): string {
 
 const today = new Date();
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // 50-STATE STATUTE OF LIMITATIONS DATABASE
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export const STATE_SOL: Record<string, { written: number; oral: number; promissory: number; openEnded: number }> = {
   'AL': { written: 6, oral: 6, promissory: 6, openEnded: 3 },
   'AK': { written: 3, oral: 3, promissory: 3, openEnded: 3 },
@@ -178,9 +178,9 @@ export const STATE_SOL: Record<string, { written: number; oral: number; promisso
   'DC': { written: 3, oral: 3, promissory: 3, openEnded: 3 },
 };
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // CATEGORY 1: OBSOLETE INFORMATION - 15 U.S.C. § 1681c(a)
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 function checkObsoleteAccounts(accounts: ParsedAccount[]): Violation[] {
   const violations: Violation[] = [];
   const negativeStatuses = ['charge-off', 'charged off', 'collection', 'collections', 'charged_off', 'written off', 'profit and loss', 'bad debt', 'seriously past due', 'delinquent'];
@@ -223,9 +223,9 @@ function checkObsoleteAccounts(accounts: ParsedAccount[]): Violation[] {
   return violations;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // CATEGORY 2: RE-AGING / DOFD MANIPULATION
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 function checkReAging(accounts: ParsedAccount[]): Violation[] {
   const violations: Violation[] = [];
   for (const acct of accounts) {
@@ -241,9 +241,9 @@ function checkReAging(accounts: ParsedAccount[]): Violation[] {
         statute: '15 U.S.C. § 1681c(c)(1) & § 1681s-2(a)(5)',
         statuteText: 'FCRA § 605(c)(1) & § 623(a)(5)',
         legalStandard: 'The 7-year period shall begin upon the expiration of the 180-day period beginning on the date of the commencement of the delinquency. The DOFD cannot be reset by subsequent transfers, payments, or collection activity.',
-        evidence: `Account "${acct.creditorName}" (${acct.accountNumber || 'N/A'}) shows DOFD as ${formatDate(dofdDate)} but Date of Last Activity as ${formatDate(dolaDate)} — ${daysDiff} days later. The reporting period appears to have been illegally extended by ${Math.round(daysDiff/30)} months.`,
+        evidence: `Account "${acct.creditorName}" (${acct.accountNumber || 'N/A'}) shows DOFD as ${formatDate(dofdDate)} but Date of Last Activity as ${formatDate(dolaDate)}  -  ${daysDiff} days later. The reporting period appears to have been illegally extended by ${Math.round(daysDiff/30)} months.`,
         explanation: `Re-aging is a federal crime under the FCRA. When a debt is transferred to a collector, the DOFD must remain the same as the original creditor's DOFD. Using DOLA, transfer date, or purchase date instead of the true DOFD artificially extends the 7-year clock, which is prohibited.`,
-        caseLaw: 'Grigoryan v. Experian Info. Sols., 84 F. Supp. 3d 1128 (C.D. Cal. 2014); FTC Advisory Opinion (2002) — re-aging constitutes willful violation',
+        caseLaw: 'Grigoryan v. Experian Info. Sols., 84 F. Supp. 3d 1128 (C.D. Cal. 2014); FTC Advisory Opinion (2002)  -  re-aging constitutes willful violation',
         accountName: acct.creditorName, accountNumber: acct.accountNumber || '',
         dofd: formatDate(dofdDate),
         statutoryDamagesMin: 100, statutoryDamagesMax: 1000,
@@ -259,9 +259,9 @@ function checkReAging(accounts: ParsedAccount[]): Violation[] {
   return violations;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // CATEGORY 3: DUPLICATE / DOUBLE-JEOPARDY REPORTING
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 function checkDuplicates(accounts: ParsedAccount[], collections: ParsedAccount[]): Violation[] {
   const violations: Violation[] = [];
   for (const coll of collections) {
@@ -294,9 +294,9 @@ function checkDuplicates(accounts: ParsedAccount[], collections: ParsedAccount[]
   return violations;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // CATEGORY 4: BALANCE INACCURACIES
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 function checkBalanceErrors(accounts: ParsedAccount[]): Violation[] {
   const violations: Violation[] = [];
   const paidStatuses = ['paid', 'closed', 'settled', 'paid in full', 'closed/paid', 'account paid', 'transferred'];
@@ -304,13 +304,13 @@ function checkBalanceErrors(accounts: ParsedAccount[]): Violation[] {
     const isPaid = paidStatuses.some(s => (acct.accountStatus || '').toLowerCase().includes(s));
     if (isPaid && acct.currentBalance > 0) {
       violations.push({
-        id: genId(), category: 'FCRA', subcategory: 'Balance Inaccuracy — Paid Account Showing Balance',
+        id: genId(), category: 'FCRA', subcategory: 'Balance Inaccuracy  -  Paid Account Showing Balance',
         severity: 'high',
         statute: '15 U.S.C. § 1681s-2(a)(1)(A) & § 1681e(b)',
         statuteText: 'FCRA § 623(a)(1)(A) & § 607(b)',
         legalStandard: 'A furnisher shall not furnish information relating to a consumer to any CRA if the person knows or has reasonable cause to believe that the information is inaccurate.',
         evidence: `Account "${acct.creditorName}" (${acct.accountNumber || 'N/A'}) shows status "${acct.accountStatus}" but reports balance of $${acct.currentBalance.toLocaleString()}. A satisfied account must report $0.`,
-        explanation: `The furnisher is reporting contradictory information — the account is marked as paid/closed/settled but still shows an outstanding balance. This artificially inflates the consumer's total debt and damages utilization ratios.`,
+        explanation: `The furnisher is reporting contradictory information  -  the account is marked as paid/closed/settled but still shows an outstanding balance. This artificially inflates the consumer's total debt and damages utilization ratios.`,
         caseLaw: 'Chiang v. Verizon New England Inc., 595 F.3d 26 (1st Cir. 2010); Gorman v. Wolpoff & Abramson, 584 F.3d 1147 (9th Cir. 2009)',
         accountName: acct.creditorName, accountNumber: acct.accountNumber || '',
         statutoryDamagesMin: 100, statutoryDamagesMax: 1000,
@@ -332,7 +332,7 @@ function checkBalanceErrors(accounts: ParsedAccount[]): Violation[] {
         legalStandard: 'Current balance cannot mathematically exceed the highest balance ever reached. This indicates a data integrity failure.',
         evidence: `Account "${acct.creditorName}" (${acct.accountNumber || 'N/A'}) shows current balance $${acct.currentBalance.toLocaleString()} but high balance is only $${acct.highBalance.toLocaleString()}. Current balance exceeds historical high by $${(acct.currentBalance - acct.highBalance).toLocaleString()}.`,
         explanation: `The high balance field (Metro 2 Field 25) should always be >= current balance. A current balance exceeding the historical high is mathematically impossible and indicates corrupt or fabricated data.`,
-        caseLaw: 'Cortez v. Trans Union, LLC, 617 F.3d 688 (3d Cir. 2010) — CRA liable for reporting facially impossible data',
+        caseLaw: 'Cortez v. Trans Union, LLC, 617 F.3d 688 (3d Cir. 2010)  -  CRA liable for reporting facially impossible data',
         accountName: acct.creditorName, accountNumber: acct.accountNumber || '',
         statutoryDamagesMin: 100, statutoryDamagesMax: 1000,
         actualDamagesEst: 1500, punitiveDamagesEst: 2000, attorneyFeesEst: 2000,
@@ -346,9 +346,9 @@ function checkBalanceErrors(accounts: ParsedAccount[]): Violation[] {
   return violations;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // CATEGORY 5: UNAUTHORIZED / OBSOLETE INQUIRIES
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 function checkInquiryViolations(inquiries: ParsedInquiry[]): Violation[] {
   const violations: Violation[] = [];
   const hardInquiries: ParsedInquiry[] = [];
@@ -373,7 +373,7 @@ function checkInquiryViolations(inquiries: ParsedInquiry[]): Violation[] {
         legalStandard: 'CRA may not report inquiries older than 2 years from the date of inquiry.',
         evidence: `Inquiry from "${inq.creditorName}" on ${formatDate(inqDate)} is ${daysOver} days past the 2-year limit. Should have been removed on ${formatDate(addYears(inqDate, 2))}.`,
         explanation: `Hard inquiries must be purged after exactly 2 years. Each obsolete inquiry depresses the consumer's credit score by approximately 5-10 points.`,
-        caseLaw: 'Blye v. Northern Trust Bank, 2005 WL 1563269 (N.D. Ill.) — CRA liable for failing to remove obsolete inquiries',
+        caseLaw: 'Blye v. Northern Trust Bank, 2005 WL 1563269 (N.D. Ill.)  -  CRA liable for failing to remove obsolete inquiries',
         accountName: inq.creditorName,
         statutoryDamagesMin: 100, statutoryDamagesMax: 1000,
         actualDamagesEst: 500, punitiveDamagesEst: 1000, attorneyFeesEst: 1500,
@@ -392,14 +392,14 @@ function checkInquiryViolations(inquiries: ParsedInquiry[]): Violation[] {
   });
   if (last6mo.length > 6) {
     violations.push({
-      id: genId(), category: 'FCRA', subcategory: 'Excessive Hard Inquiries — Potential Unauthorized Access',
+      id: genId(), category: 'FCRA', subcategory: 'Excessive Hard Inquiries  -  Potential Unauthorized Access',
       severity: 'medium',
       statute: '15 U.S.C. § 1681b(a)(3)(A) & § 1681b(f)',
       statuteText: 'FCRA § 604(a)(3)(A) & § 604(f)',
       legalStandard: 'A consumer report may only be obtained for a permissible purpose. Each inquiry must be authorized by the consumer. Unauthorized access is punishable under § 1681n/o.',
       evidence: `${last6mo.length} hard inquiries detected in the last 6 months: ${last6mo.map(i => i.creditorName).join(', ')}. This volume suggests potential unauthorized access.`,
       explanation: `An unusually high number of inquiries may indicate unauthorized credit pulls, identity theft, or predatory lending targeting. Each unauthorized inquiry is a separate violation.`,
-      caseLaw: 'Patel v. Trans Union, LLC, 2018 WL 3062948 (N.D. Ga.) — each unauthorized inquiry is a separate FCRA violation',
+      caseLaw: 'Patel v. Trans Union, LLC, 2018 WL 3062948 (N.D. Ga.)  -  each unauthorized inquiry is a separate FCRA violation',
       statutoryDamagesMin: 100 * last6mo.length, statutoryDamagesMax: 1000 * last6mo.length,
       actualDamagesEst: 500 * last6mo.length, punitiveDamagesEst: 2000, attorneyFeesEst: 3000,
       totalDamagesMin: 600 * last6mo.length + 5000, totalDamagesMax: 1500 * last6mo.length + 5000,
@@ -412,9 +412,9 @@ function checkInquiryViolations(inquiries: ParsedInquiry[]): Violation[] {
   return violations;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // CATEGORY 6: BANKRUPTCY OBSOLESCENCE
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 function checkBankruptcyObsolescence(records: ParsedPublicRecord[]): Violation[] {
   const violations: Violation[] = [];
   for (const rec of records) {
@@ -435,7 +435,7 @@ function checkBankruptcyObsolescence(records: ParsedPublicRecord[]): Violation[]
         legalStandard: `Bankruptcies may not be reported beyond ${yearsLimit} years from the date of entry of the order for relief.`,
         evidence: `Chapter ${chapter || '?'} bankruptcy filed ${formatDate(filingDate)} is ${daysOver} days past the ${yearsLimit}-year limit. Should have been removed on ${formatDate(falloff)}.`,
         explanation: `This bankruptcy has exceeded its maximum reporting period. ${chapter === '13' ? 'Discharged Chapter 13 bankruptcies have a 7-year' : 'Chapter 7/11 bankruptcies have a 10-year'} reporting limit from the filing date.`,
-        caseLaw: 'In re Sommerfeld, 2016 WL 3763023 — CRA liable for failing to remove obsolete bankruptcy',
+        caseLaw: 'In re Sommerfeld, 2016 WL 3763023  -  CRA liable for failing to remove obsolete bankruptcy',
         statutoryDamagesMin: 100, statutoryDamagesMax: 1000,
         actualDamagesEst: 5000, punitiveDamagesEst: 10000, attorneyFeesEst: 5000,
         totalDamagesMin: 10100, totalDamagesMax: 21000,
@@ -454,9 +454,9 @@ function checkBankruptcyObsolescence(records: ParsedPublicRecord[]): Violation[]
   return violations;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // CATEGORY 7: ACCOUNT STATUS / METRO 2 ERRORS
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 function checkStatusErrors(accounts: ParsedAccount[]): Violation[] {
   const violations: Violation[] = [];
   for (const acct of accounts) {
@@ -487,14 +487,14 @@ function checkStatusErrors(accounts: ParsedAccount[]): Violation[] {
     // Charged off with $0 but not marked as paid charge-off
     if (status.includes('charge') && acct.currentBalance === 0 && !status.includes('paid')) {
       violations.push({
-        id: genId(), category: 'FCRA', subcategory: 'Incomplete Status Update — Zero-Balance Charge-Off',
+        id: genId(), category: 'FCRA', subcategory: 'Incomplete Status Update  -  Zero-Balance Charge-Off',
         severity: 'low',
         statute: '15 U.S.C. § 1681e(b) & Metro 2 Account Status Code 13',
         statuteText: 'FCRA § 607(b)',
         legalStandard: 'When a charged-off account reaches zero balance (through payment or write-off), the Account Status Code should be updated to reflect the paid status.',
         evidence: `Account "${acct.creditorName}" (${acct.accountNumber || 'N/A'}) shows "charged off" with $0 balance but is not marked "Paid Charge-Off."`,
         explanation: `The consumer has satisfied this obligation but receives no credit improvement because the status was not properly updated.`,
-        caseLaw: 'CDIA Metro 2 Format — Account Status Code 13 (Paid/Closed Charge-Off)',
+        caseLaw: 'CDIA Metro 2 Format  -  Account Status Code 13 (Paid/Closed Charge-Off)',
         accountName: acct.creditorName, accountNumber: acct.accountNumber || '',
         statutoryDamagesMin: 100, statutoryDamagesMax: 1000,
         actualDamagesEst: 500, punitiveDamagesEst: 1000, attorneyFeesEst: 1500,
@@ -530,9 +530,9 @@ function checkStatusErrors(accounts: ParsedAccount[]): Violation[] {
   return violations;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // CATEGORY 8: PAYMENT HISTORY ERRORS
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 function checkPaymentHistoryErrors(accounts: ParsedAccount[]): Violation[] {
   const violations: Violation[] = [];
   for (const acct of accounts) {
@@ -578,7 +578,7 @@ function checkPaymentHistoryErrors(accounts: ParsedAccount[]): Violation[] {
           const latestLateDate = new Date(today);
           latestLateDate.setMonth(latestLateDate.getMonth() - latestLateMonthsAgo);
           if (closedDate < latestLateDate) {
-            // Late mark appears to be after account closure — potential error
+            // Late mark appears to be after account closure  -  potential error
           }
         }
       }
@@ -587,9 +587,9 @@ function checkPaymentHistoryErrors(accounts: ParsedAccount[]): Violation[] {
   return violations;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // CATEGORY 9: COLLECTION VALIDATION VIOLATIONS (FDCPA + FCRA)
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 function checkCollectionViolations(collections: ParsedAccount[]): Violation[] {
   const violations: Violation[] = [];
   for (const coll of collections) {
@@ -599,7 +599,7 @@ function checkCollectionViolations(collections: ParsedAccount[]): Violation[] {
         id: genId(), category: 'FCRA', subcategory: 'Missing Date of First Delinquency (DOFD)',
         severity: 'high',
         statute: '15 U.S.C. § 1681s-2(a)(5) & Metro 2 Field 20',
-        statuteText: 'FCRA § 623(a)(5) — Duty to Provide DOFD',
+        statuteText: 'FCRA § 623(a)(5)  -  Duty to Provide DOFD',
         legalStandard: 'Furnishers MUST report the DOFD for any account placed for collection or charged off. This is a mandatory Metro 2 field.',
         evidence: `Collection "${coll.creditorName}" (${coll.accountNumber || 'N/A'}) with balance $${coll.currentBalance.toLocaleString()} has no DOFD reported. The 7-year clock cannot be calculated.`,
         explanation: `Without DOFD, there is no way to determine when the account should fall off. This creates the risk of indefinite reporting. The furnisher has a statutory duty under § 623(a)(5) to provide the DOFD, and failure to do so is an independent violation.`,
@@ -610,7 +610,7 @@ function checkCollectionViolations(collections: ParsedAccount[]): Violation[] {
         totalDamagesMin: 5100, totalDamagesMax: 9000,
         defendantType: 'Furnisher', defendantName: coll.creditorName,
         remedialAction: 'Demand DOFD be provided immediately or account deleted. File CFPB complaint for § 623(a)(5) violation.',
-        disputeStrategy: 'Dispute as unverifiable — without DOFD the account cannot be verified as within the reporting window.',
+        disputeStrategy: 'Dispute as unverifiable  -  without DOFD the account cannot be verified as within the reporting window.',
       });
     }
 
@@ -642,7 +642,7 @@ function checkCollectionViolations(collections: ParsedAccount[]): Violation[] {
         id: genId(), category: 'FDCPA', subcategory: 'Potential Time-Barred Debt Collection',
         severity: 'medium',
         statute: '15 U.S.C. § 1692e & § 1692f & State SOL Statutes',
-        statuteText: 'FDCPA § 807 & § 808 — Unfair Practices on Time-Barred Debts',
+        statuteText: 'FDCPA § 807 & § 808  -  Unfair Practices on Time-Barred Debts',
         legalStandard: 'Collecting or threatening suit on a time-barred debt may violate the FDCPA. In many states, the statute of limitations for credit card debt is 3-6 years.',
         evidence: `Collection "${coll.creditorName}" has DOFD of ${formatDate(dofd)}, making this debt approximately ${Math.round(daysBetween(dofd, today)/365)} years old. This may exceed the applicable state statute of limitations.`,
         explanation: `If the SOL has expired, the collector cannot file suit but may still report. However, collecting on time-barred debt with implied threat of suit violates FDCPA § 1692e (false representations) and § 1692f (unfair practices). Some courts hold that merely reporting a time-barred debt with a balance is an implied threat.`,
@@ -661,9 +661,9 @@ function checkCollectionViolations(collections: ParsedAccount[]): Violation[] {
   return violations;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // CATEGORY 10: PUBLIC RECORD OBSOLESCENCE
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 function checkPublicRecordObsolescence(records: ParsedPublicRecord[]): Violation[] {
   const violations: Violation[] = [];
   for (const rec of records) {
@@ -684,7 +684,7 @@ function checkPublicRecordObsolescence(records: ParsedPublicRecord[]): Violation
           legalStandard: 'Paid tax liens may not be reported beyond 7 years from date of payment.',
           evidence: `Paid tax lien from ${formatDate(filingDate)} is ${daysOver} days past the 7-year limit from payment date ${formatDate(paymentDate)}.`,
           explanation: `This paid tax lien has exceeded its maximum reporting period.`,
-          caseLaw: '15 U.S.C. § 1681c(a)(3) — statutory prohibition',
+          caseLaw: '15 U.S.C. § 1681c(a)(3)  -  statutory prohibition',
           statutoryDamagesMin: 100, statutoryDamagesMax: 1000,
           actualDamagesEst: 3000, punitiveDamagesEst: 5000, attorneyFeesEst: 3000,
           totalDamagesMin: 6100, totalDamagesMax: 12000,
@@ -723,23 +723,23 @@ function checkPublicRecordObsolescence(records: ParsedPublicRecord[]): Violation
   return violations;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // CATEGORY 11: MIXED FILE / WRONG CONSUMER DATA
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 function checkMixedFileIndicators(report: CreditReportData): Violation[] {
   const violations: Violation[] = [];
 
   // Multiple names that don't match
   if (report.personalInfo.names.length > 3) {
     violations.push({
-      id: genId(), category: 'FCRA', subcategory: 'Possible Mixed File — Excessive Name Variations',
+      id: genId(), category: 'FCRA', subcategory: 'Possible Mixed File  -  Excessive Name Variations',
       severity: 'high',
       statute: '15 U.S.C. § 1681e(b) & § 1681i(a)',
       statuteText: 'FCRA § 607(b) & § 611(a)',
       legalStandard: 'CRA must follow reasonable procedures to assure maximum possible accuracy and avoid combining data from different consumers.',
       evidence: `Report shows ${report.personalInfo.names.length} different names: ${report.personalInfo.names.join(', ')}. This may indicate a mixed file with another consumer.`,
       explanation: `Mixed files occur when a CRA incorrectly merges data from two different consumers into one report. This is one of the most damaging FCRA violations and can affect employment, insurance, housing, and credit. Each incorrect tradeline from another person is a separate violation.`,
-      caseLaw: 'Sloane v. Equifax Info. Servs., LLC, 510 F.3d 495 (4th Cir. 2007) — $351,000 verdict for mixed file; Philbin v. Trans Union Corp., 101 F.3d 957 (3d Cir. 1996)',
+      caseLaw: 'Sloane v. Equifax Info. Servs., LLC, 510 F.3d 495 (4th Cir. 2007)  -  $351,000 verdict for mixed file; Philbin v. Trans Union Corp., 101 F.3d 957 (3d Cir. 1996)',
       statutoryDamagesMin: 100, statutoryDamagesMax: 1000,
       actualDamagesEst: 10000, punitiveDamagesEst: 25000, attorneyFeesEst: 10000,
       totalDamagesMin: 20100, totalDamagesMax: 46000,
@@ -752,7 +752,7 @@ function checkMixedFileIndicators(report: CreditReportData): Violation[] {
   // Multiple SSNs
   if (report.personalInfo.ssns.length > 1) {
     violations.push({
-      id: genId(), category: 'FCRA', subcategory: 'Multiple SSNs — Mixed File or Identity Issue',
+      id: genId(), category: 'FCRA', subcategory: 'Multiple SSNs  -  Mixed File or Identity Issue',
       severity: 'critical',
       statute: '15 U.S.C. § 1681e(b)',
       statuteText: 'FCRA § 607(b)',
@@ -772,9 +772,9 @@ function checkMixedFileIndicators(report: CreditReportData): Violation[] {
   return violations;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // CATEGORY 12: INCOMPLETE / MISSING REQUIRED DATA
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 function checkIncompleteData(accounts: ParsedAccount[]): Violation[] {
   const violations: Violation[] = [];
   for (const acct of accounts) {
@@ -788,7 +788,7 @@ function checkIncompleteData(accounts: ParsedAccount[]): Violation[] {
         legalStandard: 'Metro 2 requires Account Type (Field 14) for all tradelines. Missing data makes the report incomplete and potentially misleading.',
         evidence: `Account "${acct.creditorName}" (${acct.accountNumber || 'N/A'}) is missing the Account Type field.`,
         explanation: `Without account type, scoring models may misclassify the account, affecting credit mix calculations. This is incomplete reporting under Metro 2 standards.`,
-        caseLaw: 'CDIA Metro 2 Format — Field 14 (required)',
+        caseLaw: 'CDIA Metro 2 Format  -  Field 14 (required)',
         accountName: acct.creditorName, accountNumber: acct.accountNumber || '',
         statutoryDamagesMin: 100, statutoryDamagesMax: 1000,
         actualDamagesEst: 500, punitiveDamagesEst: 500, attorneyFeesEst: 1500,
@@ -807,7 +807,7 @@ function checkIncompleteData(accounts: ParsedAccount[]): Violation[] {
         statute: '15 U.S.C. § 1681e(b) & § 1681s-2(a)(1)',
         statuteText: 'FCRA § 607(b) & § 623(a)(1)',
         legalStandard: 'A collection account with $0 balance that is not marked as paid is misleading and inaccurate.',
-        evidence: `Collection "${acct.creditorName}" shows $0 balance but status is "${acct.accountStatus || 'Collection'}" — not marked as paid.`,
+        evidence: `Collection "${acct.creditorName}" shows $0 balance but status is "${acct.accountStatus || 'Collection'}"  -  not marked as paid.`,
         explanation: `This creates ambiguity: is the debt disputed, paid, written off, or an error? The consumer is harmed by a derogatory mark with no explanation for the zero balance.`,
         caseLaw: 'Gorman v. Wolpoff & Abramson, 584 F.3d 1147 (9th Cir. 2009)',
         accountName: acct.creditorName, accountNumber: acct.accountNumber || '',
@@ -823,9 +823,9 @@ function checkIncompleteData(accounts: ParsedAccount[]): Violation[] {
   return violations;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // CATEGORY 13: CREDIT LIMIT / UTILIZATION MANIPULATION
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 function checkCreditLimitErrors(accounts: ParsedAccount[]): Violation[] {
   const violations: Violation[] = [];
   for (const acct of accounts) {
@@ -833,14 +833,14 @@ function checkCreditLimitErrors(accounts: ParsedAccount[]): Violation[] {
     if (!type.includes('revolv') && !type.includes('credit') && !type.includes('line')) continue;
     if (acct.creditLimit === 0 && acct.currentBalance > 0 && acct.highBalance > 0) {
       violations.push({
-        id: genId(), category: 'FCRA', subcategory: 'Missing Credit Limit — Utilization Distortion',
+        id: genId(), category: 'FCRA', subcategory: 'Missing Credit Limit  -  Utilization Distortion',
         severity: 'medium',
         statute: '15 U.S.C. § 1681e(b) & Metro 2 Field 21',
         statuteText: 'FCRA § 607(b) & CDIA Metro 2 Credit Limit Reporting',
         legalStandard: 'For revolving accounts, the credit limit (Field 21) must be reported. When missing, scoring models use the high balance as a proxy, which inflates apparent utilization.',
         evidence: `Revolving account "${acct.creditorName}" (${acct.accountNumber || 'N/A'}) shows balance $${acct.currentBalance.toLocaleString()} but no credit limit reported. High balance: $${acct.highBalance.toLocaleString()}.`,
         explanation: `When credit limit is missing, FICO uses the high balance as a substitute. If high balance is lower than the actual limit, the utilization ratio appears much higher than reality. This can cost 20-50+ FICO points for consumers with high balances relative to their (unreported) limits.`,
-        caseLaw: 'Krajewski v. Am. Honda Fin. Corp., 557 F. Supp. 2d 596 (E.D. Pa. 2008) — failure to report credit limit is actionable',
+        caseLaw: 'Krajewski v. Am. Honda Fin. Corp., 557 F. Supp. 2d 596 (E.D. Pa. 2008)  -  failure to report credit limit is actionable',
         accountName: acct.creditorName, accountNumber: acct.accountNumber || '',
         statutoryDamagesMin: 100, statutoryDamagesMax: 1000,
         actualDamagesEst: 2000, punitiveDamagesEst: 3000, attorneyFeesEst: 2500,
@@ -854,9 +854,9 @@ function checkCreditLimitErrors(accounts: ParsedAccount[]): Violation[] {
   return violations;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // CATEGORY 14: FDCPA REPORTING VIOLATIONS
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 function checkFDCPAReportingViolations(collections: ParsedAccount[]): Violation[] {
   const violations: Violation[] = [];
   for (const coll of collections) {
@@ -906,9 +906,9 @@ function checkFDCPAReportingViolations(collections: ParsedAccount[]): Violation[
   return violations;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // CATEGORY 15: ECOA / EQUAL CREDIT OPPORTUNITY MARKERS
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 function checkECOAViolations(accounts: ParsedAccount[]): Violation[] {
   const violations: Violation[] = [];
   for (const acct of accounts) {
@@ -937,9 +937,9 @@ function checkECOAViolations(accounts: ParsedAccount[]): Violation[] {
   return violations;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// MASTER DETECTION ENGINE — Runs ALL 15 categories
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
+// MASTER DETECTION ENGINE  -  Runs ALL 15 categories
+// ===============================================================
 export function detectViolations(report: CreditReportData): Violation[] {
   const allAccounts = [...report.accounts, ...report.collections];
 
@@ -967,9 +967,9 @@ export function detectViolations(report: CreditReportData): Violation[] {
   });
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 // LITIGATION VALUE SCORE CALCULATOR
-// ═══════════════════════════════════════════════════════════════
+// ===============================================================
 export function calculateLitigationScore(violations: Violation[]): {
   score: number;
   grade: string;
@@ -1022,10 +1022,10 @@ export function calculateLitigationScore(violations: Violation[]): {
   else if (score >= 40) grade = 'C';
   else if (score >= 25) grade = 'D';
 
-  let recommendation = 'DISPUTE FIRST — Build evidence before litigation';
-  if (score >= 80) recommendation = 'STRONG LITIGATION CASE — High damages, multiple defendants, pursue federal lawsuit';
-  else if (score >= 60) recommendation = 'GOOD CASE — Strong settlement leverage, consider filing if dispute fails';
-  else if (score >= 40) recommendation = 'MODERATE CASE — Dispute first, litigate if not resolved in 30 days';
+  let recommendation = 'DISPUTE FIRST  -  Build evidence before litigation';
+  if (score >= 80) recommendation = 'STRONG LITIGATION CASE  -  High damages, multiple defendants, pursue federal lawsuit';
+  else if (score >= 60) recommendation = 'GOOD CASE  -  Strong settlement leverage, consider filing if dispute fails';
+  else if (score >= 40) recommendation = 'MODERATE CASE  -  Dispute first, litigate if not resolved in 30 days';
 
   const litigationPlan: string[] = [];
   litigationPlan.push(`Step 1: Send dispute letters to all 3 bureaus citing ${violations.length} violations`);
