@@ -5,7 +5,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "wrangler pages dev dist --d1=fcra-detector-production --local --ip 0.0.0.0 --port 3000",
-    "deploy": "npm run build && wrangler pages deploy dist --project-name fcra-detector",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name smart-fcra",
     "db:migrate:local": "wrangler d1 migrations apply fcra-detector-production --local",
     "db:seed": "wrangler d1 execute fcra-detector-production --local --file=./seed.sql",
     "db:reset": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local && npm run db:seed"
