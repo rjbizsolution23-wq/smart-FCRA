@@ -1266,7 +1266,7 @@ Status: Discharged`;
                   <label class="block text-xs font-medium text-gray-400 mb-1.5">Select Client</label>
                   <select id="select-client" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition">
                     <option value="">-- Choose Client --</option>
-                    \${clients.map(c => \`<option value="\${c.id}">\${c.first_name} \${c.last_name}</option>\`).join('')}
+                    ${clients.map(c => `<option value="${c.id}">${c.first_name} ${c.last_name}</option>`).join('')}
                   </select>
                 </div>
 
@@ -1274,7 +1274,7 @@ Status: Discharged`;
                   <label class="block text-xs font-medium text-gray-400 mb-1.5">Select Document Template</label>
                   <select id="select-template" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition">
                     <option value="">-- Choose Template --</option>
-                    \${templates.map(t => \`<option value="\${t.id}">\${t.name}</option>\`).join('')}
+                    ${templates.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
                   </select>
                   <p id="template-desc" class="text-xs text-gray-500 mt-1.5 italic"></p>
                 </div>
@@ -1364,8 +1364,8 @@ Status: Discharged`;
         fieldsForm.innerHTML = template.fields.map(f => {
           return `
             <div class="space-y-1">
-              <label class="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider">\${f.label}</label>
-              <input type="text" name="\${f.name}" data-default="\${f.defaultVal || ''}" placeholder="\${f.placeholder || ''}" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition">
+              <label class="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider">${f.label}</label>
+              <input type="text" name="${f.name}" data-default="${f.defaultVal || ''}" placeholder="${f.placeholder || ''}" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition">
             </div>
           `;
         }).join('');
@@ -1384,13 +1384,13 @@ Status: Discharged`;
         const client = clients.find(c => c.id === clientId);
 
         // Prepare matching attributes
-        const fullName = client ? \`\${client.first_name} \${client.last_name}\` : '';
-        const address = client ? \`\${client.address_line1 || ''}\${client.address_line2 ? ', ' + client.address_line2 : ''}, \${client.city || ''}, \${client.state || ''} \${client.zip || ''}\` : '';
+        const fullName = client ? `${client.first_name} ${client.last_name}` : '';
+        const address = client ? `${client.address_line1 || ''}${client.address_line2 ? ', ' + client.address_line2 : ''}, ${client.city || ''}, ${client.state || ''} ${client.zip || ''}` : '';
         const clientState = client?.state || '';
         const formattedToday = "June 26, 2026";
 
         template.fields.forEach(f => {
-          const input = fieldsForm.querySelector(\`input[name="\${f.name}"]\`);
+          const input = fieldsForm.querySelector(`input[name="${f.name}"]`);
           if (!input) return;
 
           let val = f.defaultVal || '';
@@ -1488,7 +1488,7 @@ Status: Discharged`;
           btnDownload.disabled = false;
           btnDownload.className = "flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-all transform hover:scale-[1.02] active:scale-[0.98] text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30";
 
-          statusDisp.textContent = `Draft saved with ID: \${res.id}`;
+          statusDisp.textContent = `Draft saved with ID: ${res.id}`;
           statusDisp.classList.remove('hidden');
         } catch (err) {
           toast('Save failed: ' + err.message, 'error');
@@ -1500,12 +1500,12 @@ Status: Discharged`;
 
       btnDownload.onclick = () => {
         if (!currentDocId) return;
-        const cleanUrl = \`/api/documents/\${currentDocId}/pdf?token=\${encodeURIComponent(state.token)}\`;
+        const cleanUrl = `/api/documents/${currentDocId}/pdf?token=${encodeURIComponent(state.token)}`;
         window.open(cleanUrl, '_blank');
       };
 
     } catch (err) {
-      el.innerHTML = \`<div class="fade-in"><div class="glass rounded-xl p-8 border border-red-500/30 text-center"><i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i><h3 class="text-lg font-bold text-white mb-1">Failed to initialize Founder OS Suite</h3><p class="text-sm text-gray-400">\${err.message}</p></div></div>\`;
+      el.innerHTML = `<div class="fade-in"><div class="glass rounded-xl p-8 border border-red-500/30 text-center"><i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i><h3 class="text-lg font-bold text-white mb-1">Failed to initialize Founder OS Suite</h3><p class="text-sm text-gray-400">${err.message}</p></div></div>`;
     }
   }
 
