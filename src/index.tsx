@@ -4,7 +4,7 @@ import { serveStatic } from 'hono/cloudflare-pages';
 import Stripe from 'stripe';
 import { generateId, hashPassword, verifyPassword, createSessionToken, generateEmailToken } from './lib/auth';
 import { parseCreditReportText } from './engine/parser';
-import { detectViolations, calculateLitigationScore } from './engine/violations';
+import { detectViolations, calculateLitigationScore, type CreditReportData } from './engine/violations';
 import { mapMfsnToInternal } from './engine/mfsn-mapper';
 import { mapSmartCreditToInternal } from './engine/smartcredit-mapper';
 import { DOCUMENT_TYPES, type DocumentData } from './engine/documents';
@@ -810,7 +810,7 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
 app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
   const user = c.get('user');
   const body = await c.req.json();
-  const { clientId, smartCreditData, trackingToken, username, password } = body;
+  const { clientId, smartCreditData, trackingToken, username, password, fileText } = body;
 
   if (!clientId) {
     return c.json({ error: 'Client ID is required' }, 400);
@@ -818,65 +818,261 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
 
   let payload = smartCreditData;
   let resolvedTrackingToken = trackingToken;
+  let bureauReports: CreditReportData[] = [];
+
+  const isSandbox = username === 'test_smartcredit@rjbusinesssolutions.com';
 
   try {
-    if (username && password) {
-      const clientKey = '19343205-b3a9-4143-8bef-2cb5da0c731f';
-      const clientSecret = 'WE_9tIrlwv0yvLW83CNmqlkyCIJVaxV5ouVu2sJ7QYQ';
-      const authHeader = 'Basic ' + btoa(`${clientKey}:${clientSecret}`);
-
-      const authRes = await fetch('https://api.smartcredit.com/v1.1/member/authenticate', {
-        method: 'POST',
-        headers: {
-          'Authorization': authHeader,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
+    if (isSandbox) {
+      resolvedTrackingToken = "sandbox_token_999";
+      const mockEquifax: CreditReportData = {
+        bureau: 'Equifax',
+        reportDate: new Date().toLocaleDateString(),
+        personalInfo: {
+          names: [ 'Rick Jefferson', 'Rick A Jefferson' ],
+          addresses: [ '1342 NM 333, Tijeras, NM 87059' ],
+          employers: [ 'RJ Business Solutions' ],
+          ssns: [ '***-**-9999' ],
+          dobs: [ '05/21/1985' ]
         },
-        body: JSON.stringify({ username, password })
-      });
+        accounts: [
+          {
+            creditorName: 'Chase Bank',
+            accountNumber: '411122223333',
+            accountType: 'Revolving',
+            accountStatus: 'Open',
+            dateOpened: '04/10/2021',
+            currentBalance: 1500,
+            originalAmount: 5000,
+            highBalance: 1200, // Balance Exceeds High Balance (Impossible Data)
+            creditLimit: 5000,
+            monthlyPayment: 50,
+            paymentStatus: 'Current',
+            paymentHistory: 'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC',
+            isCollection: false
+          }
+        ],
+        inquiries: [
+          { creditorName: 'Capital One', inquiryDate: '05/10/2026', inquiryType: 'Hard' },
+          { creditorName: 'Citibank', inquiryDate: '05/12/2026', inquiryType: 'Hard' },
+          { creditorName: 'Discover', inquiryDate: '05/15/2026', inquiryType: 'Hard' },
+          { creditorName: 'Wells Fargo', inquiryDate: '06/01/2026', inquiryType: 'Hard' },
+          { creditorName: 'Bank of America', inquiryDate: '06/05/2026', inquiryType: 'Hard' },
+          { creditorName: 'Synchrony', inquiryDate: '06/10/2026', inquiryType: 'Hard' },
+          { creditorName: 'Barclays', inquiryDate: '06/15/2026', inquiryType: 'Hard' }
+        ],
+        publicRecords: [],
+        collections: [
+          {
+            creditorName: 'ACME Collections',
+            accountNumber: '98765-COLL',
+            accountType: 'Collection',
+            accountStatus: 'Collection',
+            dateOpened: '05/15/2018',
+            dofd: '01/15/2018', // Obsolete collection (7-year rule)
+            currentBalance: 350,
+            originalAmount: 350,
+            highBalance: 0,
+            creditLimit: 0,
+            monthlyPayment: 0,
+            paymentStatus: 'Collection',
+            paymentHistory: '999999999999999999999999999999',
+            isCollection: true
+          }
+        ]
+      };
 
-      if (!authRes.ok) {
-        const errText = await authRes.text();
-        return c.json({ error: `SmartCredit Authentication Failed (${authRes.status}): ${errText}` }, authRes.status);
+      const mockExperian: CreditReportData = {
+        bureau: 'Experian',
+        reportDate: new Date().toLocaleDateString(),
+        personalInfo: {
+          names: [ 'Rick Jefferson' ],
+          addresses: [ '1342 NM 333, Tijeras, NM 87059' ],
+          employers: [ 'RJ Business Solutions' ],
+          ssns: [ '***-**-9999' ],
+          dobs: [ '05/21/1985' ]
+        },
+        accounts: [
+          {
+            creditorName: 'Chase Bank',
+            accountNumber: '411122223333',
+            accountType: 'Revolving',
+            accountStatus: 'Open',
+            dateOpened: '04/10/2021',
+            currentBalance: 2500, // Contradicts Equifax's 1500
+            originalAmount: 5000,
+            highBalance: 2500,
+            creditLimit: 0, // Missing Credit Limit - Utilization Distortion
+            monthlyPayment: 75,
+            paymentStatus: 'Current',
+            paymentHistory: 'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC',
+            isCollection: false
+          }
+        ],
+        inquiries: [
+          { creditorName: 'Capital One', inquiryDate: '05/10/2026', inquiryType: 'Hard' },
+          { creditorName: 'Citibank', inquiryDate: '05/12/2026', inquiryType: 'Hard' },
+          { creditorName: 'Discover', inquiryDate: '05/15/2026', inquiryType: 'Hard' },
+          { creditorName: 'Wells Fargo', inquiryDate: '06/01/2026', inquiryType: 'Hard' },
+          { creditorName: 'Bank of America', inquiryDate: '06/05/2026', inquiryType: 'Hard' },
+          { creditorName: 'Synchrony', inquiryDate: '06/10/2026', inquiryType: 'Hard' },
+          { creditorName: 'Barclays', inquiryDate: '06/15/2026', inquiryType: 'Hard' }
+        ],
+        publicRecords: [],
+        collections: [
+          {
+            creditorName: 'ACME Collections',
+            accountNumber: '98765-COLL',
+            accountType: 'Collection',
+            accountStatus: 'Collection',
+            dateOpened: '05/15/2018',
+            dofd: '01/15/2018',
+            currentBalance: 350,
+            originalAmount: 350,
+            highBalance: 0,
+            creditLimit: 0,
+            monthlyPayment: 0,
+            paymentStatus: 'Collection',
+            paymentHistory: '999999999999999999999999999999',
+            isCollection: true
+          }
+        ]
+      };
+
+      const mockTransUnion: CreditReportData = {
+        bureau: 'TransUnion',
+        reportDate: new Date().toLocaleDateString(),
+        personalInfo: {
+          names: [ 'Rick Jefferson' ],
+          addresses: [ '1342 NM 333, Tijeras, NM 87059' ],
+          employers: [ 'RJ Business Solutions' ],
+          ssns: [ '***-**-9999' ],
+          dobs: [ '05/21/1985' ]
+        },
+        accounts: [
+          {
+            creditorName: 'Chase Bank',
+            accountNumber: '411122223333',
+            accountType: 'Revolving',
+            accountStatus: 'Open',
+            dateOpened: '04/10/2021',
+            currentBalance: 1500, // Matches Equifax but has credit limit reported correctly
+            originalAmount: 5000,
+            highBalance: 1500,
+            creditLimit: 5000,
+            monthlyPayment: 50,
+            paymentStatus: 'Current',
+            paymentHistory: 'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCC',
+            isCollection: false
+          }
+        ],
+        inquiries: [
+          { creditorName: 'Capital One', inquiryDate: '05/10/2026', inquiryType: 'Hard' },
+          { creditorName: 'Citibank', inquiryDate: '05/12/2026', inquiryType: 'Hard' },
+          { creditorName: 'Discover', inquiryDate: '05/15/2026', inquiryType: 'Hard' },
+          { creditorName: 'Wells Fargo', inquiryDate: '06/01/2026', inquiryType: 'Hard' },
+          { creditorName: 'Bank of America', inquiryDate: '06/05/2026', inquiryType: 'Hard' },
+          { creditorName: 'Synchrony', inquiryDate: '06/10/2026', inquiryType: 'Hard' },
+          { creditorName: 'Barclays', inquiryDate: '06/15/2026', inquiryType: 'Hard' }
+        ],
+        publicRecords: [],
+        collections: [
+          {
+            creditorName: 'ACME Collections',
+            accountNumber: '98765-COLL',
+            accountType: 'Collection',
+            accountStatus: 'Collection',
+            dateOpened: '05/15/2018',
+            dofd: '01/15/2018',
+            currentBalance: 350,
+            originalAmount: 350,
+            highBalance: 0,
+            creditLimit: 0,
+            monthlyPayment: 0,
+            paymentStatus: 'Collection',
+            paymentHistory: '999999999999999999999999999999',
+            isCollection: true
+          }
+        ]
+      };
+
+      bureauReports = [mockEquifax, mockExperian, mockTransUnion];
+      payload = {
+        isMockSandbox: true,
+        reports: bureauReports
+      };
+    } else if (fileText) {
+      try {
+        const parsedJson = JSON.parse(fileText);
+        bureauReports = mapSmartCreditToInternal(parsedJson);
+        payload = parsedJson;
+        resolvedTrackingToken = trackingToken || 'file_upload_json';
+      } catch (jsonErr) {
+        const parsedReport = parseCreditReportText(fileText);
+        bureauReports = [parsedReport];
+        payload = { rawText: fileText, source: 'file_upload_text' };
+        resolvedTrackingToken = trackingToken || 'file_upload_text';
       }
+    } else {
+      if (username && password) {
+        const clientKey = '19343205-b3a9-4143-8bef-2cb5da0c731f';
+        const clientSecret = 'WE_9tIrlwv0yvLW83CNmqlkyCIJVaxV5ouVu2sJ7QYQ';
+        const authHeader = 'Basic ' + btoa(`${clientKey}:${clientSecret}`);
 
-      const authData: any = await authRes.json();
-      resolvedTrackingToken = authData.trackingToken || authData.data?.trackingToken || authData.member?.trackingToken || authData.token;
+        const authRes = await fetch('https://api.smartcredit.com/v1.1/member/authenticate', {
+          method: 'POST',
+          headers: {
+            'Authorization': authHeader,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ username, password })
+        });
 
-      if (!resolvedTrackingToken) {
-        return c.json({ error: 'Failed to resolve trackingToken from authentication response' }, 500);
-      }
-    }
-
-    // If trackingToken is provided/resolved and raw smartCreditData is absent, fetch via ConsumerDirect API
-    if (resolvedTrackingToken && !payload) {
-      const clientKey = '19343205-b3a9-4143-8bef-2cb5da0c731f';
-      const clientSecret = 'WE_9tIrlwv0yvLW83CNmqlkyCIJVaxV5ouVu2sJ7QYQ';
-      const url = `https://api.smartcredit.com/v1.1/report/retrieve?clientKey=${clientKey}&trackingToken=${resolvedTrackingToken}`;
-      const authHeader = 'Basic ' + btoa(`${clientKey}:${clientSecret}`);
-
-      const res = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': authHeader,
-          'Accept': 'application/json'
+        if (!authRes.ok) {
+          const errText = await authRes.text();
+          return c.json({ error: `SmartCredit Authentication Failed (${authRes.status}): ${errText}` }, authRes.status);
         }
-      });
 
-      if (!res.ok) {
-        const errText = await res.text();
-        return c.json({ error: `SmartCredit API Retrieve Failed (${res.status}): ${errText}` }, res.status);
+        const authData: any = await authRes.json();
+        resolvedTrackingToken = authData.trackingToken || authData.data?.trackingToken || authData.member?.trackingToken || authData.token;
+
+        if (!resolvedTrackingToken) {
+          return c.json({ error: 'Failed to resolve trackingToken from authentication response' }, 500);
+        }
       }
 
-      payload = await res.json();
+      // If trackingToken is provided/resolved and raw smartCreditData is absent, fetch via ConsumerDirect API
+      if (resolvedTrackingToken && !payload) {
+        const clientKey = '19343205-b3a9-4143-8bef-2cb5da0c731f';
+        const clientSecret = 'WE_9tIrlwv0yvLW83CNmqlkyCIJVaxV5ouVu2sJ7QYQ';
+        const url = `https://api.smartcredit.com/v1.1/report/retrieve?clientKey=${clientKey}&trackingToken=${resolvedTrackingToken}`;
+        const authHeader = 'Basic ' + btoa(`${clientKey}:${clientSecret}`);
+
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': authHeader,
+            'Accept': 'application/json'
+          }
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          return c.json({ error: `SmartCredit API Retrieve Failed (${res.status}): ${errText}` }, res.status);
+        }
+
+        payload = await res.json();
+      }
+
+      if (!payload) {
+        return c.json({ error: 'Either smartCreditData (JSON payload) or trackingToken or credentials are required' }, 400);
+      }
+
+      // Map SmartCredit Data to Internal Format
+      bureauReports = mapSmartCreditToInternal(payload);
     }
 
-    if (!payload) {
-      return c.json({ error: 'Either smartCreditData (JSON payload) or trackingToken or credentials are required' }, 400);
-    }
-
-    // Map SmartCredit Data to Internal Format
-    const bureauReports = mapSmartCreditToInternal(payload);
     if (bureauReports.length === 0) {
       return c.json({ error: 'No bureau data found in SmartCredit report response' }, 404);
     }
@@ -927,7 +1123,13 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
       ).bind(v.id, user.org_id, reportId, clientId, v.category, v.subcategory, v.severity, v.statute, v.statuteText, v.legalStandard, v.evidence, v.explanation, v.caseLaw, v.accountName || null, v.accountNumber || null, v.dofd || null, v.falloffDate || null, v.daysOverdue || null, v.statutoryDamagesMin, v.statutoryDamagesMax, v.actualDamagesEst, v.punitiveDamagesEst, v.attorneyFeesEst, v.totalDamagesMin, v.totalDamagesMax, v.defendantType, v.defendantName).run();
     }
 
-    await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, report_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, clientId, reportId, user.id, 'report_imported', `Real import from SmartCredit: ${allViolations.length} violations found across ${bureauReports.length} bureaus`, JSON.stringify({ score: litScore.score })).run();
+    const actionText = isSandbox 
+      ? `Sandbox simulation import from SmartCredit: ${allViolations.length} violations found across ${bureauReports.length} bureaus`
+      : fileText 
+        ? `Manual report upload/import from SmartCredit: ${allViolations.length} violations found`
+        : `Real import from SmartCredit: ${allViolations.length} violations found across ${bureauReports.length} bureaus`;
+
+    await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, report_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, clientId, reportId, user.id, 'report_imported', actionText, JSON.stringify({ score: litScore.score })).run();
 
     return c.json({
       reportId,

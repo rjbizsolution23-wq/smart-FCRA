@@ -393,6 +393,25 @@
         <div class="flex gap-3">
           <button type="submit" id="smartcredit-btn" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition shadow-lg"><i class="fas fa-lock mr-2"></i>Authenticate & Fetch SmartCredit</button>
         </div>
+
+        <div class="relative flex py-3 items-center">
+          <div class="flex-grow border-t border-gray-700/60"></div>
+          <span class="flex-shrink mx-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">OR</span>
+          <div class="flex-grow border-t border-gray-700/60"></div>
+        </div>
+
+        <div id="smartcredit-dropzone" class="border-2 border-dashed border-gray-700 hover:border-blue-500/80 bg-gray-900/40 hover:bg-gray-800/40 transition-all rounded-xl p-8 text-center cursor-pointer group">
+          <input type="file" id="smartcredit-file-input" class="hidden" accept=".html,.htm,.json,.txt">
+          <div class="space-y-3">
+            <div class="mx-auto w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+              <i class="fas fa-file-import text-lg"></i>
+            </div>
+            <div class="text-xs text-gray-300">
+              <span class="font-semibold text-blue-400 hover:underline">Click to upload</span> or drag and drop your report
+            </div>
+            <p class="text-[10px] text-gray-500 font-medium">Supports HTML, JSON, or TXT downloaded from your SmartCredit Portal</p>
+          </div>
+        </div>
       </form>
 
       <!-- MANUAL IMPORT TAB -->
@@ -418,6 +437,63 @@
     const formMfsn = $('#mfsn-form');
     const formSmartcredit = $('#smartcredit-form');
     const formMan = $('#upload-form');
+
+    const dropzone = $('#smartcredit-dropzone');
+    const fileInput = $('#smartcredit-file-input');
+
+    if (dropzone && fileInput) {
+      fileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) handleSmartCreditFile(file);
+      };
+
+      dropzone.ondragover = (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('border-gray-700');
+        dropzone.classList.add('border-blue-500', 'bg-blue-500/10');
+      };
+
+      dropzone.ondragleave = (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('border-blue-500', 'bg-blue-500/10');
+        dropzone.classList.add('border-gray-700');
+      };
+
+      dropzone.ondrop = (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('border-blue-500', 'bg-blue-500/10');
+        dropzone.classList.add('border-gray-700');
+
+        const file = e.dataTransfer.files[0];
+        if (file) handleSmartCreditFile(file);
+      };
+
+      dropzone.onclick = () => {
+        fileInput.click();
+      };
+    }
+
+    async function handleSmartCreditFile(file) {
+      const reader = new FileReader();
+      const resEl = $('#analysis-results');
+      resEl.classList.remove('hidden');
+      resEl.innerHTML = renderProcessStepsCustom('Reading uploaded report...', 'fas fa-spinner fa-spin');
+
+      reader.onload = async (event) => {
+        const textContent = event.target.result;
+        await runAnalysisPipeline('/reports/import-smartcredit', {
+          clientId: data.clientId,
+          fileText: textContent
+        }, true, 'SmartCredit File');
+      };
+
+      reader.onerror = (err) => {
+        resEl.innerHTML = `<div class="glass rounded-xl p-6 border border-red-500/30"><i class="fas fa-exclamation-triangle text-red-400 mr-2"></i><span class="text-red-300">Failed to read file: ${err.message}</span></div>`;
+        toast('File read error', 'error');
+      };
+
+      reader.readAsText(file);
+    }
 
     tabMfsn.onclick = () => {
       tabMfsn.className = 'px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-500 mr-4 transition';
@@ -474,6 +550,9 @@
       } catch(err) {
         resEl.innerHTML = `<div class="glass rounded-xl p-6 border border-red-500/30"><i class="fas fa-exclamation-triangle text-red-400 mr-2"></i><span class="text-red-300">${err.message}</span></div>`;
         toast(err.message, 'error');
+        if (endpoint === '/reports/import-smartcredit' && (err.message.includes('403') || err.message.includes('530') || err.message.toLowerCase().includes('forbidden') || err.message.toLowerCase().includes('failed') || err.message.toLowerCase().includes('firewall') || err.message.toLowerCase().includes('sigv4'))) {
+          showSmartCreditFirewallModal();
+        }
       }
     }
 
@@ -529,6 +608,84 @@
 
       btn.disabled = false;
       btn.innerHTML = '<i class="fas fa-file-import mr-2"></i>Run Manual Analysis';
+    };
+  }
+
+  function showSmartCreditFirewallModal() {
+    const existing = $('#smartcredit-firewall-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'smartcredit-firewall-modal';
+    modal.className = 'fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md fade-in';
+    modal.innerHTML = `
+      <div class="glass max-w-lg w-full rounded-2xl border border-blue-500/30 overflow-hidden shadow-2xl scale-in">
+        <div class="p-6 border-b border-gray-800/80 bg-gradient-to-r from-blue-900/30 via-transparent to-purple-900/30 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400">
+              <i class="fas fa-shield-alt text-lg"></i>
+            </div>
+            <div>
+              <h3 class="text-md font-bold text-white">Cloudflare/AWS Firewall Detected</h3>
+              <p class="text-[10px] text-amber-400 font-semibold tracking-wider uppercase">Connection Blocked (403/530)</p>
+            </div>
+          </div>
+          <button id="close-firewall-modal" class="text-gray-400 hover:text-white transition-all text-sm p-1.5 hover:bg-gray-800/80 rounded-lg">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        
+        <div class="p-6 space-y-4">
+          <p class="text-sm text-gray-300 leading-relaxed">
+            SmartCredit's strict <strong class="text-white">AWS SigV4</strong> signature requirements and <strong class="text-white">Cloudflare firewall policies</strong> have blocked direct API authentication.
+          </p>
+          
+          <div class="bg-gray-900/60 rounded-xl p-4 border border-gray-800/60 space-y-3">
+            <h4 class="text-xs font-bold text-blue-400 flex items-center gap-2">
+              <i class="fas fa-info-circle"></i>HOW TO RESOLVE & BYPASS:
+            </h4>
+            <ol class="text-xs text-gray-400 space-y-2.5 list-decimal pl-4">
+              <li>Open your <strong class="text-gray-200">SmartCredit Member Portal</strong> in another tab.</li>
+              <li>Download your credit report file as <strong class="text-gray-200">HTML</strong>, <strong class="text-gray-200">JSON</strong>, or <strong class="text-gray-200">TXT</strong>.</li>
+              <li>Drag and drop the downloaded report file directly into our <strong class="text-blue-400">Premium Ingestion Container</strong> below.</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="p-5 border-t border-gray-800/80 bg-gray-950/40 flex gap-3">
+          <button id="modal-use-fallback" class="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-2.5 px-4 rounded-lg text-sm transition-all shadow-lg">
+            Use Drag & Drop Fallback
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const closeBtn = modal.querySelector('#close-firewall-modal');
+    closeBtn.onclick = () => {
+      modal.style.opacity = '0';
+      modal.style.transition = 'opacity 0.2s';
+      setTimeout(() => modal.remove(), 200);
+    };
+
+    const actionBtn = modal.querySelector('#modal-use-fallback');
+    actionBtn.onclick = () => {
+      modal.style.opacity = '0';
+      modal.style.transition = 'opacity 0.2s';
+      setTimeout(() => {
+        modal.remove();
+        const dropzone = document.getElementById('smartcredit-dropzone');
+        if (dropzone) {
+          dropzone.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          dropzone.classList.remove('border-gray-700');
+          dropzone.classList.add('border-blue-500', 'bg-blue-500/10');
+          setTimeout(() => {
+            dropzone.classList.remove('border-blue-500', 'bg-blue-500/10');
+            dropzone.classList.add('border-gray-700');
+          }, 2000);
+        }
+      }, 200);
     };
   }
 
