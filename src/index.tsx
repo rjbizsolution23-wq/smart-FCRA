@@ -507,40 +507,117 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
   let clientId = '';
   let isNewClient = false;
 
-  const nameMatches = await c.env.DB.prepare(
-    'SELECT * FROM clients WHERE org_id = ? AND LOWER(first_name) = ? AND LOWER(last_name) = ?'
-  ).bind(user.org_id, firstName.toLowerCase(), lastName.toLowerCase()).all();
+  // Simple Levenshtein Distance helper
+  const getLevenshteinDistance = (a: string, b: string): number => {
+    const matrix: number[][] = [];
+    for (let i = 0; i <= a.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+    for (let i = 1; i <= a.length; i++) {
+      for (let j = 1; j <= b.length; j++) {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+        );
+      }
+    }
+    return matrix[a.length][b.length];
+  };
 
-  const results = nameMatches?.results || [];
-  if (results.length > 0) {
-    let exactMatch: any = null;
-    for (const client of results) {
-      if (ssnLast4 && client.ssn_last4 === ssnLast4) {
-        exactMatch = client;
-        break;
-      }
-      if (dob && client.dob === dob) {
-        exactMatch = client;
-        break;
-      }
-      if (zip && client.zip === zip) {
-        exactMatch = client;
-        break;
+  const allClientsQuery = await c.env.DB.prepare(
+    'SELECT * FROM clients WHERE org_id = ?'
+  ).bind(user.org_id).all();
+  const allClients = allClientsQuery?.results || [];
+
+  let bestMatch: any = null;
+  let highestConfidence = 0;
+
+  for (const client of allClients) {
+    let confidence = 0;
+    const dbFirst = (client.first_name || '').toLowerCase().trim();
+    const dbLast = (client.last_name || '').toLowerCase().trim();
+    const parsedFirst = firstName.toLowerCase().trim();
+    const parsedLast = lastName.toLowerCase().trim();
+
+    // Check exact SSN match
+    const ssnMatch = ssnLast4 && client.ssn_last4 && client.ssn_last4 === ssnLast4;
+    // Check exact DOB match
+    const dobMatch = dob && client.dob && client.dob === dob;
+    // Check exact Zip match
+    const zipMatch = zip && client.zip && client.zip === zip;
+
+    const firstLev = getLevenshteinDistance(dbFirst, parsedFirst);
+    const lastLev = getLevenshteinDistance(dbLast, parsedLast);
+
+    const firstSimilar = firstLev <= 3 || dbFirst.startsWith(parsedFirst.substring(0, 3)) || parsedFirst.startsWith(dbFirst.substring(0, 3));
+    const lastSimilar = lastLev <= 3 || dbLast.includes(parsedLast) || parsedLast.includes(dbLast);
+
+    // Detect explicit conflicts
+    const ssnConflict = ssnLast4 && client.ssn_last4 && client.ssn_last4 !== ssnLast4;
+    const dobConflict = dob && client.dob && client.dob !== dob;
+
+    if (ssnConflict || dobConflict) {
+      confidence = -100; // Hard rejection on mismatching identifiers
+    } else {
+      if (ssnMatch) confidence += 70;
+      if (dobMatch) confidence += 40;
+      if (zipMatch) confidence += 20;
+
+      if (dbFirst === parsedFirst && dbLast === parsedLast) {
+        confidence += 50;
+      } else if (firstSimilar && lastSimilar) {
+        confidence += 45; // Increased to bypass the 40 threshold gate
+      } else if (lastSimilar) {
+        confidence += 15;
+      } else if (firstSimilar) {
+        confidence += 10;
       }
     }
 
-    if (exactMatch) {
-      clientId = exactMatch.id;
-    } else if (results.length === 1) {
-      // Single match by name - link it
-      clientId = results[0].id;
-    } else {
-      // Multiple matches but no matching differentiator - create new
-      clientId = generateId();
-      isNewClient = true;
+    if (confidence > highestConfidence) {
+      highestConfidence = confidence;
+      bestMatch = client;
+    }
+  }
+
+  if (bestMatch && highestConfidence >= 40) {
+    clientId = bestMatch.id;
+    
+    // Dynamically merge/update missing profile fields on the existing client
+    const updates: string[] = [];
+    const binds: any[] = [];
+
+    if (!bestMatch.dob && dob) {
+      updates.push('dob = ?');
+      binds.push(dob);
+    }
+    if (!bestMatch.ssn_last4 && ssnLast4) {
+      updates.push('ssn_last4 = ?');
+      binds.push(ssnLast4);
+    }
+    if (!bestMatch.address_line1 && addressLine1) {
+      updates.push('address_line1 = ?');
+      binds.push(addressLine1);
+    }
+    if (!bestMatch.city && city) {
+      updates.push('city = ?');
+      binds.push(city);
+    }
+    if (!bestMatch.state && state) {
+      updates.push('state = ?');
+      binds.push(state);
+    }
+    if (!bestMatch.zip && zip) {
+      updates.push('zip = ?');
+      binds.push(zip);
+    }
+
+    if (updates.length > 0) {
+      const sql = `UPDATE clients SET ${updates.join(', ')} WHERE id = ?`;
+      binds.push(bestMatch.id);
+      await c.env.DB.prepare(sql).bind(...binds).run();
     }
   } else {
-    // No name matches at all - create new
     clientId = generateId();
     isNewClient = true;
   }

@@ -87,6 +87,24 @@ export function parseCreditReportText(rawText: string): CreditReportData {
 // ═══════════════════════════════════════════════════════════════
 // PERSONAL INFO EXTRACTION (Bureau Specific)
 // ═══════════════════════════════════════════════════════════════
+export function isValidClientName(name: string): boolean {
+  const trimmed = name.trim();
+  if (trimmed.length < 2 || trimmed.length > 50) return false;
+  
+  // Must be composed mostly of alphabetic characters, spaces, hyphens, apostrophes
+  if (!/^[A-Za-z\s\-']+$/.test(trimmed)) return false;
+
+  // Split into words and count
+  const words = trimmed.split(/\s+/);
+  if (words.length > 5) return false;
+
+  // Check against generic boilerplate patterns or common corporate/disclosure terms
+  const blacklist = /including|credit|bureau|specialty|agencies|accessing|cfpb|report|disclosure|consumer|confidential|rights|act|disclaimer|dispute|investigation|page|date|confirmation|number|summary|prepared|official|address|personal|information|welcome|access|online|annual|service|identity|protection|system|detector|smart|credit/i;
+  if (blacklist.test(trimmed)) return false;
+
+  return true;
+}
+
 function extractPersonalInfo(text: string, bureau: string): CreditReportData['personalInfo'] {
   const names: string[] = [];
   const addresses: string[] = [];
@@ -95,6 +113,16 @@ function extractPersonalInfo(text: string, bureau: string): CreditReportData['pe
   const dobs: string[] = [];
 
   const lines = text.split('\n');
+
+  // Universal High-Priority Name Extraction (e.g. Prepared for: VACARIA KELLER DABNER)
+  const preparedMatch = text.match(/Prepared\s+for:\s*([A-Za-z][A-Za-z\t \-']{2,40})/i) || 
+                        text.match(/Prepared\s+For\s*:\s*([A-Za-z][A-Za-z\t \-']{2,40})/i);
+  if (preparedMatch) {
+    const nameCandidate = preparedMatch[1].trim();
+    if (isValidClientName(nameCandidate)) {
+      names.push(nameCandidate);
+    }
+  }
 
   if (bureau === 'Experian') {
     // Find name block
@@ -190,7 +218,7 @@ function extractPersonalInfo(text: string, bureau: string): CreditReportData['pe
       for (let offset = 1; offset <= 6; offset++) {
         const line = lines[pIdx + offset]?.trim();
         if (!line) continue;
-        if (!nameFound && !/Creditors|identify|impact|--- PAGE/i.test(line)) {
+        if (!nameFound && isValidClientName(line)) {
           names.push(line);
           nameFound = true;
           // Address might follow on the very next non-empty line
@@ -203,12 +231,21 @@ function extractPersonalInfo(text: string, bureau: string): CreditReportData['pe
       }
     }
 
+    // Robust Address Extraction for Equifax (when on the same line)
+    const eqAddrMatch = text.match(/(?:[A-Z][A-Z\s\-']{2,40})\s+([0-9]+\s+[A-Z0-9\s#\.]+?,\s*[A-Z\s]+?,\s*[A-Z]{2}\s+\d{5})\s+Social Security Number/i);
+    if (eqAddrMatch) {
+      const addr = eqAddrMatch[1].trim();
+      if (!addresses.includes(addr)) {
+        addresses.push(addr);
+      }
+    }
+
     // SSN
-    const ssnMatch = text.match(/Social Security Number:\s*([^\s\n|]+)/i);
+    const ssnMatch = text.match(/Social Security Number:\s*([^\s\n|]+)/i) || text.match(/Social Security Number\s+([^\s\n|]+)/i);
     if (ssnMatch) ssns.push(ssnMatch[1].trim());
 
     // DOB
-    const dobMatch = text.match(/Date of Birth:\s*([^\s\n|]+)/i);
+    const dobMatch = text.match(/Date of Birth:\s*([^\s\n|]+)/i) || text.match(/Date of Birth\s+([^\s\n|]+)/i);
     if (dobMatch) dobs.push(dobMatch[1].trim());
 
   } else if (bureau === 'TransUnion') {
@@ -257,10 +294,29 @@ function extractPersonalInfo(text: string, bureau: string): CreditReportData['pe
     }
   }
 
+  // Backup Universal US Address Pattern Extraction
+  if (addresses.length === 0) {
+    const addrRegex = /([0-9]+\s+[A-Z0-9\s#\.]+?,\s*[A-Z\s]+?,\s*[A-Z]{2}\s+\d{5})/gi;
+    let match;
+    while ((match = addrRegex.exec(text)) !== null) {
+      const addr = match[1].trim();
+      if (!/PO Box|P\.O\.\s*Box|Atlanta,\s*GA\s*303|Sartell,\s*MN|Knoxville,\s*TN|Charlotte,\s*NC|Gilbert,\s*AZ|Las\s*Vegas,\s*NV|Philadelphia,\s*PA|Woodland\s*Hills|Allen,\s*TX/i.test(addr)) {
+        if (!addresses.includes(addr)) {
+          addresses.push(addr);
+        }
+      }
+    }
+  }
+
   // Fallbacks if arrays are empty to prevent incomplete parses
   if (names.length === 0) {
-    const sMatch = text.match(/(?:name|consumer)[:\s]+([A-Z][A-Z\s,.\-']+)/i);
-    if (sMatch) names.push(sMatch[1].trim());
+    const sMatch = text.match(/(?:consumer\s+name|client\s+name|^name)[:\s]+([A-Za-z][A-Za-z\t \-']{2,35})/im);
+    if (sMatch) {
+      const nameCandidate = sMatch[1].trim();
+      if (isValidClientName(nameCandidate)) {
+        names.push(nameCandidate);
+      }
+    }
   }
   if (ssns.length === 0) {
     const sMatch = text.match(/(?:ssn|social)[:\s]*(?:xxx-xx-|[\d*]{3}-[\d*]{2}-)(\d{4})/i);

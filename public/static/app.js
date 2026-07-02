@@ -623,6 +623,20 @@
       });
     }
 
+    function loadScript(url) {
+      return new Promise((resolve, reject) => {
+        if (window.Tesseract) {
+          resolve();
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = url;
+        script.onload = () => resolve();
+        script.onerror = (e) => reject(new Error('Failed to load OCR engine script'));
+        document.head.appendChild(script);
+      });
+    }
+
     async function handleACRPDFDrop(files) {
       const progressContainer = $('#acr-progress-container');
       const progressTitle = $('#acr-progress-title');
@@ -678,6 +692,41 @@
             const textContent = await page.getTextContent();
             const pageText = textContent.items.map(item => item.str).join(' ');
             compiledText += pageText + '\n\n';
+          }
+
+          if (compiledText.trim().length < 1000) {
+            activeFileText.textContent = `Scanned PDF detected. Loading OCR Engine (Tesseract.js)...`;
+            await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
+            
+            compiledText = ''; // Reset and use OCR instead
+            for (let p = 1; p <= numPages; p++) {
+              activeFileText.textContent = `Rendering page ${p} of ${numPages} from ${file.name}...`;
+              const page = await pdf.getPage(p);
+              const viewport = page.getViewport({ scale: 1.5 });
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              canvas.height = viewport.height;
+              canvas.width = viewport.width;
+              
+              const renderContext = {
+                canvasContext: ctx,
+                viewport: viewport
+              };
+              await page.render(renderContext).promise;
+              
+              activeFileText.textContent = `OCR Analyzing page ${p} of ${numPages} from ${file.name}...`;
+              const ocrResult = await Tesseract.recognize(canvas, 'eng', {
+                logger: m => {
+                  if (m.status === 'recognizing text') {
+                    const pagePercent = basePercent + Math.round(((p - 1 + m.progress) / numPages) * (1 / totalFiles) * 100);
+                    progressPercent.textContent = `${pagePercent}%`;
+                    progressBar.style.width = `${pagePercent}%`;
+                    activeFileText.textContent = `OCR Analyzing page ${p}/${numPages}: ${Math.round(m.progress * 100)}%`;
+                  }
+                }
+              });
+              compiledText += ocrResult.data.text + '\n\n';
+            }
           }
 
           let endpoint = '/reports/upload';
