@@ -214,7 +214,10 @@
         </p>
       </div>
       <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">Dashboard</h1><p class="text-sm text-gray-400">Credit dispute operations overview</p></div>
-        <button onclick="window._nav('clients')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"><i class="fas fa-plus mr-1.5"></i>New Client</button>
+        <div class="flex gap-2">
+          <button onclick="window._nav('upload-report', { clientId: 'autopilot', autopilot: true, from: 'dashboard' })" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition shadow-lg flex items-center gap-1.5"><i class="fas fa-magic"></i>Smart Autopilot Ingest</button>
+          <button onclick="window._nav('clients')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-plus"></i>New Client</button>
+        </div>
       </div>
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         ${statCard('fa-users','Clients',d.totalClients,'blue')}
@@ -236,7 +239,10 @@
     const d = await api('/clients');
     el.innerHTML = `<div class="fade-in">
       <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">Clients</h1><p class="text-sm text-gray-400">${d.clients.length} total</p></div>
-        <button onclick="$('#add-client-form').classList.toggle('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"><i class="fas fa-plus mr-1.5"></i>Add Client</button>
+        <div class="flex gap-2">
+          <button onclick="window._nav('upload-report', { clientId: 'autopilot', autopilot: true, from: 'clients' })" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition shadow-lg flex items-center gap-1.5"><i class="fas fa-magic"></i>Smart Autopilot Ingest</button>
+          <button onclick="$('#add-client-form').classList.toggle('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-plus"></i>Add Client</button>
+        </div>
       </div>
       <div id="add-client-form" class="hidden glass rounded-xl p-5 mb-6 fade-in"><h3 class="text-sm font-semibold text-white mb-4">New Client</h3>
         <form id="client-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -338,19 +344,52 @@
   // UPLOAD REPORT — FULL PROCESS FLOW
   // ═══════════════════════════════════════════════════════════════
   async function pgUploadReport(el, data) {
-    el.innerHTML = `<div class="fade-in max-w-4xl">
-      <button onclick="window._nav('client-detail',{clientId:'${data.clientId}'})" class="text-gray-400 hover:text-white text-sm mb-4 inline-flex items-center gap-1.5 transition"><i class="fas fa-arrow-left text-xs"></i>Back to ${data.clientName}</button>
-      <h1 class="text-xl font-bold text-white mb-1"><i class="fas fa-radar mr-2 text-blue-400"></i>Full Credit Report Analysis</h1>
-      <p class="text-sm text-gray-400 mb-6">Import via MyFreeScoreNow, SmartCredit, or upload raw text. The system will parse, detect ALL violations, and calculate litigation value.</p>
+    if (!data) {
+      data = { clientId: 'autopilot', autopilot: true };
+    } else if (data.clientId === 'autopilot') {
+      data.autopilot = true;
+    }
 
-      <div class="mb-4 border-b border-gray-700 pb-2">
-        <button id="tab-mfsn" class="px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-500 mr-4 transition"><i class="fas fa-cloud-download-alt mr-2"></i>MyFreeScoreNow Integration</button>
-        <button id="tab-smartcredit" class="px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-4 transition"><i class="fas fa-lock mr-2"></i>SmartCredit Integration</button>
+    const isAutopilot = !!data.autopilot;
+    const backNav = isAutopilot 
+      ? `window._nav('${data.from || 'clients'}')` 
+      : `window._nav('client-detail',{clientId:'${data.clientId}'})`;
+    const backText = isAutopilot 
+      ? `Back to ${data.from === 'dashboard' ? 'Dashboard' : 'Clients'}` 
+      : `Back to ${data.clientName || 'Client'}`;
+
+    const title = isAutopilot 
+      ? `<i class="fas fa-magic mr-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400"></i>Smart Client Autopilot Ingest` 
+      : `<i class="fas fa-radar mr-2 text-blue-400"></i>Full Credit Report Analysis`;
+
+    const description = isAutopilot 
+      ? `Zero-friction onboarding. Drop raw credit report PDFs (Equifax, Experian, TransUnion) or paste raw text. The system will automatically extract demographics, resolve or register client files, run complete litigation scans, and redirect you directly to their workspace.` 
+      : `Import via MyFreeScoreNow, SmartCredit, or upload raw text / AnnualCreditReport.com PDFs. The system will parse, detect ALL violations, and calculate litigation value.`;
+
+    const mfsnClass = isAutopilot 
+      ? 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-2 transition'
+      : 'px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-500 mr-2 transition';
+    const acrClass = isAutopilot
+      ? 'px-4 py-2 font-semibold text-red-400 border-b-2 border-red-500 mr-2 transition'
+      : 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-2 transition';
+
+    const mfsnFormHidden = isAutopilot ? 'hidden' : '';
+    const acrFormHidden = isAutopilot ? '' : 'hidden';
+
+    el.innerHTML = `<div class="fade-in max-w-4xl">
+      <button onclick="${backNav}" class="text-gray-400 hover:text-white text-sm mb-4 inline-flex items-center gap-1.5 transition"><i class="fas fa-arrow-left text-xs"></i>${backText}</button>
+      <h1 class="text-xl font-bold text-white mb-1">${title}</h1>
+      <p class="text-sm text-gray-400 mb-6">${description}</p>
+
+      <div class="mb-4 border-b border-gray-700 pb-2 flex flex-wrap gap-2">
+        <button id="tab-mfsn" class="${mfsnClass}"><i class="fas fa-cloud-download-alt mr-2"></i>MyFreeScoreNow Integration</button>
+        <button id="tab-smartcredit" class="px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-2 transition"><i class="fas fa-lock mr-2"></i>SmartCredit Integration</button>
+        <button id="tab-acr" class="${acrClass}"><i class="fas fa-file-pdf mr-2 text-red-400"></i>Annual Credit Report PDF</button>
         <button id="tab-manual" class="px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white transition"><i class="fas fa-file-alt mr-2"></i>Manual Raw File Text</button>
       </div>
 
       <!-- MFSN IMPORT TAB -->
-      <form id="mfsn-form" class="space-y-5">
+      <form id="mfsn-form" class="space-y-5 ${mfsnFormHidden}">
         <div class="grid grid-cols-2 gap-4">
           <div><label class="block text-xs text-gray-400 mb-1.5">API Username (Email)</label>
           <input type="text" name="username" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="apiuser@test.com"></div>
@@ -414,6 +453,46 @@
         </div>
       </form>
 
+      <!-- ANNUAL CREDIT REPORT (ACR) PDF TAB -->
+      <form id="acr-form" class="space-y-5 ${acrFormHidden}">
+        <div class="bg-red-950/10 border border-red-500/30 rounded-xl p-4 mb-4">
+          <h4 class="text-xs font-bold text-red-400 flex items-center gap-2 mb-1">
+            <i class="fas fa-file-pdf"></i>ANNUAL CREDIT REPORT PDF DIRECT INGESTION
+          </h4>
+          <p class="text-[11px] text-red-200/80 leading-relaxed">
+            Upload your official, high-fidelity credit report PDFs downloaded directly from <strong class="text-white">AnnualCreditReport.com</strong>.
+            This tool processes your reports locally in the browser to compile clean credit data, completely bypassing edge CPU limits, and runs full litigation scans on RJ Business Solutions engines.
+          </p>
+        </div>
+
+        <div id="acr-dropzone" class="border-2 border-dashed border-gray-700 hover:border-red-500/80 bg-gray-900/40 hover:bg-gray-800/40 transition-all rounded-xl p-10 text-center cursor-pointer group">
+          <input type="file" id="acr-file-input" class="hidden" accept=".pdf" multiple>
+          <div class="space-y-4">
+            <div class="mx-auto w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center text-red-400 group-hover:scale-110 transition-transform">
+              <i class="fas fa-file-pdf text-2xl"></i>
+            </div>
+            <div class="text-sm text-gray-300">
+              <span class="font-bold text-red-400 hover:underline">Click to select files</span> or drag & drop Equifax, Experian, or TransUnion PDFs here
+            </div>
+            <p class="text-xs text-gray-500 font-medium">Accepts multiple files simultaneously. Drop your multi-bureau reports together!</p>
+          </div>
+        </div>
+
+        <div id="acr-progress-container" class="hidden bg-gray-900/60 rounded-xl p-5 border border-gray-800 space-y-4">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-gray-300 uppercase tracking-wider" id="acr-progress-title">Processing PDFs...</span>
+            <span class="text-xs text-red-400 font-semibold" id="acr-progress-percent">0%</span>
+          </div>
+          <div class="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
+            <div id="acr-progress-bar" class="h-full bg-gradient-to-r from-red-500 to-purple-600 transition-all duration-300" style="width: 0%"></div>
+          </div>
+          <div id="acr-active-file-status" class="text-xs text-gray-400 flex items-center gap-2">
+            <i class="fas fa-spinner fa-spin text-red-400"></i>
+            <span id="acr-active-file-text">Initializing extraction pipeline...</span>
+          </div>
+        </div>
+      </form>
+
       <!-- MANUAL IMPORT TAB -->
       <form id="upload-form" class="space-y-5 hidden">
         <div class="grid grid-cols-2 gap-4">
@@ -433,9 +512,11 @@
 
     const tabMfsn = $('#tab-mfsn');
     const tabSmartcredit = $('#tab-smartcredit');
+    const tabAcr = $('#tab-acr');
     const tabMan = $('#tab-manual');
     const formMfsn = $('#mfsn-form');
     const formSmartcredit = $('#smartcredit-form');
+    const formAcr = $('#acr-form');
     const formMan = $('#upload-form');
 
     const dropzone = $('#smartcredit-dropzone');
@@ -495,29 +576,465 @@
       reader.readAsText(file);
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // ACR PDF DRAG & DROP + EXTRACTION
+    // ═══════════════════════════════════════════════════════════════
+    const acrDropzone = $('#acr-dropzone');
+    const acrFileInput = $('#acr-file-input');
+
+    if (acrDropzone && acrFileInput) {
+      acrFileInput.onchange = (e) => {
+        const files = e.target.files;
+        if (files.length) handleACRPDFDrop(files);
+      };
+
+      acrDropzone.ondragover = (e) => {
+        e.preventDefault();
+        acrDropzone.classList.remove('border-gray-700');
+        acrDropzone.classList.add('border-red-500', 'bg-red-500/10');
+      };
+
+      acrDropzone.ondragleave = (e) => {
+        e.preventDefault();
+        acrDropzone.classList.remove('border-red-500', 'bg-red-500/10');
+        acrDropzone.classList.add('border-gray-700');
+      };
+
+      acrDropzone.ondrop = (e) => {
+        e.preventDefault();
+        acrDropzone.classList.remove('border-red-500', 'bg-red-500/10');
+        acrDropzone.classList.add('border-gray-700');
+
+        const files = e.dataTransfer.files;
+        if (files.length) handleACRPDFDrop(files);
+      };
+
+      acrDropzone.onclick = () => {
+        acrFileInput.click();
+      };
+    }
+
+    function readFileAsArrayBuffer(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    async function handleACRPDFDrop(files) {
+      const progressContainer = $('#acr-progress-container');
+      const progressTitle = $('#acr-progress-title');
+      const progressPercent = $('#acr-progress-percent');
+      const progressBar = $('#acr-progress-bar');
+      const activeFileText = $('#acr-active-file-text');
+      const resEl = $('#analysis-results');
+
+      const filesArray = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+      if (!filesArray.length) {
+        toast('Please drop/select valid PDF credit report files', 'error');
+        return;
+      }
+
+      progressContainer.classList.remove('hidden');
+      resEl.classList.remove('hidden');
+      resEl.innerHTML = renderProcessStepsCustom('Initializing browser-side PDF text extraction engine...', 'fas fa-spinner fa-spin');
+      
+      const totalFiles = filesArray.length;
+      const results = [];
+      const wasAutopilot = (data.clientId === 'autopilot' || data.autopilot);
+
+      for (let i = 0; i < totalFiles; i++) {
+        const file = filesArray[i];
+        const fileIndexText = `(${i + 1} of ${totalFiles})`;
+        progressTitle.textContent = `Extracting PDF ${fileIndexText}`;
+        activeFileText.textContent = `Reading ${file.name}...`;
+
+        const basePercent = Math.round((i / totalFiles) * 100);
+        progressPercent.textContent = `${basePercent}%`;
+        progressBar.style.width = `${basePercent}%`;
+
+        try {
+          const arrayBuffer = await readFileAsArrayBuffer(file);
+          activeFileText.textContent = `Analyzing document structure of ${file.name}...`;
+
+          if (!window.pdfjsLib) {
+            throw new Error('PDF.js library is not loaded. Please reload the page.');
+          }
+
+          const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+          const pdf = await loadingTask.promise;
+          const numPages = pdf.numPages;
+          let compiledText = '';
+
+          for (let p = 1; p <= numPages; p++) {
+            const pagePercent = basePercent + Math.round((p / numPages) * (1 / totalFiles) * 100);
+            progressPercent.textContent = `${pagePercent}%`;
+            progressBar.style.width = `${pagePercent}%`;
+            activeFileText.textContent = `Extracting page ${p} of ${numPages} from ${file.name}...`;
+
+            const page = await pdf.getPage(p);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map(item => item.str).join(' ');
+            compiledText += pageText + '\n\n';
+          }
+
+          let endpoint = '/reports/upload';
+          if (wasAutopilot && i === 0) {
+            endpoint = '/reports/onboard';
+          }
+
+          activeFileText.textContent = `Uploading ${file.name} to analysis engine...`;
+          resEl.innerHTML = renderProcessStepsCustom(`Running statutory FCRA scans on ${file.name}...`, 'fas fa-shield-alt text-red-400 progress-pulse');
+
+          // Sequential API call to prevent SQLite D1 concurrent locks
+          const response = await api(endpoint, {
+            method: 'POST',
+            body: JSON.stringify({
+              clientId: data.clientId,
+              bureau: 'Unknown', // Backend auto-detects from first 1500 chars
+              rawText: compiledText,
+              fileName: file.name
+            })
+          });
+
+          if (wasAutopilot && i === 0) {
+            if (!response.clientId) {
+              throw new Error('Onboarding failed to return a Client ID');
+            }
+            data.clientId = response.clientId;
+            data.clientName = response.clientName;
+            data.autopilot = false; // Resolved, subsequent files are normal uploads for this client
+          }
+
+          results.push({ file, result: response });
+          toast(`Successfully processed ${file.name}!`, 'success');
+
+        } catch (err) {
+          console.error('PDF ingestion pipeline failed:', err);
+          activeFileText.innerHTML = `<span class="text-red-400"><i class="fas fa-times-circle mr-1"></i>Error: ${err.message}</span>`;
+          resEl.innerHTML = `<div class="glass rounded-xl p-6 border border-red-500/30"><i class="fas fa-exclamation-triangle text-red-400 mr-2"></i><span class="text-red-300">Failed to process ${file.name}: ${err.message}</span></div>`;
+          toast(`Failed to process ${file.name}`, 'error');
+          progressContainer.classList.add('hidden');
+          return;
+        }
+      }
+
+      progressPercent.textContent = '100%';
+      progressBar.style.width = '100%';
+      progressTitle.textContent = 'All Credit Reports Extracted Successfully';
+      activeFileText.innerHTML = '<span class="text-green-400 font-bold"><i class="fas fa-check-circle mr-1"></i>Ingestion pipeline finished! Rendering litigation reports...</span>';
+
+      await sleep(1000);
+      progressContainer.classList.add('hidden');
+
+      if (wasAutopilot) {
+        toast(`Onboarding complete for ${data.clientName}! Redirecting to client detail...`, 'success');
+        await sleep(1500);
+        window._nav('client-detail', { clientId: data.clientId });
+        return;
+      }
+
+      if (results.length === 1) {
+        renderFullResults(resEl, results[0].result, data);
+        const r = results[0].result;
+        toast(`COMPLETE: ${r.violationsFound} violations found! Litigation score: ${r.litigationScore.score}/100`, r.violationsFound > 0 ? 'warning' : 'success');
+      } else {
+        renderAggregatedResults(resEl, results, data);
+        const totalViolations = results.reduce((sum, res) => sum + res.result.violationsFound, 0);
+        toast(`COMPLETE: ${totalViolations} violations found across ${results.length} bureaus!`, 'success');
+      }
+    }
+
+    function renderConsolidatedViolationsList(violations) {
+      if (!violations.length) return '<div class="text-center py-8 text-gray-500"><i class="fas fa-check-circle text-3xl mb-3"></i><p>No violations</p></div>';
+      return `<div class="space-y-2">${violations.map(v=>`<details class="group"><summary class="cursor-pointer list-none"><div class="glass rounded-lg p-4 border-l-4 border-${sevColor(v.severity)} card-hover"><div class="flex items-start justify-between"><div class="flex-1 min-w-0"><div class="flex items-center gap-2 mb-1"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-${sevColor(v.severity)}/20 text-${sevColor(v.severity)}">${v.severity}</span><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-red-950/40 text-red-400 border border-red-500/20"><i class="fas fa-building mr-1"></i>${v.bureau||'Bureau'}</span><span class="text-xs text-gray-400">${v.category} &bull; ${v.statute}</span><i class="fas fa-chevron-down text-[10px] text-gray-500 group-open:rotate-180 transition-transform"></i></div><div class="text-sm font-medium text-white">${v.subcategory}</div>${v.account_name||v.accountName?`<div class="text-xs text-gray-500">Account: ${v.account_name||v.accountName}</div>`:''}</div><div class="text-right shrink-0 ml-4"><div class="text-xs text-green-400 font-medium">${money(v.total_damages_min||v.totalDamagesMin)} &ndash; ${money(v.total_damages_max||v.totalDamagesMax)}</div></div></div></div></summary>
+        <div class="mt-2 ml-4 space-y-2 text-sm fade-in">
+          <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-blue-400 mb-1">STATUTE</div><div class="text-xs text-gray-300">${v.statute_text||v.statuteText||''}</div></div>
+          <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-red-400 mb-1">EVIDENCE</div><div class="text-xs text-gray-300">${v.evidence||''}</div></div>
+          <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-purple-400 mb-1">LEGAL STANDARD</div><div class="text-xs text-gray-300">${v.legal_standard||v.legalStandard||''}</div></div>
+          <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-yellow-400 mb-1">EXPLANATION</div><div class="text-xs text-gray-300">${v.explanation||''}</div></div>
+          <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-cyan-400 mb-1">CASE LAW</div><div class="text-xs text-gray-300">${v.case_law||v.caseLaw||''}</div></div>
+          <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-green-400 mb-1">DAMAGES</div><div class="grid grid-cols-2 gap-2 text-xs text-gray-300">
+            <div>Statutory: ${money(v.statutory_damages_min||v.statutoryDamagesMin)} &ndash; ${money(v.statutory_damages_max||v.statutoryDamagesMax)}</div>
+            <div>Actual: ${money(v.actual_damages_est||v.actualDamagesEst)}</div>
+            <div>Punitive: ${money(v.punitive_damages_est||v.punitiveDamagesEst)}</div>
+            <div>Attorney Fees: ${money(v.attorney_fees_est||v.attorneyFeesEst)}</div>
+          </div><div class="mt-1 text-xs font-medium text-green-400">Defendant: ${v.defendant_type||v.defendantType||''} &mdash; ${v.defendant_name||v.defendantName||''}</div></div>
+        </div></details>`).join('')}</div>`;
+    }
+
+    function renderAggregatedResults(el, resultsArray, data) {
+      let totalAccounts = 0;
+      let totalCollections = 0;
+      let totalInquiries = 0;
+      let totalPublicRecords = 0;
+      let violationsFound = 0;
+      const combinedViolations = [];
+      
+      let maxScore = -1;
+      let maxScoreResult = null;
+      
+      let preLitMin = 0;
+      let preLitMax = 0;
+      let postFilingMin = 0;
+      let postFilingMax = 0;
+      let trialMin = 0;
+      let trialMax = 0;
+      
+      const combinedByDefendant = {};
+      const combinedLitigationPlans = [];
+
+      resultsArray.forEach(item => {
+        const r = item.result;
+        totalAccounts += r.totalAccounts || 0;
+        totalCollections += r.totalCollections || 0;
+        totalInquiries += r.totalInquiries || 0;
+        totalPublicRecords += r.totalPublicRecords || 0;
+        violationsFound += r.violationsFound || 0;
+        
+        const bureauName = r.bureau || 'Unknown';
+        if (r.violations) {
+          r.violations.forEach(v => {
+            v.bureau = v.bureau || bureauName;
+            combinedViolations.push(v);
+          });
+        }
+
+        const ls = r.litigationScore;
+        if (ls) {
+          if (ls.score > maxScore) {
+            maxScore = ls.score;
+            maxScoreResult = r;
+          }
+          
+          preLitMin += ls.preLitSettlement?.min || 0;
+          preLitMax += ls.preLitSettlement?.max || 0;
+          postFilingMin += ls.postFilingSettlement?.min || 0;
+          postFilingMax += ls.postFilingSettlement?.max || 0;
+          trialMin += ls.trialVerdict?.min || 0;
+          trialMax += ls.trialVerdict?.max || 0;
+
+          if (ls.byDefendant) {
+            Object.entries(ls.byDefendant).forEach(([defName, defInfo]) => {
+              if (!combinedByDefendant[defName]) {
+                combinedByDefendant[defName] = { count: 0, damages: 0 };
+              }
+              combinedByDefendant[defName].count += defInfo.count || 0;
+              combinedByDefendant[defName].damages += defInfo.damages || 0;
+            });
+          }
+
+          if (ls.litigationPlan) {
+            ls.litigationPlan.forEach(p => {
+              if (!combinedLitigationPlans.includes(p)) {
+                combinedLitigationPlans.push(p);
+              }
+            });
+          }
+        }
+      });
+
+      if (maxScore === -1) {
+        maxScore = 0;
+        maxScoreResult = resultsArray[0].result;
+      }
+
+      const scoreColor = maxScore >= 70 ? 'green' : maxScore >= 40 ? 'yellow' : 'gray';
+      const processedFilesHtml = resultsArray.map(item => {
+        const r = item.result;
+        const bureau = r.bureau || 'Unknown';
+        const fileScoreColor = r.litigationScore.score >= 70 ? 'green' : r.litigationScore.score >= 40 ? 'yellow' : 'gray';
+        return `
+          <div class="bg-gray-800/30 rounded-xl p-4 border border-gray-700/40 flex items-center justify-between card-hover">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-400">
+                <i class="fas fa-building"></i>
+              </div>
+              <div>
+                <div class="text-sm font-bold text-white">${bureau} Bureau</div>
+                <div class="text-[11px] text-gray-400">${item.file.name} &bull; ${r.totalAccounts} accounts</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-4">
+              <div class="text-right">
+                <div class="text-[10px] text-gray-400">Violations</div>
+                <div class="text-xs font-bold text-red-400">${r.violationsFound}</div>
+              </div>
+              <div class="text-right">
+                <div class="text-[10px] text-gray-400">Litigation Score</div>
+                <div class="text-xs font-black text-${fileScoreColor}-400">${r.litigationScore.score}/100</div>
+              </div>
+              <div class="flex gap-1 ml-2">
+                <button onclick="window._nav('generate-doc',{clientId:'${data.clientId}',clientName:'${data.clientName}',reportId:'${r.reportId}'})" class="bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 text-xs px-2.5 py-1.5 rounded transition" title="Generate documents for ${bureau}"><i class="fas fa-file-contract"></i></button>
+                <button onclick="window._exportViolations('${data.clientId}','${r.reportId}')" class="bg-green-600/20 hover:bg-green-600/30 text-green-300 text-xs px-2.5 py-1.5 rounded transition" title="Export ${bureau} violations"><i class="fas fa-download"></i></button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      el.innerHTML = `
+        <div class="fade-in space-y-6">
+          <!-- HEADER -->
+          <div class="glass rounded-2xl p-5 border border-red-500/30 bg-gradient-to-r from-red-950/20 via-transparent to-purple-950/20 flex items-center justify-between">
+            <div>
+              <span class="px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-red-500/20 text-red-400 border border-red-500/30">Multi-Bureau Consolidated</span>
+              <h2 class="text-xl font-extrabold text-white mt-1">Unified Credit Analysis</h2>
+              <p class="text-xs text-gray-400 mt-0.5">Aggregated legal claims and cumulative litigation value from all processed PDF reports.</p>
+            </div>
+            <div class="text-right shrink-0">
+              <span class="text-xs text-gray-500">Processed:</span>
+              <div class="text-md font-bold text-white">${resultsArray.length} reports</div>
+            </div>
+          </div>
+
+          <!-- SCORE HERO -->
+          <div class="glass rounded-2xl p-6 border ${maxScore>=70?'border-green-500/30':maxScore>=40?'border-yellow-500/30':'border-gray-600/30'}">
+            <div class="flex items-center gap-6">
+              <div class="text-center">
+                <div class="w-24 h-24 rounded-full bg-${scoreColor}-600/20 border-4 border-${scoreColor}-500/50 flex items-center justify-center">
+                  <div>
+                    <div class="text-3xl font-black text-${scoreColor}-400">${maxScore}</div>
+                    <div class="text-[10px] text-${scoreColor}-400/70">/100</div>
+                  </div>
+                </div>
+                <div class="text-xs font-bold text-${scoreColor}-400 mt-2">Peak Grade: ${maxScoreResult.litigationScore.grade}</div>
+              </div>
+              <div class="flex-1">
+                <h2 class="text-lg font-bold text-white mb-1">Consolidated Litigation Analysis</h2>
+                <p class="text-sm text-${scoreColor}-300 font-medium mb-3">${maxScoreResult.litigationScore.recommendation}</p>
+                <div class="grid grid-cols-3 gap-3 text-center">
+                  <div class="bg-gray-800/60 rounded-lg p-2">
+                    <div class="text-[10px] text-gray-400">Total Pre-Lit Settlement</div>
+                    <div class="text-sm font-bold text-green-400">${money(preLitMin)} &ndash; ${money(preLitMax)}</div>
+                  </div>
+                  <div class="bg-gray-800/60 rounded-lg p-2">
+                    <div class="text-[10px] text-gray-400">Total Post-Filing</div>
+                    <div class="text-sm font-bold text-green-400">${money(postFilingMin)} &ndash; ${money(postFilingMax)}</div>
+                  </div>
+                  <div class="bg-gray-800/60 rounded-lg p-2">
+                    <div class="text-[10px] text-gray-400">Total Trial Verdict</div>
+                    <div class="text-sm font-bold text-green-300">${money(trialMin)} &ndash; ${money(trialMax)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- INDIVIDUAL REPORTS LIST -->
+          <div class="space-y-3">
+            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider"><i class="fas fa-file-pdf mr-2"></i>Individual Report Statuses</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              ${processedFilesHtml}
+            </div>
+          </div>
+
+          <!-- SUMMARY GRID -->
+          <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div class="glass rounded-lg p-3 text-center"><div class="text-2xl font-bold text-white">${totalAccounts}</div><div class="text-xs text-gray-400">Accounts</div></div>
+            <div class="glass rounded-lg p-3 text-center"><div class="text-2xl font-bold text-orange-400">${totalCollections}</div><div class="text-xs text-gray-400">Collections</div></div>
+            <div class="glass rounded-lg p-3 text-center"><div class="text-2xl font-bold text-yellow-400">${totalInquiries}</div><div class="text-xs text-gray-400">Inquiries</div></div>
+            <div class="glass rounded-lg p-3 text-center"><div class="text-2xl font-bold text-purple-400">${totalPublicRecords}</div><div class="text-xs text-gray-400">Public Records</div></div>
+            <div class="glass rounded-lg p-3 text-center"><div class="text-2xl font-bold text-red-400">${violationsFound}</div><div class="text-xs text-gray-400">Violations</div></div>
+          </div>
+
+          <!-- LITIGATION PLAN -->
+          ${combinedLitigationPlans.length?`<div class="glass rounded-xl p-5">
+            <h3 class="text-sm font-bold text-white mb-3"><i class="fas fa-route mr-2 text-blue-400"></i>Consolidated Litigation Plan</h3>
+            <div class="space-y-2">${combinedLitigationPlans.map((step,i) => `<div class="flex items-start gap-3"><div class="w-6 h-6 rounded-full bg-blue-600/20 flex items-center justify-center shrink-0 mt-0.5"><span class="text-[10px] font-bold text-blue-400">${i+1}</span></div><div class="text-sm text-gray-300">${step}</div></div>`).join('')}</div>
+          </div>`:''}
+
+          <!-- BY DEFENDANT -->
+          ${Object.keys(combinedByDefendant).length?`<div class="glass rounded-xl p-5">
+            <h3 class="text-sm font-bold text-white mb-3"><i class="fas fa-building mr-2 text-orange-400"></i>Consolidated Defendants &amp; Damages</h3>
+            <div class="space-y-2">${Object.entries(combinedByDefendant).map(([name,info]) => `<div class="bg-gray-800/40 rounded-lg p-3 flex items-center justify-between"><div><div class="text-sm font-medium text-white">${name}</div><div class="text-xs text-gray-400">${info.count} violation(s)</div></div><div class="text-sm font-bold text-green-400">${money(info.damages)}</div></div>`).join('')}</div>
+          </div>`:''}
+
+          <!-- ALL CONSOLIDATED VIOLATIONS -->
+          ${combinedViolations.length?`<div class="glass rounded-xl p-5">
+            <h3 class="text-sm font-bold text-white mb-3"><i class="fas fa-exclamation-triangle mr-2 text-red-400"></i>All Consolidated Violations Detected (${combinedViolations.length})</h3>
+            ${renderConsolidatedViolationsList(combinedViolations)}
+          </div>`:''}
+
+          <!-- CONSOLIDATED ACTION BUTTONS -->
+          <div class="glass rounded-xl p-5">
+            <h3 class="text-sm font-bold text-white mb-3"><i class="fas fa-paper-plane mr-2 text-purple-400"></i>Batch Next Steps</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-center">
+              <button onclick="window._nav('client-detail',{clientId:'${data.clientId}'})" class="bg-gray-600/20 border border-gray-500/30 hover:bg-gray-600/30 text-gray-300 px-4 py-3.5 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2"><i class="fas fa-user text-lg"></i>Return to Client Profile</button>
+              <button id="acr-bulk-btn" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-3.5 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 shadow-lg"><i class="fas fa-layer-group text-lg animate-pulse"></i>Bulk Generate Letters for All Bureaus</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const acrBulkBtn = $('#acr-bulk-btn');
+      if (acrBulkBtn) {
+        acrBulkBtn.onclick = async () => {
+          try {
+            acrBulkBtn.disabled = true;
+            acrBulkBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating letters...';
+            const reportIds = resultsArray.map(item => item.result.reportId);
+            toast('Bulk generating dispute letters for all processed bureaus...', 'info');
+            let totalCount = 0;
+            for (const reportId of reportIds) {
+              const result = await api('/documents/generate-bulk', { method:'POST', body:JSON.stringify({
+                clientId: data.clientId, reportId,
+                docTypes: ['bureau-dispute','furnisher-dispute','debt-validation','609-disclosure','method-of-verification','cease-desist','intent-to-sue','cfpb-complaint','state-ag-complaint','goodwill-letter'],
+                bureau: 'Equifax',
+              })});
+              totalCount += result.count;
+            }
+            toast(`Generated ${totalCount} letters across all bureaus successfully!`, 'success');
+          } catch(err) { toast(err.message, 'error'); }
+          finally {
+            acrBulkBtn.disabled = false;
+            acrBulkBtn.innerHTML = '<i class="fas fa-layer-group text-lg animate-pulse mr-2"></i>Bulk Generate Letters for All Bureaus';
+          }
+        };
+      }
+    }
+
     tabMfsn.onclick = () => {
-      tabMfsn.className = 'px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-500 mr-4 transition';
-      tabSmartcredit.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-4 transition';
+      tabMfsn.className = 'px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-500 mr-2 transition';
+      tabSmartcredit.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-2 transition';
+      tabAcr.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-2 transition';
       tabMan.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white transition';
       formMfsn.classList.remove('hidden');
       formSmartcredit.classList.add('hidden');
+      formAcr.classList.add('hidden');
       formMan.classList.add('hidden');
     };
     tabSmartcredit.onclick = () => {
-      tabSmartcredit.className = 'px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-500 mr-4 transition';
-      tabMfsn.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-4 transition';
+      tabSmartcredit.className = 'px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-500 mr-2 transition';
+      tabMfsn.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-2 transition';
+      tabAcr.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-2 transition';
       tabMan.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white transition';
       formSmartcredit.classList.remove('hidden');
       formMfsn.classList.add('hidden');
+      formAcr.classList.add('hidden');
+      formMan.classList.add('hidden');
+    };
+    tabAcr.onclick = () => {
+      tabAcr.className = 'px-4 py-2 font-semibold text-red-400 border-b-2 border-red-500 mr-2 transition';
+      tabMfsn.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-2 transition';
+      tabSmartcredit.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-2 transition';
+      tabMan.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white transition';
+      formAcr.classList.remove('hidden');
+      formMfsn.classList.add('hidden');
+      formSmartcredit.classList.add('hidden');
       formMan.classList.add('hidden');
     };
     tabMan.onclick = () => {
       tabMan.className = 'px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-500 transition';
-      tabMfsn.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-4 transition';
-      tabSmartcredit.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-4 transition';
+      tabMfsn.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-2 transition';
+      tabSmartcredit.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-2 transition';
+      tabAcr.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-2 transition';
       formMan.classList.remove('hidden');
       formMfsn.classList.add('hidden');
       formSmartcredit.classList.add('hidden');
+      formAcr.classList.add('hidden');
     };
 
     // Shared execution runner
@@ -525,6 +1042,12 @@
       const resEl = $('#analysis-results');
       resEl.classList.remove('hidden');
       
+      let actualEndpoint = endpoint;
+      const isAutopilot = (data.clientId === 'autopilot' || data.autopilot);
+      if (isAutopilot && endpoint === '/reports/upload') {
+        actualEndpoint = '/reports/onboard';
+      }
+
       if (isIntegration) {
         resEl.innerHTML = renderProcessStepsCustom(`Authenticating with ${integrationName}...`, 'fas fa-spinner fa-spin');
         await sleep(1000);
@@ -534,7 +1057,7 @@
       }
 
       try {
-        const result = await api(endpoint, { method:'POST', body:JSON.stringify(payload) });
+        const result = await api(actualEndpoint, { method:'POST', body:JSON.stringify(payload) });
 
         resEl.innerHTML = renderProcessSteps('detecting');
         await sleep(400);
@@ -545,12 +1068,19 @@
         resEl.innerHTML = renderProcessSteps('complete');
         await sleep(300);
 
+        if (actualEndpoint === '/reports/onboard') {
+          toast(`Onboarding complete! Redirecting to client detail for ${result.clientName}...`, 'success');
+          await sleep(1500);
+          window._nav('client-detail', { clientId: result.clientId });
+          return;
+        }
+
         renderFullResults(resEl, result, data);
         toast(`COMPLETE: ${result.violationsFound} violations found! Litigation score: ${result.litigationScore.score}/100`, result.violationsFound > 0 ? 'warning' : 'success');
       } catch(err) {
         resEl.innerHTML = `<div class="glass rounded-xl p-6 border border-red-500/30"><i class="fas fa-exclamation-triangle text-red-400 mr-2"></i><span class="text-red-300">${err.message}</span></div>`;
         toast(err.message, 'error');
-        if (endpoint === '/reports/import-smartcredit' && (err.message.includes('403') || err.message.includes('530') || err.message.toLowerCase().includes('forbidden') || err.message.toLowerCase().includes('failed') || err.message.toLowerCase().includes('firewall') || err.message.toLowerCase().includes('sigv4'))) {
+        if (endpoint === '/reports/import-smartcredit' && (err.message.includes('403') || err.message.includes('530') || err.message.toLowerCase().includes('forbidden') || err.message.toLowerCase().includes('firewall') || err.message.toLowerCase().includes('sigv4'))) {
           showSmartCreditFirewallModal();
         }
       }

@@ -12,7 +12,7 @@ import { generatePDFReport, type PDFReportData, generatePDFFromText } from './en
 import { FOUNDER_TEMPLATES } from './engine/founder-templates';
 
 type Bindings = {
-  DB: D1Database;
+  DB: any;
   STRIPE_API_KEY: string;
   STRIPE_WEBHOOK_SECRET: string;
   FRONTEND_URL: string;
@@ -20,6 +20,8 @@ type Bindings = {
   CLICK2MAIL_AUTH_BASIC: string;
   CLICK2MAIL_API_URL: string;
   AI: any;
+  SMARTCREDIT_CLIENT_KEY?: string;
+  SMARTCREDIT_CLIENT_SECRET?: string;
 };
 type Variables = { user?: any; org?: any; session?: any };
 
@@ -392,6 +394,286 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
   });
 });
 
+// ═══════════════════════════════════════════════════════════════
+// SMART CLIENT AUTOPILOT ONBOARDING ENDPOINT
+// ═══════════════════════════════════════════════════════════════
+app.post('/api/reports/onboard', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json();
+  const { rawText, fileName, bureau } = body;
+
+  if (!rawText) return c.json({ error: 'Report text required for onboarding' }, 400);
+
+  // 1. Parse credit report text
+  const parsed = parseCreditReportText(rawText);
+
+  // 2. Extract demographics
+  const personal = parsed.personalInfo || { names: [], addresses: [], employers: [], ssns: [], dobs: [] };
+  const rawName = personal.names && personal.names[0] ? personal.names[0].trim() : 'Unknown Client';
+  
+  // Title Case conversion helper
+  const toTitleCase = (str: string) => {
+    return str.toLowerCase()
+      .replace(/(?:^|\s|-|')\S/g, (m) => m.toUpperCase())
+      .replace(/\b(Mc)([a-z])/g, (_, p1, p2) => p1 + p2.toUpperCase());
+  };
+
+  let firstName = '';
+  let lastName = '';
+  if (rawName) {
+    if (rawName.includes(',')) {
+      const parts = rawName.split(',');
+      lastName = toTitleCase(parts[0].trim());
+      firstName = toTitleCase(parts.slice(1).join(',').trim());
+    } else {
+      const parts = rawName.split(/\s+/);
+      firstName = toTitleCase(parts[0] || '');
+      lastName = toTitleCase(parts.slice(1).join(' ') || 'Client');
+    }
+  }
+
+  // DOB
+  const dob = personal.dobs && personal.dobs[0] ? personal.dobs[0].trim() : null;
+
+  // SSN Last 4
+  let ssnLast4: string | null = null;
+  const rawSsn = personal.ssns && personal.ssns[0] ? personal.ssns[0].trim() : null;
+  if (rawSsn) {
+    const match = rawSsn.match(/\d{4}$/);
+    if (match) {
+      ssnLast4 = match[0];
+    } else {
+      const digits = rawSsn.replace(/\D/g, '');
+      if (digits.length >= 4) {
+        ssnLast4 = digits.slice(-4);
+      } else if (digits.length > 0) {
+        ssnLast4 = digits;
+      }
+    }
+  }
+
+  // Parse Address
+  let addressLine1: string | null = null;
+  let city: string | null = null;
+  let state: string | null = null;
+  let zip: string | null = null;
+  const rawAddr = personal.addresses && personal.addresses[0] ? personal.addresses[0].trim() : null;
+
+  if (rawAddr) {
+    const parts = rawAddr.split(',').map(p => p.trim());
+    if (parts.length >= 3) {
+      addressLine1 = parts[0];
+      if (parts.length === 4) {
+        addressLine1 = `${parts[0]}, ${parts[1]}`;
+        city = parts[2];
+        const stateZip = parts[3].split(/\s+/);
+        state = stateZip[0] || null;
+        zip = stateZip[1] || null;
+      } else {
+        city = parts[1];
+        const stateZip = parts[2].split(/\s+/);
+        state = stateZip[0] || null;
+        zip = stateZip[1] || null;
+      }
+    } else {
+      const zipMatch = rawAddr.match(/\b\d{5}(?:-\d{4})?\b$/);
+      if (zipMatch) {
+        zip = zipMatch[0];
+        const rest = rawAddr.substring(0, rawAddr.length - zip.length).trim();
+        const stateMatch = rest.match(/\b([A-Z]{2})\b$/);
+        if (stateMatch) {
+          state = stateMatch[1];
+          const rest2 = rest.substring(0, rest.length - state.length).trim().replace(/,$/, '').trim();
+          const cityParts = rest2.split(/\s+/);
+          if (cityParts.length > 1) {
+            city = cityParts[cityParts.length - 1];
+            addressLine1 = cityParts.slice(0, -1).join(' ');
+          } else {
+            addressLine1 = rest2;
+          }
+        } else {
+          addressLine1 = rest;
+        }
+      } else {
+        addressLine1 = rawAddr;
+      }
+    }
+  }
+
+  // Ensure state is capitalized if parsed
+  if (state) state = state.toUpperCase();
+
+  // 3. Match / Deduplicate Client in D1
+  let clientId = '';
+  let isNewClient = false;
+
+  const nameMatches = await c.env.DB.prepare(
+    'SELECT * FROM clients WHERE org_id = ? AND LOWER(first_name) = ? AND LOWER(last_name) = ?'
+  ).bind(user.org_id, firstName.toLowerCase(), lastName.toLowerCase()).all();
+
+  const results = nameMatches?.results || [];
+  if (results.length > 0) {
+    let exactMatch: any = null;
+    for (const client of results) {
+      if (ssnLast4 && client.ssn_last4 === ssnLast4) {
+        exactMatch = client;
+        break;
+      }
+      if (dob && client.dob === dob) {
+        exactMatch = client;
+        break;
+      }
+      if (zip && client.zip === zip) {
+        exactMatch = client;
+        break;
+      }
+    }
+
+    if (exactMatch) {
+      clientId = exactMatch.id;
+    } else if (results.length === 1) {
+      // Single match by name - link it
+      clientId = results[0].id;
+    } else {
+      // Multiple matches but no matching differentiator - create new
+      clientId = generateId();
+      isNewClient = true;
+    }
+  } else {
+    // No name matches at all - create new
+    clientId = generateId();
+    isNewClient = true;
+  }
+
+  // 4. Create new client profile if not matched
+  if (isNewClient) {
+    await c.env.DB.prepare(
+      'INSERT INTO clients (id, org_id, created_by, first_name, last_name, email, phone, address_line1, address_line2, city, state, zip, dob, ssn_last4, status, notes, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      clientId,
+      user.org_id,
+      user.id,
+      firstName,
+      lastName,
+      null, // email
+      null, // phone
+      addressLine1,
+      null, // address_line2
+      city,
+      state,
+      zip,
+      dob,
+      ssnLast4,
+      'active',
+      'Automatically created via Smart Client Autopilot',
+      '[]'
+    ).run();
+
+    await c.env.DB.prepare(
+      'INSERT INTO activity_log (id, org_id, client_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(
+      generateId(),
+      user.org_id,
+      clientId,
+      user.id,
+      'client_created',
+      `Automatically created client profile for ${firstName} ${lastName} via Smart Client Autopilot`
+    ).run();
+  }
+
+  // 5. Detect violations and calculate score
+  const violations = detectViolations(parsed);
+  const litScore = calculateLitigationScore(violations);
+  const reportId = generateId();
+
+  // 6. Save report
+  await c.env.DB.prepare(
+    'INSERT INTO credit_reports (id, org_id, client_id, uploaded_by, bureau, report_date, file_name, raw_text, parsed_data, status, total_accounts, total_inquiries, total_public_records, total_collections, analysis_started_at, analysis_completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime("now"), datetime("now"))'
+  ).bind(
+    reportId,
+    user.org_id,
+    clientId,
+    user.id,
+    parsed.bureau || bureau || 'Unknown',
+    parsed.reportDate,
+    fileName || 'upload.txt',
+    rawText,
+    JSON.stringify(parsed),
+    'analyzed',
+    parsed.accounts.length,
+    parsed.inquiries.length,
+    parsed.publicRecords.length,
+    parsed.collections.length
+  ).run();
+
+  // 7. Save violations in batch
+  for (const v of violations) {
+    await c.env.DB.prepare(
+      'INSERT INTO violations (id, org_id, report_id, client_id, category, subcategory, severity, statute, statute_text, legal_standard, evidence, explanation, case_law, account_name, account_number, dofd, falloff_date, days_overdue, statutory_damages_min, statutory_damages_max, actual_damages_est, punitive_damages_est, attorney_fees_est, total_damages_min, total_damages_max, defendant_type, defendant_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      v.id,
+      user.org_id,
+      reportId,
+      clientId,
+      v.category,
+      v.subcategory,
+      v.severity,
+      v.statute,
+      v.statuteText,
+      v.legalStandard,
+      v.evidence,
+      v.explanation,
+      v.caseLaw,
+      v.accountName || null,
+      v.accountNumber || null,
+      v.dofd || null,
+      v.falloffDate || null,
+      v.daysOverdue || null,
+      v.statutoryDamagesMin,
+      v.statutoryDamagesMax,
+      v.actualDamagesEst,
+      v.punitiveDamagesEst,
+      v.attorneyFeesEst,
+      v.totalDamagesMin,
+      v.totalDamagesMax,
+      v.defendantType,
+      v.defendantName
+    ).run();
+  }
+
+  // 8. Log activity
+  await c.env.DB.prepare(
+    'INSERT INTO activity_log (id, org_id, client_id, report_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    generateId(),
+    user.org_id,
+    clientId,
+    reportId,
+    user.id,
+    'report_analyzed',
+    `Autopilot processed report for ${firstName} ${lastName}: ${violations.length} violations found`,
+    JSON.stringify({ score: litScore.score })
+  ).run();
+
+  return c.json({
+    success: true,
+    clientId,
+    isNewClient,
+    clientName: `${firstName} ${lastName}`,
+    reportId,
+    bureau: parsed.bureau || bureau || 'Unknown',
+    reportDate: parsed.reportDate,
+    personalInfo: parsed.personalInfo,
+    totalAccounts: parsed.accounts.length,
+    totalCollections: parsed.collections.length,
+    totalInquiries: parsed.inquiries.length,
+    totalPublicRecords: parsed.publicRecords.length,
+    violationsFound: violations.length,
+    violations,
+    litigationScore: litScore,
+  });
+});
+
 app.post('/api/reports/mfsn-import', authMiddleware, async (c) => {
   const user = c.get('user');
   const body = await c.req.json();
@@ -667,7 +949,7 @@ app.get('/api/reports/:id/pdf', authMiddleware, async (c) => {
     reportDate: (report as any).report_date,
     bureau: (report as any).bureau,
     violations: pdfViolations,
-    litigationScore: litScore,
+    litigationScore: litScore.score,
     generatedDate: new Date().toISOString().split('T')[0],
     reportId: id,
     orgName: 'RJ Business Solutions',
@@ -1015,8 +1297,8 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
       }
     } else {
       if (username && password) {
-        const clientKey = '19343205-b3a9-4143-8bef-2cb5da0c731f';
-        const clientSecret = 'WE_9tIrlwv0yvLW83CNmqlkyCIJVaxV5ouVu2sJ7QYQ';
+        const clientKey = c.env.SMARTCREDIT_CLIENT_KEY || '19343205-b3a9-4143-8bef-2cb5da0c731f';
+        const clientSecret = c.env.SMARTCREDIT_CLIENT_SECRET || 'WE_9tIrlwv0yvLW83CNmqlkyCIJVaxV5ouVu2sJ7QYQ';
         const authHeader = 'Basic ' + btoa(`${clientKey}:${clientSecret}`);
 
         const authRes = await fetch('https://api.smartcredit.com/v1.1/member/authenticate', {
@@ -1031,7 +1313,7 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
 
         if (!authRes.ok) {
           const errText = await authRes.text();
-          return c.json({ error: `SmartCredit Authentication Failed (${authRes.status}): ${errText}` }, authRes.status);
+          return c.json({ error: `SmartCredit Authentication Failed (${authRes.status}): ${errText}` }, authRes.status as any);
         }
 
         const authData: any = await authRes.json();
@@ -1044,8 +1326,8 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
 
       // If trackingToken is provided/resolved and raw smartCreditData is absent, fetch via ConsumerDirect API
       if (resolvedTrackingToken && !payload) {
-        const clientKey = '19343205-b3a9-4143-8bef-2cb5da0c731f';
-        const clientSecret = 'WE_9tIrlwv0yvLW83CNmqlkyCIJVaxV5ouVu2sJ7QYQ';
+        const clientKey = c.env.SMARTCREDIT_CLIENT_KEY || '19343205-b3a9-4143-8bef-2cb5da0c731f';
+        const clientSecret = c.env.SMARTCREDIT_CLIENT_SECRET || 'WE_9tIrlwv0yvLW83CNmqlkyCIJVaxV5ouVu2sJ7QYQ';
         const url = `https://api.smartcredit.com/v1.1/report/retrieve?clientKey=${clientKey}&trackingToken=${resolvedTrackingToken}`;
         const authHeader = 'Basic ' + btoa(`${clientKey}:${clientSecret}`);
 
@@ -1059,7 +1341,7 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
 
         if (!res.ok) {
           const errText = await res.text();
-          return c.json({ error: `SmartCredit API Retrieve Failed (${res.status}): ${errText}` }, res.status);
+          return c.json({ error: `SmartCredit API Retrieve Failed (${res.status}): ${errText}` }, res.status as any);
         }
 
         payload = await res.json();
@@ -1476,7 +1758,7 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
     const errText = await addrRes.text();
     return c.json({ error: `Click2Mail address fetch failed: ${errText}` }, 502);
   }
-  const addrData = await addrRes.json();
+  const addrData = await addrRes.json() as any;
   const fromAddress = addrData.addresses?.[0]?.id;
   if (!fromAddress) return c.json({ error: 'No sender address found in Click2Mail account' }, 400);
 
@@ -1501,7 +1783,7 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
     const errText = await createRes.text();
     return c.json({ error: `Click2Mail document creation failed: ${errText}` }, 502);
   }
-  const createData = await createRes.json();
+  const createData = await createRes.json() as any;
   const documentId = createData.id;
 
   // Step 3: Create mailing
@@ -1528,7 +1810,7 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
     const errText = await mailingRes.text();
     return c.json({ error: `Click2Mail mailing creation failed: ${errText}` }, 502);
   }
-  const mailingData = await mailingRes.json();
+  const mailingData = await mailingRes.json() as any;
 
   // Update document status to "mailed"
   await c.env.DB.prepare('UPDATE documents SET status = ?, mailed_at = ?, mailed_by = ? WHERE id = ?').bind('mailed', new Date().toISOString(), user.id, id).run();
@@ -1816,6 +2098,12 @@ function getAppHtml(): string {
 </head>
 <body class="gradient-bg min-h-screen text-gray-100">
   <div id="app"></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+  <script>
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+    }
+  </script>
   <script src="/static/app.js"></script>
 </body>
 </html>`;
