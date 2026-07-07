@@ -28,6 +28,7 @@ export interface ParsedAccount {
   comments?: string;
   dateReported?: string;
   lastPaymentDate?: string;
+  lastPaymentAmount?: number;
   terms?: string;
   responsibility?: string;
 }
@@ -775,7 +776,7 @@ function checkMixedFileIndicators(report: CreditReportData): Violation[] {
 // ===============================================================
 // CATEGORY 12: INCOMPLETE / MISSING REQUIRED DATA
 // ===============================================================
-function checkIncompleteData(accounts: ParsedAccount[]): Violation[] {
+function checkIncompleteData(accounts: ParsedAccount[], bureau: string): Violation[] {
   const violations: Violation[] = [];
   for (const acct of accounts) {
     // Missing account type
@@ -817,6 +818,51 @@ function checkIncompleteData(accounts: ParsedAccount[]): Violation[] {
         defendantType: 'Furnisher', defendantName: acct.creditorName,
         remedialAction: 'Demand proper status coding or deletion.',
         disputeStrategy: 'Dispute as inaccurate/misleading. A derogatory tradeline with $0 balance and no "paid" status is inherently misleading.',
+      });
+    }
+
+    // Unpaid Charge-Off Incomplete Reporting
+    const status = (acct.accountStatus || '').toLowerCase();
+    const payStatus = (acct.paymentStatus || '').toLowerCase();
+    const isChargeOff = status === 'co' || status.includes('charge-off') || status.includes('chargeoff') || status.includes('charged off') || status.includes('charged-off') ||
+                        payStatus === 'co' || payStatus.includes('charge-off') || payStatus.includes('chargeoff') || payStatus.includes('charged off') || payStatus.includes('charged-off');
+    
+    if (isChargeOff && acct.currentBalance > 0) {
+      let disputeText = '';
+      const bUpper = (bureau || '').toUpperCase();
+      if (bUpper.includes('TRANSUNION') || bUpper.includes('TU')) {
+        disputeText = "TransUnion is reporting incomplete and inaccurate account information. TransUnion is not reporting the scheduled payment amount on this unpaid charge-off. TransUnion is also missing the original charge-off amount and the date of first delinquency. These fields are required to accurately report the account history, balance, and reporting timeline. This reporting does not comply with Metro 2 reporting standards for complete and accurate credit reporting.";
+      } else if (bUpper.includes('EXPERIAN') || bUpper.includes('EX') || bUpper.includes('EXP')) {
+        disputeText = "I am disputing this account because Experian is reporting incomplete and inaccurate account information. Experian is not reporting the scheduled payment amount on this unpaid charge-off. Experian is also missing the date of first delinquency, the date closed, and the date of last payment. These missing fields are required for the account to be reported completely and accurately. This reporting does not comply with Metro 2 reporting standards for complete and accurate credit reporting.";
+      } else if (bUpper.includes('EQUIFAX') || bUpper.includes('EQ') || bUpper.includes('EQF')) {
+        disputeText = "I am disputing this account because Equifax is reporting incomplete and inaccurate account information. Equifax is not reporting the scheduled payment amount, the date the account was closed, or the last payment amount. These fields are required for complete and accurate reporting of the account history, payment activity, and account status. This reporting does not comply with Metro 2 reporting standards for complete and accurate credit reporting.";
+      } else {
+        disputeText = "The credit bureau is reporting incomplete and inaccurate account information. The bureau is not reporting the scheduled payment amount on this unpaid charge-off. Critical reporting fields such as the original charge-off amount, the date of first delinquency, the date closed, or the last payment details are missing or incomplete. These fields are required to completely and accurately report the account under Metro 2 standards.";
+      }
+
+      violations.push({
+        id: genId(),
+        category: 'FCRA',
+        subcategory: 'Unpaid Charge-Off Incomplete Reporting',
+        severity: 'high',
+        statute: '15 U.S. Code § 1681i & § 1681e(b)',
+        statuteText: '15 U.S.C. § 1681i & § 1681e(b)',
+        legalStandard: 'Bureaus and furnishers must report complete, accurate, and consistent account data. Missing critical timeline or payment metrics on unpaid charge-offs violates Metro 2 compliance and the FCRA accuracy mandate.',
+        evidence: disputeText,
+        explanation: 'Under 15 U.S. Code § 1681i, the consumer has the right to dispute incomplete and inaccurate information. This unpaid charge-off contains missing and incomplete data fields required under Metro 2 reporting standards.',
+        caseLaw: 'Cortez v. Trans Union, LLC, 617 F.3d 688 (3d Cir. 2010); Saunders v. Branch Banking & Trust Co. of Va., 526 F.3d 142 (4th Cir. 2008)',
+        accountName: acct.creditorName,
+        accountNumber: acct.accountNumber || '',
+        statutoryDamagesMin: 100,
+        statutoryDamagesMax: 1000,
+        actualDamagesEst: 1500,
+        punitiveDamagesEst: 2000,
+        attorneyFeesEst: 2500,
+        totalDamagesMin: 3600,
+        totalDamagesMax: 6500,
+        defendantType: 'CRA + Furnisher',
+        defendantName: `Credit Bureau & ${acct.creditorName}`,
+        remedialAction: 'Update all missing/incomplete fields or delete the account entirely.',
       });
     }
   }
@@ -955,7 +1001,7 @@ export function detectViolations(report: CreditReportData): Violation[] {
     ...checkCollectionViolations(report.collections),
     ...checkPublicRecordObsolescence(report.publicRecords),
     ...checkMixedFileIndicators(report),
-    ...checkIncompleteData(allAccounts),
+    ...checkIncompleteData(allAccounts, report.bureau),
     ...checkCreditLimitErrors(report.accounts),
     ...checkFDCPAReportingViolations(report.collections),
     ...checkECOAViolations(allAccounts),
@@ -986,8 +1032,14 @@ export function calculateLitigationScore(violations: Violation[]): {
   topViolations: Violation[];
   litigationPlan: string[];
 } {
-  const totalMin = violations.reduce((s, v) => s + v.totalDamagesMin, 0);
-  const totalMax = violations.reduce((s, v) => s + v.totalDamagesMax, 0);
+  const totalMin = violations.reduce((s, v) => {
+    const val = v.totalDamagesMin !== undefined ? v.totalDamagesMin : (v as any).total_damages_min;
+    return s + (val || 0);
+  }, 0);
+  const totalMax = violations.reduce((s, v) => {
+    const val = v.totalDamagesMax !== undefined ? v.totalDamagesMax : (v as any).total_damages_max;
+    return s + (val || 0);
+  }, 0);
 
   const bySeverity: Record<string, number> = {};
   const byCategory: Record<string, number> = {};
@@ -995,12 +1047,21 @@ export function calculateLitigationScore(violations: Violation[]): {
   const byStatute: Record<string, number> = {};
 
   for (const v of violations) {
-    bySeverity[v.severity] = (bySeverity[v.severity] || 0) + 1;
-    byCategory[v.subcategory] = (byCategory[v.subcategory] || 0) + 1;
-    if (!byDefendant[v.defendantName]) byDefendant[v.defendantName] = { count: 0, damages: 0 };
-    byDefendant[v.defendantName].count++;
-    byDefendant[v.defendantName].damages += v.totalDamagesMax;
-    byStatute[v.statute] = (byStatute[v.statute] || 0) + 1;
+    const severity = v.severity || (v as any).severity || 'medium';
+    bySeverity[severity] = (bySeverity[severity] || 0) + 1;
+    
+    const subcategory = v.subcategory || (v as any).subcategory || 'other';
+    byCategory[subcategory] = (byCategory[subcategory] || 0) + 1;
+    
+    const defendantName = v.defendantName || (v as any).defendant_name || 'Unknown';
+    if (!byDefendant[defendantName]) byDefendant[defendantName] = { count: 0, damages: 0 };
+    byDefendant[defendantName].count++;
+    
+    const dMax = v.totalDamagesMax !== undefined ? v.totalDamagesMax : (v as any).total_damages_max;
+    byDefendant[defendantName].damages += (dMax || 0);
+    
+    const statute = v.statute || (v as any).statute || 'FCRA';
+    byStatute[statute] = (byStatute[statute] || 0) + 1;
   }
 
   let score = 0;
@@ -1029,12 +1090,23 @@ export function calculateLitigationScore(violations: Violation[]): {
 
   const litigationPlan: string[] = [];
   litigationPlan.push(`Step 1: Send dispute letters to all 3 bureaus citing ${violations.length} violations`);
-  if (violations.some(v => v.defendantType.includes('Furnisher'))) {
+  
+  const hasFurnisher = violations.some(v => {
+    const dType = v.defendantType || (v as any).defendant_type || '';
+    return dType.includes('Furnisher');
+  });
+  if (hasFurnisher) {
     litigationPlan.push('Step 2: Send § 623(a)(8) direct disputes to furnishers');
   }
-  if (violations.some(v => v.defendantType.includes('Debt Collector'))) {
+  
+  const hasDebtCollector = violations.some(v => {
+    const dType = v.defendantType || (v as any).defendant_type || '';
+    return dType.includes('Debt Collector');
+  });
+  if (hasDebtCollector) {
     litigationPlan.push('Step 3: Send FDCPA § 809(b) debt validation requests');
   }
+  
   litigationPlan.push('Step 4: Wait 30 days for responses (statutory deadline)');
   litigationPlan.push('Step 5: File CFPB complaint if violations not corrected');
   if (score >= 50) {
@@ -1042,7 +1114,11 @@ export function calculateLitigationScore(violations: Violation[]): {
     litigationPlan.push('Step 7: File federal lawsuit under FCRA § 1681n/o and/or FDCPA');
   }
 
-  const topViolations = [...violations].sort((a, b) => b.totalDamagesMax - a.totalDamagesMax).slice(0, 5);
+  const topViolations = [...violations].sort((a, b) => {
+    const aMax = a.totalDamagesMax !== undefined ? a.totalDamagesMax : (a as any).total_damages_max || 0;
+    const bMax = b.totalDamagesMax !== undefined ? b.totalDamagesMax : (b as any).total_damages_max || 0;
+    return bMax - aMax;
+  }).slice(0, 5);
 
   return {
     score, grade, recommendation,

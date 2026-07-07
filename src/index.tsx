@@ -1693,6 +1693,14 @@ app.get('/api/documents/:id', authMiddleware, async (c) => {
   return c.json({ document: doc });
 });
 
+app.put('/api/documents/:id', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const { content } = await c.req.json();
+  await c.env.DB.prepare('UPDATE documents SET content = ?, updated_at = datetime("now") WHERE id = ? AND org_id = ?').bind(content, id, user.org_id).run();
+  return c.json({ success: true });
+});
+
 app.post('/api/documents/:id/ai-rewrite', authMiddleware, async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');

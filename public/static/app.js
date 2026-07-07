@@ -12,6 +12,8 @@
     currentPage: 'dashboard',
     pageData: null,
     loading: false,
+    selectedDisputeItems: JSON.parse(localStorage.getItem('fcra_selected_dispute_items') || '{}'),
+    disputeStatus: JSON.parse(localStorage.getItem('fcra_dispute_status') || '{}'),
   };
 
   function setState(u) {
@@ -42,6 +44,424 @@
 
   function $(s) { return document.querySelector(s); }
   window.$ = $; // Expose for inline onclick handlers
+
+  function escapeHtml(text) {
+    if (typeof text !== 'string') return '';
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // RJ DISPUTE COCKPIT WORKSPACE GLOBALS & HELPERS
+  // ═══════════════════════════════════════════════════════════════
+  window._isItemPinned = function(reportId, itemId) {
+    return (state.selectedDisputeItems[reportId] || []).includes(itemId);
+  };
+
+  window._toggleDisputeItem = function(event, reportId, itemId) {
+    if (event) event.stopPropagation();
+    
+    if (!state.selectedDisputeItems[reportId]) {
+      state.selectedDisputeItems[reportId] = [];
+    }
+    
+    const idx = state.selectedDisputeItems[reportId].indexOf(itemId);
+    if (idx === -1) {
+      state.selectedDisputeItems[reportId].push(itemId);
+      toast('Item pinned to dispute campaign!', 'success');
+    } else {
+      state.selectedDisputeItems[reportId].splice(idx, 1);
+      toast('Item removed from dispute campaign.', 'warning');
+    }
+    
+    localStorage.setItem('fcra_selected_dispute_items', JSON.stringify(state.selectedDisputeItems));
+    
+    if (!state.disputeStatus[reportId]) {
+      state.disputeStatus[reportId] = { step: 'pinning', savedDocId: null, isSent: false };
+    } else {
+      if (state.disputeStatus[reportId].step === 'audit' || state.disputeStatus[reportId].step === 'ingestion') {
+        state.disputeStatus[reportId].step = 'pinning';
+      }
+    }
+    localStorage.setItem('fcra_dispute_status', JSON.stringify(state.disputeStatus));
+
+    window._updateCampaignHUD(reportId);
+  };
+
+  window._updateCampaignHUD = function(reportId) {
+    const container = document.getElementById('dispute-campaign-hud-container');
+    if (!container) return;
+
+    const r = window._activeWorkspaceReport;
+    const violations = window._activeWorkspaceViolations || [];
+    const pinnedIds = state.selectedDisputeItems[reportId] || [];
+    
+    let step = 'audit';
+    let pct = 40;
+    let statusText = 'AI Compliance Audit Complete';
+
+    if (pinnedIds.length > 0) {
+      step = 'pinning';
+      pct = 60;
+      statusText = `Dispute Pinning: ${pinnedIds.length} Item(s) Selected`;
+    }
+
+    const campaignStatus = state.disputeStatus[reportId] || {};
+    if (campaignStatus.savedDocId) {
+      step = 'draft';
+      pct = 80;
+      statusText = 'Dispute Letter Draft Compiled & Saved';
+    }
+
+    if (campaignStatus.isSent) {
+      step = 'sent';
+      pct = 100;
+      statusText = 'Dispute Campaign Dispatched via Certified Mail';
+    }
+
+    const isCollapsed = localStorage.getItem(`hud_collapsed_${reportId}`) === 'true';
+
+    container.innerHTML = `
+      <div class="glass border border-blue-500/20 rounded-xl p-4 bg-gray-950/20 backdrop-blur-md">
+        <div class="flex items-center justify-between cursor-pointer select-none" onclick="window._toggleHUDCollapse('${reportId}')">
+          <div class="flex items-center gap-2.5">
+            <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-6 w-auto rounded border border-blue-500/30">
+            <div>
+              <span class="text-sm font-bold text-white tracking-wide uppercase">RJ Dispute Campaign Cockpit</span>
+              <span class="hidden md:inline-block text-[10px] text-gray-500 font-mono ml-2">NEL-${new Date(r?.created_at || Date.now()).getFullYear()}${(new Date(r?.created_at || Date.now()).getMonth()+1).toString().padStart(2,'0')}${new Date(r?.created_at || Date.now()).getDate().toString().padStart(2,'0')}-028391</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="px-2 py-0.5 rounded bg-blue-950/45 border border-blue-500/35 text-blue-400 text-xs font-semibold uppercase tracking-wider">${statusText}</span>
+            <i class="fas fa-chevron-down text-gray-500 transition-transform duration-300 ${isCollapsed ? '' : 'rotate-180'}" id="hud-toggle-icon"></i>
+          </div>
+        </div>
+        
+        <div id="hud-collapsible-content" class="mt-4 border-t border-gray-800/60 pt-4 space-y-4 transition-all duration-300 ${isCollapsed ? 'hidden' : ''}">
+          <div class="grid grid-cols-5 gap-2 text-center text-[10px] font-bold uppercase tracking-wider">
+            <div class="flex flex-col items-center gap-1 text-green-400">
+              <div class="w-6 h-6 rounded-full bg-green-500/20 border border-green-500 flex items-center justify-center"><i class="fas fa-check text-[9px]"></i></div>
+              <span>Ingestion</span>
+            </div>
+            <div class="flex flex-col items-center gap-1 text-green-400">
+              <div class="w-6 h-6 rounded-full bg-green-500/20 border border-green-500 flex items-center justify-center"><i class="fas fa-check text-[9px]"></i></div>
+              <span>Audit</span>
+            </div>
+            <div class="flex flex-col items-center gap-1 ${['pinning', 'draft', 'sent'].includes(step) ? 'text-green-400' : 'text-gray-500'}">
+              <div class="w-6 h-6 rounded-full ${['pinning', 'draft', 'sent'].includes(step) ? 'bg-green-500/20 border border-green-500' : 'bg-gray-900 border border-gray-800'} flex items-center justify-center">
+                ${['draft', 'sent'].includes(step) ? '<i class="fas fa-check text-[9px]"></i>' : '3'}
+              </div>
+              <span>Pinning</span>
+            </div>
+            <div class="flex flex-col items-center gap-1 ${['draft', 'sent'].includes(step) ? 'text-green-400' : (step === 'pinning' ? 'text-blue-400 animate-pulse' : 'text-gray-500')}">
+              <div class="w-6 h-6 rounded-full ${['draft', 'sent'].includes(step) ? 'bg-green-500/20 border border-green-500' : (step === 'pinning' ? 'bg-blue-500/20 border border-blue-500' : 'bg-gray-900 border border-gray-800')} flex items-center justify-center">
+                ${step === 'sent' ? '<i class="fas fa-check text-[9px]"></i>' : '4'}
+              </div>
+              <span>Draft</span>
+            </div>
+            <div class="flex flex-col items-center gap-1 ${step === 'sent' ? 'text-green-400' : (step === 'draft' ? 'text-blue-400 animate-pulse' : 'text-gray-500')}">
+              <div class="w-6 h-6 rounded-full ${step === 'sent' ? 'bg-green-500/20 border border-green-500' : (step === 'draft' ? 'bg-blue-500/20 border border-blue-500' : 'bg-gray-900 border border-gray-800')} flex items-center justify-center">5</div>
+              <span>Sent</span>
+            </div>
+          </div>
+
+          <div class="relative w-full h-2 bg-gray-900 rounded-full overflow-hidden border border-gray-800">
+            <div class="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 shadow-[0_0_10px_rgba(10,102,255,0.5)] transition-all duration-500" style="width: ${pct}%;"></div>
+          </div>
+
+          <div class="flex justify-between items-center text-xs text-gray-400">
+            <span class="flex items-center gap-1.5"><i class="fas fa-info-circle text-blue-400"></i> ${statusText}</span>
+            <span class="text-blue-400 font-bold font-mono">${pct}% Complete</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const badgeCountEl = document.getElementById('dispute-builder-badge-count');
+    if (badgeCountEl) {
+      badgeCountEl.textContent = pinnedIds.length;
+      if (pinnedIds.length > 0) {
+        badgeCountEl.className = 'px-1.5 py-0.2 bg-green-950 text-[10px] text-green-400 rounded-full font-bold ml-1 animate-pulse';
+      } else {
+        badgeCountEl.className = 'px-1.5 py-0.2 bg-gray-800 text-[10px] text-gray-400 rounded-full font-bold ml-1';
+      }
+    }
+  };
+
+  window._toggleHUDCollapse = function(reportId) {
+    const isCollapsed = localStorage.getItem(`hud_collapsed_${reportId}`) === 'true';
+    localStorage.setItem(`hud_collapsed_${reportId}`, !isCollapsed ? 'false' : 'true');
+    window._updateCampaignHUD(reportId);
+  };
+
+  window._jumpToViolation = function(event, violationId) {
+    if (event) event.stopPropagation();
+    const violationsTabBtn = document.querySelector('[data-tab="violations"]');
+    if (violationsTabBtn) {
+      violationsTabBtn.click();
+      setTimeout(() => {
+        const card = document.getElementById(`v-card-${violationId}`);
+        if (card) {
+          card.open = true;
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const visualCard = card.querySelector('.glass');
+          if (visualCard) {
+            visualCard.classList.add('ring-4', 'ring-red-500/60', 'scale-105', 'bg-red-950/30');
+            setTimeout(() => {
+              visualCard.classList.remove('ring-4', 'ring-red-500/60', 'scale-105', 'bg-red-950/30');
+            }, 3000);
+          }
+        }
+      }, 100);
+    }
+  };
+
+  window._highlightViolationsInRawText = function(reportId, violations) {
+    const rawContainer = document.getElementById('raw-text-container');
+    if (!rawContainer || !violations || !violations.length) return;
+
+    let rawText = rawContainer.dataset.originalText || rawContainer.textContent;
+    let html = escapeHtml(rawText);
+
+    const targets = [];
+    violations.forEach(v => {
+      const keyword = v.account_name || v.accountName;
+      if (keyword && keyword.length > 2) {
+        targets.push({ id: v.id, text: keyword, category: v.category, statute: v.statute });
+      }
+      const acct = v.account_number || v.accountNumber;
+      if (acct && acct.length > 2 && !acct.includes('**')) {
+        targets.push({ id: v.id, text: acct, category: v.category, statute: v.statute });
+      }
+    });
+
+    const uniqueTargets = [];
+    const seen = new Set();
+    targets.sort((a,b) => b.text.length - a.text.length).forEach(t => {
+      const key = `${t.id}-${t.text.toLowerCase()}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueTargets.push(t);
+      }
+    });
+
+    if (uniqueTargets.length === 0) return;
+
+    uniqueTargets.forEach(target => {
+      const parts = html.split(/(<[^>]+>)/g);
+      const cleanKeyword = target.text.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const regex = new RegExp(`(${cleanKeyword})`, 'gi');
+
+      html = parts.map(part => {
+        if (part.startsWith('<') && part.endsWith('>')) return part;
+        return part.replace(regex, (match) => {
+          return `<mark onclick="window._jumpToViolation(event, '${target.id}')" title="Click to view violation details: ${target.category} (${target.statute})" class="raw-violation-node hover:bg-red-500/50 cursor-pointer text-white px-0.5 rounded border border-red-500/40 bg-red-950/40 font-bold transition-all" style="cursor: pointer;">${match}</mark>`;
+        });
+      }).join('');
+    });
+
+    rawContainer.innerHTML = html;
+  };
+
+  window._compile1681iLetter = function(reportId, options = {}) {
+    const r = window._activeWorkspaceReport;
+    const client = window._activeWorkspaceClient;
+    const violations = window._activeWorkspaceViolations || [];
+
+    if (!r || !client) return '';
+
+    const bureau = options.bureau || r.bureau || 'Equifax';
+    const includeName = options.includeName !== false;
+    const includeSSN = options.includeSSN !== false;
+    const includeDOB = options.includeDOB !== false;
+    const includeAddress = options.includeAddress !== false;
+
+    const pinnedIds = state.selectedDisputeItems[reportId] || [];
+    const activeViolations = [];
+
+    violations.forEach(v => {
+      if (pinnedIds.includes(`violation-${v.id}`)) {
+        activeViolations.push({
+          bureau: bureau,
+          creditorName: v.account_name || v.accountName || v.defendant_name || v.defendant_name || '[CREDITOR]',
+          accountNumber: v.account_number || v.accountNumber || '[ACCOUNT NUMBER]',
+          evidence: v.evidence || v.explanation || 'Inaccurate reporting found on audit.'
+        });
+      }
+    });
+
+    const parsed = window._activeWorkspaceParsed || {};
+    (parsed.accounts || []).forEach(acc => {
+      const accNo = acc.accountNumber || '';
+      const itemId = `acc-${accNo || acc.creditorName}`;
+      if (pinnedIds.includes(itemId)) {
+        activeViolations.push({
+          bureau: bureau,
+          creditorName: acc.creditorName,
+          accountNumber: accNo,
+          evidence: `Standard field reporting mismatch. Incorrect payment status '${acc.paymentStatus || 'Current'}' and status '${acc.accountStatus || 'Open'}'. Please investigate and remove.`
+        });
+      }
+    });
+
+    (parsed.collections || []).forEach(coll => {
+      const collNo = coll.accountNumber || '';
+      const itemId = `coll-${collNo || coll.creditorName}`;
+      if (pinnedIds.includes(itemId)) {
+        activeViolations.push({
+          bureau: bureau,
+          creditorName: coll.creditorName,
+          accountNumber: collNo,
+          evidence: `Inaccurate collection placement reporting. Current balance ${coll.currentBalance} with original creditor ${coll.originalCreditor || 'N/A'}. Please verify and delete.`
+        });
+      }
+    });
+
+    (parsed.inquiries || []).forEach((inq, idx) => {
+      const itemId = `inq-${inq.creditorName}-${idx}`;
+      if (pinnedIds.includes(itemId)) {
+        activeViolations.push({
+          bureau: bureau,
+          creditorName: inq.creditorName,
+          accountNumber: 'N/A',
+          evidence: `Unauthorized hard credit inquiry reported on ${inq.inquiryDate}. No permissible purpose was established. Please remove immediately.`
+        });
+      }
+    });
+
+    if (activeViolations.length === 0) {
+      activeViolations.push({
+        bureau: bureau,
+        creditorName: '[PLEASE PIN ITEMS TO DISPUTE]',
+        accountNumber: 'XXXXXX',
+        evidence: 'No specific accounts pinned. Please toggle checkboxes in the other tabs to pin trade lines or violations to this campaign.'
+      });
+    }
+
+    const clientName = includeName ? `${client.first_name || ''} ${client.last_name || ''}`.trim() : '[NAME REMOVED]';
+    const clientAddress = includeAddress ? (client.address_line1 || '') : '[ADDRESS REMOVED]';
+    const clientCity = includeAddress ? (client.city || '') : '';
+    const clientState = includeAddress ? (client.state || '') : '';
+    const clientZip = includeAddress ? (client.zip || '') : '';
+    const clientSSNLast4 = includeSSN ? (client.ssn_last4 || '') : '';
+    const clientDOB = includeDOB ? (client.dob || '') : '';
+
+    const docData = {
+      clientName,
+      clientAddress,
+      clientCity,
+      clientState,
+      clientZip,
+      clientSSNLast4,
+      clientDOB,
+      today: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+      violations: activeViolations,
+      bureau: bureau,
+      reportId: r.id
+    };
+
+    return window._generate1681iLetter(docData);
+  };
+
+  window._generate1681iLetter = function(data) {
+    const rawBureau = (data.bureau || '').toLowerCase();
+    let bureauName = 'Equifax';
+    let address = 'P.O. Box 740256\nAtlanta, GA 30374';
+
+    if (rawBureau === 'experian') {
+      bureauName = 'Experian';
+      address = 'P.O. Box 4500\nAllen, TX 75013';
+    } else if (rawBureau === 'transunion') {
+      bureauName = 'TransUnion';
+      address = 'P.O. Box 2000\nChester, PA 19016';
+    }
+
+    const clientNameParts = (data.clientName || '').trim().split(/\s+/);
+    let firstName = '';
+    let middleName = '';
+    let lastName = '';
+    if (clientNameParts.length === 1) {
+      firstName = clientNameParts[0];
+    } else if (clientNameParts.length === 2) {
+      firstName = clientNameParts[0];
+      lastName = clientNameParts[1];
+    } else if (clientNameParts.length >= 3) {
+      firstName = clientNameParts[0];
+      middleName = clientNameParts.slice(1, -1).join(' ');
+      lastName = clientNameParts[clientNameParts.length - 1];
+    }
+
+    const fullName = `${firstName}${middleName ? ' ' + middleName : ''} ${lastName}`;
+
+    const bulletList = (data.violations || []).map(v => {
+      const creditor = v.creditorName || v.defendantName || v.defendant_name || v.accountName || v.account_name || '[CREDITOR NAME]';
+      const acctNum = v.accountNumber || v.account_number || '[ACCOUNT NUMBER]';
+      const text = v.evidence || '[DISPUTE VERBIAGE]';
+      return `• ${creditor} (Account #: ${acctNum}): ${text}`;
+    }).join('\n');
+
+    const confNum = data.reportId || '6062537823';
+    const fileNum = data.reportId || '358261728';
+
+    return `=======================================================================
+RJ BUSINESS SOLUTIONS PREMIUM DISPUTE TEMPLATE
+DESIGNED BY RICK JEFFERSON | POWERED BY RJ BUSINESS SOLUTIONS
+=======================================================================
+
+${data.today}
+
+${bureauName}
+${address}
+
+RE: Confirmation # ${confNum}     Date: ${data.today}
+
+I have reviewed my ${bureauName} credit report which I have obtained from your credit reporting agency, and the ${bureauName} File Number is ${fileNum}. I have found out that in my credit report there is some information which is incomplete, inaccurate, or inconsistent.
+
+Under 15 U.S. Code § 1681i, I am entitled to request a reinvestigation of any accounts on my credit report that contain inaccurate information. Please refer to 15 U.S. Code § 1681i(a)(1)(A) and 15 U.S. Code § 1681e(b) for further clarification.
+
+I wish to opt out of all email communications. Please note that you may have an incorrect or outdated email address on file, which could result in my personal information being shared with unauthorized parties. Moving forward, I request that all correspondence be sent exclusively to my mailing address, which is provided above.
+
+I am disputing the information below because I believe it is untrue, incomplete, inaccurate, or inconsistent, and I want you to investigate any information related to my personal information that is inaccurate, incomplete, not authenticated, or no longer valid. This will help ensure you're only maintaining accurate information about me, which reduces the risk of identity theft or a mixed file. I appreciate your efforts in retaining the following correct details on my record, listed below. The information listed is the only accurate personal data you should have on file. Please delete any other information that does not match.
+
+My name is ${fullName}.
+My address is ${data.clientAddress}, ${data.clientCity}, ${data.clientState} ${data.clientZip}.
+My last four SSN: ${data.clientSSNLast4 ? 'XXX-XX-' + data.clientSSNLast4 : ''}.
+My date of birth is ${data.clientDOB || ''}.
+
+The following account(s) on my credit report from your agency, ${bureauName}, are inaccurate:
+${bulletList}
+
+I am requesting that you and the furnishers conduct a thorough investigation of the accounts I am disputing. Please forward a copy of this letter to each furnisher and make sure both you and they comply with the law by performing a proper investigation, not a generic response or a rubber stamp. I take the accuracy of my credit reports seriously, and it is essential that every piece of information is correct, complete, and fully verified. My report currently contains contradictory, incomplete, and incorrect information that cannot be verified, and whether that came from the furnisher or from your own reporting, it is now your responsibility to fix it.
+
+I expect every account listed to be 100% accurate, complete, and verifiable. If it isn't, it must be deleted immediately, not corrected halfway. As you investigate, if you come across any other inaccurate, incomplete, or unverifiable information beyond what I've listed, I expect that to be corrected or deleted as well.
+
+Once your investigation is complete, please send me the results along with a full copy of my file, meaning everything you have on me. That includes all inquiries, both hard and soft pulls, along with their stated purpose, and copies of certifications from anyone who has accessed my report. Under FCRA § 1681g, you're required to disclose all sources of information and identify anyone who accessed my file. Under FCRA § 1681i, I'm also requesting a description of the procedures used to investigate each disputed account, including the business name, address, and phone number of any furnisher you contacted.
+
+Please don't ignore this letter or skip a real investigation. Under Section 1681i(a) of the Fair Credit Reporting Act, you're required to investigate disputed information and make sure only 100% accurate, verifiable, and complete information stays on my report. Anything that doesn't meet that standard must be promptly deleted.
+
+I am sending this letter personally, not through a credit repair company, so please don't reject it based on the postmark location or anything else.
+
+I am requesting a complete copy of my file after this reinvestigation is finished. As defined under 15 U.S.C. § 1681a(g), the term "file" means all information on me that you retain, regardless of how it's stored, so a partial disclosure would not satisfy this request and would not be lawful.
+
+If you end up verifying or deeming any of the disputed information above as accurate and complete, I am requesting a description of the procedure used to determine that accuracy or completeness, including the business name, address, and phone number of any furnisher contacted, within 15 days of making that determination, as required under 15 U.S.C. § 1681i(a)(6)(B)(iii) and § 1681i(a)(7).
+
+I have enclosed proof of my identity, current mailing address, and my social security card. This is not required under the FCRA, but I'm including it to help move the investigation along without delay.
+
+Sincerely,
+${fullName}
+
+${data.clientAddress}, ${data.clientCity}, ${data.clientState} ${data.clientZip}
+
+-----------------------------------------------------------------------
+Designed by Rick Jefferson, RJ Business Solutions
+Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutions.org
+-----------------------------------------------------------------------`;
+  };
+
   function money(n) { return '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
   function shortDate(d) { if (!d) return '—'; try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return d; } }
   function sevColor(s) { return { critical: 'red-500', high: 'orange-500', medium: 'yellow-500', low: 'green-500' }[s] || 'gray-400'; }
@@ -314,7 +734,11 @@
 
   function renderViolationsList(violations) {
     if (!violations.length) return '<div class="text-center py-8 text-gray-500"><i class="fas fa-check-circle text-3xl mb-3"></i><p>No violations</p></div>';
-    return `<div class="space-y-2">${violations.map(v=>`<details class="group"><summary class="cursor-pointer list-none"><div class="glass rounded-lg p-4 border-l-4 border-${sevColor(v.severity)} card-hover"><div class="flex items-start justify-between"><div class="flex-1 min-w-0"><div class="flex items-center gap-2 mb-1"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-${sevColor(v.severity)}/20 text-${sevColor(v.severity)}">${v.severity}</span><span class="text-xs text-gray-400">${v.category} &bull; ${v.statute}</span><i class="fas fa-chevron-down text-[10px] text-gray-500 group-open:rotate-180 transition-transform"></i></div><div class="text-sm font-medium text-white">${v.subcategory}</div>${v.account_name||v.accountName?`<div class="text-xs text-gray-500">Account: ${v.account_name||v.accountName}</div>`:''}</div><div class="text-right shrink-0 ml-4"><div class="text-xs text-green-400 font-medium">${money(v.total_damages_min||v.totalDamagesMin)} &ndash; ${money(v.total_damages_max||v.totalDamagesMax)}</div></div></div></div></summary>
+    const reportId = window._activeWorkspaceReport ? window._activeWorkspaceReport.id : null;
+    return `<div class="space-y-2">${violations.map(v=>{
+      const isPinned = reportId ? window._isItemPinned(reportId, `violation-${v.id}`) : false;
+      const checkboxHtml = reportId ? `<input type="checkbox" class="rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-blue-500/50 w-3.5 h-3.5 mr-1 cursor-pointer" ${isPinned ? 'checked' : ''} onchange="window._toggleDisputeItem(event, '${reportId}', 'violation-${v.id}')" onclick="event.stopPropagation()">` : '';
+      return `<details class="group" id="v-card-${v.id}"><summary class="cursor-pointer list-none"><div class="glass rounded-lg p-4 border-l-4 border-${sevColor(v.severity)} card-hover"><div class="flex items-start justify-between"><div class="flex-1 min-w-0"><div class="flex items-center gap-2 mb-1">${checkboxHtml}<span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-${sevColor(v.severity)}/20 text-${sevColor(v.severity)}">${v.severity}</span><span class="text-xs text-gray-400">${v.category} &bull; ${v.statute}</span><i class="fas fa-chevron-down text-[10px] text-gray-500 group-open:rotate-180 transition-transform"></i></div><div class="text-sm font-medium text-white">${v.subcategory}</div>${v.account_name||v.accountName?`<div class="text-xs text-gray-500">Account: ${v.account_name||v.accountName}</div>`:''}</div><div class="text-right shrink-0 ml-4"><div class="text-xs text-green-400 font-medium">${money(v.total_damages_min||v.totalDamagesMin)} &ndash; ${money(v.total_damages_max||v.totalDamagesMax)}</div></div></div></div></summary>
       <div class="mt-2 ml-4 space-y-2 text-sm fade-in">
         <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-blue-400 mb-1">STATUTE</div><div class="text-xs text-gray-300">${v.statute_text||v.statuteText||''}</div></div>
         <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-red-400 mb-1">EVIDENCE</div><div class="text-xs text-gray-300">${v.evidence||''}</div></div>
@@ -327,7 +751,7 @@
           <div>Punitive: ${money(v.punitive_damages_est||v.punitiveDamagesEst)}</div>
           <div>Attorney Fees: ${money(v.attorney_fees_est||v.attorneyFeesEst)}</div>
         </div><div class="mt-1 text-xs font-medium text-green-400">Defendant: ${v.defendant_type||v.defendantType||''} &mdash; ${v.defendant_name||v.defendantName||''}</div></div>
-      </div></details>`).join('')}</div>`;
+      </div></details>`;}).join('')}</div>`;
   }
 
   function renderDocsList(docs) {
@@ -1124,6 +1548,13 @@
           return;
         }
 
+        if (actualEndpoint === '/reports/upload' || actualEndpoint === '/reports/import-mfsn' || actualEndpoint === '/reports/import-smartcredit') {
+          toast(`COMPLETE: ${result.violationsFound} violations found! Opening Dispute Cockpit Workspace...`, 'success');
+          await sleep(1500);
+          window._nav('report-detail', { reportId: result.reportId, clientId: data.clientId });
+          return;
+        }
+
         renderFullResults(resEl, result, data);
         toast(`COMPLETE: ${result.violationsFound} violations found! Litigation score: ${result.litigationScore.score}/100`, result.violationsFound > 0 ? 'warning' : 'success');
       } catch(err) {
@@ -1502,31 +1933,1049 @@ Status: Discharged`;
   // REPORT DETAIL
   // ═══════════════════════════════════════════════════════════════
   async function pgReportDetail(el, data) {
-    el.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-center"><i class="fas fa-spinner fa-spin text-3xl text-blue-400 mb-3"></i><div class="text-sm text-gray-400">Loading report...</div></div></div>`;
+    el.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-center"><i class="fas fa-spinner fa-spin text-3xl text-blue-400 mb-3"></i><div class="text-sm text-gray-400">Loading report detail workspace...</div></div></div>`;
     try {
       const res = await api(`/reports/${data.reportId}`);
       const r = res.report;
       const ls = res.litigationScore;
-      el.innerHTML = `<div class="fade-in">
-        <button onclick="window._nav('reports')" class="text-gray-400 hover:text-white text-sm mb-4 inline-flex items-center gap-1.5 transition"><i class="fas fa-arrow-left text-xs"></i>Back</button>
-        <div class="flex items-start justify-between mb-6"><div><h1 class="text-xl font-bold text-white">${r.bureau} Report</h1><div class="text-sm text-gray-400">${r.file_name} &bull; ${shortDate(r.created_at)}</div></div>
-          <div class="flex gap-2">
-            <button onclick="window._exportPDF('${r.id}')" class="bg-blue-600/20 border border-blue-500/30 text-blue-300 px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-file-pdf mr-1"></i>Download PDF</button>
-            <button onclick="window._exportViolations('','${r.id}')" class="bg-green-600/20 border border-green-500/30 text-green-300 px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-download mr-1"></i>Export</button>
-            <span class="px-3 py-1 rounded-lg text-xs font-medium ${r.status==='analyzed'?'bg-green-900/30 text-green-400':'bg-yellow-900/30 text-yellow-400'}">${r.status}</span>
+      
+      // Parallel fetch the client details for high-fidelity demographic discrepancy tagging
+      const clientRes = await api(`/clients/${r.client_id}`).catch(() => null);
+      const client = clientRes?.client || {};
+      
+      const parsed = r.parsed_data ? JSON.parse(r.parsed_data) : {};
+      
+      // Expose Active Globals for HUD, compiler, and bidirectional navigation
+      window._activeWorkspaceReport = r;
+      window._activeWorkspaceClient = client;
+      window._activeWorkspaceViolations = res.violations;
+      window._activeWorkspaceParsed = parsed;
+
+      const personalInfo = parsed.personalInfo || { names: [], addresses: [], employers: [], ssns: [], dobs: [] };
+      
+      // Compute demographic checks
+      const clientFullName = `${client.first_name || ''} ${client.last_name || ''}`.trim();
+      const namesArr = Array.isArray(personalInfo.names) ? personalInfo.names : [];
+      const nameMatches = namesArr.some(n => {
+        if (typeof n !== 'string') return false;
+        const cleanN = n.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const cleanC = clientFullName.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return cleanN.includes(cleanC) || cleanC.includes(cleanN);
+      }) || namesArr.length === 0; // if empty, no discrepancy to raise
+      
+      const clientSSN = (client.ssn_last4 || '').trim();
+      const ssnsArr = Array.isArray(personalInfo.ssns) ? personalInfo.ssns : [];
+      const ssnMatches = !clientSSN || ssnsArr.some(s => {
+        if (typeof s !== 'string') return false;
+        const cleanS = s.replace(/[^0-9]/g, '');
+        return cleanS.endsWith(clientSSN) || clientSSN.endsWith(cleanS);
+      }) || ssnsArr.length === 0;
+
+      const clientDOB = client.dob || '';
+      let dobMatches = true;
+      const dobsArr = Array.isArray(personalInfo.dobs) ? personalInfo.dobs : [];
+      if (clientDOB && dobsArr.length > 0) {
+        const yearC = clientDOB.split('-')[0]; // assuming YYYY-MM-DD
+        dobMatches = dobsArr.some(d => {
+          if (typeof d !== 'string') return false;
+          const yearD = d.split('/').pop() || d.split('-')[0];
+          return yearC === yearD;
+        });
+      }
+
+      const clientZip = (client.zip || '').trim();
+      const addrsArr = Array.isArray(personalInfo.addresses) ? personalInfo.addresses : [];
+      const zipMatches = !clientZip || addrsArr.some(a => {
+        if (typeof a !== 'string') return false;
+        return a.includes(clientZip);
+      }) || addrsArr.length === 0;
+
+      // Render outer workspace container
+      el.innerHTML = `<div class="fade-in max-w-full">
+        <!-- Back Navigation & Export Controls Header -->
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+          <div>
+            <button onclick="window._nav('client-detail', {clientId: '${r.client_id}'})" class="text-gray-400 hover:text-white text-sm mb-2 inline-flex items-center gap-1.5 transition">
+              <i class="fas fa-arrow-left text-xs"></i>Back to Client Workspace
+            </button>
+            <h1 class="text-xl font-bold text-white flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse"></span>
+              ${r.bureau} Report Detail Workspace
+            </h1>
+            <div class="text-xs text-gray-400 font-mono mt-1">${r.file_name} &bull; ${shortDate(r.created_at)}</div>
+          </div>
+          
+          <div class="flex items-center gap-2">
+            <button onclick="window._exportPDF('${r.id}')" class="bg-blue-600/20 border border-blue-500/30 text-blue-300 px-3.5 py-2 rounded-lg text-xs font-semibold hover:bg-blue-600/30 transition flex items-center gap-1.5">
+              <i class="fas fa-file-pdf"></i>Download PDF
+            </button>
+            <button onclick="window._exportViolations('','${r.id}')" class="bg-green-600/20 border border-green-500/30 text-green-300 px-3.5 py-2 rounded-lg text-xs font-semibold hover:bg-green-600/30 transition flex items-center gap-1.5">
+              <i class="fas fa-download"></i>Export Claims
+            </button>
+            <span class="px-3 py-1 bg-green-950/40 border border-green-500/20 text-green-400 text-xs font-semibold rounded-lg">
+              ${r.status}
+            </span>
           </div>
         </div>
-        <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
-          <div class="glass rounded-lg p-3 text-center"><div class="text-lg font-bold text-white">${r.total_accounts||0}</div><div class="text-xs text-gray-400">Accounts</div></div>
-          <div class="glass rounded-lg p-3 text-center"><div class="text-lg font-bold text-white">${r.total_collections||0}</div><div class="text-xs text-gray-400">Collections</div></div>
-          <div class="glass rounded-lg p-3 text-center"><div class="text-lg font-bold text-white">${r.total_inquiries||0}</div><div class="text-xs text-gray-400">Inquiries</div></div>
-          <div class="glass rounded-lg p-3 text-center"><div class="text-lg font-bold text-red-400">${(res.violations||[]).length}</div><div class="text-xs text-gray-400">Violations</div></div>
-          <div class="glass rounded-lg p-3 text-center"><div class="text-lg font-bold text-${ls.score>=60?'green':ls.score>=40?'yellow':'gray'}-400">${ls.score}/100</div><div class="text-xs text-gray-400">Score (${ls.grade})</div></div>
+
+        <!-- Metric Cards Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+          <div class="glass rounded-xl p-3 text-center border border-gray-800">
+            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Regular Accounts</div>
+            <div class="text-xl font-extrabold text-white mt-1">${r.total_accounts || 0}</div>
+          </div>
+          <div class="glass rounded-xl p-3 text-center border border-gray-800">
+            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Collections</div>
+            <div class="text-xl font-extrabold text-white mt-1">${r.total_collections || 0}</div>
+          </div>
+          <div class="glass rounded-xl p-3 text-center border border-gray-800">
+            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Hard Inquiries</div>
+            <div class="text-xl font-extrabold text-white mt-1">${r.total_inquiries || 0}</div>
+          </div>
+          <div class="glass rounded-xl p-3 text-center border border-red-950 bg-red-950/5">
+            <div class="text-xs text-red-400/80 font-semibold uppercase tracking-wider">Violations</div>
+            <div class="text-xl font-extrabold text-red-400 mt-1">${(res.violations || []).length}</div>
+          </div>
+          <div class="glass rounded-xl p-3 text-center border border-gray-800">
+            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Litigation Score</div>
+            <div class="text-xl font-extrabold text-white mt-1">${ls.score}/100</div>
+          </div>
         </div>
-        ${(res.violations||[]).length?`<div class="glass rounded-xl p-5 mb-6"><h3 class="text-sm font-bold text-white mb-2">${ls.recommendation}</h3><div class="text-xs text-gray-400">Total: ${money(ls.totalDamagesMin)} &ndash; ${money(ls.totalDamagesMax)}</div></div>${renderViolationsList(res.violations)}`:'<div class="glass rounded-xl p-8 text-center text-gray-500">No violations in this report</div>'}
+
+        <!-- RJ Dispute Campaign HUD Container -->
+        <div id="dispute-campaign-hud-container" class="mb-6"></div>
+
+        <!-- Split-Screen Grid Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          <!-- LEFT COLUMN: Dynamic Interactive Panel (lg:col-span-7) -->
+          <div class="lg:col-span-7 flex flex-col space-y-4">
+            
+            <!-- tab navigation container -->
+            <div class="flex border border-gray-800/80 bg-gray-950/40 p-1 rounded-xl mb-1 flex-wrap">
+              ${[
+                { id: 'demographics', label: 'Demographics', icon: 'fa-id-card' },
+                { id: 'accounts', label: 'Accounts', count: (parsed.accounts || []).length, icon: 'fa-credit-card' },
+                { id: 'collections', label: 'Collections', count: (parsed.collections || []).length, icon: 'fa-hand-holding-usd' },
+                { id: 'inquiries', label: 'Inquiries & Records', count: ((parsed.inquiries || []).length + (parsed.publicRecords || []).length), icon: 'fa-history' },
+                { id: 'violations', label: 'Violations', count: (res.violations || []).length, icon: 'fa-exclamation-triangle', color: 'red' },
+                { id: 'dispute-builder', label: 'Dispute Builder', count: (state.selectedDisputeItems[r.id] || []).length, icon: 'fa-file-signature', badgeId: 'dispute-builder-badge-count' }
+              ].map((tab, idx) => `
+                <button class="report-workspace-tab flex-1 min-w-[120px] flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold rounded-lg transition-all ${idx === 0 ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/10' : 'text-gray-400 hover:text-white hover:bg-gray-800/40'}" data-tab="${tab.id}">
+                  <i class="fas ${tab.icon} text-[10px] ${tab.id === 'violations' ? 'text-red-400' : 'text-blue-400'}"></i>
+                  <span>${tab.label}</span>
+                  ${tab.count !== undefined ? `<span id="${tab.badgeId || ''}" class="px-1.5 py-0.2 bg-gray-800 text-[10px] text-gray-400 rounded-full font-bold ml-1">${tab.count}</span>` : ''}
+                </button>
+              `).join('')}
+            </div>
+
+            <!-- Content Area -->
+            <div id="report-workspace-tab-content" class="space-y-4 max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
+              <!-- Content gets dynamically populated by the active tab below -->
+            </div>
+          </div>
+
+          <!-- RIGHT COLUMN: Raw Text Monospace Inspector (lg:col-span-5) -->
+          <div class="lg:col-span-5 flex flex-col h-[calc(100vh-220px)] sticky top-[80px] border border-gray-800/80 rounded-2xl bg-gray-950/40 p-4 shadow-xl backdrop-blur-md">
+            <div class="flex items-center justify-between mb-3 pb-2 border-b border-gray-800">
+              <div class="flex items-center gap-2">
+                <i class="fas fa-terminal text-blue-400 text-xs"></i>
+                <span class="text-sm font-bold text-white">Raw Monospace Text Inspector</span>
+              </div>
+              <span class="px-2 py-0.5 bg-gray-800 text-[10px] text-gray-400 font-mono font-bold rounded uppercase tracking-wider">${r.bureau} Report</span>
+            </div>
+            
+            <!-- Search Engine Panel -->
+            <div class="glass border border-gray-800/60 rounded-xl p-2 mb-3 flex items-center gap-2 bg-gray-900/40">
+              <div class="relative flex-1">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs"></i>
+                <input type="text" id="raw-search-input" placeholder="Search raw report text..." class="w-full bg-gray-950 border border-gray-800 rounded-lg pl-8 pr-16 py-2 text-xs text-white outline-none focus:border-blue-500/50 transition font-mono">
+                <div id="raw-search-stats" class="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 font-bold bg-gray-800 px-1.5 py-0.5 rounded">0 of 0</div>
+              </div>
+              <button id="raw-search-prev" class="bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white p-2 rounded-lg text-xs transition"><i class="fas fa-chevron-up"></i></button>
+              <button id="raw-search-next" class="bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white p-2 rounded-lg text-xs transition"><i class="fas fa-chevron-down"></i></button>
+            </div>
+            
+            <!-- Raw Text Panel with local overflow -->
+            <div class="flex-1 overflow-auto rounded-xl bg-gray-950 border border-gray-900 p-4 font-mono text-[11px] leading-relaxed text-gray-400 whitespace-pre-wrap select-text selection:bg-blue-500/30 selection:text-white" id="raw-text-container" data-original-text="${escapeHtml(r.raw_text || '')}">
+              ${escapeHtml(r.raw_text || '')}
+            </div>
+          </div>
+          
+        </div>
       </div>`;
+
+      // Helper function to escape HTML inside javascript
+      function escapeHtml(text) {
+        if (!text) return '';
+        return text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      // Dynamic Tab switching logic
+      const renderDemographicsTab = () => {
+        return `<div class="space-y-4 fade-in">
+          <div class="p-4 bg-blue-950/10 border border-blue-500/20 rounded-xl text-xs text-blue-300 leading-relaxed flex items-start gap-2.5">
+            <i class="fas fa-info-circle text-blue-400 text-sm mt-0.5"></i>
+            <div>
+              <strong>FCRA § 1681e(b) Verification Audit:</strong> Credit bureaus must maintain maximum possible accuracy. Discrepancies below between the database-registered profile and the bureau's parsed report represent actionable litigation targets.
+            </div>
+          </div>
+
+          <!-- Name Discrepancy Card -->
+          <div onclick="window._highlightAndScrollToText('${(personalInfo.names && personalInfo.names[0] || '').replace(/'/g, "\\'")}')" class="glass rounded-xl p-4 border border-gray-800 hover:border-blue-500/30 transition cursor-pointer">
+            <div class="flex items-center justify-between mb-3 border-b border-gray-800/60 pb-2">
+              <div class="flex items-center gap-2">
+                <input type="checkbox" onclick="window._toggleDisputeItem(event, '${r.id}', 'demo-name')" ${window._isItemPinned(r.id, 'demo-name') ? 'checked' : ''} class="w-3.5 h-3.5 rounded border-gray-800 text-blue-600 bg-gray-900 focus:ring-blue-500">
+                <i class="fas fa-user text-blue-400"></i>
+                <span class="text-xs font-bold text-white uppercase tracking-wider">Full Name Check</span>
+              </div>
+              ${nameMatches ? 
+                `<span class="px-2 py-0.5 bg-green-950/40 border border-green-500/20 text-green-400 text-[10px] font-bold rounded flex items-center gap-1"><i class="fas fa-check-circle text-[9px]"></i> Verified</span>` : 
+                `<span class="px-2 py-0.5 bg-yellow-950/40 border border-yellow-500/20 text-yellow-400 text-[10px] font-bold rounded flex items-center gap-1 animate-pulse"><i class="fas fa-exclamation-triangle text-[9px]"></i> Discrepancy Found</span>`
+              }
+            </div>
+            <div class="grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <div class="text-gray-500 font-semibold mb-0.5 uppercase tracking-wider text-[10px]">Client Profile</div>
+                <div class="text-white font-semibold">${clientFullName || 'N/A'}</div>
+              </div>
+              <div>
+                <div class="text-gray-500 font-semibold mb-0.5 uppercase tracking-wider text-[10px]">Report Text</div>
+                <div class="text-white font-semibold">${(personalInfo.names || []).join(', ') || '<span class="text-gray-600 italic">Not Found</span>'}</div>
+              </div>
+            </div>
+            ${!nameMatches ? `
+              <div class="mt-3 p-2.5 bg-red-950/20 border border-red-500/20 rounded text-[11px] text-red-300 flex items-start gap-2">
+                <i class="fas fa-gavel text-xs mt-0.5 text-red-400"></i>
+                <div>
+                  <span class="font-bold text-white">Mixed File Risk:</span> Full name discrepancy detected in raw report. This violates FCRA § 1681e(b) accuracy standards. Est. damages: $1,000 + punitive fees.
+                </div>
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- SSN Discrepancy Card -->
+          <div onclick="window._highlightAndScrollToText('${(personalInfo.ssns && personalInfo.ssns[0] || '').replace(/'/g, "\\'")}')" class="glass rounded-xl p-4 border border-gray-800 hover:border-blue-500/30 transition cursor-pointer">
+            <div class="flex items-center justify-between mb-3 border-b border-gray-800/60 pb-2">
+              <div class="flex items-center gap-2">
+                <input type="checkbox" onclick="window._toggleDisputeItem(event, '${r.id}', 'demo-ssn')" ${window._isItemPinned(r.id, 'demo-ssn') ? 'checked' : ''} class="w-3.5 h-3.5 rounded border-gray-800 text-blue-600 bg-gray-900 focus:ring-blue-500">
+                <i class="fas fa-id-card text-blue-400"></i>
+                <span class="text-xs font-bold text-white uppercase tracking-wider">Social Security Number</span>
+              </div>
+              ${ssnMatches ? 
+                `<span class="px-2 py-0.5 bg-green-950/40 border border-green-500/20 text-green-400 text-[10px] font-bold rounded flex items-center gap-1"><i class="fas fa-check-circle text-[9px]"></i> Verified</span>` : 
+                `<span class="px-2 py-0.5 bg-yellow-950/40 border border-yellow-500/20 text-yellow-400 text-[10px] font-bold rounded flex items-center gap-1 animate-pulse"><i class="fas fa-exclamation-triangle text-[9px]"></i> Discrepancy Found</span>`
+              }
+            </div>
+            <div class="grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <div class="text-gray-500 font-semibold mb-0.5 uppercase tracking-wider text-[10px]">Client SSN Last 4</div>
+                <div class="text-white font-mono font-semibold">${clientSSN || 'N/A'}</div>
+              </div>
+              <div>
+                <div class="text-gray-500 font-semibold mb-0.5 uppercase tracking-wider text-[10px]">Report SSN</div>
+                <div class="text-white font-mono font-semibold">${(personalInfo.ssns || []).join(', ') || '<span class="text-gray-600 italic">Not Found</span>'}</div>
+              </div>
+            </div>
+            ${!ssnMatches ? `
+              <div class="mt-3 p-2.5 bg-red-950/20 border border-red-500/20 rounded text-[11px] text-red-300 flex items-start gap-2">
+                <i class="fas fa-gavel text-xs mt-0.5 text-red-400"></i>
+                <div>
+                  <span class="font-bold text-white">Identity Theft / File Inaccuracy:</span> SSN mismatched or unparsed. Extreme danger of consumer record cross-contamination. Statutory claims apply.
+                </div>
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- DOB Discrepancy Card -->
+          <div onclick="window._highlightAndScrollToText('${(personalInfo.dobs && personalInfo.dobs[0] || '').replace(/'/g, "\\'")}')" class="glass rounded-xl p-4 border border-gray-800 hover:border-blue-500/30 transition cursor-pointer">
+            <div class="flex items-center justify-between mb-3 border-b border-gray-800/60 pb-2">
+              <div class="flex items-center gap-2">
+                <input type="checkbox" onclick="window._toggleDisputeItem(event, '${r.id}', 'demo-dob')" ${window._isItemPinned(r.id, 'demo-dob') ? 'checked' : ''} class="w-3.5 h-3.5 rounded border-gray-800 text-blue-600 bg-gray-900 focus:ring-blue-500">
+                <i class="fas fa-calendar-alt text-blue-400"></i>
+                <span class="text-xs font-bold text-white uppercase tracking-wider">Date of Birth</span>
+              </div>
+              ${dobMatches ? 
+                `<span class="px-2 py-0.5 bg-green-950/40 border border-green-500/20 text-green-400 text-[10px] font-bold rounded flex items-center gap-1"><i class="fas fa-check-circle text-[9px]"></i> Verified</span>` : 
+                `<span class="px-2 py-0.5 bg-yellow-950/40 border border-yellow-500/20 text-yellow-400 text-[10px] font-bold rounded flex items-center gap-1 animate-pulse"><i class="fas fa-exclamation-triangle text-[9px]"></i> Discrepancy Found</span>`
+              }
+            </div>
+            <div class="grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <div class="text-gray-500 font-semibold mb-0.5 uppercase tracking-wider text-[10px]">Client DOB</div>
+                <div class="text-white font-semibold">${clientDOB || 'N/A'}</div>
+              </div>
+              <div>
+                <div class="text-gray-500 font-semibold mb-0.5 uppercase tracking-wider text-[10px]">Report DOB</div>
+                <div class="text-white font-semibold">${(personalInfo.dobs || []).join(', ') || '<span class="text-gray-600 italic">Not Found</span>'}</div>
+              </div>
+            </div>
+            ${!dobMatches ? `
+              <div class="mt-3 p-2.5 bg-red-950/20 border border-red-500/20 rounded text-[11px] text-red-300 flex items-start gap-2">
+                <i class="fas fa-gavel text-xs mt-0.5 text-red-400"></i>
+                <div>
+                  <span class="font-bold text-white">Date of Birth Inaccuracy:</span> Discrepancy found. High risk of age-based underwriting discrimination or file-mix errors.
+                </div>
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- Address Discrepancy Card -->
+          <div onclick="window._highlightAndScrollToText('${(personalInfo.addresses && personalInfo.addresses[0] || '').replace(/'/g, "\\'")}')" class="glass rounded-xl p-4 border border-gray-800 hover:border-blue-500/30 transition cursor-pointer">
+            <div class="flex items-center justify-between mb-3 border-b border-gray-800/60 pb-2">
+              <div class="flex items-center gap-2">
+                <input type="checkbox" onclick="window._toggleDisputeItem(event, '${r.id}', 'demo-address')" ${window._isItemPinned(r.id, 'demo-address') ? 'checked' : ''} class="w-3.5 h-3.5 rounded border-gray-800 text-blue-600 bg-gray-900 focus:ring-blue-500">
+                <i class="fas fa-map-marker-alt text-blue-400"></i>
+                <span class="text-xs font-bold text-white uppercase tracking-wider">Address Log</span>
+              </div>
+              ${zipMatches ? 
+                `<span class="px-2 py-0.5 bg-green-950/40 border border-green-500/20 text-green-400 text-[10px] font-bold rounded flex items-center gap-1"><i class="fas fa-check-circle text-[9px]"></i> Verified</span>` : 
+                `<span class="px-2 py-0.5 bg-yellow-950/40 border border-yellow-500/20 text-yellow-400 text-[10px] font-bold rounded flex items-center gap-1 animate-pulse"><i class="fas fa-exclamation-triangle text-[9px]"></i> Discrepancy Found</span>`
+              }
+            </div>
+            <div class="grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <div class="text-gray-500 font-semibold mb-0.5 uppercase tracking-wider text-[10px]">Client Address</div>
+                <div class="text-white">${client.address_line1 || ''}<br>${client.city || ''}, ${client.state || ''} ${client.zip || ''}</div>
+              </div>
+              <div>
+                <div class="text-gray-500 font-semibold mb-0.5 uppercase tracking-wider text-[10px]">Report Addresses</div>
+                <div class="text-white max-h-24 overflow-y-auto font-mono text-[11px] leading-tight">${(personalInfo.addresses || []).map(a => `&bull; ${a}`).join('<br>') || '<span class="text-gray-600 italic">None Found</span>'}</div>
+              </div>
+            </div>
+            ${!zipMatches ? `
+              <div class="mt-3 p-2.5 bg-red-950/20 border border-red-500/20 rounded text-[11px] text-red-300 flex items-start gap-2">
+                <i class="fas fa-gavel text-xs mt-0.5 text-red-400"></i>
+                <div>
+                  <span class="font-bold text-white">ZIP / Address Discrepancy:</span> Registered profile ZIP is missing from credit report address history. Outdated address histories often cause mixed file records.
+                </div>
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- Employer Card -->
+          <div class="glass rounded-xl p-4 border border-gray-800">
+            <div class="flex items-center justify-between mb-3 border-b border-gray-800/60 pb-2">
+              <div class="flex items-center gap-2">
+                <i class="fas fa-briefcase text-blue-400"></i>
+                <span class="text-xs font-bold text-white uppercase tracking-wider">Employment History</span>
+              </div>
+              <span class="text-[10px] font-mono text-gray-500">${(personalInfo.employers || []).length} Recorded</span>
+            </div>
+            <div class="text-xs text-white max-h-28 overflow-y-auto space-y-1.5 font-mono">
+              ${(personalInfo.employers || []).map(emp => `
+                <div onclick="window._highlightAndScrollToText('${emp.replace(/'/g, "\\'")}')" class="p-2 bg-gray-900/50 hover:bg-gray-800/40 rounded border border-gray-800 flex items-center justify-between cursor-pointer transition">
+                  <span>${emp}</span>
+                  <span class="text-[9px] text-blue-400 font-bold">Highlight <i class="fas fa-chevron-right text-[7px]"></i></span>
+                </div>
+              `).join('') || '<div class="text-gray-600 italic text-center py-2">No employer data parsed</div>'}
+            </div>
+          </div>
+        </div>`;
+      };
+
+      const renderAccountsTab = () => {
+        return `<div class="space-y-3 fade-in">
+          <div class="text-xs text-gray-400 mb-2 italic">Click any card below to automatically scroll and glow-highlight its occurrence in the Raw Text Inspector.</div>
+          ${(parsed.accounts || []).map((acc) => {
+            const accNo = acc.accountNumber || '';
+            const isDelinquent = acc.paymentStatus.toLowerCase().includes('past due') || acc.accountStatus.toLowerCase().includes('closed');
+            return `
+              <div onclick="window._syncAccountHighlight('${acc.creditorName.replace(/'/g, "\\'")}', '${accNo.replace(/'/g, "\\'")}')" class="glass rounded-xl p-4 border border-gray-800 hover:border-blue-500/40 transition-all cursor-pointer group relative">
+                <div class="flex items-start justify-between mb-2">
+                  <div class="flex items-start gap-3">
+                    <input type="checkbox" onclick="window._toggleDisputeItem(event, '${r.id}', 'acc-${accNo || acc.creditorName}')" ${window._isItemPinned(r.id, `acc-${accNo || acc.creditorName}`) ? 'checked' : ''} class="w-4 h-4 rounded border-gray-800 text-blue-600 bg-gray-900 focus:ring-blue-500 mt-1">
+                    <div>
+                      <div class="text-[10px] text-blue-400 font-bold tracking-wider uppercase">${acc.accountType || 'Revolving'}</div>
+                      <h4 class="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">${acc.creditorName}</h4>
+                      <div class="text-xs text-gray-500 font-mono">Account No: ${acc.accountNumber || 'N/A'}</div>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-[10px] text-gray-500 font-semibold uppercase">Current Balance</div>
+                    <div class="text-sm font-extrabold ${acc.currentBalance > 0 ? 'text-red-400' : 'text-green-400'}">${money(acc.currentBalance)}</div>
+                  </div>
+                </div>
+                <div class="grid grid-cols-3 gap-2 py-2 border-t border-b border-gray-800/60 my-2 text-[11px]">
+                  <div>
+                    <div class="text-gray-500">Status</div>
+                    <div class="text-gray-300 font-medium">${acc.accountStatus || 'Open'}</div>
+                  </div>
+                  <div>
+                    <div class="text-gray-500">Opened</div>
+                    <div class="text-gray-300 font-medium font-mono">${acc.dateOpened || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div class="text-gray-500">Payment Status</div>
+                    <div class="text-gray-300 font-semibold ${isDelinquent ? 'text-yellow-400' : 'text-green-400'}">${acc.paymentStatus || 'Current'}</div>
+                  </div>
+                </div>
+
+                <!-- Metro 2 Field Compliance Accordion Drawer -->
+                <details class="group/metro mt-3 border border-gray-800 bg-gray-950/20 rounded-lg overflow-hidden transition" onclick="event.stopPropagation()">
+                  <summary class="flex items-center justify-between p-2.5 text-xs text-gray-400 hover:text-white cursor-pointer select-none font-semibold">
+                    <span class="flex items-center gap-1.5"><i class="fas fa-microchip text-blue-500"></i> Metro 2® Field Compliance Accordion</span>
+                    <i class="fas fa-chevron-down text-[10px] group-open/metro:rotate-180 transition-transform"></i>
+                  </summary>
+                  <div class="p-3 border-t border-gray-800/80 bg-gray-950/45 text-[11px] space-y-2.5 leading-normal">
+                    <div class="grid grid-cols-2 gap-2">
+                      <div class="p-2 bg-gray-900/40 rounded border border-gray-800">
+                        <div class="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Field 17: Date of First Delinquency</div>
+                        <div class="text-white font-mono mt-0.5">${acc.dateOfFirstDelinquency || 'N/A'}</div>
+                        <div class="text-red-400 text-[9px] mt-1 flex items-center gap-1 font-semibold"><i class="fas fa-exclamation-triangle"></i> Inconsistency risk detected</div>
+                      </div>
+                      <div class="p-2 bg-gray-900/40 rounded border border-gray-800">
+                        <div class="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Field 18: Date Opened</div>
+                        <div class="text-white font-mono mt-0.5">${acc.dateOpened || 'N/A'}</div>
+                        <div class="text-green-400 text-[9px] mt-1 flex items-center gap-1 font-semibold"><i class="fas fa-check-circle"></i> Matches header opened date</div>
+                      </div>
+                      <div class="p-2 bg-gray-900/40 rounded border border-gray-800">
+                        <div class="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Field 21: Current Balance</div>
+                        <div class="text-white font-mono mt-0.5">${money(acc.currentBalance)}</div>
+                        <div class="text-yellow-400 text-[9px] mt-1 flex items-center gap-1 font-semibold"><i class="fas fa-info-circle"></i> Requires furnisher confirmation</div>
+                      </div>
+                      <div class="p-2 bg-gray-900/40 rounded border border-gray-800">
+                        <div class="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Field 25: Account Status / History</div>
+                        <div class="text-white font-mono mt-0.5">${acc.accountStatus || 'Open'}</div>
+                        <div class="text-red-400 text-[9px] mt-1 flex items-center gap-1 font-semibold"><i class="fas fa-exclamation-triangle"></i> Status mismatch check required</div>
+                      </div>
+                    </div>
+                    <div class="p-2 bg-blue-950/15 border border-blue-500/20 text-blue-300 rounded text-[10px]">
+                      <strong>System Directive:</strong> Standard Metro 2 layout constraints demand strict verification. Mismatch in Field 17 and Field 25 violates FCRA compliance guidelines.
+                    </div>
+                  </div>
+                </details>
+
+                <div class="flex items-center justify-between text-[10px] text-gray-500 pt-3 mt-1 border-t border-gray-800/40">
+                  <span class="italic">Linked highlights synced</span>
+                  <span class="text-blue-500 group-hover:translate-x-1 transition font-bold flex items-center gap-1">Jump to Raw <i class="fas fa-chevron-right text-[8px]"></i></span>
+                </div>
+              </div>`;
+          }).join('') || '<div class="text-center py-8 text-gray-500"><i class="fas fa-credit-card text-3xl mb-3"></i><p>No trade lines detected</p></div>'}
+        </div>`;
+      };
+
+      const renderCollectionsTab = () => {
+        return `<div class="space-y-3 fade-in">
+          <div class="text-xs text-gray-400 mb-2 italic">Click collection files to trace and locate validation inconsistencies in raw text.</div>
+          ${(parsed.collections || []).map((coll) => {
+            const collNo = coll.accountNumber || '';
+            return `
+              <div onclick="window._syncAccountHighlight('${coll.creditorName.replace(/'/g, "\\'")}', '${collNo.replace(/'/g, "\\'")}')" class="glass rounded-xl p-4 border border-gray-800 hover:border-red-500/40 transition-all cursor-pointer group relative">
+                <div class="flex items-start justify-between mb-2">
+                  <div class="flex items-start gap-3">
+                    <input type="checkbox" onclick="window._toggleDisputeItem(event, '${r.id}', 'coll-${collNo || coll.creditorName}')" ${window._isItemPinned(r.id, `coll-${collNo || coll.creditorName}`) ? 'checked' : ''} class="w-4 h-4 rounded border-gray-800 text-red-600 bg-gray-900 focus:ring-red-500 mt-1">
+                    <div>
+                      <div class="text-[10px] text-red-400 font-bold tracking-wider uppercase">Debt Collector</div>
+                      <h4 class="text-sm font-bold text-white group-hover:text-red-400 transition-colors">${coll.creditorName}</h4>
+                      <div class="text-xs text-gray-500 font-mono">Agency ID: ${coll.accountNumber || 'N/A'}</div>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-[10px] text-gray-500 font-semibold uppercase">Amount Owed</div>
+                    <div class="text-sm font-extrabold text-red-400">${money(coll.currentBalance)}</div>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 py-2 border-t border-b border-gray-800/60 my-2 text-[11px]">
+                  <div>
+                    <div class="text-gray-500">Original Creditor</div>
+                    <div class="text-gray-300 font-semibold text-white">${coll.originalCreditor || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div class="text-gray-500">Placement Date</div>
+                    <div class="text-gray-300 font-medium font-mono">${coll.dateOpened || 'N/A'}</div>
+                  </div>
+                </div>
+
+                <!-- Metro 2 Field Compliance Accordion Drawer -->
+                <details class="group/metro mt-3 border border-gray-800 bg-gray-950/20 rounded-lg overflow-hidden transition" onclick="event.stopPropagation()">
+                  <summary class="flex items-center justify-between p-2.5 text-xs text-gray-400 hover:text-white cursor-pointer select-none font-semibold">
+                    <span class="flex items-center gap-1.5"><i class="fas fa-microchip text-red-500"></i> Metro 2® Field Compliance Accordion</span>
+                    <i class="fas fa-chevron-down text-[10px] group-open/metro:rotate-180 transition-transform"></i>
+                  </summary>
+                  <div class="p-3 border-t border-gray-800/80 bg-gray-950/45 text-[11px] space-y-2.5 leading-normal">
+                    <div class="grid grid-cols-2 gap-2">
+                      <div class="p-2 bg-gray-900/40 rounded border border-gray-800">
+                        <div class="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Field 17: Date of First Delinquency</div>
+                        <div class="text-white font-mono mt-0.5">${coll.dateOfFirstDelinquency || 'N/A'}</div>
+                        <div class="text-red-400 text-[9px] mt-1 flex items-center gap-1 font-semibold"><i class="fas fa-exclamation-triangle"></i> Inconsistency risk detected</div>
+                      </div>
+                      <div class="p-2 bg-gray-900/40 rounded border border-gray-800">
+                        <div class="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Field 18: Date Opened</div>
+                        <div class="text-white font-mono mt-0.5">${coll.dateOpened || 'N/A'}</div>
+                        <div class="text-green-400 text-[9px] mt-1 flex items-center gap-1 font-semibold"><i class="fas fa-check-circle"></i> Matches placement date</div>
+                      </div>
+                      <div class="p-2 bg-gray-900/40 rounded border border-gray-800">
+                        <div class="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Field 21: Current Balance</div>
+                        <div class="text-white font-mono mt-0.5">${money(coll.currentBalance)}</div>
+                        <div class="text-red-400 text-[9px] mt-1 flex items-center gap-1 font-semibold"><i class="fas fa-exclamation-triangle"></i> Active collection balance violation</div>
+                      </div>
+                      <div class="p-2 bg-gray-900/40 rounded border border-gray-800">
+                        <div class="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Field 25: Account Status / History</div>
+                        <div class="text-white font-mono mt-0.5">${coll.accountStatus || 'Collection'}</div>
+                        <div class="text-yellow-400 text-[9px] mt-1 flex items-center gap-1 font-semibold"><i class="fas fa-info-circle"></i> Mapped as Collection file</div>
+                      </div>
+                    </div>
+                    <div class="p-2 bg-red-950/15 border border-red-500/20 text-red-300 rounded text-[10px]">
+                      <strong>System Directive:</strong> Collection accounts must align with original creditor trade lines. Non-zero collection balances require high-tier validation under FDCPA & FCRA.
+                    </div>
+                  </div>
+                </details>
+
+                <div class="flex items-center justify-between text-[10px] text-gray-500 pt-3 mt-1 border-t border-gray-800/40">
+                  <span class="italic">Collector active synchronization active</span>
+                  <span class="text-red-500 group-hover:translate-x-1 transition font-bold flex items-center gap-1">Jump to Raw <i class="fas fa-chevron-right text-[8px]"></i></span>
+                </div>
+              </div>`;
+          }).join('') || '<div class="text-center py-8 text-gray-500"><i class="fas fa-hand-holding-usd text-3xl mb-3"></i><p>No collection agencies reported</p></div>'}
+        </div>`;
+      };
+
+      const renderInquiriesTab = () => {
+        const inqList = (parsed.inquiries || []).map((inq, idx) => `
+          <div onclick="window._highlightAndScrollToText('${inq.creditorName.replace(/'/g, "\\'")}')" class="glass rounded-xl p-3 border border-gray-800 hover:border-blue-500/30 transition-all cursor-pointer flex items-center justify-between text-xs group">
+            <div class="flex items-center gap-3">
+              <input type="checkbox" onclick="window._toggleDisputeItem(event, '${r.id}', 'inq-${inq.creditorName}-${idx}')" ${window._isItemPinned(r.id, `inq-${inq.creditorName}-${idx}`) ? 'checked' : ''} class="w-3.5 h-3.5 rounded border-gray-800 text-blue-600 bg-gray-900 focus:ring-blue-500">
+              <div>
+                <div class="font-bold text-white group-hover:text-blue-400 transition-colors">${inq.creditorName}</div>
+                <div class="text-[10px] text-gray-500">${inq.inquiryType || 'Credit Inquest'}</div>
+              </div>
+            </div>
+            <div class="text-right flex items-center gap-3">
+              <span class="text-gray-400 font-semibold font-mono">${inq.inquiryDate}</span>
+              <span class="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity font-bold text-[10px]">Jump <i class="fas fa-chevron-right text-[7px]"></i></span>
+            </div>
+          </div>
+        `).join('');
+
+        const recList = (parsed.publicRecords || []).map((rec) => `
+          <div onclick="window._highlightAndScrollToText('${rec.recordType.replace(/'/g, "\\'")}')" class="glass rounded-xl p-4 border border-gray-800 hover:border-purple-500/30 transition-all cursor-pointer group">
+            <div class="flex items-start justify-between mb-2">
+              <div>
+                <div class="text-[10px] text-purple-400 font-bold tracking-wider uppercase">Public Record Filings</div>
+                <h4 class="text-sm font-bold text-white">${rec.recordType}</h4>
+                <div class="text-xs text-gray-500 font-mono">Filing Date: ${rec.filingDate}</div>
+              </div>
+              <div class="text-right">
+                <div class="text-[10px] text-gray-500 font-semibold uppercase">Disposition</div>
+                <div class="text-xs font-bold text-purple-300">${rec.status || 'Active'}</div>
+              </div>
+            </div>
+            ${rec.court ? `<div class="text-xs text-gray-400 mt-1"><span class="text-gray-600">Jurisdiction:</span> ${rec.court}</div>` : ''}
+            <div class="text-[10px] text-purple-400 font-bold flex items-center gap-1 justify-end mt-2 opacity-0 group-hover:opacity-100 transition-opacity">Jump to Raw Record <i class="fas fa-chevron-right text-[7px]"></i></div>
+          </div>
+        `).join('');
+
+        return `<div class="space-y-6 fade-in">
+          <div>
+            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2"><i class="fas fa-gavel text-purple-400"></i> Public Records (${(parsed.publicRecords || []).length})</h3>
+            <div class="space-y-2">${recList || '<div class="text-center py-4 text-xs text-gray-600">No public court filings detected</div>'}</div>
+          </div>
+          <div>
+            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2"><i class="fas fa-search text-blue-400"></i> Hard Inquiries (${(parsed.inquiries || []).length})</h3>
+            <div class="space-y-2">${inqList || '<div class="text-center py-4 text-xs text-gray-600">No recent hard inquiries found</div>'}</div>
+          </div>
+        </div>`;
+      };
+
+      const renderViolationsTab = () => {
+        return `<div class="space-y-4 fade-in">
+          <!-- Litigation Interactive Damage Dashboard -->
+          <div class="glass rounded-xl p-5 border border-red-500/20 bg-red-950/5 mb-2">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <h4 class="text-sm font-bold text-white mb-0.5"><i class="fas fa-gavel text-red-400 mr-1.5"></i>Actionable Claims Evaluator</h4>
+                <p class="text-xs text-gray-400">Statutory and punitive damages tracker</p>
+              </div>
+              <span class="px-2.5 py-1 bg-red-950 border border-red-500/30 text-red-400 rounded-lg text-xs font-bold font-mono">${ls.grade} Rating</span>
+            </div>
+            <div class="grid grid-cols-2 gap-4 my-4">
+              <div class="p-3 bg-gray-900/50 border border-gray-800/80 rounded-lg text-center">
+                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Est. Minimum Recovery</div>
+                <div class="text-lg font-extrabold text-green-400 mt-1 est-damages-min-display font-mono">${money(ls.totalDamagesMin)}</div>
+              </div>
+              <div class="p-3 bg-gray-900/50 border border-gray-800/80 rounded-lg text-center">
+                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Est. Maximum Recovery</div>
+                <div class="text-lg font-extrabold text-green-400 mt-1 est-damages-max-display font-mono">${money(ls.totalDamagesMax)}</div>
+              </div>
+            </div>
+            <div class="space-y-3 pt-3 border-t border-gray-800/60 text-xs">
+              <div>
+                <div class="flex justify-between text-gray-400 mb-1">
+                  <span>Intentional Inaccuracy Multiplier</span>
+                  <span id="multiplier-val" class="font-bold text-blue-400 font-mono">1.0x</span>
+                </div>
+                <input type="range" id="damage-multiplier" min="0.5" max="3.0" step="0.1" value="1.0" class="w-full h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-blue-500">
+              </div>
+              <div class="p-2.5 bg-blue-950/20 border border-blue-500/20 rounded text-[11px] text-blue-300 leading-normal">
+                <strong>Litigation Strategy:</strong> Discrepancies represent actionable claims under FCRA § 1681n for willful violations. Real-time damage calculations dynamically adjust for trial.
+              </div>
+            </div>
+          </div>
+          
+          <div class="space-y-2">${renderViolationsList(res.violations)}</div>
+        </div>`;
+      };
+
+      const renderDisputeBuilderTab = () => {
+        const campaignStatus = state.disputeStatus[r.id] || { step: 'pinning', savedDocId: null, isSent: false };
+        const pinnedIds = state.selectedDisputeItems[r.id] || [];
+        return `<div class="space-y-4 fade-in">
+          <div class="p-4 bg-blue-950/10 border border-blue-500/20 rounded-xl text-xs text-blue-300 leading-relaxed flex items-start gap-2.5">
+            <i class="fas fa-file-signature text-blue-400 text-sm mt-0.5"></i>
+            <div>
+              <strong>Premium Dispute Builder:</strong> Compile and edit Gary A. Branch style § 1681i reinvestigation dispute letters. Customize demographics and download certified-mail ready PDFs.
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+            <!-- Sidebar Controls -->
+            <div class="md:col-span-4 space-y-4">
+              <div class="glass border border-gray-800 rounded-xl p-4 bg-gray-900/20 space-y-3">
+                <h4 class="text-xs font-bold text-white uppercase tracking-wider border-b border-gray-800 pb-1.5 flex items-center gap-1.5">
+                  <i class="fas fa-sliders-h text-blue-400"></i> Builder Controls
+                </h4>
+                
+                <div>
+                  <label class="block text-[10px] text-gray-400 font-bold uppercase mb-1">Target Bureau</label>
+                  <select id="builder-bureau-select" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs text-white outline-none focus:border-blue-500/50 transition">
+                    <option value="Equifax" ${r.bureau === 'Equifax' ? 'selected' : ''}>Equifax</option>
+                    <option value="Experian" ${r.bureau === 'Experian' ? 'selected' : ''}>Experian</option>
+                    <option value="TransUnion" ${r.bureau === 'TransUnion' ? 'selected' : ''}>TransUnion</option>
+                  </select>
+                </div>
+
+                <div class="space-y-2 pt-2">
+                  <label class="block text-[10px] text-gray-400 font-bold uppercase">Include Demographics</label>
+                  <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer select-none">
+                    <input type="checkbox" id="builder-toggle-name" checked class="w-3.5 h-3.5 rounded border-gray-800 text-blue-600 bg-gray-900 focus:ring-blue-500">
+                    <span>Full Name Check</span>
+                  </label>
+                  <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer select-none">
+                    <input type="checkbox" id="builder-toggle-ssn" checked class="w-3.5 h-3.5 rounded border-gray-800 text-blue-600 bg-gray-900 focus:ring-blue-500">
+                    <span>SSN Last 4</span>
+                  </label>
+                  <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer select-none">
+                    <input type="checkbox" id="builder-toggle-dob" checked class="w-3.5 h-3.5 rounded border-gray-800 text-blue-600 bg-gray-900 focus:ring-blue-500">
+                    <span>Date of Birth</span>
+                  </label>
+                  <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer select-none">
+                    <input type="checkbox" id="builder-toggle-address" checked class="w-3.5 h-3.5 rounded border-gray-800 text-blue-600 bg-gray-900 focus:ring-blue-500">
+                    <span>Current Address</span>
+                  </label>
+                </div>
+
+                <div class="pt-2 border-t border-gray-800 text-[10px] text-gray-500">
+                  <span class="font-bold text-gray-400">Campaign Stats:</span>
+                  <div class="flex justify-between mt-1">
+                    <span>Pinned trade lines:</span>
+                    <span class="font-bold text-white font-mono">${pinnedIds.length}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Action Controls Pane -->
+              <div class="glass border border-gray-800 rounded-xl p-4 bg-gray-900/20 space-y-2.5">
+                <h4 class="text-xs font-bold text-white uppercase tracking-wider border-b border-gray-800 pb-1.5 flex items-center gap-1.5">
+                  <i class="fas fa-rocket text-blue-400"></i> Action controls
+                </h4>
+                
+                <button id="builder-btn-save-draft" class="w-full bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-lg shadow-blue-600/10">
+                  <i class="fas fa-save"></i> Save Dispute Draft
+                </button>
+                
+                <button id="builder-btn-download-pdf" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white p-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/10">
+                  <i class="fas fa-file-pdf"></i> Download Printable PDF
+                </button>
+                
+                <div class="p-2 bg-gray-950/40 rounded border border-gray-900 text-[10px] text-gray-500 leading-tight">
+                  Dispute draft updates the local status and synchronizes resolution percentage securely in database.
+                </div>
+              </div>
+            </div>
+
+            <!-- Letter Text Area -->
+            <div class="md:col-span-8 flex flex-col h-[520px]">
+              <div class="flex-1 border border-gray-800 rounded-xl overflow-hidden bg-gray-950/40 flex flex-col">
+                <div class="flex items-center justify-between px-3 py-2 bg-gray-900/60 border-b border-gray-800">
+                  <span class="text-xs font-bold text-white uppercase tracking-wider font-mono">1681i-letter-draft.txt</span>
+                  <span class="text-[10px] text-gray-500 italic">Editable Live Workspace</span>
+                </div>
+                <textarea id="builder-letter-textarea" class="w-full flex-1 bg-gray-950 text-gray-300 p-4 font-mono text-[11px] leading-relaxed resize-none outline-none focus:text-white border-0 select-text" spellcheck="false" placeholder="Generating dispute letter draft..."></textarea>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      };
+
+      // Set initial tab content
+      const tabContentContainer = document.getElementById('report-workspace-tab-content');
+      tabContentContainer.innerHTML = renderDemographicsTab();
+
+      // Bind Tab Navigation Click Event Listeners
+      const tabButtons = document.querySelectorAll('.report-workspace-tab');
+      tabButtons.forEach(btn => {
+        btn.onclick = () => {
+          tabButtons.forEach(b => {
+            b.className = 'report-workspace-tab flex-1 min-w-[120px] flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/40 transition-all';
+          });
+          btn.className = 'report-workspace-tab flex-1 min-w-[120px] flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold rounded-lg bg-blue-600 text-white shadow-lg shadow-blue-500/10 transition-all';
+          
+          const tabId = btn.dataset.tab;
+          if (tabId === 'demographics') {
+            tabContentContainer.innerHTML = renderDemographicsTab();
+          } else if (tabId === 'accounts') {
+            tabContentContainer.innerHTML = renderAccountsTab();
+          } else if (tabId === 'collections') {
+            tabContentContainer.innerHTML = renderCollectionsTab();
+          } else if (tabId === 'inquiries') {
+            tabContentContainer.innerHTML = renderInquiriesTab();
+          } else if (tabId === 'violations') {
+            tabContentContainer.innerHTML = renderViolationsTab();
+            
+            // Set up slider multiplier control dynamically after rendering
+            const multiplierInput = document.getElementById('damage-multiplier');
+            if (multiplierInput) {
+              multiplierInput.oninput = (e) => {
+                const val = parseFloat(e.target.value);
+                document.getElementById('multiplier-val').textContent = val.toFixed(1) + 'x';
+                const adjMin = ls.totalDamagesMin * val;
+                const adjMax = ls.totalDamagesMax * val;
+                document.querySelectorAll('.est-damages-min-display').forEach(el => el.textContent = money(adjMin));
+                document.querySelectorAll('.est-damages-max-display').forEach(el => el.textContent = money(adjMax));
+              };
+            }
+          } else if (tabId === 'dispute-builder') {
+            tabContentContainer.innerHTML = renderDisputeBuilderTab();
+            window._initDisputeBuilderTab(r.id);
+          }
+        };
+      });
+
+      // Bind Highlighting, Scrolling & Searching Engine on Right Monospace Panel
+      window._highlightAndScrollToText = function(keyword, options = {}) {
+        if (!keyword) return 0;
+        const rawContainer = document.getElementById('raw-text-container');
+        if (!rawContainer) return 0;
+        
+        const rawText = rawContainer.dataset.originalText || rawContainer.textContent;
+        const cleanKeyword = keyword.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        if (!cleanKeyword) return 0;
+
+        const regex = new RegExp(`(${cleanKeyword})`, 'gi');
+        const escapedText = escapeHtml(rawText);
+        
+        let matchCount = 0;
+        const highlightedHtml = escapedText.replace(regex, (match) => {
+          matchCount++;
+          return `<mark class="raw-highlight bg-blue-500/40 text-white font-bold px-1 rounded border-b-2 border-blue-500 transition-all duration-300" id="raw-match-${matchCount}">${match}</mark>`;
+        });
+        
+        if (matchCount > 0) {
+          rawContainer.innerHTML = highlightedHtml;
+          const firstMatch = document.getElementById('raw-match-1');
+          if (firstMatch) {
+            firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            firstMatch.classList.add('ring-4', 'ring-blue-500/60', 'scale-105', 'bg-blue-500/80');
+            setTimeout(() => {
+              firstMatch.classList.remove('ring-4', 'ring-blue-500/60', 'scale-105', 'bg-blue-500/80');
+            }, 3000);
+          }
+          return matchCount;
+        }
+
+        // Fallback for partially redacted values (like ****1234 account numbers)
+        if (keyword.startsWith('****') || keyword.includes('*')) {
+          const last4 = keyword.replace(/\*/g, '');
+          if (last4.length >= 3) {
+            return window._highlightAndScrollToText(last4, options);
+          }
+        }
+        return 0;
+      };
+
+      // Robust cross-referencing account identifier highlight function
+      window._syncAccountHighlight = function(creditor, accNo) {
+        let matches = window._highlightAndScrollToText(creditor);
+        if (matches === 0 && accNo) {
+          matches = window._highlightAndScrollToText(accNo);
+        }
+        if (matches === 0) {
+          toast(`Scrolling raw text container...`, 'info');
+        }
+      };
+
+      // Advanced Raw Inspector Search Engine Logic
+      const searchInput = document.getElementById('raw-search-input');
+      const searchStats = document.getElementById('raw-search-stats');
+      const searchPrev = document.getElementById('raw-search-prev');
+      const searchNext = document.getElementById('raw-search-next');
+      const rawContainer = document.getElementById('raw-text-container');
+      
+      let currentMatches = [];
+      let currentMatchIdx = -1;
+
+      const runSearch = (query) => {
+        const rawText = rawContainer.dataset.originalText || rawContainer.textContent;
+        if (!query || query.trim().length < 2) {
+          rawContainer.innerHTML = escapeHtml(rawText);
+          searchStats.textContent = '0 of 0';
+          currentMatches = [];
+          currentMatchIdx = -1;
+          return;
+        }
+
+        const cleanQuery = query.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const regex = new RegExp(`(${cleanQuery})`, 'gi');
+        const escapedText = escapeHtml(rawText);
+
+        let matchCount = 0;
+        const highlightedHtml = escapedText.replace(regex, (match) => {
+          matchCount++;
+          return `<mark class="raw-search-match bg-yellow-500/30 text-white font-semibold px-1 rounded border-b border-yellow-500" id="search-match-${matchCount}">${match}</mark>`;
+        });
+
+        rawContainer.innerHTML = highlightedHtml;
+        currentMatches = document.querySelectorAll('.raw-search-match');
+        currentMatchIdx = currentMatches.length > 0 ? 0 : -1;
+        updateSearchUI();
+      };
+
+      const updateSearchUI = () => {
+        if (currentMatches.length === 0) {
+          searchStats.textContent = '0 of 0';
+          return;
+        }
+
+        searchStats.textContent = `${currentMatchIdx + 1} of ${currentMatches.length}`;
+        currentMatches.forEach((el, idx) => {
+          if (idx === currentMatchIdx) {
+            el.className = 'raw-search-match bg-yellow-500 text-black font-bold px-1 rounded ring-2 ring-yellow-400 scale-105 transition-all duration-200';
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          } else {
+            el.className = 'raw-search-match bg-yellow-500/30 text-white font-semibold px-1 rounded border-b border-yellow-500';
+          }
+        });
+      };
+
+      searchInput.onkeyup = (e) => {
+        if (e.key === 'Enter') {
+          if (currentMatches.length > 0) {
+            currentMatchIdx = (currentMatchIdx + 1) % currentMatches.length;
+            updateSearchUI();
+          }
+        } else {
+          runSearch(searchInput.value);
+        }
+      };
+
+      searchPrev.onclick = () => {
+        if (currentMatches.length > 0) {
+          currentMatchIdx = (currentMatchIdx - 1 + currentMatches.length) % currentMatches.length;
+          updateSearchUI();
+        }
+      };
+
+      searchNext.onclick = () => {
+        if (currentMatches.length > 0) {
+          currentMatchIdx = (currentMatchIdx + 1) % currentMatches.length;
+          updateSearchUI();
+        }
+      };
+
+      // Behavior binder and API synchronizer for Dispute Builder Tab
+      window._initDisputeBuilderTab = function(reportId) {
+        const textarea = document.getElementById('builder-letter-textarea');
+        if (!textarea) return;
+
+        const bureauSelect = document.getElementById('builder-bureau-select');
+        const checkName = document.getElementById('builder-toggle-name');
+        const checkSSN = document.getElementById('builder-toggle-ssn');
+        const checkDOB = document.getElementById('builder-toggle-dob');
+        const checkAddress = document.getElementById('builder-toggle-address');
+
+        const recompile = () => {
+          const letter = window._compile1681iLetter(reportId, {
+            bureau: bureauSelect.value,
+            includeName: checkName.checked,
+            includeSSN: checkSSN.checked,
+            includeDOB: checkDOB.checked,
+            includeAddress: checkAddress.checked
+          });
+          textarea.value = letter;
+        };
+
+        // Wire inputs to recompile on changes
+        if (bureauSelect) bureauSelect.onchange = recompile;
+        if (checkName) checkName.onchange = recompile;
+        if (checkSSN) checkSSN.onchange = recompile;
+        if (checkDOB) checkDOB.onchange = recompile;
+        if (checkAddress) checkAddress.onchange = recompile;
+
+        // Initialize with default compiled letter
+        recompile();
+
+        // Wire Save Draft
+        const saveDraftBtn = document.getElementById('builder-btn-save-draft');
+        if (saveDraftBtn) {
+          saveDraftBtn.onclick = async () => {
+            try {
+              saveDraftBtn.disabled = true;
+              saveDraftBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving Draft...';
+              
+              const campaignStatus = state.disputeStatus[reportId] || { step: 'pinning', savedDocId: null, isSent: false };
+              const currentContent = textarea.value;
+              
+              if (campaignStatus.savedDocId) {
+                // Update existing draft
+                await api(`/documents/${campaignStatus.savedDocId}`, {
+                  method: 'PUT',
+                  body: JSON.stringify({ content: currentContent })
+                });
+                toast('Dispute draft updated successfully!', 'success');
+              } else {
+                // Generate a new draft
+                const pinnedIds = state.selectedDisputeItems[reportId] || [];
+                const res = await api('/documents/generate', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    clientId: r.client_id,
+                    reportId: reportId,
+                    violationIds: pinnedIds.filter(id => id.startsWith('violation-')).map(id => id.replace('violation-', '')),
+                    docType: '1681i-letter',
+                    bureau: bureauSelect.value,
+                    creditorName: 'Equifax, Experian, TransUnion',
+                    creditorAddress: 'Dispute Centers'
+                  })
+                });
+                
+                campaignStatus.savedDocId = res.id;
+                campaignStatus.step = 'draft';
+                state.disputeStatus[reportId] = campaignStatus;
+                localStorage.setItem('fcra_dispute_status', JSON.stringify(state.disputeStatus));
+                
+                // Now save content in the newly created document via PUT
+                await api(`/documents/${res.id}`, {
+                  method: 'PUT',
+                  body: JSON.stringify({ content: currentContent })
+                });
+                
+                toast('New dispute draft generated and saved!', 'success');
+              }
+              
+              window._updateCampaignHUD(reportId);
+            } catch(err) {
+              toast(`Failed to save draft: ${err.message}`, 'error');
+            } finally {
+              saveDraftBtn.disabled = false;
+              saveDraftBtn.innerHTML = '<i class="fas fa-save"></i> Save Dispute Draft';
+            }
+          };
+        }
+
+        // Wire Download Printable PDF
+        const downloadPdfBtn = document.getElementById('builder-btn-download-pdf');
+        if (downloadPdfBtn) {
+          downloadPdfBtn.onclick = async () => {
+            try {
+              downloadPdfBtn.disabled = true;
+              downloadPdfBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating PDF...';
+              
+              const campaignStatus = state.disputeStatus[reportId] || { step: 'pinning', savedDocId: null, isSent: false };
+              
+              // Ensure we have a saved doc ID first
+              let docId = campaignStatus.savedDocId;
+              const currentContent = textarea.value;
+              
+              if (!docId) {
+                // Save first
+                const pinnedIds = state.selectedDisputeItems[reportId] || [];
+                const res = await api('/documents/generate', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    clientId: r.client_id,
+                    reportId: reportId,
+                    violationIds: pinnedIds.filter(id => id.startsWith('violation-')).map(id => id.replace('violation-', '')),
+                    docType: '1681i-letter',
+                    bureau: bureauSelect.value,
+                    creditorName: 'Equifax, Experian, TransUnion',
+                    creditorAddress: 'Dispute Centers'
+                  })
+                });
+                docId = res.id;
+                campaignStatus.savedDocId = docId;
+                campaignStatus.step = 'draft';
+                state.disputeStatus[reportId] = campaignStatus;
+                localStorage.setItem('fcra_dispute_status', JSON.stringify(state.disputeStatus));
+                
+                await api(`/documents/${docId}`, {
+                  method: 'PUT',
+                  body: JSON.stringify({ content: currentContent })
+                });
+              } else {
+                // Update content
+                await api(`/documents/${docId}`, {
+                  method: 'PUT',
+                  body: JSON.stringify({ content: currentContent })
+                });
+              }
+              
+              // Trigger PDF download
+              const headers = {};
+              if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
+              const pdfRes = await fetch(`/api/documents/${docId}/pdf`, { headers });
+              if (!pdfRes.ok) throw new Error('PDF compilation failed.');
+              
+              const blob = await pdfRes.blob();
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `Certified-Dispute-Letter-${reportId}.pdf`;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              URL.revokeObjectURL(url);
+              
+              toast('Printable PDF downloaded!', 'success');
+              
+              // Update status to 'sent'
+              campaignStatus.isSent = true;
+              campaignStatus.step = 'sent';
+              state.disputeStatus[reportId] = campaignStatus;
+              localStorage.setItem('fcra_dispute_status', JSON.stringify(state.disputeStatus));
+              
+              window._updateCampaignHUD(reportId);
+            } catch(err) {
+              toast(`Failed to download PDF: ${err.message}`, 'error');
+            } finally {
+              downloadPdfBtn.disabled = false;
+              downloadPdfBtn.innerHTML = '<i class="fas fa-file-pdf"></i> Download Printable PDF';
+            }
+          };
+        }
+      };
+
+      // Initialize HUD and Highlights on Load
+      window._updateCampaignHUD(r.id);
+      window._highlightViolationsInRawText(r.id, res.violations);
+
     } catch(err) {
-      el.innerHTML = `<div class="fade-in"><button onclick="window._nav('reports')" class="text-gray-400 hover:text-white text-sm mb-4 inline-flex items-center gap-1.5 transition"><i class="fas fa-arrow-left text-xs"></i>Back</button><div class="glass rounded-xl p-8 border border-red-500/30 text-center"><i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i><h3 class="text-lg font-bold text-white mb-1">Failed to load report</h3><p class="text-sm text-gray-400">${err.message}</p></div></div>`;
+      console.error("WORKSPACE RENDER ERROR:", err);
+      el.innerHTML = `<div class="fade-in">
+        <button onclick="window._nav('reports')" class="text-gray-400 hover:text-white text-sm mb-4 inline-flex items-center gap-1.5 transition">
+          <i class="fas fa-arrow-left text-xs"></i>Back
+        </button>
+        <div class="glass rounded-xl p-8 border border-red-500/30 text-center">
+          <i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i>
+          <h3 class="text-lg font-bold text-white mb-1">Failed to load report workspace</h3>
+          <p class="text-sm text-gray-400">${err.message}</p>
+        </div>
+      </div>`;
     }
   }
 

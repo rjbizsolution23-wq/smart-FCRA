@@ -360,7 +360,7 @@ function parseExperianAccounts(text: string): ParsedAccount[] {
     acct.dateOpened = openedMatch ? openedMatch[1].trim() : '';
 
     // Date Closed
-    const closedMatch = block.match(/Date Closed\s+(\d{2}\/\d{2}\/\d{4})/);
+    const closedMatch = block.match(/(?:Date Closed|Closed Date)[:\s]+(\d{1,2}\/\d{1,2}\/\d{2,4})/i);
     if (closedMatch) acct.dateClosed = closedMatch[1].trim();
 
     // Status (multi-line non-greedy check)
@@ -402,6 +402,30 @@ function parseExperianAccounts(text: string): ParsedAccount[] {
     if (paymentMatch) {
       const pStr = paymentMatch[1].trim();
       acct.monthlyPayment = pStr === '-' ? 0 : parseFloat(pStr.replace(/[$,]/g, '')) || 0;
+    }
+
+    // Recent Payment
+    const recentPayMatch = block.match(/Recent Payment\s+\$?([\d,]+(?:\.\d{2})?)\s+as\s+of\s+(\d{1,2}\/\d{1,2}\/\d{4})/i);
+    if (recentPayMatch) {
+      acct.lastPaymentAmount = parseFloat(recentPayMatch[1].replace(/,/g, ''));
+      acct.lastPaymentDate = recentPayMatch[2];
+    } else {
+      const recentPaySimple = block.match(/Recent Payment\s+([^\r\n]+)/i);
+      if (recentPaySimple) {
+        const rpVal = recentPaySimple[1].trim();
+        if (rpVal !== '-') {
+          const amtMatch = rpVal.match(/\$?([\d,]+(?:\.\d{2})?)/);
+          if (amtMatch) acct.lastPaymentAmount = parseFloat(amtMatch[1].replace(/,/g, ''));
+          const dtMatch = rpVal.match(/(\d{1,2}\/\d{1,2}\/\d{4})/);
+          if (dtMatch) acct.lastPaymentDate = dtMatch[1];
+        }
+      }
+    }
+
+    // DOFD for Experian
+    const dofdMatch = block.match(/(?:Date of First Delinquency|Date of 1st Delinquency|First Delinquency|DOFD)[:\s]+(\d{1,2}\/\d{1,2}\/\d{4})/i);
+    if (dofdMatch) {
+      acct.dofd = dofdMatch[1].trim();
     }
 
     // Payment History Pattern
@@ -499,7 +523,7 @@ function parseEquifaxAccounts(text: string): ParsedAccount[] {
 
       creditorName = creditorName.replace(/\s*-\s*(?:closed|open)\s*$/i, '').trim();
 
-      const blockText = lines.slice(i, Math.min(lines.length, i + 15)).join('\n');
+      const blockText = lines.slice(i, Math.min(lines.length, i + 25)).join('\n');
       const acct: Partial<ParsedAccount> = { creditorName };
 
       // Account Number
@@ -539,10 +563,22 @@ function parseEquifaxAccounts(text: string): ParsedAccount[] {
         acct.highBalance = acct.originalAmount;
       }
 
-      // Monthly Payment
-      const paymentMatch = blockText.match(/Scheduled Payment Amount:\s*([^\s\n|]+)/i);
+      // Monthly Payment / Scheduled Payment Amount
+      const paymentMatch = blockText.match(/(?:Scheduled Payment Amount|Monthly Payment Amount):\s*([^\s\n|]+)/i);
       if (paymentMatch) {
         acct.monthlyPayment = parseFloat(paymentMatch[1].replace(/[$,]/g, '')) || 0;
+      }
+
+      // Actual Payment Amount -> lastPaymentAmount
+      const actualPayMatch = blockText.match(/Actual Payment Amount:\s*([^\s\n|]+)/i);
+      if (actualPayMatch) {
+        acct.lastPaymentAmount = parseFloat(actualPayMatch[1].replace(/[$,]/g, '')) || 0;
+      }
+
+      // Date of Last Payment -> lastPaymentDate
+      const lastPayDateMatch = blockText.match(/Date of Last Payment:\s*(\d{2}\/\d{2}\/\d{4})/i);
+      if (lastPayDateMatch) {
+        acct.lastPaymentDate = lastPayDateMatch[1].trim();
       }
 
       // Collection indicator
@@ -678,6 +714,24 @@ function parseTransUnionAccounts(text: string): ParsedAccount[] {
     if (highHistMatch) {
       acct.originalAmount = parseFloat(highHistMatch[1].replace(/,/g, '')) || 0;
       acct.highBalance = acct.originalAmount;
+    }
+
+    // Monthly Payment
+    const paymentMatch = block.match(/(?:Monthly Payment|Scheduled Payment|Payment Amount)\s+\$?([\d,]+(?:\.\d{2})?)/i);
+    if (paymentMatch) {
+      acct.monthlyPayment = parseFloat(paymentMatch[1].replace(/,/g, '')) || 0;
+    }
+
+    // Date of First Delinquency for TransUnion
+    const dofdMatch = block.match(/(?:Date of First Delinquency|First Delinquency|DOFD)[:\s]+(\d{2}\/\d{2}\/\d{4})/i);
+    if (dofdMatch) {
+      acct.dofd = dofdMatch[1].trim();
+    }
+
+    // Last Payment Date for TransUnion
+    const lastPayMatch = block.match(/(?:Last Payment Date|Date of Last Payment)[:\s]+(\d{2}\/\d{2}\/\d{4})/i);
+    if (lastPayMatch) {
+      acct.lastPaymentDate = lastPayMatch[1].trim();
     }
 
     // Collection indicator
@@ -912,5 +966,10 @@ function finalizeAccount(partial: Partial<ParsedAccount>): ParsedAccount {
     originalCreditor: partial.originalCreditor,
     disputeFlag: partial.disputeFlag,
     comments: partial.comments,
+    lastPaymentAmount: partial.lastPaymentAmount,
+    lastPaymentDate: partial.lastPaymentDate,
+    terms: partial.terms,
+    responsibility: partial.responsibility,
+    dateReported: partial.dateReported,
   };
 }
