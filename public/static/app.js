@@ -481,7 +481,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     return `<div class="min-h-screen flex items-center justify-center p-4">
       <div class="w-full max-w-md">
         <div class="text-center mb-8">
-          <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600/20 border border-blue-500/30 mb-4"><i class="fas fa-shield-alt text-2xl text-blue-400"></i></div>
+          <div class="inline-flex items-center justify-center mb-4"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-16 w-auto rounded-2xl border border-blue-500/30 object-cover shadow-[0_0_20px_rgba(10,102,255,0.2)]"></div>
           <h1 class="text-2xl font-bold text-white">FCRA Supreme Detector</h1>
           <p class="text-gray-400 mt-1 text-sm">Multi-tenant credit report violation analysis SaaS</p>
         </div>
@@ -569,14 +569,14 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   // Branding URLs - replace with actual image URLs
     const RJ_LOGO = 'https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg';
     const MFSN_BANNER = '/static/logos/mfsn-banner.png';
-    const FCRA_LOGO = '/static/logos/Professional_logo_design_for_FCRA_DETECTOR_mode-1776629301082.png';
+    const FCRA_LOGO = RJ_LOGO;
     return `<div class="flex h-screen overflow-hidden flex-col">
       <!-- Top Branding Header -->
       ${MFSN_BANNER ? `<div class="h-16 bg-gray-900 border-b border-gray-800 flex items-center px-4 shrink-0"><img src="${MFSN_BANNER}" alt="MyFreeScoreNow" class="h-14 object-contain"></div>` : ''}
             <div class="flex flex-1 overflow-hidden">
       <aside class="w-56 bg-gray-900/80 border-r border-gray-800 flex flex-col shrink-0">
         <div class="p-4 border-b border-gray-800"><div class="flex items-center gap-2.5">
-          ${FCRA_LOGO ? `<img src="${FCRA_LOGO}" alt="FCRA" class="w-12 h-12 rounded-lg object-contain">` : `<div class="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center"><i class="fas fa-shield-alt text-blue-400 text-xs"></i></div>`}
+          ${FCRA_LOGO ? `<img src="${FCRA_LOGO}" alt="RJ Business Solutions" class="w-12 h-12 rounded-xl object-cover border border-blue-500/20 shadow-[0_0_15px_rgba(10,102,255,0.15)]">` : `<div class="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center"><i class="fas fa-shield-alt text-blue-400 text-xs"></i></div>`}
           <div class="min-w-0"><div class="text-xs font-bold text-white truncate">FCRA Detector</div><div class="text-[10px] text-gray-500 truncate">${state.org?.name||'Org'}</div></div>
         </div></div>
         <nav class="flex-1 p-3 space-y-1 overflow-y-auto">${navItems.map(n=>`<button onclick="window._nav('${n.id}')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${state.currentPage===n.id?'bg-blue-600/20 text-blue-400':'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}"><i class="fas ${n.icon} w-5 text-center text-xs"></i><span>${n.label}</span></button>`).join('')}</nav>
