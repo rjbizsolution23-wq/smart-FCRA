@@ -2769,28 +2769,84 @@ function getAppHtml(): string {
     }
   </script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-    * { font-family: 'Inter', system-ui, sans-serif; }
-    .glass { background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }
-    .gradient-bg { background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%); }
-    .card-hover { transition: all 0.2s; }
-    .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
-    .severity-critical { border-left: 4px solid #ef4444; }
-    .severity-high { border-left: 4px solid #f97316; }
-    .severity-medium { border-left: 4px solid #eab308; }
-    .severity-low { border-left: 4px solid #22c55e; }
-    .fade-in { animation: fadeIn 0.3s ease-in; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: #1e293b; }
-    ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
-    .pulse-glow { animation: pulseGlow 2s ease-in-out infinite; }
-    @keyframes pulseGlow { 0%, 100% { box-shadow: 0 0 5px rgba(59,130,246,0.5); } 50% { box-shadow: 0 0 20px rgba(59,130,246,0.8); } }
-    .step-done { background: rgba(34, 197, 94, 0.15); border-color: rgba(34, 197, 94, 0.5); }
-    .step-active { background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.5); }
-    .step-pending { background: rgba(100, 116, 139, 0.1); border-color: rgba(100, 116, 139, 0.3); }
-    @keyframes progressPulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
-    .progress-pulse { animation: progressPulse 1s ease-in-out infinite; }
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+    
+    * { 
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif; 
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    
+    h1, h2, h3, .font-title {
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+    }
+
+    .glass { 
+      background: rgba(10, 15, 30, 0.6); 
+      backdrop-filter: blur(24px) saturate(180%); 
+      -webkit-backdrop-filter: blur(24px) saturate(180%); 
+      border: 1px solid rgba(255, 255, 255, 0.08); 
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    }
+
+    .glass-premium {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+      backdrop-filter: blur(30px);
+      -webkit-backdrop-filter: blur(30px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1), 0 20px 50px rgba(0, 0, 0, 0.4);
+    }
+
+    .gradient-bg { 
+      background: radial-gradient(circle at 50% 0%, #172554 0%, #0f172a 60%, #020617 100%); 
+    }
+
+    .card-hover { 
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+    }
+
+    .card-hover:hover { 
+      transform: translateY(-4px) scale(1.01); 
+      border-color: rgba(59, 130, 246, 0.35);
+      box-shadow: 0 12px 30px rgba(10, 102, 255, 0.15), inset 0 1px 1px rgba(255, 255, 255, 0.15); 
+    }
+
+    .severity-critical { border-left: 5px solid #ef4444; background: linear-gradient(90deg, rgba(239, 68, 68, 0.05) 0%, transparent 100%); }
+    .severity-high { border-left: 5px solid #f97316; background: linear-gradient(90deg, rgba(249, 115, 22, 0.05) 0%, transparent 100%); }
+    .severity-medium { border-left: 5px solid #eab308; background: linear-gradient(90deg, rgba(234, 179, 8, 0.05) 0%, transparent 100%); }
+    .severity-low { border-left: 5px solid #22c55e; background: linear-gradient(90deg, rgba(34, 197, 94, 0.05) 0%, transparent 100%); }
+
+    .fade-in { 
+      animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
+    }
+
+    @keyframes fadeIn { 
+      from { opacity: 0; transform: translateY(12px); } 
+      to { opacity: 1; transform: translateY(0); } 
+    }
+
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #020617; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; border: 2px solid #020617; }
+    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+
+    .pulse-glow { animation: pulseGlow 3s ease-in-out infinite; }
+    @keyframes pulseGlow { 
+      0%, 100% { box-shadow: 0 0 10px rgba(59, 130, 246, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.05); } 
+      50% { box-shadow: 0 0 25px rgba(59, 130, 246, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.15); border-color: rgba(59, 130, 246, 0.5); } 
+    }
+
+    .step-done { background: rgba(34, 197, 94, 0.12); border-color: rgba(34, 197, 94, 0.35); color: #4ade80; }
+    .step-active { background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.45); color: #60a5fa; box-shadow: 0 0 15px rgba(59, 130, 246, 0.25); }
+    .step-pending { background: rgba(100, 116, 139, 0.06); border-color: rgba(100, 116, 139, 0.2); color: #94a3b8; }
+    
+    @keyframes progressPulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .progress-pulse { animation: progressPulse 1.2s ease-in-out infinite; }
+
+    /* Elegant brand styling */
+    .brand-glow {
+      text-shadow: 0 0 20px rgba(10, 102, 255, 0.4);
+    }
   </style>
 </head>
 <body class="gradient-bg min-h-screen text-gray-100">
