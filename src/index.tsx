@@ -2,7 +2,8 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serveStatic } from 'hono/cloudflare-pages';
 import Stripe from 'stripe';
-import { generateId, hashPassword, verifyPassword, createSessionToken, generateEmailToken } from './lib/auth';
+import { generateId, hashPassword, verifyPassword, createSessionToken, generateEmailToken, generateMFASecret, verifyTOTP } from './lib/auth';
+import { encryptText, decryptText } from './lib/crypto';
 import { parseCreditReportText } from './engine/parser';
 import { detectViolations, calculateLitigationScore, type CreditReportData } from './engine/violations';
 import { mapMfsnToInternal } from './engine/mfsn-mapper';
@@ -10,6 +11,16 @@ import { mapSmartCreditToInternal } from './engine/smartcredit-mapper';
 import { DOCUMENT_TYPES, type DocumentData } from './engine/documents';
 import { generatePDFReport, type PDFReportData, generatePDFFromText } from './engine/pdf-generator';
 import { FOUNDER_TEMPLATES } from './engine/founder-templates';
+
+// Secure field-level cryptographic helpers mapped to Worker bindings
+async function encryptPII(c: any, text: string): Promise<string> {
+  return encryptText(text, c.env.PII_ENCRYPTION_KEY);
+}
+
+async function decryptPII(c: any, text: string): Promise<string> {
+  return decryptText(text, c.env.PII_ENCRYPTION_KEY);
+}
+
 
 type Bindings = {
   DB: any;
@@ -22,6 +33,8 @@ type Bindings = {
   AI: any;
   SMARTCREDIT_CLIENT_KEY?: string;
   SMARTCREDIT_CLIENT_SECRET?: string;
+  RATE_LIMIT_KV?: any;
+  SENTRY_DSN?: string;
 };
 type Variables = { user?: any; org?: any; session?: any };
 
@@ -33,6 +46,63 @@ const getStripe = (env: Bindings) => new Stripe(env.STRIPE_API_KEY, {
 });
 
 app.use('/api/*', cors());
+
+// ═══════════════════════════════════════════════════════════════
+// GLOBAL SECURITY HEADERS & CONTENT SECURITY POLICY (CSP)
+// ═══════════════════════════════════════════════════════════════
+app.use('*', async (c, next) => {
+  await next();
+  c.res.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://use.fontawesome.com; font-src 'self' https://fonts.gstatic.com https://use.fontawesome.com; img-src 'self' data: https://storage.googleapis.com; connect-src 'self' https://api.stripe.com;");
+  c.res.headers.set('X-Frame-Options', 'DENY');
+  c.res.headers.set('X-Content-Type-Options', 'nosniff');
+  c.res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  c.res.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
+});
+
+// ═══════════════════════════════════════════════════════════════
+// EDGE RATE LIMITING MIDDLEWARE (VIA CLOUDFLARE KV)
+// ═══════════════════════════════════════════════════════════════
+async function rateLimiter(c: any, next: any) {
+  const ip = c.req.header('CF-Connecting-IP') || 'anonymous';
+  const key = `rate_limit:${ip}`;
+  
+  if (!c.env.RATE_LIMIT_KV) {
+    return await next();
+  }
+
+  try {
+    const currentCount = parseInt(await c.env.RATE_LIMIT_KV.get(key) || '0', 10);
+    if (currentCount >= 100) {
+      return c.json({ error: 'Too many requests. Please slow down.' }, 429);
+    }
+    await c.env.RATE_LIMIT_KV.put(key, (currentCount + 1).toString(), { expirationTtl: 60 });
+  } catch (e) {
+    console.warn('[WARN] Rate limiter KV failed:', e);
+  }
+  
+  await next();
+}
+
+app.use('/api/auth/login', rateLimiter);
+app.use('/api/reports/upload', rateLimiter);
+
+// ═══════════════════════════════════════════════════════════════
+// GLOBAL ERROR HANDLER & OBSERVABILITY TELEMETRY
+// ═══════════════════════════════════════════════════════════════
+app.onError((err, c) => {
+  const errorLog = {
+    error: err.message,
+    stack: err.stack,
+    method: c.req.method,
+    path: c.req.path,
+    timestamp: new Date().toISOString(),
+    ip: c.req.header('CF-Connecting-IP') || 'unknown',
+    user_agent: c.req.header('User-Agent') || 'unknown',
+    user_id: c.get('session')?.user_id || 'anonymous',
+  };
+  console.error('[CRITICAL UNHANDLED EXCEPTION]', JSON.stringify(errorLog));
+  return c.json({ error: 'Internal Server Error', message: err.message }, 500);
+});
 
 // Serve static assets in local development and production
 app.use('/static/*', serveStatic());
@@ -73,13 +143,118 @@ async function authMiddleware(c: any, next: any) {
   if (!sessionId) return c.json({ error: 'Unauthorized' }, 401);
 
   const session = await c.env.DB.prepare(
-    'SELECT s.*, u.id as user_id, u.name as user_name, u.email as user_email, u.role as user_role, u.org_id FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND s.expires_at > datetime("now")'
+    'SELECT s.*, u.id as user_id, u.name as user_name, u.email as user_email, u.role as user_role, u.is_active, u.org_id FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND s.expires_at > datetime("now")'
   ).bind(sessionId).first();
 
   if (!session) return c.json({ error: 'Session expired' }, 401);
+
+  // Active Suspension Enforcement
+  if (session.is_active === 0) {
+    return c.json({ error: 'User account suspended' }, 403);
+  }
+
+  const org = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(session.org_id).first();
+  if (org) {
+    try {
+      const settings = JSON.parse(org.settings || '{}');
+      if (settings.suspended) {
+        return c.json({ error: 'Organization account suspended' }, 403);
+      }
+    } catch (e) {}
+  }
+
+  // Session Request Fingerprinting (Zero-Trust Session Hijacking Protection)
+  const currentIp = c.req.header('CF-Connecting-IP') || 'unknown';
+  const currentUa = c.req.header('User-Agent') || 'unknown';
+
+  if (session.ip_address && session.ip_address !== 'unknown' && session.ip_address !== currentIp) {
+    console.warn(`[SECURITY] Session Hijacking Attempt detected! Session: ${session.id}. Saved IP: ${session.ip_address}, Request IP: ${currentIp}`);
+    await c.env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(sessionId).run();
+    return c.json({ error: 'Session hijacked / IP mismatch' }, 401);
+  }
+  if (session.user_agent && session.user_agent !== 'unknown' && session.user_agent !== currentUa) {
+    console.warn(`[SECURITY] Session Hijacking Attempt detected! Session: ${session.id}. Saved UA: ${session.user_agent}, Request UA: ${currentUa}`);
+    await c.env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(sessionId).run();
+    return c.json({ error: 'Session hijacked / User-Agent mismatch' }, 401);
+  }
+
   c.set('user', { id: session.user_id, name: session.user_name, email: session.user_email, role: session.user_role, org_id: session.org_id });
   c.set('session', session);
   return next();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MULTI-TENANCY PLAN LIMITS & 'NO FREE TRIALS' ENFORCEMENT
+// ═══════════════════════════════════════════════════════════════
+async function verifyOrgPlanLimits(c: any, resourceType: 'client' | 'report' | 'user') {
+  const user = c.get('user');
+  if (!user || !user.org_id) {
+    return { allowed: false, message: 'Unauthorized' };
+  }
+
+  const org = await c.env.DB.prepare('SELECT plan FROM organizations WHERE id = ?').bind(user.org_id).first();
+  const plan = org?.plan || 'free';
+
+  // Strict "No Free Trials" Compliance Gate
+  if (plan === 'free') {
+    return {
+      allowed: false,
+      message: 'Subscription Required. Under SmartFCRA compliance rules and RJ Business Solutions terms, free trials are not supported. Please subscribe to a plan in the Billing tab to unlock all features.'
+    };
+  }
+
+  if (resourceType === 'client') {
+    if (plan === 'professional' || plan === 'pro') {
+      const clientCountRes = await c.env.DB.prepare('SELECT COUNT(*) as total FROM clients WHERE org_id = ?').bind(user.org_id).first();
+      const clientCount = clientCountRes?.total || 0;
+      if (clientCount >= 100) {
+        return {
+          allowed: false,
+          message: 'Client Limit Reached. Your Basic plan supports up to 100 clients. Please upgrade to the Unlimited or Enterprise plan for unlimited clients.'
+        };
+      }
+    }
+  }
+
+  if (resourceType === 'report') {
+    if (plan === 'professional' || plan === 'pro') {
+      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const reportCountRes = await c.env.DB.prepare(
+        "SELECT COUNT(*) as total FROM credit_reports WHERE org_id = ? AND strftime('%Y-%m', created_at) = ?"
+      ).bind(user.org_id, currentMonth).first();
+      const reportCount = reportCountRes?.total || 0;
+      if (reportCount >= 100) {
+        return {
+          allowed: false,
+          message: 'Report Analysis Limit Reached. Your Basic plan supports up to 100 report analyses per month. Please upgrade to the Unlimited or Enterprise plan for unlimited analyses.'
+        };
+      }
+    }
+  }
+
+  if (resourceType === 'user') {
+    if (plan === 'professional' || plan === 'pro') {
+      const userCountRes = await c.env.DB.prepare('SELECT COUNT(*) as total FROM users WHERE org_id = ?').bind(user.org_id).first();
+      const userCount = userCountRes?.total || 0;
+      if (userCount >= 5) {
+        return {
+          allowed: false,
+          message: 'Team Limit Reached. Your Basic plan supports up to 5 team members. Please upgrade to the Unlimited or Enterprise plan for more seats.'
+        };
+      }
+    } else if (plan === 'unlimited') {
+      const userCountRes = await c.env.DB.prepare('SELECT COUNT(*) as total FROM users WHERE org_id = ?').bind(user.org_id).first();
+      const userCount = userCountRes?.total || 0;
+      if (userCount >= 20) {
+        return {
+          allowed: false,
+          message: 'Team Limit Reached. Your Unlimited plan supports up to 20 team members. Please upgrade to the Enterprise plan for more seats.'
+        };
+      }
+    }
+  }
+
+  return { allowed: true };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -102,7 +277,7 @@ app.post('/api/auth/register', async (c) => {
   const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
   if (existing) return c.json({ error: 'Email already registered' }, 409);
 
-  let orgId: string, userId: string, slug: string, passwordHash: string, token: string;
+  let orgId: string, userId: string, slug: string, passwordHash: string;
   try {
     orgId = generateId();
     userId = generateId();
@@ -139,8 +314,10 @@ app.post('/api/auth/register', async (c) => {
   }
 
   const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const ip = c.req.header('CF-Connecting-IP') || 'unknown';
+  const ua = c.req.header('User-Agent') || 'unknown';
   try {
-    await c.env.DB.prepare('INSERT INTO sessions (id, user_id, org_id, expires_at) VALUES (?, ?, ?, ?)').bind(sessionToken, userId, orgId, expires).run();
+    await c.env.DB.prepare('INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)').bind(sessionToken, userId, orgId, expires, ip, ua).run();
   } catch (e: any) {
     console.error('[REGISTER] session insert failed:', e.message, e.stack);
     return c.json({ error: `Internal error (session): ${e.message}` }, 500);
@@ -159,12 +336,95 @@ app.post('/api/auth/login', async (c) => {
   const valid = await verifyPassword(password, user.password_hash);
   if (!valid) return c.json({ error: 'Invalid credentials' }, 401);
 
+  // Check MFA challenge gating
+  if (user.mfa_enabled === 1) {
+    const tempToken = generateId() + '_mfa_pending';
+    return c.json({
+      mfaRequired: true,
+      userId: user.id,
+      tempToken
+    });
+  }
+
   const token = createSessionToken();
   const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-  await c.env.DB.prepare('INSERT INTO sessions (id, user_id, org_id, expires_at) VALUES (?, ?, ?, ?)').bind(token, user.id, user.org_id, expires).run();
+  const ip = c.req.header('CF-Connecting-IP') || 'unknown';
+  const ua = c.req.header('User-Agent') || 'unknown';
+  await c.env.DB.prepare('INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)').bind(token, user.id, user.org_id, expires, ip, ua).run();
   await c.env.DB.prepare('UPDATE users SET last_login = datetime("now") WHERE id = ?').bind(user.id).run();
 
   return c.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, org_id: user.org_id }, org: { id: user.org_id, name: user.org_name, plan: user.org_plan } });
+});
+
+app.post('/api/auth/mfa/challenge', async (c) => {
+  const { userId, code, tempToken } = await c.req.json();
+  if (!userId || !code || !tempToken) return c.json({ error: 'All fields required' }, 400);
+
+  if (!tempToken.endsWith('_mfa_pending')) return c.json({ error: 'Invalid MFA request' }, 400);
+
+  const user = await c.env.DB.prepare('SELECT u.*, o.name as org_name, o.plan as org_plan FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.id = ? AND u.is_active = 1').bind(userId).first() as any;
+  if (!user) return c.json({ error: 'User not found' }, 404);
+
+  const isValid = await verifyTOTP(user.mfa_secret, code);
+  if (!isValid) return c.json({ error: 'Invalid 6-digit MFA code' }, 401);
+
+  const token = createSessionToken();
+  const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const ip = c.req.header('CF-Connecting-IP') || 'unknown';
+  const ua = c.req.header('User-Agent') || 'unknown';
+  await c.env.DB.prepare('INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)').bind(token, user.id, user.org_id, expires, ip, ua).run();
+  await c.env.DB.prepare('UPDATE users SET last_login = datetime("now") WHERE id = ?').bind(user.id).run();
+
+  return c.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, org_id: user.org_id }, org: { id: user.org_id, name: user.org_name, plan: user.org_plan } });
+});
+
+app.post('/api/auth/mfa/setup', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const mfaSecret = generateMFASecret();
+  await c.env.DB.prepare('UPDATE users SET mfa_secret = ? WHERE id = ?').bind(mfaSecret, user.id).run();
+
+  const issuer = 'SmartFCRA';
+  const otpauthUrl = `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(user.email)}?secret=${mfaSecret}&issuer=${encodeURIComponent(issuer)}`;
+
+  return c.json({ secret: mfaSecret, otpauthUrl, issuer });
+});
+
+app.post('/api/auth/mfa/verify', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const { code } = await c.req.json();
+  if (!code) return c.json({ error: '6-digit code required' }, 400);
+
+  const dbUser = await c.env.DB.prepare('SELECT mfa_secret FROM users WHERE id = ?').bind(user.id).first() as any;
+  if (!dbUser || !dbUser.mfa_secret) return c.json({ error: 'MFA not set up yet' }, 400);
+
+  const isValid = await verifyTOTP(dbUser.mfa_secret, code);
+  if (!isValid) return c.json({ error: 'Invalid 6-digit MFA code' }, 401);
+
+  await c.env.DB.prepare('UPDATE users SET mfa_enabled = 1 WHERE id = ?').bind(user.id).run();
+
+  return c.json({ success: true, message: 'Multi-factor authentication enabled successfully' });
+});
+
+app.post('/api/auth/mfa/disable', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const { code } = await c.req.json();
+  if (!code) return c.json({ error: 'Code required to disable MFA' }, 400);
+
+  const dbUser = await c.env.DB.prepare('SELECT mfa_secret, mfa_enabled FROM users WHERE id = ?').bind(user.id).first() as any;
+  if (!dbUser || !dbUser.mfa_enabled) return c.json({ error: 'MFA is not enabled' }, 400);
+
+  const isValid = await verifyTOTP(dbUser.mfa_secret, code);
+  if (!isValid) return c.json({ error: 'Invalid 6-digit MFA code' }, 401);
+
+  await c.env.DB.prepare('UPDATE users SET mfa_secret = NULL, mfa_enabled = 0 WHERE id = ?').bind(user.id).run();
+
+  return c.json({ success: true, message: 'Multi-factor authentication disabled successfully' });
+});
+
+app.get('/api/auth/mfa/status', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const dbUser = await c.env.DB.prepare('SELECT mfa_enabled FROM users WHERE id = ?').bind(user.id).first() as any;
+  return c.json({ enabled: dbUser ? dbUser.mfa_enabled === 1 : false });
 });
 
 app.post('/api/auth/logout', authMiddleware, async (c) => {
@@ -298,6 +558,9 @@ app.get('/api/clients', authMiddleware, async (c) => {
 
 app.post('/api/clients', authMiddleware, async (c) => {
   const user = c.get('user');
+  const planCheck = await verifyOrgPlanLimits(c, 'client');
+  if (!planCheck.allowed) return c.json({ error: planCheck.message }, 403);
+
   const data = await c.req.json();
   const id = generateId();
 
@@ -311,9 +574,21 @@ app.post('/api/clients', authMiddleware, async (c) => {
   }
   if (!firstName) return c.json({ error: 'First name is required' }, 400);
 
+  // Regulatory checkbox values (CROA, FCRA, and TSR)
+  const permissiblePurposeConsent = data.permissiblePurposeConsent ? 1 : 0;
+  const croaContractAgreed = data.croaContractAgreed ? 1 : 0;
+  const tsrAdvanceFeeWaived = data.tsrAdvanceFeeWaived ? 1 : 0;
+  const consentTimestamp = data.consentTimestamp || (permissiblePurposeConsent || croaContractAgreed || tsrAdvanceFeeWaived ? new Date().toISOString() : null);
+
   await c.env.DB.prepare(
-    'INSERT INTO clients (id, org_id, created_by, first_name, last_name, email, phone, address_line1, address_line2, city, state, zip, dob, ssn_last4, notes, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(id, user.org_id, user.id, firstName, lastName, data.email || null, data.phone || null, data.addressLine1 || null, data.addressLine2 || null, data.city || null, data.state || null, data.zip || null, data.dob || null, data.ssnLast4 || null, data.notes || null, JSON.stringify(data.tags || [])).run();
+    'INSERT INTO clients (id, org_id, created_by, first_name, last_name, email, phone, address_line1, address_line2, city, state, zip, dob, ssn_last4, notes, tags, permissible_purpose_consent, croa_contract_agreed, tsr_advance_fee_waived, consent_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    id, user.org_id, user.id, firstName, lastName,
+    data.email || null, data.phone || null, data.addressLine1 || null, data.addressLine2 || null,
+    data.city || null, data.state || null, data.zip || null, data.dob || null, data.ssnLast4 || null,
+    data.notes || null, JSON.stringify(data.tags || []),
+    permissiblePurposeConsent, croaContractAgreed, tsrAdvanceFeeWaived, consentTimestamp
+  ).run();
 
   await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, id, user.id, 'client_created', `Created client ${firstName} ${lastName}`).run();
 
@@ -331,7 +606,14 @@ app.get('/api/clients/:id', authMiddleware, async (c) => {
   const documents = await c.env.DB.prepare('SELECT * FROM documents WHERE client_id = ? ORDER BY created_at DESC').bind(id).all();
   const activity = await c.env.DB.prepare('SELECT a.*, u.name as user_name FROM activity_log a JOIN users u ON a.user_id = u.id WHERE a.client_id = ? ORDER BY a.created_at DESC LIMIT 50').bind(id).all();
 
-  return c.json({ client, reports: reports?.results || [], violations: violations?.results || [], documents: documents?.results || [], activity: activity?.results || [] });
+  // Transparently decrypt raw text and parsed structures
+  const reportsResult = reports?.results || [];
+  for (const r of reportsResult) {
+    if (r.raw_text) r.raw_text = await decryptPII(c, r.raw_text);
+    if (r.parsed_data) r.parsed_data = await decryptPII(c, r.parsed_data);
+  }
+
+  return c.json({ client, reports: reportsResult, violations: violations?.results || [], documents: documents?.results || [], activity: activity?.results || [] });
 });
 
 app.put('/api/clients/:id', authMiddleware, async (c) => {
@@ -339,9 +621,40 @@ app.put('/api/clients/:id', authMiddleware, async (c) => {
   const id = c.req.param('id');
   const data = await c.req.json();
 
+  const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(id, user.org_id).first();
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+
+  const firstName = data.firstName !== undefined ? data.firstName : client.first_name;
+  const lastName = data.lastName !== undefined ? data.lastName : client.last_name;
+  const email = data.email !== undefined ? data.email : client.email;
+  const phone = data.phone !== undefined ? data.phone : client.phone;
+  const addressLine1 = data.addressLine1 !== undefined ? data.addressLine1 : client.address_line1;
+  const city = data.city !== undefined ? data.city : client.city;
+  const stateVal = data.state !== undefined ? data.state : client.state;
+  const zip = data.zip !== undefined ? data.zip : client.zip;
+  const notes = data.notes !== undefined ? data.notes : client.notes;
+  const status = data.status !== undefined ? data.status : client.status;
+
+  const permissiblePurposeConsent = data.permissiblePurposeConsent !== undefined 
+    ? (data.permissiblePurposeConsent ? 1 : 0) 
+    : client.permissible_purpose_consent;
+  const croaContractAgreed = data.croaContractAgreed !== undefined 
+    ? (data.croaContractAgreed ? 1 : 0) 
+    : client.croa_contract_agreed;
+  const tsrAdvanceFeeWaived = data.tsrAdvanceFeeWaived !== undefined 
+    ? (data.tsrAdvanceFeeWaived ? 1 : 0) 
+    : client.tsr_advance_fee_waived;
+  const consentTimestamp = data.consentTimestamp !== undefined 
+    ? data.consentTimestamp 
+    : (data.permissiblePurposeConsent || data.croaContractAgreed || data.tsrAdvanceFeeWaived ? new Date().toISOString() : client.consent_timestamp);
+
   await c.env.DB.prepare(
-    'UPDATE clients SET first_name=?, last_name=?, email=?, phone=?, address_line1=?, city=?, state=?, zip=?, notes=?, status=?, updated_at=datetime("now") WHERE id=? AND org_id=?'
-  ).bind(data.firstName, data.lastName, data.email, data.phone, data.addressLine1, data.city, data.state, data.zip, data.notes, data.status || 'active', id, user.org_id).run();
+    'UPDATE clients SET first_name=?, last_name=?, email=?, phone=?, address_line1=?, city=?, state=?, zip=?, notes=?, status=?, permissible_purpose_consent=?, croa_contract_agreed=?, tsr_advance_fee_waived=?, consent_timestamp=?, updated_at=datetime("now") WHERE id=? AND org_id=?'
+  ).bind(
+    firstName, lastName, email, phone, addressLine1, city, stateVal, zip, notes, status || 'active',
+    permissiblePurposeConsent, croaContractAgreed, tsrAdvanceFeeWaived, consentTimestamp,
+    id, user.org_id
+  ).run();
 
   return c.json({ ok: true });
 });
@@ -351,10 +664,24 @@ app.put('/api/clients/:id', authMiddleware, async (c) => {
 // ═══════════════════════════════════════════════════════════════
 app.post('/api/reports/upload', authMiddleware, async (c) => {
   const user = c.get('user');
+  const planCheck = await verifyOrgPlanLimits(c, 'report');
+  if (!planCheck.allowed) return c.json({ error: planCheck.message }, 403);
+
   const body = await c.req.json();
   const { clientId, bureau, rawText, fileName } = body;
 
   if (!clientId || !rawText) return c.json({ error: 'Client ID and report text required' }, 400);
+
+  // Compliance Consent Check
+  const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first() as any;
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  if (!client.permissible_purpose_consent || !client.croa_contract_agreed || !client.tsr_advance_fee_waived) {
+    return c.json({ 
+      error: 'Regulatory Compliance Consent Required', 
+      complianceRequired: true,
+      message: 'This client profile is missing signed regulatory compliance consents for permissible purpose (FCRA), CROA contract, and TSR advance fee waiver. Report ingestion is disabled until these consents are logged.' 
+    }, 403);
+  }
 
   const reportId = generateId();
 
@@ -365,10 +692,14 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
   const violations = detectViolations(parsed);
   const litScore = calculateLitigationScore(violations);
 
+  // Field-level AES-GCM Encryptions
+  const encryptedRawText = await encryptPII(c, rawText);
+  const encryptedParsedData = await encryptPII(c, JSON.stringify(parsed));
+
   // Save report
   await c.env.DB.prepare(
     'INSERT INTO credit_reports (id, org_id, client_id, uploaded_by, bureau, report_date, file_name, raw_text, parsed_data, status, total_accounts, total_inquiries, total_public_records, total_collections, analysis_started_at, analysis_completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime("now"), datetime("now"))'
-  ).bind(reportId, user.org_id, clientId, user.id, parsed.bureau || bureau || 'Unknown', parsed.reportDate, fileName || 'upload.txt', rawText, JSON.stringify(parsed), 'analyzed', parsed.accounts.length, parsed.inquiries.length, parsed.publicRecords.length, parsed.collections.length).run();
+  ).bind(reportId, user.org_id, clientId, user.id, parsed.bureau || bureau || 'Unknown', parsed.reportDate, fileName || 'upload.txt', encryptedRawText, encryptedParsedData, 'analyzed', parsed.accounts.length, parsed.inquiries.length, parsed.publicRecords.length, parsed.collections.length).run();
 
   // Save violations in batch
   for (const v of violations) {
@@ -399,6 +730,11 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
 // ═══════════════════════════════════════════════════════════════
 app.post('/api/reports/onboard', authMiddleware, async (c) => {
   const user = c.get('user');
+  const clientCheck = await verifyOrgPlanLimits(c, 'client');
+  if (!clientCheck.allowed) return c.json({ error: clientCheck.message }, 403);
+  const reportCheck = await verifyOrgPlanLimits(c, 'report');
+  if (!reportCheck.allowed) return c.json({ error: reportCheck.message }, 403);
+
   const body = await c.req.json();
   const { rawText, fileName, bureau } = body;
 
@@ -663,7 +999,10 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
   const litScore = calculateLitigationScore(violations);
   const reportId = generateId();
 
-  // 6. Save report
+  // 6. Save report with Field-Level AES-GCM Encryptions
+  const encryptedRawText = await encryptPII(c, rawText);
+  const encryptedParsedData = await encryptPII(c, JSON.stringify(parsed));
+
   await c.env.DB.prepare(
     'INSERT INTO credit_reports (id, org_id, client_id, uploaded_by, bureau, report_date, file_name, raw_text, parsed_data, status, total_accounts, total_inquiries, total_public_records, total_collections, analysis_started_at, analysis_completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime("now"), datetime("now"))'
   ).bind(
@@ -674,8 +1013,8 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
     parsed.bureau || bureau || 'Unknown',
     parsed.reportDate,
     fileName || 'upload.txt',
-    rawText,
-    JSON.stringify(parsed),
+    encryptedRawText,
+    encryptedParsedData,
     'analyzed',
     parsed.accounts.length,
     parsed.inquiries.length,
@@ -753,6 +1092,9 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
 
 app.post('/api/reports/mfsn-import', authMiddleware, async (c) => {
   const user = c.get('user');
+  const planCheck = await verifyOrgPlanLimits(c, 'report');
+  if (!planCheck.allowed) return c.json({ error: planCheck.message }, 403);
+
   const body = await c.req.json();
   const { clientId, mfsnData } = body;
 
@@ -769,10 +1111,13 @@ app.post('/api/reports/mfsn-import', authMiddleware, async (c) => {
     const violations = detectViolations(report);
     const litScore = calculateLitigationScore(violations);
 
-    // Save report
+    // Save report with Field-Level AES-GCM Encryptions
+    const encryptedRawText = await encryptPII(c, JSON.stringify(mfsnData));
+    const encryptedParsedData = await encryptPII(c, JSON.stringify(report));
+
     await c.env.DB.prepare(
       'INSERT INTO credit_reports (id, org_id, client_id, uploaded_by, bureau, report_date, file_name, raw_text, parsed_data, status, total_accounts, total_inquiries, total_public_records, total_collections, analysis_started_at, analysis_completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime("now"), datetime("now"))'
-    ).bind(reportId, user.org_id, clientId, user.id, report.bureau, report.reportDate, `mfsn-import-${report.bureau}.json`, JSON.stringify(mfsnData), JSON.stringify(report), 'analyzed', report.accounts.length, report.inquiries.length, report.publicRecords.length, report.collections.length).run();
+    ).bind(reportId, user.org_id, clientId, user.id, report.bureau, report.reportDate, `mfsn-import-${report.bureau}.json`, encryptedRawText, encryptedParsedData, 'analyzed', report.accounts.length, report.inquiries.length, report.publicRecords.length, report.collections.length).run();
 
     // Save violations
     for (const v of violations) {
@@ -808,9 +1153,9 @@ app.post('/api/billing/checkout', authMiddleware, async (c) => {
   const org = await c.env.DB.prepare('SELECT * FROM organizations WHERE id = ?').bind(user.org_id).first();
 
   const planPrices: Record<string, { amount: number; name: string; interval: 'month' }> = {
-    'professional': { amount: 19900, name: 'Professional Plan', interval: 'month' },
-    'enterprise': { amount: 39900, name: 'Enterprise Plan', interval: 'month' },
-    'unlimited': { amount: 79900, name: 'Unlimited Plan', interval: 'month' }
+    'professional': { amount: 49700, name: 'Basic Plan', interval: 'month' },
+    'unlimited': { amount: 250000, name: 'Unlimited Plan', interval: 'month' },
+    'enterprise': { amount: 999700, name: 'Enterprise Plan', interval: 'month' }
   };
 
   const plan = planPrices[planId as string];
@@ -864,6 +1209,14 @@ app.post('/api/billing/webhook', async (c) => {
     return c.json({ error: `Webhook error: ${err.message}` }, 400);
   }
 
+  // 5. Webhook Idempotency (FTC/TSR & SLA security guarantee)
+  try {
+    await c.env.DB.prepare('INSERT INTO stripe_processed_events (id) VALUES (?)').bind(event.id).run();
+  } catch (dbErr: any) {
+    console.warn(`[WEBHOOK] Event ${event.id} already processed. Intercepting replay cleanly.`);
+    return c.json({ received: true, duplicate: true });
+  }
+
   const session = event.data.object as any;
 
   switch (event.type) {
@@ -876,9 +1229,9 @@ app.post('/api/billing/webhook', async (c) => {
       const stripe = getStripe(c.env);
       const subscription = await stripe.subscriptions.retrieve(stripeSubId);
       const priceId = subscription.items.data[0]?.price.id;
-      const plan = priceId === process.env.STRIPE_UNLIMITED_PRICE_ID ? 'unlimited'
-        : priceId === process.env.STRIPE_ENTERPRISE_PRICE_ID ? 'enterprise'
-        : priceId === process.env.STRIPE_PROFESSIONAL_PRICE_ID ? 'professional' : 'professional';
+      const plan = priceId === c.env.STRIPE_UNLIMITED_PRICE_ID ? 'unlimited'
+        : priceId === c.env.STRIPE_ENTERPRISE_PRICE_ID ? 'enterprise'
+        : priceId === c.env.STRIPE_PROFESSIONAL_PRICE_ID ? 'professional' : 'professional';
 
       await c.env.DB.prepare(
         'UPDATE organizations SET plan = ?, stripe_customer_id = ?, stripe_subscription_id = ? WHERE id = ?'
@@ -900,9 +1253,9 @@ app.post('/api/billing/webhook', async (c) => {
         const priceId = subscription.items.data[0]?.price.id;
         const status = subscription.status;
         if (status === 'active' || status === 'trialing') {
-          const plan = priceId === process.env.STRIPE_UNLIMITED_PRICE_ID ? 'unlimited'
-            : priceId === process.env.STRIPE_ENTERPRISE_PRICE_ID ? 'enterprise'
-            : priceId === process.env.STRIPE_PROFESSIONAL_PRICE_ID ? 'professional' : 'professional';
+          const plan = priceId === c.env.STRIPE_UNLIMITED_PRICE_ID ? 'unlimited'
+            : priceId === c.env.STRIPE_ENTERPRISE_PRICE_ID ? 'enterprise'
+            : priceId === c.env.STRIPE_PROFESSIONAL_PRICE_ID ? 'professional' : 'professional';
           await c.env.DB.prepare('UPDATE organizations SET plan = ? WHERE stripe_subscription_id = ?').bind(plan, subId).run();
         } else if (status === 'past_due') {
           await c.env.DB.prepare('UPDATE organizations SET plan = \'free\' WHERE stripe_subscription_id = ?').bind(subId).run();
@@ -918,9 +1271,9 @@ app.post('/api/billing/webhook', async (c) => {
       try {
         const subscription = await stripe.subscriptions.retrieve(subId);
         const priceId = subscription.items.data[0]?.price.id;
-        const plan = priceId === process.env.STRIPE_UNLIMITED_PRICE_ID ? 'unlimited'
-          : priceId === process.env.STRIPE_ENTERPRISE_PRICE_ID ? 'enterprise'
-          : priceId === process.env.STRIPE_PROFESSIONAL_PRICE_ID ? 'professional' : 'professional';
+        const plan = priceId === c.env.STRIPE_UNLIMITED_PRICE_ID ? 'unlimited'
+          : priceId === c.env.STRIPE_ENTERPRISE_PRICE_ID ? 'enterprise'
+          : priceId === c.env.STRIPE_PROFESSIONAL_PRICE_ID ? 'professional' : 'professional';
         await c.env.DB.prepare('UPDATE organizations SET plan = ? WHERE stripe_subscription_id = ?').bind(plan, subId).run();
       } catch {}
       break;
@@ -935,6 +1288,44 @@ app.post('/api/billing/webhook', async (c) => {
   }
 
   return c.json({ received: true });
+});
+
+app.post('/api/billing/mailing-callback', async (c) => {
+  const body = await c.req.json();
+  const { documentId, uspsTrackingNumber, mailingDate } = body;
+
+  if (!documentId) {
+    return c.json({ error: 'documentId is required' }, 400);
+  }
+
+  const doc = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ?').bind(documentId).first() as any;
+  if (!doc) {
+    return c.json({ error: 'Document not found' }, 404);
+  }
+
+  const mDate = mailingDate ? new Date(mailingDate) : new Date();
+  const due = new Date(mDate.getTime() + 35 * 24 * 60 * 60 * 1000);
+  const responseDueDateStr = due.toISOString().split('T')[0];
+  const sentDateStr = mDate.toISOString().split('T')[0];
+
+  await c.env.DB.prepare(
+    'UPDATE documents SET usps_tracking_number = ?, response_due_date = ?, sent_date = ?, status = \'sent\', updated_at = datetime("now") WHERE id = ?'
+  ).bind(uspsTrackingNumber || null, responseDueDateStr, sentDateStr, documentId).run();
+
+  await c.env.DB.prepare(
+    'INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    generateId(),
+    doc.org_id,
+    doc.client_id,
+    documentId,
+    'system_usps',
+    'document_mailed',
+    `Certified letter sent via USPS. Tracking: ${uspsTrackingNumber || 'N/A'}. Due date set to ${responseDueDateStr} (15 U.S.C. § 1681i).`,
+    JSON.stringify({ trackingNumber: uspsTrackingNumber, responseDueDate: responseDueDateStr, sentDate: sentDateStr })
+  ).run();
+
+  return c.json({ ok: true, responseDueDate: responseDueDateStr });
 });
 
 app.get('/api/reports', authMiddleware, async (c) => {
@@ -958,14 +1349,30 @@ app.get('/api/reports', authMiddleware, async (c) => {
     'SELECT COUNT(*) as count FROM credit_reports WHERE org_id = ?'
   ).bind(user.org_id).first();
 
-  return c.json({ reports: reports?.results || [], total: total?.count || 0, page, limit });
+  const results = reports?.results || [];
+  const decryptedReports = [];
+  for (const r of results as any[]) {
+    const rDecrypted = { ...r };
+    if (rDecrypted.raw_text) {
+      rDecrypted.raw_text = await decryptPII(c, rDecrypted.raw_text);
+    }
+    if (rDecrypted.parsed_data) {
+      rDecrypted.parsed_data = await decryptPII(c, rDecrypted.parsed_data);
+    }
+    decryptedReports.push(rDecrypted);
+  }
+
+  return c.json({ reports: decryptedReports, total: total?.count || 0, page, limit });
 });
 
 app.get('/api/reports/:id', authMiddleware, async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
-  const report = await c.env.DB.prepare('SELECT * FROM credit_reports WHERE id = ? AND org_id = ?').bind(id, user.org_id).first();
+  const report = await c.env.DB.prepare('SELECT * FROM credit_reports WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
   if (!report) return c.json({ error: 'Not found' }, 404);
+
+  if (report.raw_text) report.raw_text = await decryptPII(c, report.raw_text);
+  if (report.parsed_data) report.parsed_data = await decryptPII(c, report.parsed_data);
 
   const violations = await c.env.DB.prepare('SELECT * FROM violations WHERE report_id = ? AND org_id = ? ORDER BY severity ASC').bind(id, user.org_id).all();
   const litScore = calculateLitigationScore((violations?.results || []) as any);
@@ -978,8 +1385,11 @@ app.get('/api/reports/:id/pdf', authMiddleware, async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
 
-  const report = await c.env.DB.prepare('SELECT * FROM credit_reports WHERE id = ? AND org_id = ?').bind(id, user.org_id).first();
+  const report = await c.env.DB.prepare('SELECT * FROM credit_reports WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
   if (!report) return c.json({ error: 'Report not found' }, 404);
+
+  if (report.raw_text) report.raw_text = await decryptPII(c, report.raw_text);
+  if (report.parsed_data) report.parsed_data = await decryptPII(c, report.parsed_data);
 
   const violations = await c.env.DB.prepare('SELECT * FROM violations WHERE report_id = ? AND org_id = ? ORDER BY severity ASC').bind(id, user.org_id).all();
   const litScore = calculateLitigationScore((violations?.results || []) as any);
@@ -1047,6 +1457,9 @@ app.get('/api/reports/:id/pdf', authMiddleware, async (c) => {
 // ═══════════════════════════════════════════════════════════════
 app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
   const user = c.get('user');
+  const planCheck = await verifyOrgPlanLimits(c, 'report');
+  if (!planCheck.allowed) return c.json({ error: planCheck.message }, 403);
+
   const body = await c.req.json();
   const { clientId, username, password, clientEmail, secretWord } = body;
 
@@ -1117,6 +1530,9 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
 
     const litScore = calculateLitigationScore(allViolations);
 
+    const encryptedRawText = await encryptPII(c, JSON.stringify(mfsnReportData));
+    const encryptedParsedData = await encryptPII(c, JSON.stringify(primaryReport));
+
     await c.env.DB.prepare(
       'INSERT INTO credit_reports (id, org_id, client_id, uploaded_by, bureau, report_date, file_name, raw_text, parsed_data, status, total_accounts, total_inquiries, total_public_records, total_collections, analysis_started_at, analysis_completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime("now"), datetime("now"))'
     ).bind(
@@ -1127,8 +1543,8 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
       'MyFreeScoreNow (3B)', 
       primaryReport.reportDate, 
       `mfsn_${username}.json`, 
-      JSON.stringify(mfsnReportData), 
-      JSON.stringify(primaryReport), 
+      encryptedRawText, 
+      encryptedParsedData, 
       'analyzed', 
       totalAccounts, 
       totalInquiries, 
@@ -1168,6 +1584,9 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
 // ═══════════════════════════════════════════════════════════════
 app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
   const user = c.get('user');
+  const planCheck = await verifyOrgPlanLimits(c, 'report');
+  if (!planCheck.allowed) return c.json({ error: planCheck.message }, 403);
+
   const body = await c.req.json();
   const { clientId, smartCreditData, trackingToken, username, password, fileText } = body;
 
@@ -1457,6 +1876,9 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
 
     const litScore = calculateLitigationScore(allViolations);
 
+    const encryptedRawText = await encryptPII(c, JSON.stringify(payload));
+    const encryptedParsedData = await encryptPII(c, JSON.stringify(primaryReport));
+
     await c.env.DB.prepare(
       'INSERT INTO credit_reports (id, org_id, client_id, uploaded_by, bureau, report_date, file_name, raw_text, parsed_data, status, total_accounts, total_inquiries, total_public_records, total_collections, analysis_started_at, analysis_completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime("now"), datetime("now"))'
     ).bind(
@@ -1467,8 +1889,8 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
       bureauReports.map(r => r.bureau).join(', ') || 'SmartCredit', 
       primaryReport.reportDate, 
       resolvedTrackingToken ? `smartcredit_${resolvedTrackingToken}.json` : `smartcredit_manual.json`, 
-      JSON.stringify(payload), 
-      JSON.stringify(primaryReport), 
+      encryptedRawText, 
+      encryptedParsedData, 
       'analyzed', 
       totalAccounts, 
       totalInquiries, 
@@ -1726,17 +2148,38 @@ CRITICAL INSTRUCTIONS:
 3. The tone must remain professional, firm, assertive, yet authentic.
 4. Return ONLY the rewritten plain text document, with no introductory text, no conversational remarks, and no markdown formatting (like asterisks for bolding). Preserve a clean, professional letter layout.`;
 
-    // 3. Call Cloudflare Workers AI
-    const aiResult = await c.env.AI.run('@cf/meta/llama-3.2-3b-instruct', {
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Here is the dispute letter to rewrite:\n\n${doc.content}` }
-      ]
-    }) as any;
+    // 3. Call Cloudflare Workers AI with a Resilient Model Multi-Tier Fallback Pool
+    const modelPool = [
+      '@cf/meta/llama-3.1-70b-instruct', // Ultra-premium 70B legal reasoning model
+      '@cf/meta/llama-3.1-8b-instruct',  // High-performance 8B model
+      '@cf/meta/llama-3.2-3b-instruct'   // Standard lightweight fallback
+    ];
+
+    let aiResult: any = null;
+    let errorDetails = '';
+
+    for (const model of modelPool) {
+      try {
+        console.log(`[INFO] Attempting dynamic AI rewrite with model: ${model}`);
+        aiResult = await c.env.AI.run(model, {
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Here is the dispute letter to rewrite:\n\n${doc.content}` }
+          ]
+        }) as any;
+        if (aiResult?.response) {
+          console.log(`[SUCCESS] AI rewrite completed using model: ${model}`);
+          break;
+        }
+      } catch (err: any) {
+        console.warn(`[WARN] Model ${model} execution failed or timed out:`, err);
+        errorDetails += `${model}: ${err.message || err}; `;
+      }
+    }
 
     const rewrittenText = aiResult?.response;
     if (!rewrittenText) {
-      return c.json({ error: 'Failed to rewrite document using Cloudflare Workers AI. No response returned.' }, 500);
+      return c.json({ error: 'Failed to rewrite document using Cloudflare Workers AI. No response returned. Details: ' + errorDetails }, 500);
     }
 
     // 4. Update the document in D1
@@ -1916,7 +2359,10 @@ app.get('/api/team', authMiddleware, async (c) => {
 
 app.post('/api/team/invite', authMiddleware, async (c) => {
   const user = c.get('user');
-  if (user.role !== 'admin') return c.json({ error: 'Admin only' }, 403);
+  if (user.role !== 'admin' && user.role !== 'super_admin') return c.json({ error: 'Admin only' }, 403);
+
+  const planCheck = await verifyOrgPlanLimits(c, 'user');
+  if (!planCheck.allowed) return c.json({ error: planCheck.message }, 403);
   
   const { name, email, password, role } = await c.req.json();
   const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
@@ -1951,6 +2397,172 @@ app.get('/api/settings/statutes', (c) => {
     ],
     severities: ['critical', 'high', 'medium', 'low'],
   });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// PLATFORM SUPER ADMIN ENDPOINTS (Gated to role === 'super_admin')
+// ═══════════════════════════════════════════════════════════════
+
+const adminGateMiddleware = async (c: any, next: any) => {
+  const user = c.get('user');
+  if (!user || user.role !== 'super_admin') {
+    return c.json({ error: 'Forbidden: Super Admin only' }, 403);
+  }
+  return next();
+};
+
+// 1. GET /api/admin/db-stats
+app.get('/api/admin/db-stats', authMiddleware, adminGateMiddleware, async (c) => {
+  try {
+    const orgsCount = await c.env.DB.prepare('SELECT COUNT(*) as count FROM organizations').first('count');
+    const usersCount = await c.env.DB.prepare('SELECT COUNT(*) as count FROM users').first('count');
+    const clientsCount = await c.env.DB.prepare('SELECT COUNT(*) as count FROM clients').first('count');
+    const reportsCount = await c.env.DB.prepare('SELECT COUNT(*) as count FROM credit_reports').first('count');
+    const violationsCount = await c.env.DB.prepare('SELECT COUNT(*) as count FROM violations').first('count');
+    const documentsCount = await c.env.DB.prepare('SELECT COUNT(*) as count FROM documents').first('count');
+    const activeSessionsCount = await c.env.DB.prepare('SELECT COUNT(*) as count FROM sessions WHERE expires_at > datetime("now")').first('count');
+
+    return c.json({
+      stats: {
+        organizations: orgsCount || 0,
+        users: usersCount || 0,
+        clients: clientsCount || 0,
+        reports: reportsCount || 0,
+        violations: violationsCount || 0,
+        documents: documentsCount || 0,
+        active_sessions: activeSessionsCount || 0,
+      }
+    });
+  } catch (err: any) {
+    return c.json({ error: `Failed to fetch stats: ${err.message}` }, 500);
+  }
+});
+
+// 2. GET /api/admin/organizations
+app.get('/api/admin/organizations', authMiddleware, adminGateMiddleware, async (c) => {
+  try {
+    const orgs = await c.env.DB.prepare('SELECT * FROM organizations ORDER BY created_at DESC').all();
+    return c.json({ organizations: orgs?.results || [] });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// 3. POST /api/admin/organizations/:id
+app.post('/api/admin/organizations/:id', authMiddleware, adminGateMiddleware, async (c) => {
+  try {
+    const id = c.req.param('id');
+    const body = await c.req.json();
+    const { name, plan, max_users, max_clients, max_reports_per_month } = body;
+
+    await c.env.DB.prepare(
+      'UPDATE organizations SET name = ?, plan = ?, max_users = ?, max_clients = ?, max_reports_per_month = ? WHERE id = ?'
+    ).bind(name, plan, max_users, max_clients, max_reports_per_month, id).run();
+
+    return c.json({ ok: true, message: 'Organization updated' });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// 4. POST /api/admin/organizations/:id/toggle-suspension
+app.post('/api/admin/organizations/:id/toggle-suspension', authMiddleware, adminGateMiddleware, async (c) => {
+  try {
+    const id = c.req.param('id');
+    const org = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(id).first();
+    if (!org) return c.json({ error: 'Organization not found' }, 404);
+
+    const settings = JSON.parse(org.settings || '{}');
+    const isSuspended = !!settings.suspended;
+    settings.suspended = !isSuspended;
+
+    await c.env.DB.prepare('UPDATE organizations SET settings = ? WHERE id = ?').bind(JSON.stringify(settings), id).run();
+
+    // Log the action
+    const adminUser = c.get('user');
+    await c.env.DB.prepare(
+      'INSERT INTO activity_log (id, org_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(
+      generateId(),
+      adminUser.org_id,
+      adminUser.id,
+      'admin_toggle_suspension',
+      `Toggled suspension of organization ${id} to ${settings.suspended}`,
+      JSON.stringify({ target_org: id, suspended: settings.suspended })
+    ).run();
+
+    return c.json({ ok: true, suspended: settings.suspended });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// 5. GET /api/admin/users
+app.get('/api/admin/users', authMiddleware, adminGateMiddleware, async (c) => {
+  try {
+    const query = `
+      SELECT u.id, u.name, u.email, u.role, u.is_active, u.last_login, u.created_at, o.name as org_name, o.id as org_id 
+      FROM users u 
+      JOIN organizations o ON u.org_id = o.id 
+      ORDER BY u.created_at DESC
+    `;
+    const users = await c.env.DB.prepare(query).all();
+    return c.json({ users: users?.results || [] });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// 6. POST /api/admin/users/:id/toggle-status
+app.post('/api/admin/users/:id/toggle-status', authMiddleware, adminGateMiddleware, async (c) => {
+  try {
+    const id = c.req.param('id');
+    const user = await c.env.DB.prepare('SELECT is_active, org_id FROM users WHERE id = ?').bind(id).first();
+    if (!user) return c.json({ error: 'User not found' }, 404);
+
+    const newStatus = user.is_active === 1 ? 0 : 1;
+    await c.env.DB.prepare('UPDATE users SET is_active = ? WHERE id = ?').bind(newStatus, id).run();
+
+    // Force expire any active sessions for the suspended user instantly
+    if (newStatus === 0) {
+      await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id).run();
+    }
+
+    // Log the action
+    const adminUser = c.get('user');
+    await c.env.DB.prepare(
+      'INSERT INTO activity_log (id, org_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(
+      generateId(),
+      adminUser.org_id,
+      adminUser.id,
+      'admin_toggle_user_status',
+      `Toggled status of user ${id} to ${newStatus === 1 ? 'Active' : 'Suspended'}`,
+      JSON.stringify({ target_user: id, is_active: newStatus })
+    ).run();
+
+    return c.json({ ok: true, is_active: newStatus });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// 7. GET /api/admin/logs
+app.get('/api/admin/logs', authMiddleware, adminGateMiddleware, async (c) => {
+  try {
+    const query = `
+      SELECT l.*, u.email as user_email, o.name as org_name 
+      FROM activity_log l 
+      JOIN users u ON l.user_id = u.id 
+      JOIN organizations o ON l.org_id = o.id 
+      ORDER BY l.created_at DESC 
+      LIMIT 100
+    `;
+    const logs = await c.env.DB.prepare(query).all();
+    return c.json({ logs: logs?.results || [] });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════

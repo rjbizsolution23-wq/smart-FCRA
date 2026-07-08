@@ -1,21 +1,78 @@
-MIT License
+# SMARTFCRA™ MASTER PROPRIETARY SOFTWARE LICENSE AGREEMENT
+## COPYRIGHT © 2026 RICK JEFFERSON | RJ BUSINESS SOLUTIONS. ALL RIGHTS RESERVED.
+### DOCUMENT REFERENCE: RJBS-SF-LICENSE-2026 | BUILD ID: NEL-20260707-194132
 
-Copyright (c) 2026 Rick Jefferson | RJ Business Solutions
+```
+==============================================================================
+   Sovereign Proprietor:  Rick Jefferson
+   Corporate Body:        RJ Business Solutions
+   HQ Address:            1342 NM 333, Tijeras, New Mexico 87059
+   Primary Portals:       https://rickjeffersonsolutions.com
+                          https://rjbusinesssolutions.org
+   Sovereign Emails:      rjbizsolution23@gmail.com
+                          support@rjbusinesssolutions.org
+   Classification:        PROPRIETARY COMMERCIAL SOFTWARE LICENSE
+==============================================================================
+```
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+---
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+### IMPORTANT: READ THIS AGREEMENT CAREFULLY BEFORE DOWNLOADING, COMPILING, OR UTILIZING THIS SOFTWARE.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+This Master Proprietary Software License Agreement (the "Agreement") is a legally binding contract between Rick Jefferson (individually) and RJ Business Solutions (collectively, "Licensor"), and any user, operator, developer, partner, or licensee ("Licensee") of the SmartFCRA™ software system, compiled under the repository name `fcra-detector` (the "Software").
+
+By accessing, running, compiling, or deploying the Software, Licensee agrees to be bound by the terms of this proprietary license. If Licensee does not agree to these terms, Licensee is strictly prohibited from utilizing, running, or hosting any portion of this system.
+
+---
+
+## 🏛️ SECTION 1: DECLARATION OF ABSOLUTE OWNER STATUS & SOVEREIGN IP
+
+1.1 **Sole Ownership**: Rick Jefferson, through RJ Business Solutions, is the Sole Inventor, Principal Architect, and Sovereign Owner of all intellectual property, trade secrets, patents, copyrights, source code compilations, database models, Edge worker API configurations, client-side parsing modules, and visual interfaces contained within this Software.
+
+1.2 **Trade Secret Status**: Licensee acknowledges that the Software contains highly proprietary algorithmic structures, regular expression parsing engines, fuzzy-clustering name matching engines, and regulatory compliance logic that represent trade secrets protected under the **Defend Trade Secrets Act (DTSA) (18 U.S.C. § 1836)**, the **Uniform Trade Secrets Act (UTSA)**, and international treaties.
+
+1.3 **Revocation of Prior Terms**: Any and all prior open-source licenses, permissive distribution structures (including but not limited to the MIT, Apache, BSD, or GNU GPL licenses), or other public code permissions are hereby **permanently and retroactively revoked, nullified, and terminated**. This closed-source Commercial Proprietary License constitutes the sole valid legal term of use.
+
+---
+
+## 📝 SECTION 2: LIMITED COMMERCIAL LICENSE GRANT & COVENANTS
+
+2.1 **Scope of Grant**: Subject to a signed, active paid commercial SaaS subscription contract with RJ Business Solutions, Licensor grants Licensee a **limited, non-exclusive, non-transferable, revocable, and non-sublicensable** seat license to access and use the hosted Software through authorized web routing interfaces.
+
+2.2 **Restrictive Covenants**: Licensee and any developers, operators, or sub-tenants associated with Licensee are strictly prohibited from performing any of the following actions:
+* **No Extraction**: Licensee shall not download, clone, scrape, copy, or export any raw server-side or edge-worker Hono source files, database relational schemas, or proprietary front-end compilation scripts.
+* **No Reverse Engineering**: Licensee shall not decompile, de-obfuscate, disassemble, or attempt to recreate the mathematical heuristics, regular expression matrices, or legal rules engine parameters.
+* **No Reselling or Sublicensing**: Licensee shall not rent, lease, white-label, package, or resell the Software or its API routes to unauthorized legal groups, credit repair organizations, or third parties without a custom corporate contract signed by Rick Jefferson.
+
+---
+
+## ⚖️ SECTION 3: LIQUIDATED DAMAGES & INJUNCTIVE REMEDIES
+
+3.1 **Liquidated Damages Clause**: Licensee acknowledges that the unauthorized duplication, reverse engineering, extraction, white-labeling, or sub-tenant resale of the core Trade Secret modules of the Software (including the fuzzy matching engine, regex parser, or automated legal letter generators) will cause catastrophic and irreversible financial harm to Licensor. 
+In the event of such violation, Licensee agrees to pay to Licensor **Liquidated Damages in the amount of $250,000 USD** per infraction.
+
+3.2 **Injunctive Relief**: Licensor shall be entitled to seek immediate injunctive relief to halt any unauthorized distribution or reverse engineering, as well as full recovery of attorney's fees, investigative costs, and all legal expenditures under **18 U.S.C. § 1836**.
+
+---
+
+## 🏛️ SECTION 4: STATUTORY AND COPYRIGHT FOOTERS
+
+All deployed web interfaces, output documents, and generated dispute letters must continuously display the following on-brand copyright notice to preserve absolute legal protections:
+
+```text
+© 2026 Rick Jefferson | RJ Business Solutions. All Rights Reserved.
+SmartFCRA™ is a registered trademark of RJ Business Solutions.
+This software and its proprietary parsing, matching, and violations engines are 
+protected under federal copyright law, trade secret acts, and international treaties.
+Unauthorized duplication, distribution, or reverse engineering is strictly prohibited.
+Corporate Address: RJ Business Solutions, 1342 NM 333, Tijeras, New Mexico 87059
+```
+
+**Sovereign Signature & Execution Seal:**
+
+```
+[SEAL OF OWNER]
+/s/ Rick Jefferson
+Principal Prompt Architect, Data Engineer, & Owner
+RJ Business Solutions
+```

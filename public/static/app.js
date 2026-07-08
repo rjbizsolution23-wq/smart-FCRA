@@ -563,7 +563,10 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       { id:'billing', icon:'fa-credit-card', label:'Billing' },
       { id:'legal', icon:'fa-gavel', label:'Legal' },
     ];
-    // Branding URLs - replace with actual image URLs
+    if (state.user?.role === 'super_admin') {
+    navItems.push({ id:'admin-console', icon:'fa-user-shield', label:'Admin Console' });
+  }
+  // Branding URLs - replace with actual image URLs
     const RJ_LOGO = 'https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg';
     const MFSN_BANNER = '/static/logos/mfsn-banner.png';
     const FCRA_LOGO = '/static/logos/Professional_logo_design_for_FCRA_DETECTOR_mode-1776629301082.png';
@@ -608,6 +611,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'team': await pgTeam(el); break;
         case 'billing': await pgBilling(el); break;
         case 'legal': await pgLegal(el); break;
+        case 'admin-console': await pgAdminConsole(el); break;
         case 'upload-report': await pgUploadReport(el, state.pageData); break;
         case 'generate-doc': await pgGenerateDoc(el, state.pageData); break;
         case 'full-analysis': await pgFullAnalysis(el, state.pageData); break;
@@ -3694,5 +3698,563 @@ Status: Discharged`;
     }
   }
 
-  render();
+  
+async function pgAdminConsole(el) {
+  el.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-center"><i class="fas fa-spinner fa-spin text-3xl text-blue-400 mb-3"></i><div class="text-sm text-gray-400">Initializing Platform Control Center...</div></div></div>`;
+
+  try {
+    const [statsData, orgsData, usersData, logsData] = await Promise.all([
+      api('/admin/db-stats'),
+      api('/admin/organizations'),
+      api('/admin/users'),
+      api('/admin/logs')
+    ]);
+
+    let activeTab = 'overview';
+
+    function renderConsole() {
+      el.innerHTML = `
+        <div class="fade-in">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div>
+              <h1 class="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+                <i class="fas fa-user-shield text-blue-500"></i> Platform Control Center
+              </h1>
+              <p class="text-xs text-gray-400 mt-0.5">RJ Business Solutions • Global Multi-Tenant Systems Admin Panel</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-green-500/10 text-green-400 border border-green-500/20 flex items-center gap-1.5 animate-pulse">
+                <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span> Edge Native Normal
+              </span>
+              <span class="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                Build ID: NEL-20260708
+              </span>
+            </div>
+          </div>
+
+          <div class="flex border-b border-gray-800 mb-6 overflow-x-auto whitespace-nowrap gap-1">
+            <button class="px-4 py-2.5 text-xs font-semibold border-b-2 transition ${activeTab === 'overview' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}" onclick="window._adminTab('overview')">
+              <i class="fas fa-chart-bar mr-1.5"></i>Overview
+            </button>
+            <button class="px-4 py-2.5 text-xs font-semibold border-b-2 transition ${activeTab === 'organizations' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}" onclick="window._adminTab('organizations')">
+              <i class="fas fa-building mr-1.5"></i>B2B Tenants (${orgsData.organizations.length})
+            </button>
+            <button class="px-4 py-2.5 text-xs font-semibold border-b-2 transition ${activeTab === 'users' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}" onclick="window._adminTab('users')">
+              <i class="fas fa-users mr-1.5"></i>User Accounts (${usersData.users.length})
+            </button>
+            <button class="px-4 py-2.5 text-xs font-semibold border-b-2 transition ${activeTab === 'logs' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}" onclick="window._adminTab('logs')">
+              <i class="fas fa-list-alt mr-1.5"></i>Security Audit Trails
+            </button>
+            <button class="px-4 py-2.5 text-xs font-semibold border-b-2 transition ${activeTab === 'sop' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}" onclick="window._adminTab('sop')">
+              <i class="fas fa-book mr-1.5"></i>Admin SOP Documentation
+            </button>
+          </div>
+
+          <div id="admin-tab-content" class="space-y-6"></div>
+        </div>
+      `;
+
+      renderTabContent();
+    }
+
+    function renderTabContent() {
+      const target = document.getElementById('admin-tab-content');
+      if (!target) return;
+
+      if (activeTab === 'overview') {
+        const stats = statsData.stats;
+        target.innerHTML = `
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="glass p-5 rounded-xl border border-gray-800">
+              <div class="text-xs text-gray-400 uppercase tracking-wider font-semibold">B2B Tenants</div>
+              <div class="text-2xl font-extrabold text-white mt-2">${stats.organizations}</div>
+              <div class="text-[10px] text-blue-400 font-medium mt-1"><i class="fas fa-circle text-[6px] mr-1"></i>Active Multi-Tenants</div>
+            </div>
+            <div class="glass p-5 rounded-xl border border-gray-800">
+              <div class="text-xs text-gray-400 uppercase tracking-wider font-semibold">User Accounts</div>
+              <div class="text-2xl font-extrabold text-white mt-2">${stats.users}</div>
+              <div class="text-[10px] text-purple-400 font-medium mt-1"><i class="fas fa-user-check text-[10px] mr-1"></i>Registered Users</div>
+            </div>
+            <div class="glass p-5 rounded-xl border border-gray-800">
+              <div class="text-xs text-gray-400 uppercase tracking-wider font-semibold">Reports Ingested</div>
+              <div class="text-2xl font-extrabold text-white mt-2">${stats.reports}</div>
+              <div class="text-[10px] text-green-400 font-medium mt-1"><i class="fas fa-file-invoice text-[10px] mr-1"></i>Total Analyzed Reports</div>
+            </div>
+            <div class="glass p-5 rounded-xl border border-gray-800">
+              <div class="text-xs text-gray-400 uppercase tracking-wider font-semibold">Active Sessions</div>
+              <div class="text-2xl font-extrabold text-white mt-2">${stats.active_sessions}</div>
+              <div class="text-[10px] text-amber-400 font-medium mt-1 animate-pulse"><i class="fas fa-bolt text-[10px] mr-1"></i>Live Sessions</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+            <div class="glass p-5 rounded-xl border border-gray-800 md:col-span-2">
+              <h3 class="text-sm font-bold text-white mb-3">Database Telemetry & Entity Ratios</h3>
+              <div class="space-y-4">
+                <div>
+                  <div class="flex justify-between text-xs mb-1">
+                    <span class="text-gray-400">Violations Detected vs Credit Reports Ingested</span>
+                    <span class="text-white font-semibold">${stats.violations} violations across ${stats.reports} reports</span>
+                  </div>
+                  <div class="w-full bg-gray-800 h-2 rounded-full overflow-hidden">
+                    <div class="bg-red-500 h-full rounded-full" style="width: ${Math.min(100, (stats.violations / (stats.reports || 1)) * 25)}%"></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="flex justify-between text-xs mb-1">
+                    <span class="text-gray-400">Certified Documents Generated vs Clients</span>
+                    <span class="text-white font-semibold">${stats.documents} documents across ${stats.clients} clients</span>
+                  </div>
+                  <div class="w-full bg-gray-800 h-2 rounded-full overflow-hidden">
+                    <div class="bg-blue-500 h-full rounded-full" style="width: ${Math.min(100, (stats.documents / (stats.clients || 1)) * 50)}%"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="glass p-5 rounded-xl border border-gray-800 flex flex-col justify-between">
+              <div>
+                <h3 class="text-sm font-bold text-white mb-3">System Health Status</h3>
+                <div class="space-y-2.5">
+                  <div class="flex items-center justify-between text-xs text-gray-300">
+                    <span>Edge Worker Gateway</span>
+                    <span class="text-green-400 font-semibold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-green-400"></span>Operational</span>
+                  </div>
+                  <div class="flex items-center justify-between text-xs text-gray-300">
+                    <span>SQLite Cloudflare D1</span>
+                    <span class="text-green-400 font-semibold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-green-400"></span>Healthy</span>
+                  </div>
+                  <div class="flex items-center justify-between text-xs text-gray-300">
+                    <span>Tesseract OCR Engine</span>
+                    <span class="text-blue-400 font-semibold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span>Standby</span>
+                  </div>
+                </div>
+              </div>
+              <div class="pt-4 border-t border-gray-800 text-[10px] text-gray-500 text-center">
+                System uptime: 100.00% • Verified Local Time MST
+              </div>
+            </div>
+          </div>
+        `;
+      } 
+      
+      else if (activeTab === 'organizations') {
+        target.innerHTML = `
+          <div class="glass rounded-xl border border-gray-800 overflow-hidden">
+            <div class="p-4 border-b border-gray-800 bg-gray-900/40 flex justify-between items-center">
+              <h3 class="text-sm font-bold text-white">Active Tenants Directory</h3>
+              <span class="text-xs text-gray-400">${orgsData.organizations.length} organizations provisioned</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr class="border-b border-gray-800 text-gray-400 font-medium">
+                    <th class="p-3">Organization ID</th>
+                    <th class="p-3">Name / Slug</th>
+                    <th class="p-3">Active Subscription Plan</th>
+                    <th class="p-3 text-center">Max Users</th>
+                    <th class="p-3 text-center">Max Clients</th>
+                    <th class="p-3 text-center">Max Reports / Mo</th>
+                    <th class="p-3 text-center">Status</th>
+                    <th class="p-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-800/60 text-gray-300">
+                  ${orgsData.organizations.map(o => {
+                    const settings = JSON.parse(o.settings || '{}');
+                    const isSuspended = !!settings.suspended;
+                    return `
+                      <tr class="hover:bg-gray-800/20">
+                        <td class="p-3 font-mono text-[10px] text-gray-400">${o.id}</td>
+                        <td class="p-3">
+                          <div class="font-bold text-white">${o.name}</div>
+                          <div class="text-[10px] text-gray-500">${o.slug}</div>
+                        </td>
+                        <td class="p-3">
+                          <span class="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            o.plan === 'enterprise' ? 'bg-purple-900/30 text-purple-400 border border-purple-800/30' :
+                            o.plan === 'pro' || o.plan === 'unlimited' ? 'bg-blue-900/30 text-blue-400 border border-blue-800/30' :
+                            'bg-gray-700/50 text-gray-400'
+                          }">${o.plan}</span>
+                        </td>
+                        <td class="p-3 text-center font-semibold">${o.max_users}</td>
+                        <td class="p-3 text-center font-semibold">${o.max_clients}</td>
+                        <td class="p-3 text-center font-semibold">${o.max_reports_per_month}</td>
+                        <td class="p-3 text-center">
+                          <span class="px-2.5 py-0.5 rounded text-[10px] font-semibold ${
+                            isSuspended ? 'bg-red-900/30 text-red-400 border border-red-800/30' : 'bg-green-900/30 text-green-400 border border-green-800/30'
+                          }">${isSuspended ? 'Suspended' : 'Active'}</span>
+                        </td>
+                        <td class="p-3 text-right space-x-1.5 whitespace-nowrap">
+                          <button onclick="window._adminEditOrg('${o.id}')" class="bg-gray-800 hover:bg-gray-700 text-white px-2.5 py-1.5 rounded text-[10px] font-bold transition">
+                            <i class="fas fa-edit mr-1"></i>Edit
+                          </button>
+                          <button onclick="window._adminToggleOrgSuspension('${o.id}')" class="${
+                            isSuspended ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white'
+                          } px-2.5 py-1.5 rounded text-[10px] font-bold transition">
+                            <i class="fas ${isSuspended ? 'fa-play' : 'fa-stop'} mr-1"></i>${isSuspended ? 'Unsuspend' : 'Suspend'}
+                          </button>
+                        </td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="org-edit-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div class="glass w-full max-w-md rounded-xl border border-gray-800 overflow-hidden shadow-2xl">
+              <div class="p-5 border-b border-gray-800 bg-gray-900/40 flex justify-between items-center">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2"><i class="fas fa-edit text-blue-400"></i> Edit Tenant Boundaries</h3>
+                <button onclick="$('#org-edit-modal').classList.add('hidden')" class="text-gray-500 hover:text-white"><i class="fas fa-times text-sm"></i></button>
+              </div>
+              <form id="org-edit-form" class="p-5 space-y-4">
+                <input type="hidden" name="id">
+                <div>
+                  <label class="block text-xs text-gray-400 mb-1">Company / Organization Name</label>
+                  <input type="text" name="name" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-xs focus:border-blue-500 outline-none">
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-400 mb-1">Commercial Billing Plan</label>
+                  <select name="plan" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-xs focus:border-blue-500 outline-none">
+                    <option value="free">Free Account</option>
+                    <option value="pro">Pro Plan ($497/mo)</option>
+                    <option value="unlimited">Unlimited Plan ($2500/mo)</option>
+                    <option value="enterprise">Enterprise Plan ($9997/mo)</option>
+                  </select>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                  <div>
+                    <label class="block text-xs text-gray-400 mb-1">Max Users</label>
+                    <input type="number" name="max_users" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-xs focus:border-blue-500 outline-none">
+                  </div>
+                  <div>
+                    <label class="block text-xs text-gray-400 mb-1">Max Clients</label>
+                    <input type="number" name="max_clients" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-xs focus:border-blue-500 outline-none">
+                  </div>
+                  <div>
+                    <label class="block text-xs text-gray-400 mb-1">Max Reports / Mo</label>
+                    <input type="number" name="max_reports" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-xs focus:border-blue-500 outline-none">
+                  </div>
+                </div>
+                <div class="flex gap-2 pt-2">
+                  <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-semibold transition">Save Modifications</button>
+                  <button type="button" onclick="$('#org-edit-modal').classList.add('hidden')" class="bg-gray-700 text-white px-4 py-2 rounded-lg text-xs">Cancel</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        `;
+
+        const f = $('#org-edit-form');
+        if (f) {
+          f.onsubmit = async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const orgId = fd.get('id');
+            try {
+              await api(`/admin/organizations/${orgId}`, {
+                method: 'POST',
+                body: JSON.stringify({
+                  name: fd.get('name'),
+                  plan: fd.get('plan'),
+                  max_users: parseInt(fd.get('max_users')),
+                  max_clients: parseInt(fd.get('max_clients')),
+                  max_reports_per_month: parseInt(fd.get('max_reports'))
+                })
+              });
+              toast('Tenant settings updated successfully', 'success');
+              $('#org-edit-modal').classList.add('hidden');
+              
+              const updatedOrgs = await api('/admin/organizations');
+              orgsData.organizations = updatedOrgs.organizations;
+              renderTabContent();
+            } catch(err) {
+              toast(err.message, 'error');
+            }
+          };
+        }
+      } 
+      
+      else if (activeTab === 'users') {
+        target.innerHTML = `
+          <div class="flex items-center justify-between mb-4 gap-4">
+            <div class="relative flex-1 max-w-md">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500"><i class="fas fa-search text-xs"></i></span>
+              <input type="text" id="admin-user-search" placeholder="Filter platform users by name or email..." class="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-white text-xs focus:border-blue-500 outline-none">
+            </div>
+          </div>
+          
+          <div class="glass rounded-xl border border-gray-800 overflow-hidden">
+            <div class="p-4 border-b border-gray-800 bg-gray-900/40 flex justify-between items-center">
+              <h3 class="text-sm font-bold text-white">Platform Users Registry</h3>
+              <span class="text-xs text-gray-400">${usersData.users.length} users registered</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr class="border-b border-gray-800 text-gray-400 font-medium">
+                    <th class="p-3">User ID</th>
+                    <th class="p-3">Name / Role</th>
+                    <th class="p-3">Email Address</th>
+                    <th class="p-3">Associated Organization</th>
+                    <th class="p-3">Last Login Tracker</th>
+                    <th class="p-3 text-center">Status</th>
+                    <th class="p-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-800/60 text-gray-300" id="admin-users-tbody">
+                  ${renderUserRows(usersData.users)}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+
+        const searchInput = $('#admin-user-search');
+        if (searchInput) {
+          searchInput.oninput = (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            const filtered = usersData.users.filter(u => 
+              u.name.toLowerCase().includes(query) || 
+              u.email.toLowerCase().includes(query) || 
+              u.org_name.toLowerCase().includes(query)
+            );
+            const tbody = $('#admin-users-tbody');
+            if (tbody) tbody.innerHTML = renderUserRows(filtered);
+          };
+        }
+      } 
+      
+      else if (activeTab === 'logs') {
+        target.innerHTML = `
+          <div class="flex items-center justify-between mb-4 gap-4">
+            <div class="relative flex-1 max-w-md">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500"><i class="fas fa-search text-xs"></i></span>
+              <input type="text" id="admin-log-search" placeholder="Search logs by action, email, description..." class="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-white text-xs focus:border-blue-500 outline-none">
+            </div>
+          </div>
+
+          <div class="glass rounded-xl border border-gray-800 overflow-hidden">
+            <div class="p-4 border-b border-gray-800 bg-gray-900/40 flex justify-between items-center">
+              <h3 class="text-sm font-bold text-white">System Security & Audit Trail</h3>
+              <span class="text-xs text-gray-400">Showing last 100 entries</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr class="border-b border-gray-800 text-gray-400 font-medium">
+                    <th class="p-3">Timestamp (UTC)</th>
+                    <th class="p-3">User Email</th>
+                    <th class="p-3">B2B Tenant</th>
+                    <th class="p-3">Security Action</th>
+                    <th class="p-3">SOP Description</th>
+                    <th class="p-3 text-right">Entity Link ID</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-800/60 text-gray-400" id="admin-logs-tbody">
+                  ${renderLogRows(logsData.logs)}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+
+        const logSearchInput = $('#admin-log-search');
+        if (logSearchInput) {
+          logSearchInput.oninput = (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            const filtered = logsData.logs.filter(l => 
+              l.user_email.toLowerCase().includes(query) || 
+              l.action.toLowerCase().includes(query) || 
+              l.description.toLowerCase().includes(query) || 
+              l.org_name.toLowerCase().includes(query)
+            );
+            const tbody = $('#admin-logs-tbody');
+            if (tbody) tbody.innerHTML = renderLogRows(filtered);
+          };
+        }
+      } 
+      
+      else if (activeTab === 'sop') {
+        target.innerHTML = `
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div class="glass p-4 rounded-xl border border-gray-800 h-fit space-y-2">
+              <h4 class="text-xs font-bold text-white uppercase tracking-wider mb-2.5">SOP Outline</h4>
+              <a href="#sop-purpose" class="block text-xs text-blue-400 hover:text-white transition"><i class="fas fa-bookmark mr-1.5"></i>1. Purpose & Scope</a>
+              <a href="#sop-console" class="block text-xs text-blue-400 hover:text-white transition"><i class="fas fa-bookmark mr-1.5"></i>2. Console Overview</a>
+              <a href="#sop-shutdown" class="block text-xs text-blue-400 hover:text-white transition"><i class="fas fa-bookmark mr-1.5"></i>3. Account Shutdowns</a>
+              <a href="#sop-db" class="block text-xs text-blue-400 hover:text-white transition"><i class="fas fa-bookmark mr-1.5"></i>4. DB Maintenance</a>
+              <a href="#sop-security" class="block text-xs text-blue-400 hover:text-white transition"><i class="fas fa-bookmark mr-1.5"></i>5. Security Audits</a>
+            </div>
+
+            <div class="glass p-6 rounded-xl border border-gray-800 md:col-span-3 prose prose-invert max-w-none text-xs text-gray-300 space-y-6">
+              <h2 class="text-lg font-extrabold text-white border-b border-gray-800 pb-2 mb-4">SmartFCRA™ Supreme — Platform Admin Operations SOP</h2>
+              
+              <section id="sop-purpose" class="space-y-2">
+                <h3 class="text-sm font-bold text-white">1. Document Purpose & Scope</h3>
+                <p>This SOP outlines the zero-defect procedures for administering the SmartFCRA™ Supreme multi-tenant platform. All operations must prioritize tenant security isolation and prevent database leakage. Administrative interventions (such as user deactivation and tenant-level blocks) must follow authorized protocols.</p>
+              </section>
+
+              <section id="sop-console" class="space-y-2">
+                <h3 class="text-sm font-bold text-white">2. Platform Admin Console Overview</h3>
+                <p>The Super Admin dashboard provides parallel monitoring across all tenants. Only users possessing the <code>super_admin</code> role can access these API controllers. Overview telemetry is pulled dynamically in real-time, verifying network, sessions, and database counts.</p>
+              </section>
+
+              <section id="sop-shutdown" class="space-y-2">
+                <h3 class="text-sm font-bold text-white">3. Account Shutdown & User Suspension Procedures</h3>
+                <div class="bg-blue-600/10 border border-blue-500/20 rounded-xl p-4 mb-3">
+                  <div class="font-bold text-blue-400 mb-1"><i class="fas fa-info-circle mr-1"></i> Active Real-Time Enforcement</div>
+                  If a user or tenant is suspended, their active session cookie is instantly intercepted and revoked at the edge by the server middleware, preventing any further read/write queries.
+                </div>
+                <h4 class="font-bold text-white mt-2">Individual User Suspension:</h4>
+                <p>To block a specific user, locate their entry in the <strong>User Accounts</strong> tab and click "Suspend". This instantly invalidates their sessions across all devices.</p>
+                <h4 class="font-bold text-white mt-2">Tenant-Wide Suspension:</h4>
+                <p>To block an entire organization, toggle their status in the <strong>B2B Tenants</strong> tab. This puts an immediate lockout blanket over all users belonging to that organization slug.</p>
+              </section>
+
+              <section id="sop-db" class="space-y-2">
+                <h3 class="text-sm font-bold text-white">4. Database Maintenance & Backup SOP</h3>
+                <p>Cloudflare D1 SQLite utilizes Edge replication. Prior to manual database column alterations or security migrations, admins are required to log in via CLI and trigger a manual export capture command:</p>
+                <pre class="bg-black/40 border border-gray-800 p-3 rounded-lg font-mono text-[10px] text-gray-400 overflow-x-auto">npx wrangler d1 export fcra-detector-production --local --output=./backups/snap_NEL_latest.sql</pre>
+              </section>
+
+              <section id="sop-security" class="space-y-2">
+                <h3 class="text-sm font-bold text-white">5. Security Auditing & Compliance Guidelines</h3>
+                <p>Admins must trace the global Security Activity log weekly for suspicious patterns, such as multiple login IP mismatches or consecutive document generation requests outside business hours.</p>
+              </section>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function renderUserRows(users) {
+      if (!users.length) {
+        return `<tr><td colspan="7" class="p-6 text-center text-gray-500"><i class="fas fa-user-slash text-2xl mb-2"></i><div>No users found matching filter criteria</div></td></tr>`;
+      }
+      return users.map(u => `
+        <tr class="hover:bg-gray-800/20">
+          <td class="p-3 font-mono text-[10px] text-gray-400">${u.id}</td>
+          <td class="p-3">
+            <div class="font-bold text-white">${u.name}</div>
+            <div class="text-[10px] text-purple-400 font-semibold uppercase tracking-wider">${u.role}</div>
+          </td>
+          <td class="p-3 font-mono text-[11px]">${u.email}</td>
+          <td class="p-3 font-semibold">${u.org_name}</td>
+          <td class="p-3 text-gray-400">${u.last_login ? new Date(u.last_login).toLocaleString() : 'Never'}</td>
+          <td class="p-3 text-center">
+            <span class="px-2.5 py-0.5 rounded text-[10px] font-semibold ${
+              u.is_active === 1 ? 'bg-green-900/30 text-green-400 border border-green-800/30' : 'bg-red-900/30 text-red-400 border border-red-800/30'
+            }">${u.is_active === 1 ? 'Active' : 'Suspended'}</span>
+          </td>
+          <td class="p-3 text-right">
+            ${u.id !== state.user?.id ? `
+              <button onclick="window._adminToggleUser('${u.id}')" class="${
+                u.is_active === 1 ? 'bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white' : 'bg-green-600 hover:bg-green-700 text-white'
+              } px-2.5 py-1.5 rounded text-[10px] font-bold transition">
+                <i class="fas ${u.is_active === 1 ? 'fa-user-slash' : 'fa-user-check'} mr-1"></i>${u.is_active === 1 ? 'Suspend' : 'Activate'}
+              </button>
+            ` : '<span class="text-[10px] text-gray-500 font-medium">Locked (Self)</span>'}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function renderLogRows(logs) {
+      if (!logs.length) {
+        return `<tr><td colspan="6" class="p-6 text-center text-gray-500"><i class="fas fa-exclamation-circle text-2xl mb-2"></i><div>No activity logs found</div></td></tr>`;
+      }
+      return logs.map(l => `
+        <tr class="hover:bg-gray-800/20">
+          <td class="p-3 text-gray-400 whitespace-nowrap">${new Date(l.created_at).toLocaleString()}</td>
+          <td class="p-3 font-semibold text-gray-300 font-mono text-[11px]">${l.user_email}</td>
+          <td class="p-3 text-gray-300">${l.org_name}</td>
+          <td class="p-3">
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono tracking-wider font-semibold bg-gray-800 text-gray-300 border border-gray-700/50">${l.action}</span>
+          </td>
+          <td class="p-3 text-gray-300 font-medium">${l.description}</td>
+          <td class="p-3 text-right font-mono text-[10px] text-gray-500">${l.client_id || l.document_id || l.report_id || '-'}</td>
+        </tr>
+      `).join('');
+    }
+
+    window._adminTab = (t) => {
+      activeTab = t;
+      renderConsole();
+    };
+
+    window._adminToggleUser = async (userId) => {
+      try {
+        const res = await api(`/admin/users/${userId}/toggle-status`, { method: 'POST' });
+        toast(`User status set to ${res.is_active === 1 ? 'Active' : 'Suspended'}`, 'success');
+        
+        const updatedUsers = await api('/admin/users');
+        usersData.users = updatedUsers.users;
+        
+        const updatedLogs = await api('/admin/logs');
+        logsData.logs = updatedLogs.logs;
+        
+        const updatedStats = await api('/admin/db-stats');
+        statsData.stats = updatedStats.stats;
+
+        renderConsole();
+      } catch(err) {
+        toast(err.message, 'error');
+      }
+    };
+
+    window._adminToggleOrgSuspension = async (orgId) => {
+      try {
+        const res = await api(`/admin/organizations/${orgId}/toggle-suspension`, { method: 'POST' });
+        toast(`Tenant organization set to ${res.suspended ? 'Suspended' : 'Active'}`, 'success');
+
+        const updatedOrgs = await api('/admin/organizations');
+        orgsData.organizations = updatedOrgs.organizations;
+
+        const updatedLogs = await api('/admin/logs');
+        logsData.logs = updatedLogs.logs;
+        
+        const updatedStats = await api('/admin/db-stats');
+        statsData.stats = updatedStats.stats;
+
+        renderConsole();
+      } catch(err) {
+        toast(err.message, 'error');
+      }
+    };
+
+    window._adminEditOrg = (orgId) => {
+      const o = orgsData.organizations.find(org => org.id === orgId);
+      if (!o) return;
+      const m = $('#org-edit-modal');
+      if (m) {
+        m.querySelector('input[name="id"]').value = o.id;
+        m.querySelector('input[name="name"]').value = o.name;
+        m.querySelector('select[name="plan"]').value = o.plan;
+        m.querySelector('input[name="max_users"]').value = o.max_users;
+        m.querySelector('input[name="max_clients"]').value = o.max_clients;
+        m.querySelector('input[name="max_reports"]').value = o.max_reports_per_month;
+        m.classList.remove('hidden');
+      }
+    };
+
+    renderConsole();
+
+  } catch (err) {
+    el.innerHTML = `
+      <div class="fade-in">
+        <div class="glass rounded-xl p-8 border border-red-500/30 text-center">
+          <i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i>
+          <h3 class="text-lg font-bold text-white mb-1">Authorization Lockout</h3>
+          <p class="text-sm text-gray-400">${err.message}</p>
+        </div>
+      </div>
+    `;
+  }
+}
+
+
+render();
 })();

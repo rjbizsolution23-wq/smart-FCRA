@@ -1,0 +1,46 @@
+ 
+[pretty_curr_date]
+ 
+[bureau_name]
+‎
+[bureau_address]
+ 
+ 
+RE: Confirmation # 6062537823     Date:letter date
+ 
+I have reviewed my [bureau_name] credit report which I have obtained from your credit reporting agency, and the[bureau_name] File Number is 358261728. I have found out that in my credit report there is some information which is incomplete, inaccurate, or inconsistent.
+ 
+ 
+Under 15 U.S. Code § 1681i, I am entitled to request a reinvestigation of any accounts on my credit report that contain inaccurate information. Please refer to 15 U.S. Code § 1681i(a)(1)(A) and 15 U.S. Code § 1681e(b) for further clarification.
+ 
+I wish to opt out of all email communications. Please note that you may have an incorrect or outdated email address on file, which could result in my personal information being shared with unauthorized parties. Moving forward, I request that all correspondence be sent exclusively to my mailing address, which is provided above.
+ 
+ 
+I am disputing the information below because I believe it is untrue, incomplete, inaccurate, or inconsistent, and I want you to investigate any information related to my personal information that is inaccurate, incomplete, not authenticated, or no longer valid. This will help ensure you're only maintaining accurate information about me, which reduces the risk of identity theft or a mixed file. I appreciate your efforts in retaining the following correct details on my record, listed below. The information listed is the only accurate personal data you should have on file. Please delete any other information that does not match.
+ 
+My name is [client_first_name] [client_middle_name] [client_last_name].My address is [client_address], [client_city], [client_state] [client_postal_code].My last four SSN: [last4_ssn].My date of birth is [bdate].
+ 
+The following account(s) on my credit report from your agency, [bureau_name], are inaccurate:
+[account , dispute_instruction_in_bullet_list]
+ 
+ 
+I am requesting that you and the furnishers conduct a thorough investigation of the accounts I am disputing. Please forward a copy of this letter to each furnisher and make sure both you and they comply with the law by performing a proper investigation, not a generic response or a rubber stamp. I take the accuracy of my credit reports seriously, and it is essential that every piece of information is correct, complete, and fully verified. My report currently contains contradictory, incomplete, and incorrect information that cannot be verified, and whether that came from the furnisher or from your own reporting, it is now your responsibility to fix it.
+ 
+I expect every account listed to be 100% accurate, complete, and verifiable. If it isn't, it must be deleted immediately, not corrected halfway. As you investigate, if you come across any other inaccurate, incomplete, or unverifiable information beyond what I've listed, I expect that to be corrected or deleted as well.
+ 
+Once your investigation is complete, please send me the results along with a full copy of my file, meaning everything you have on me. That includes all inquiries, both hard and soft pulls, along with their stated purpose, and copies of certifications from anyone who has accessed my report. Under FCRA § 1681g, you're required to disclose all sources of information and identify anyone who accessed my file. Under FCRA § 1681i, I'm also requesting a description of the procedures used to investigate each disputed account, including the business name, address, and phone number of any furnisher you contacted.
+ 
+Please don't ignore this letter or skip a real investigation. Under Section 1681i(a) of the Fair Credit Reporting Act, you're required to investigate disputed information and make sure only 100% accurate, verifiable, and complete information stays on my report. Anything that doesn't meet that standard must be promptly deleted.
+ 
+I am sending this letter personally, not through a credit repair company, so please don't reject it based on the postmark location or anything else.
+ 
+I am requesting a complete copy of my file after this reinvestigation is finished. As defined under 15 U.S.C. § 1681a(g), the term "file" means all information on me that you retain, regardless of how it's stored, so a partial disclosure would not satisfy this request and would not be lawful.
+ 
+If you end up verifying or deeming any of the disputed information above as accurate and complete, I am requesting a description of the procedure used to determine that accuracy or completeness, including the business name, address, and phone number of any furnisher contacted, within 15 days of making that determination, as required under 15 U.S.C. § 1681i(a)(6)(B)(iii) and § 1681i(a)(7).
+ 
+I have enclosed proof of my identity current mailing address, and My social security card. This is not required under the FCRA, but I'm including it to help move the investigation along without delay.
+ 
+Sincerely,
+[client_first_name] [client_middle_name] [client_last_name]
+‎
+[client_address], [client_city], [client_state] [client_postal_code]

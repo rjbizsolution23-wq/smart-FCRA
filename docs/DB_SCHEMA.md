@@ -1,49 +1,22 @@
 # Database Schema — FCRA Supreme Violation Detector
 
-## Overview
-The platform uses Cloudflare D1 (SQLite) as its primary relational database. The schema is multi-tenant, with data isolation achieved via `org_id` on all resident tables.
+The relational multi-tenant SQLite database schema (Cloudflare D1) has been fully defined, documented, and consolidated into the Master API manual.
 
-## Tables
+👉 **Refer to the Master Documentation:** [docs/API_INTEGRATIONS_AND_SPECS.md#️-relational-database-schema-design-cloudflare-d1](file:///c:/Users/ricky/Downloads/fcra-detector-main/fcra-detector-main/docs/API_INTEGRATIONS_AND_SPECS.md#️-relational-database-schema-design-cloudflare-d1)
 
-### organizations
-| Column | Type | Description |
-|--------|------|-------------|
-| id | TEXT | Primary Key (Id) |
-| name | TEXT | Human-readable name |
-| slug | TEXT | URL-friendly identifier |
-| plan | TEXT | Current tier (free, pro, enterprise) |
-| stripe_customer_id | TEXT | Reference to Stripe Customer |
-| stripe_subscription_id | TEXT | Reference to Stripe Subscription |
+---
 
-### users
-| Column | Type | Description |
-|--------|------|-------------|
-| id | TEXT | Primary Key (Id) |
-| org_id | TEXT | Organization FK |
-| email | TEXT | Unique login email |
-| password_hash | TEXT | Argon2id hash |
-| role | TEXT | admin, member |
+## 🏛️ Quick Database Table Roster
+- `organizations`: B2B Tenants with dynamically adjustable tier and compliance limit fields.
+- `users`: Registered users, including `'super_admin'`, `'admin'`, and `'member'` roles.
+- `sessions`: Active device cookies.
+- `clients`: Consumer clients (PIN fields are fully encrypted at rest using Aes-256-Gcm).
+- `credit_reports`: Extracted credit report details and tradelines.
+- `violations`: Detected FCRA/FDCPA compliance statutory violations.
+- `documents`: Generated dispute letters and litigation complaints.
+- `activity_logs`: Global security audit trails tracking operator actions, IP addresses, and timestamps.
 
-### clients
-| Column | Type | Description |
-|--------|------|-------------|
-| id | TEXT | Primary Key (Id) |
-| org_id | TEXT | Organization FK |
-| first_name | TEXT | Client first name |
-| last_name | TEXT | Client last name |
-
-### credit_reports
-| Column | Type | Description |
-|--------|------|-------------|
-| id | TEXT | Primary Key (Id) |
-| client_id | TEXT | Client FK |
-| bureau | TEXT | Experian, Equifax, TransUnion, 3-Bureau |
-| parsed_data | TEXT | JSON blob of mapped report data |
-
-### violations
-| Column | Type | Description |
-|--------|------|-------------|
-| id | TEXT | Primary Key (Id) |
-| report_id | TEXT | Report FK |
-| severity | TEXT | critical, high, medium, low |
-| statute | TEXT | Legal reference (FCRA, FDCPA) |
+---
+⏰ **Anchor Date:** 2026-07-08 MST  
+🏢 **RJ Business Solutions**  
+👤 **Owner:** Rick Jefferson  

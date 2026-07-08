@@ -7,7 +7,7 @@
 
 [![Deploy Status](https://img.shields.io/badge/Deployment-Cloudflare%20Pages-0A66FF?style=for-the-badge&logo=cloudflare)](https://smart-fcra.pages.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-007ACC?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-emerald?style=for-the-badge)](LICENSE)
+[![License: Proprietary](https://img.shields.io/badge/License-Proprietary%20Commercial-0A66FF?style=for-the-badge)](LICENSE)
 [![Security](https://img.shields.io/badge/Compliance-FCRA%20%2F%20FDCPA-blueviolet?style=for-the-badge)](#compliance--legal-auto-wiring)
 
 ---
@@ -78,7 +78,8 @@ Our repository layout is engineered for immediate technical onboarding and insti
 │   ├── SECURITY_AUDIT.md   # Threat Vector Modeling & Data Safety Analysis
 │   ├── INFRASTRUCTURE.md   # Cloudflare Pages, Worker, and D1 Database Mapping
 │   ├── DB_SCHEMA.md        # Relational SQLite D1 Entity Layout
-│   └── ADR_LOG.md          # Architectural Decision Records
+│   ├── ADR_LOG.md          # Architectural Decision Records
+│   └── IP_PROTECTION_AND_LICENSING.md # Absolute Ownership & Sovereign IP Protection Deed
 ├── src/                # Edge Workers API & Parsing Engine Source Code
 │   ├── engine/             # The Analytical Brain
 │   │   ├── parser.ts           # High-Fidelity Demographic & Bureau Extraction
@@ -151,4 +152,4 @@ For custom business customizations or enterprise licensing options, reach out to
 * **Owner**: Rick Jefferson, Principal prompt architect & full stack developer
 
 ---
-© 2026 RJ Business Solutions. All rights reserved. Registered trademark.
+© 2026 Rick Jefferson | RJ Business Solutions. All rights reserved. Registered trademark.
