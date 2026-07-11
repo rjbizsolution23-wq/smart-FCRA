@@ -551,22 +551,34 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   // SHELL
   // ═══════════════════════════════════════════════════════════════
   function renderShell() {
-    const navItems = [
-      { id:'dashboard', icon:'fa-chart-line', label:'Dashboard' },
-      { id:'clients', icon:'fa-users', label:'Clients' },
-      { id:'reports', icon:'fa-file-alt', label:'Reports' },
-      { id:'report-history', icon:'fa-history', label:'Report History' },
-      { id:'violations', icon:'fa-exclamation-triangle', label:'Violations' },
-      { id:'documents', icon:'fa-file-contract', label:'Documents' },
-      { id:'founder-os', icon:'fa-briefcase', label:'Founder OS' },
-      { id:'team', icon:'fa-user-friends', label:'Team' },
-      { id:'billing', icon:'fa-credit-card', label:'Billing' },
-      { id:'legal', icon:'fa-gavel', label:'Legal' },
-    ];
-    if (state.user?.role === 'super_admin') {
-    navItems.push({ id:'admin-console', icon:'fa-user-shield', label:'Admin Console' });
-  }
-  // Branding URLs - replace with actual image URLs
+    let navItems = [];
+    if (state.user?.role === 'client') {
+      navItems = [
+        { id: 'client-cockpit', icon: 'fa-rocket', label: 'My Cockpit' },
+        { id: 'client-documents', icon: 'fa-file-signature', label: 'My Documents' },
+        { id: 'client-knowledge', icon: 'fa-graduation-cap', label: 'Education Hub' }
+      ];
+    } else {
+      navItems = [
+        { id: 'admin-overview', icon: 'fa-chart-pie', label: 'Executive Overview' },
+        { id: 'admin-clients', icon: 'fa-address-card', label: 'Client Management' },
+        { id: 'admin-violation-queue', icon: 'fa-tasks', label: 'Violation Review QA' },
+        { id: 'dashboard', icon: 'fa-chart-line', label: 'Dashboard' },
+        { id: 'clients', icon: 'fa-users', label: 'Clients' },
+        { id: 'reports', icon: 'fa-file-alt', label: 'Reports' },
+        { id: 'report-history', icon: 'fa-history', label: 'Report History' },
+        { id: 'violations', icon: 'fa-exclamation-triangle', label: 'Violations' },
+        { id: 'documents', icon: 'fa-file-contract', label: 'Documents' },
+        { id: 'founder-os', icon: 'fa-briefcase', label: 'Founder OS' },
+        { id: 'team', icon: 'fa-user-friends', label: 'Team' },
+        { id: 'billing', icon: 'fa-credit-card', label: 'Billing' },
+        { id: 'legal', icon: 'fa-gavel', label: 'Legal' },
+      ];
+      if (state.user?.role === 'super_admin') {
+        navItems.push({ id: 'admin-console', icon: 'fa-user-shield', label: 'Admin Console' });
+      }
+    }
+    // Branding URLs - replace with actual image URLs
     const RJ_LOGO = 'https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg';
     const MFSN_BANNER = '/static/logos/mfsn-banner.png';
     const FCRA_LOGO = RJ_LOGO;
@@ -596,6 +608,18 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   async function loadPage(page) {
     const el = $('#page-content');
     if (!el) return;
+
+    // Zero-Trust Role Redirection for the default Dashboard route
+    if (page === 'dashboard') {
+      if (state.user?.role === 'client') {
+        page = 'client-cockpit';
+        state.currentPage = 'client-cockpit';
+      } else {
+        page = 'admin-overview';
+        state.currentPage = 'admin-overview';
+      }
+    }
+
     el.innerHTML = '<div class="flex items-center justify-center h-40"><i class="fas fa-spinner fa-spin text-blue-400 text-xl"></i></div>';
     try {
       switch(page) {
@@ -612,9 +636,22 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'billing': await pgBilling(el); break;
         case 'legal': await pgLegal(el); break;
         case 'admin-console': await pgAdminConsole(el); break;
+        case 'onboarding-wizard': await pgOnboardingWizard(el, state.pageData); break;
         case 'upload-report': await pgUploadReport(el, state.pageData); break;
         case 'generate-doc': await pgGenerateDoc(el, state.pageData); break;
         case 'full-analysis': await pgFullAnalysis(el, state.pageData); break;
+        case 'report-comparison': await pgReportComparison(el, state.pageData); break;
+        
+        // Secure Self-Service Client Portal Pages
+        case 'client-cockpit': await pgClientCockpit(el); break;
+        case 'client-documents': await pgClientDocuments(el); break;
+        case 'client-knowledge': await pgClientKnowledge(el); break;
+
+        // Admin/Staff CRM & Litigation Dashboard
+        case 'admin-overview': await pgAdminOverview(el); break;
+        case 'admin-clients': await pgAdminClients(el); break;
+        case 'admin-violation-queue': await pgAdminViolationQueue(el); break;
+
         default: el.innerHTML = '<p class="text-gray-400">Page not found.</p>';
       }
     } catch(err) { el.innerHTML = `<div class="text-red-400 p-4"><i class="fas fa-exclamation-triangle mr-2"></i>${err.message}</div>`; }
@@ -639,7 +676,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       </div>
       <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">Dashboard</h1><p class="text-sm text-gray-400">Credit dispute operations overview</p></div>
         <div class="flex gap-2">
-          <button onclick="window._nav('upload-report', { clientId: 'autopilot', autopilot: true, from: 'dashboard' })" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition shadow-lg flex items-center gap-1.5"><i class="fas fa-magic"></i>Smart Autopilot Ingest</button>
+          <button onclick="window._nav('onboarding-wizard', { step: 1 })" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition shadow-lg flex items-center gap-1.5"><i class="fas fa-magic"></i>Smart Autopilot Ingest</button>
           <button onclick="window._nav('clients')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-plus"></i>New Client</button>
         </div>
       </div>
@@ -664,7 +701,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     el.innerHTML = `<div class="fade-in">
       <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">Clients</h1><p class="text-sm text-gray-400">${d.clients.length} total</p></div>
         <div class="flex gap-2">
-          <button onclick="window._nav('upload-report', { clientId: 'autopilot', autopilot: true, from: 'clients' })" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition shadow-lg flex items-center gap-1.5"><i class="fas fa-magic"></i>Smart Autopilot Ingest</button>
+          <button onclick="window._nav('onboarding-wizard', { step: 1 })" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition shadow-lg flex items-center gap-1.5"><i class="fas fa-magic"></i>Smart Autopilot Ingest</button>
           <button onclick="$('#add-client-form').classList.toggle('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-plus"></i>Add Client</button>
         </div>
       </div>
@@ -697,13 +734,14 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 
     el.innerHTML = `<div class="fade-in">
       <button onclick="window._nav('clients')" class="text-gray-400 hover:text-white text-sm mb-4 inline-flex items-center gap-1.5 transition"><i class="fas fa-arrow-left text-xs"></i>Back</button>
-      <div class="flex items-start justify-between mb-6">
+      <div class="flex items-start justify-between mb-6 flex-wrap gap-4">
         <div class="flex items-center gap-4"><div class="w-14 h-14 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 font-bold text-xl">${(c.first_name||'?')[0]}${(c.last_name||'?')[0]}</div>
           <div><h1 class="text-xl font-bold text-white">${c.first_name} ${c.last_name}</h1><div class="text-sm text-gray-400">${c.email||''} ${c.phone?'&bull; '+c.phone:''}</div>${c.address_line1?`<div class="text-xs text-gray-500">${c.address_line1}${c.city?', '+c.city:''} ${c.state||''} ${c.zip||''}</div>`:''}</div>
         </div>
         <div class="flex gap-2">
-          <button onclick="window._nav('upload-report',{clientId:'${c.id}',clientName:'${c.first_name} ${c.last_name}'})" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"><i class="fas fa-upload mr-1.5"></i>Upload Report</button>
-          <button onclick="window._nav('generate-doc',{clientId:'${c.id}',clientName:'${c.first_name} ${c.last_name}'})" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"><i class="fas fa-file-contract mr-1.5"></i>Generate Docs</button>
+          <button id="btn-edit-client" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 border border-gray-700"><i class="fas fa-edit"></i>Edit Profile</button>
+          <button onclick="window._nav('upload-report',{clientId:'${c.id}',clientName:'${c.first_name} ${c.last_name}'})" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-upload"></i>Upload Report</button>
+          <button onclick="window._nav('generate-doc',{clientId:'${c.id}',clientName:'${c.first_name} ${c.last_name}'})" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-file-contract"></i>Generate Docs</button>
         </div>
       </div>
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
@@ -714,7 +752,167 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       </div>
       <div class="flex border-b border-gray-800 mb-4">${['reports','violations','documents','activity'].map((t,i)=>`<button class="client-tab pb-2.5 px-4 text-sm font-medium ${i===0?'text-blue-400 border-b-2 border-blue-400':'text-gray-500 border-b-2 border-transparent hover:text-gray-300'}" data-tab="${t}">${t[0].toUpperCase()+t.slice(1)} (${t==='activity'?res.activity.length:res[t].length})</button>`).join('')}</div>
       <div id="client-tab-content">${renderViolationsList(res.violations)}</div>
+
+      <!-- Edit Client Slide-Over Panel -->
+      <div id="edit-client-modal" class="fixed inset-0 z-[100] hidden">
+        <div class="absolute inset-0 bg-gray-950/70 backdrop-blur-sm transition-opacity" onclick="window._closeEditClientModal()"></div>
+        <div class="absolute inset-y-0 right-0 max-w-full flex">
+          <div class="w-screen max-w-lg glass bg-gray-950/95 border-l border-gray-800/80 p-6 flex flex-col h-full shadow-2xl overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-gray-800/60 pb-4 mb-6">
+              <div class="flex items-center gap-2.5">
+                <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-6 w-auto rounded border border-blue-500/30">
+                <h2 class="text-sm font-bold text-white uppercase tracking-wider font-mono">Edit Client Profile</h2>
+              </div>
+              <button onclick="window._closeEditClientModal()" class="text-gray-400 hover:text-white transition"><i class="fas fa-times text-lg"></i></button>
+            </div>
+            
+            <form id="edit-client-form-submit" class="space-y-4 flex-1">
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">First Name *</label>
+                  <input type="text" name="firstName" required value="${escapeHtml(c.first_name)}" class="w-full bg-gray-900/60 border border-gray-800 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Last Name *</label>
+                  <input type="text" name="lastName" required value="${escapeHtml(c.last_name)}" class="w-full bg-gray-900/60 border border-gray-800 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+                </div>
+              </div>
+              
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Email Address</label>
+                  <input type="email" name="email" value="${escapeHtml(c.email)}" class="w-full bg-gray-900/60 border border-gray-800 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Phone Number</label>
+                  <input type="tel" name="phone" value="${escapeHtml(c.phone)}" class="w-full bg-gray-900/60 border border-gray-800 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Street Mailing Address</label>
+                <input type="text" name="addressLine1" value="${escapeHtml(c.address_line1)}" class="w-full bg-gray-900/60 border border-gray-800 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+              </div>
+
+              <div class="grid grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">City</label>
+                  <input type="text" name="city" value="${escapeHtml(c.city)}" class="w-full bg-gray-900/60 border border-gray-800 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">State</label>
+                  <input type="text" name="state" maxlength="2" value="${escapeHtml(c.state)}" class="w-full bg-gray-900/60 border border-gray-800 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="e.g. CA">
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">ZIP Code</label>
+                  <input type="text" name="zip" value="${escapeHtml(c.zip)}" class="w-full bg-gray-900/60 border border-gray-800 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Date of Birth</label>
+                  <input type="date" name="dob" value="${c.dob || ''}" class="w-full bg-gray-900/60 border border-gray-800 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">SSN (Last 4 Digits)</label>
+                  <input type="text" name="ssnLast4" maxlength="4" value="${escapeHtml(c.ssn_last4)}" class="w-full bg-gray-900/60 border border-gray-800 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="e.g. 1234">
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Client Status</label>
+                <select name="status" class="w-full bg-gray-900/60 border border-gray-800 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+                  <option value="active" ${c.status === 'active' ? 'selected' : ''}>Active</option>
+                  <option value="lead" ${c.status === 'lead' ? 'selected' : ''}>Lead</option>
+                  <option value="inactive" ${c.status === 'inactive' ? 'selected' : ''}>Inactive</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Internal Account Notes</label>
+                <textarea name="notes" rows="3" class="w-full bg-gray-900/60 border border-gray-800 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="Add confidential notes...">${escapeHtml(c.notes)}</textarea>
+              </div>
+
+              <div class="p-4 bg-blue-950/25 border border-blue-500/20 rounded-xl space-y-3">
+                <h4 class="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5"><i class="fas fa-shield-alt"></i> Compliance Authorization</h4>
+                
+                <label class="flex items-start gap-2.5 cursor-pointer">
+                  <input type="checkbox" name="permissiblePurposeConsent" ${c.permissible_purpose_consent ? 'checked' : ''} class="mt-1 rounded border-gray-800 bg-gray-900 text-blue-600 focus:ring-blue-500/50 w-4 h-4">
+                  <span class="text-[10px] text-gray-400 leading-relaxed">
+                    <strong>Permissible Purpose (15 U.S.C. § 1681b):</strong> Client grants RJ Business Solutions explicit permission to pull credit files.
+                  </span>
+                </label>
+
+                <label class="flex items-start gap-2.5 cursor-pointer">
+                  <input type="checkbox" name="croaContractAgreed" ${c.croa_contract_agreed ? 'checked' : ''} class="mt-1 rounded border-gray-800 bg-gray-900 text-blue-600 focus:ring-blue-500/50 w-4 h-4">
+                  <span class="text-[10px] text-gray-400 leading-relaxed">
+                    <strong>CROA Disclosures (15 U.S.C. § 1679c):</strong> Client signed and accepted complete CROA disclosure statements before credit review.
+                  </span>
+                </label>
+
+                <label class="flex items-start gap-2.5 cursor-pointer">
+                  <input type="checkbox" name="tsrAdvanceFeeWaived" ${c.tsr_advance_fee_waived ? 'checked' : ''} class="mt-1 rounded border-gray-800 bg-gray-900 text-blue-600 focus:ring-blue-500/50 w-4 h-4">
+                  <span class="text-[10px] text-gray-400 leading-relaxed">
+                    <strong>TSR Compliance (16 C.F.R. § 310.4):</strong> No advance fees are collected. All billing is strictly in arrears based on results.
+                  </span>
+                </label>
+              </div>
+
+              <div class="flex gap-3 pt-4 border-t border-gray-800/60">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-2.5 rounded-lg transition text-sm shadow-lg shadow-blue-500/10">Save Profile Updates</button>
+                <button type="button" onclick="window._closeEditClientModal()" class="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 border border-gray-800 rounded-lg text-sm text-gray-400 hover:text-white transition">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </div>`;
+
+    // Wire up events
+    const btnEdit = document.getElementById('btn-edit-client');
+    const modal = document.getElementById('edit-client-modal');
+    if (btnEdit && modal) {
+      btnEdit.onclick = () => modal.classList.remove('hidden');
+    }
+    window._closeEditClientModal = () => {
+      if (modal) modal.classList.add('hidden');
+    };
+
+    const editForm = document.getElementById('edit-client-form-submit');
+    if (editForm) {
+      editForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const b = {
+          firstName: fd.get('firstName'),
+          lastName: fd.get('lastName'),
+          email: fd.get('email'),
+          phone: fd.get('phone'),
+          addressLine1: fd.get('addressLine1'),
+          city: fd.get('city'),
+          state: fd.get('state'),
+          zip: fd.get('zip'),
+          dob: fd.get('dob'),
+          ssnLast4: fd.get('ssnLast4'),
+          notes: fd.get('notes'),
+          status: fd.get('status'),
+          permissiblePurposeConsent: fd.get('permissiblePurposeConsent') !== null,
+          croaContractAgreed: fd.get('croaContractAgreed') !== null,
+          tsrAdvanceFeeWaived: fd.get('tsrAdvanceFeeWaived') !== null,
+        };
+        try {
+          await api(`/clients/${c.id}`, { method: 'PUT', body: JSON.stringify(b) });
+          toast('Client profile successfully updated!', 'success');
+          window._closeEditClientModal();
+          // Reload page content
+          await pgClientDetail(el, data);
+        } catch(err) {
+          toast(err.message, 'error');
+        }
+      };
+    }
+
     // Show violations first since that's the money view
     document.querySelectorAll('.client-tab').forEach(tab => {
       tab.onclick = () => {
@@ -733,7 +931,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 
   function renderReportsList(reports) {
     if (!reports.length) return '<div class="text-center py-8 text-gray-500"><i class="fas fa-file-alt text-3xl mb-3"></i><p>No reports yet</p></div>';
-    return `<div class="space-y-2">${reports.map(r=>`<div onclick="window._nav('report-detail',{reportId:'${r.id}'})" class="glass rounded-lg p-4 card-hover cursor-pointer"><div class="flex items-center justify-between"><div><div class="text-sm font-medium text-white"><i class="fas fa-file-alt mr-2 text-blue-400"></i>${r.bureau||'Unknown'}</div><div class="text-xs text-gray-400">${r.file_name} &bull; ${shortDate(r.created_at)}</div></div><div class="text-right"><div class="text-xs text-gray-400">${r.total_accounts||0} accounts</div><span class="px-2 py-0.5 rounded text-[10px] font-medium ${r.status==='analyzed'?'bg-green-900/30 text-green-400':'bg-yellow-900/30 text-yellow-400'}">${r.status}</span></div></div></div>`).join('')}</div>`;
+    return `<div class="space-y-2">${reports.map(r=>`<div onclick="window._nav('report-detail',{reportId:'${r.id}'})" class="glass rounded-lg p-4 card-hover cursor-pointer"><div class="flex items-center justify-between"><div><div class="text-sm font-medium text-white"><i class="fas fa-file-alt mr-2 text-blue-400"></i>${r.bureau||'Unknown'}</div><div class="text-xs text-gray-400">${r.file_name} &bull; ${shortDate(r.created_at)}</div></div><div class="text-right flex flex-col items-end gap-1.5"><div class="text-xs text-gray-400">${r.total_accounts||0} accounts</div><div class="flex items-center gap-1.5"><button onclick="event.stopPropagation(); window._nav('report-comparison', {reportId:'${r.id}'})" class="px-2 py-0.5 rounded bg-purple-950/40 text-purple-400 hover:bg-purple-900/30 border border-purple-500/20 text-[10px] font-semibold transition flex items-center gap-1"><i class="fas fa-balance-scale"></i> Compare</button><span class="px-2 py-0.5 rounded text-[10px] font-medium ${r.status==='analyzed'?'bg-green-900/30 text-green-400':'bg-yellow-900/30 text-yellow-400'}">${r.status}</span></div></div></div></div>`).join('')}</div>`;
   }
 
   function renderViolationsList(violations) {
@@ -1625,6 +1823,718 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     };
   }
 
+
+async function pgOnboardingWizard(el, data) {
+  let currentStep = data && data.step ? data.step : 1;
+  let onboardingData = {
+    clientId: data && data.clientId ? data.clientId : '',
+    clientName: data && data.clientName ? data.clientName : '',
+    bureau: data && data.bureau ? data.bureau : '',
+    reportId: data && data.reportId ? data.reportId : '',
+    violationsFound: data && data.violationsFound ? data.violationsFound : 0,
+    language: 'en',
+    firstName: '',
+    lastName: '',
+    dob: '',
+    ssnLast4: '',
+    addressLine1: '',
+    city: '',
+    state: '',
+    zip: '',
+    phone: '',
+    email: '',
+    permissiblePurposeConsent: false,
+    croaContractAgreed: false,
+    tsrAdvanceFeeWaived: false,
+    password: '',
+  };
+
+  // If we already have a clientId, prefill from server
+  if (onboardingData.clientId) {
+    try {
+      const res = await api(`/clients/${onboardingData.clientId}`);
+      if (res && res.client) {
+        onboardingData.firstName = res.client.first_name || '';
+        onboardingData.lastName = res.client.last_name || '';
+        onboardingData.dob = res.client.dob || '';
+        onboardingData.ssnLast4 = res.client.ssn_last4 || '';
+        onboardingData.addressLine1 = res.client.address_line1 || '';
+        onboardingData.city = res.client.city || '';
+        onboardingData.state = res.client.state || '';
+        onboardingData.zip = res.client.zip || '';
+        onboardingData.email = res.client.email || '';
+        onboardingData.phone = res.client.phone || '';
+      }
+    } catch (e) {
+      console.error('Error pre-filling client details:', e);
+    }
+  }
+
+  function render() {
+    el.innerHTML = `
+      <div class="fade-in max-w-4xl mx-auto px-4 py-8">
+        <!-- Brand Header -->
+        <div class="flex items-center justify-between border-b border-gray-800 pb-6 mb-8 flex-wrap gap-4">
+          <div class="flex items-center gap-3">
+            <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-10 w-auto rounded border border-blue-500/30">
+            <div>
+              <h1 class="text-xl font-extrabold text-white tracking-tight uppercase font-mono">FCRA Onboarding Wizard</h1>
+              <p class="text-xs text-blue-400 font-semibold tracking-wider uppercase font-mono">Client Ingest & Compliance Setup</p>
+            </div>
+          </div>
+          <button onclick="window._nav('dashboard')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-1.5 rounded-lg text-xs font-semibold border border-gray-700 transition flex items-center gap-1.5"><i class="fas fa-home"></i>Exit Wizard</button>
+        </div>
+
+        <!-- Progress Steps -->
+        <div class="grid grid-cols-5 gap-2 mb-8 select-none">
+          ${renderStepIndicator(1, 'Upload', 'fa-file-upload')}
+          ${renderStepIndicator(2, 'Language', 'fa-language')}
+          ${renderStepIndicator(3, 'Profile', 'fa-id-card')}
+          ${renderStepIndicator(4, 'Intake', 'fa-shield-alt')}
+          ${renderStepIndicator(5, 'Portal', 'fa-user-lock')}
+        </div>
+
+        <!-- Wizard Container -->
+        <div class="glass p-6 md:p-8 rounded-2xl border border-gray-800 relative shadow-2xl">
+          <div id="wizard-step-content" class="fade-in">
+            ${renderStepContent()}
+          </div>
+        </div>
+      </div>
+    `;
+
+    attachStepEvents();
+  }
+
+  function renderStepIndicator(stepNum, label, icon) {
+    let stateClass = 'step-pending';
+
+    if (currentStep > stepNum) {
+      stateClass = 'step-done';
+    } else if (currentStep === stepNum) {
+      stateClass = 'step-active';
+    }
+
+    return `
+      <div class="flex flex-col items-center text-center">
+        <div class="w-10 h-10 md:w-12 md:h-12 rounded-full border-2 flex items-center justify-center text-base md:text-lg transition font-bold font-mono ${stateClass}">
+          <i class="fas ${icon}"></i>
+        </div>
+        <span class="text-[10px] md:text-xs font-semibold mt-2 ${currentStep === stepNum ? 'text-blue-400' : 'text-gray-500'} font-mono uppercase tracking-wider">${label}</span>
+      </div>
+    `;
+  }
+
+  function renderStepContent() {
+    switch (currentStep) {
+      case 1:
+        return `
+          <h2 class="text-xl font-extrabold text-white mb-2 font-mono uppercase">Step 1: Ingest Credit Report</h2>
+          <p class="text-sm text-gray-400 mb-6">Select a credit report file (HTML/PDF/Image) to parse accounts, inquiries, and identify statutory violations dynamically.</p>
+          
+          <div id="dropzone-onboard" class="border-2 border-dashed border-gray-800 hover:border-blue-500/50 rounded-2xl p-10 text-center cursor-pointer transition flex flex-col items-center justify-center gap-4 bg-gray-950/20 hover:bg-gray-950/40 relative group overflow-hidden">
+            <div class="absolute inset-0 bg-gradient-to-b from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition duration-300"></div>
+            <div class="w-16 h-14 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-2xl group-hover:scale-110 transition"><i class="fas fa-cloud-upload-alt"></i></div>
+            <div>
+              <p class="font-bold text-white text-base group-hover:text-blue-400 transition">Drag & drop credit report here</p>
+              <p class="text-xs text-gray-500 mt-1">Supports PDF, HTML, or Image files</p>
+            </div>
+            <button class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition">Browse File</button>
+            <input type="file" id="input-onboard-file" class="hidden" accept=".html,.htm,.txt,.pdf,.jpg,.jpeg,.png" multiple>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+            <div class="glass bg-gray-950/40 p-4 rounded-xl border border-gray-800/80 hover:border-gray-700/80 transition cursor-pointer" onclick="window._showMfsnModal()">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center text-green-400 text-lg"><i class="fas fa-link"></i></div>
+                <div>
+                  <h4 class="text-sm font-bold text-white">MyFreeScoreNow Import</h4>
+                  <p class="text-xs text-gray-500 mt-0.5">Import credentials and pull latest bureaus.</p>
+                </div>
+              </div>
+            </div>
+            <div class="glass bg-gray-950/40 p-4 rounded-xl border border-gray-800/80 hover:border-gray-700/80 transition cursor-pointer" onclick="window._showSmartCreditModal()">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 text-lg"><i class="fas fa-key"></i></div>
+                <div>
+                  <h4 class="text-sm font-bold text-white">SmartCredit Integration</h4>
+                  <p class="text-xs text-gray-500 mt-0.5">Secure SSO and dynamic credit mapping.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-8 pt-6 border-t border-gray-800/60 flex flex-col gap-4">
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-gray-500 font-mono">Or paste raw credit report text below:</span>
+              <button id="btn-submit-onboard-raw" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-1.5 rounded-lg text-xs font-bold border border-gray-700 transition">Analyze Raw Text</button>
+            </div>
+            <textarea id="ta-onboard-raw" class="w-full h-32 bg-gray-950/60 border border-gray-800 rounded-xl p-3 text-sm text-gray-300 focus:outline-none focus:border-blue-500/50 transition placeholder-gray-600" placeholder="Paste full credit report copy-paste string here..."></textarea>
+          </div>
+
+          <div id="onboard-processing" class="hidden mt-6 pt-6 border-t border-gray-800/60 text-center">
+            <div class="flex items-center justify-center gap-3 text-blue-400 font-bold text-sm">
+              <i class="fas fa-circle-notch fa-spin"></i>
+              <span>Processing and parsing report...</span>
+            </div>
+          </div>
+        `;
+
+      case 2:
+        return `
+          <h2 class="text-xl font-extrabold text-white mb-2 font-mono uppercase">Step 2: Language Preference</h2>
+          <p class="text-sm text-gray-400 mb-6">Select the language used for client communications, automated portal messaging, and litigation letters.</p>
+          
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div id="lang-card-en" class="glass bg-gray-950/40 p-6 rounded-2xl border-2 cursor-pointer card-hover flex flex-col items-center text-center gap-3 ${onboardingData.language === 'en' ? 'border-blue-500 bg-blue-500/5 shadow-[0_0_15px_rgba(59,130,246,0.15)]' : 'border-gray-800'}" data-lang="en">
+              <div class="w-14 h-14 rounded-full overflow-hidden border border-gray-800/80 flex items-center justify-center text-3xl">🇺🇸</div>
+              <div>
+                <h3 class="text-base font-bold text-white">English</h3>
+                <p class="text-xs text-gray-500 mt-1">Default communications and English legal dispute letters.</p>
+              </div>
+            </div>
+            <div id="lang-card-es" class="glass bg-gray-950/40 p-6 rounded-2xl border-2 cursor-pointer card-hover flex flex-col items-center text-center gap-3 ${onboardingData.language === 'es' ? 'border-blue-500 bg-blue-500/5 shadow-[0_0_15px_rgba(59,130,246,0.15)]' : 'border-gray-800'}" data-lang="es">
+              <div class="w-14 h-14 rounded-full overflow-hidden border border-gray-800/80 flex items-center justify-center text-3xl">🇪🇸</div>
+              <div>
+                <h3 class="text-base font-bold text-white">Spanish (Español)</h3>
+                <p class="text-xs text-gray-500 mt-1">Full portal translate with localized litigation guides.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-800/60">
+            <button id="btn-lang-prev" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-5 py-2 rounded-lg text-sm font-semibold transition border border-gray-700">Back</button>
+            <button id="btn-lang-next" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-bold transition flex items-center gap-1.5">Next Step <i class="fas fa-arrow-right text-xs"></i></button>
+          </div>
+        `;
+
+      case 3:
+        return `
+          <h2 class="text-xl font-extrabold text-white mb-2 font-mono uppercase">Step 3: Auto-populated Profile Review</h2>
+          <p class="text-sm text-gray-400 mb-6">Review the client identity fields parsed automatically from the credit report. Please verify or correct them below.</p>
+          
+          <form id="onboard-profile-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-gray-400 uppercase font-mono mb-1.5 tracking-wider">First Name</label>
+              <input type="text" id="prof-firstName" class="w-full bg-gray-950/50 border border-gray-800 focus:border-blue-500/50 rounded-lg p-2.5 text-sm text-white focus:outline-none transition" value="${onboardingData.firstName}" required>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-400 uppercase font-mono mb-1.5 tracking-wider">Last Name</label>
+              <input type="text" id="prof-lastName" class="w-full bg-gray-950/50 border border-gray-800 focus:border-blue-500/50 rounded-lg p-2.5 text-sm text-white focus:outline-none transition" value="${onboardingData.lastName}" required>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-400 uppercase font-mono mb-1.5 tracking-wider">Date of Birth (YYYY-MM-DD)</label>
+              <input type="text" id="prof-dob" class="w-full bg-gray-950/50 border border-gray-800 focus:border-blue-500/50 rounded-lg p-2.5 text-sm text-white focus:outline-none transition" placeholder="e.g. 1985-05-12" value="${onboardingData.dob}">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-400 uppercase font-mono mb-1.5 tracking-wider">SSN Last 4</label>
+              <input type="text" id="prof-ssnLast4" class="w-full bg-gray-950/50 border border-gray-800 focus:border-blue-500/50 rounded-lg p-2.5 text-sm text-white focus:outline-none transition" placeholder="e.g. 1234" maxlength="4" value="${onboardingData.ssnLast4}">
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs font-bold text-gray-400 uppercase font-mono mb-1.5 tracking-wider">Address Line 1</label>
+              <input type="text" id="prof-addressLine1" class="w-full bg-gray-950/50 border border-gray-800 focus:border-blue-500/50 rounded-lg p-2.5 text-sm text-white focus:outline-none transition" value="${onboardingData.addressLine1}">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-400 uppercase font-mono mb-1.5 tracking-wider">City</label>
+              <input type="text" id="prof-city" class="w-full bg-gray-950/50 border border-gray-800 focus:border-blue-500/50 rounded-lg p-2.5 text-sm text-white focus:outline-none transition" value="${onboardingData.city}">
+            </div>
+            <div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-xs font-bold text-gray-400 uppercase font-mono mb-1.5 tracking-wider">State</label>
+                  <input type="text" id="prof-state" class="w-full bg-gray-950/50 border border-gray-800 focus:border-blue-500/50 rounded-lg p-2.5 text-sm text-white focus:outline-none transition" value="${onboardingData.state}" maxlength="2">
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-gray-400 uppercase font-mono mb-1.5 tracking-wider">ZIP Code</label>
+                  <input type="text" id="prof-zip" class="w-full bg-gray-950/50 border border-gray-800 focus:border-blue-500/50 rounded-lg p-2.5 text-sm text-white focus:outline-none transition" value="${onboardingData.zip}">
+                </div>
+              </div>
+            </div>
+          </form>
+
+          <div class="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-800/60">
+            <button id="btn-profile-prev" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-5 py-2 rounded-lg text-sm font-semibold transition border border-gray-700">Back</button>
+            <button id="btn-profile-next" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-bold transition flex items-center gap-1.5">Next Step <i class="fas fa-arrow-right text-xs"></i></button>
+          </div>
+        `;
+
+      case 4:
+        return `
+          <h2 class="text-xl font-extrabold text-white mb-2 font-mono uppercase">Step 4: Contact Intake & Regulatory Compliance</h2>
+          <p class="text-sm text-gray-400 mb-6">Provide contact information and authorize required FCRA/CROA litigation consents to establish the litigation workflow.</p>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div>
+              <label class="block text-xs font-bold text-gray-400 uppercase font-mono mb-1.5 tracking-wider">Phone Number</label>
+              <input type="tel" id="intake-phone" class="w-full bg-gray-950/50 border border-gray-800 focus:border-blue-500/50 rounded-lg p-2.5 text-sm text-white focus:outline-none transition" placeholder="e.g. (414) 430-4277" value="${onboardingData.phone || ''}" required>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-400 uppercase font-mono mb-1.5 tracking-wider">Email Address</label>
+              <input type="email" id="intake-email" class="w-full bg-gray-950/50 border border-gray-800 focus:border-blue-500/50 rounded-lg p-2.5 text-sm text-white focus:outline-none transition" placeholder="e.g. rjbizsolution23@gmail.com" value="${onboardingData.email || ''}" required>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <!-- Permissible Purpose -->
+            <label class="flex items-start gap-3.5 p-4 glass bg-gray-950/30 border border-gray-800 hover:border-gray-700/80 rounded-xl cursor-pointer transition select-none">
+              <input type="checkbox" id="consent-permissible" class="mt-1.5 h-4 w-4 rounded border-gray-800 text-blue-600 focus:ring-blue-500 bg-gray-950" ${onboardingData.permissiblePurposeConsent ? 'checked' : ''}>
+              <div>
+                <span class="text-sm font-bold text-white block">FCRA Permissible Purpose Authorization</span>
+                <span class="text-xs text-gray-400 mt-1 block leading-relaxed">I authorize Rick Jefferson | RJ Business Solutions to access and evaluate my consumer reports under 15 U.S.C. § 1681b for credit repair analysis and statutory dispute generation.</span>
+              </div>
+            </label>
+
+            <!-- CROA Disclosure -->
+            <label class="flex items-start gap-3.5 p-4 glass bg-gray-950/30 border border-gray-800 hover:border-gray-700/80 rounded-xl cursor-pointer transition select-none">
+              <input type="checkbox" id="consent-croa" class="mt-1.5 h-4 w-4 rounded border-gray-800 text-blue-600 focus:ring-blue-500 bg-gray-950" ${onboardingData.croaContractAgreed ? 'checked' : ''}>
+              <div>
+                <span class="text-sm font-bold text-white block">CROA Written Disclosures Agreement</span>
+                <span class="text-xs text-gray-400 mt-1 block leading-relaxed">I acknowledge receipt of the written consumer disclosure required under the Credit Repair Organizations Act (15 U.S.C. § 1679c) detailing my statutory rights before executing any contract.</span>
+              </div>
+            </label>
+
+            <!-- TSR Waiver -->
+            <label class="flex items-start gap-3.5 p-4 glass bg-gray-950/30 border border-gray-800 hover:border-gray-700/80 rounded-xl cursor-pointer transition select-none">
+              <input type="checkbox" id="consent-tsr" class="mt-1.5 h-4 w-4 rounded border-gray-800 text-blue-600 focus:ring-blue-500 bg-gray-950" ${onboardingData.tsrAdvanceFeeWaived ? 'checked' : ''}>
+              <div>
+                <span class="text-sm font-bold text-white block">TSR Advance Fee Disclosure Waiver</span>
+                <span class="text-xs text-gray-400 mt-1 block leading-relaxed">I agree to waive any advance fee limitations in accordance with Telemarketing Sales Rule (16 CFR § 310) guidelines, understanding that services are billed only after document delivery.</span>
+              </div>
+            </label>
+          </div>
+
+          <div id="compliance-error-msg" class="hidden mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span>All three regulatory compliance checkboxes must be agreed to proceed.</span>
+          </div>
+
+          <div class="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-800/60">
+            <button id="btn-intake-prev" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-5 py-2 rounded-lg text-sm font-semibold transition border border-gray-700">Back</button>
+            <button id="btn-intake-next" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-bold transition flex items-center gap-1.5">Next Step <i class="fas fa-arrow-right text-xs"></i></button>
+          </div>
+        `;
+
+      case 5:
+        return `
+          <h2 class="text-xl font-extrabold text-white mb-2 font-mono uppercase">Step 5: Portal Credentials & Finalize</h2>
+          <p class="text-sm text-gray-400 mb-6">Setup secure credentials for the Client Portal. This authorizes real-time access to the litigation cockpit.</p>
+          
+          <div class="max-w-md mx-auto space-y-4">
+            ${onboardingData.password ? `
+              <div class="glass bg-gradient-to-r from-blue-900/40 to-indigo-900/40 p-4 rounded-xl border border-blue-500/30 mb-6 animate-pulse shadow-[0_0_15px_rgba(59,130,246,0.25)]">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400">
+                    <i class="fas fa-magic animate-bounce"></i>
+                  </div>
+                  <div>
+                    <h4 class="text-xs font-bold text-white uppercase font-mono">Autopilot Established Portal Credentials</h4>
+                    <p class="text-[11px] text-gray-300 mt-1">🎉 Secure temporary password was auto-generated and dispatched to: <strong class="text-white">${onboardingData.email || 'N/A'}</strong></p>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
+
+            <div class="glass bg-blue-500/5 p-4 rounded-xl border border-blue-500/20 mb-6">
+              <div class="flex gap-3">
+                <div class="text-blue-400 text-lg mt-0.5"><i class="fas fa-info-circle"></i></div>
+                <div>
+                  <h4 class="text-xs font-bold text-white uppercase font-mono">Litigation Target Statistics</h4>
+                  <p class="text-xs text-gray-400 mt-1">Parsed Client: <strong class="text-white">${onboardingData.clientName || 'Unregistered'}</strong></p>
+                  <p class="text-xs text-gray-400">Total Violations Pinned: <strong class="text-red-400">${onboardingData.violationsFound || 0} violations</strong></p>
+                  <p class="text-xs text-gray-400">Preferred Language: <strong class="text-green-400 uppercase font-mono">${onboardingData.language.toUpperCase()}</strong></p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-gray-400 uppercase font-mono mb-1.5 tracking-wider">Setup Portal Password</label>
+              <input type="password" id="portal-password" class="w-full bg-gray-950/50 border border-gray-800 focus:border-blue-500/50 rounded-lg p-2.5 text-sm text-white focus:outline-none transition" placeholder="Enter secure password" value="${onboardingData.password || ''}" required>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-400 uppercase font-mono mb-1.5 tracking-wider">Confirm Password</label>
+              <input type="password" id="portal-password-confirm" class="w-full bg-gray-950/50 border border-gray-800 focus:border-blue-500/50 rounded-lg p-2.5 text-sm text-white focus:outline-none transition" placeholder="Confirm secure password" value="${onboardingData.password || ''}" required>
+            </div>
+
+            <div id="password-error-msg" class="hidden p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+              <i class="fas fa-exclamation-triangle"></i>
+              <span id="password-error-text">Passwords must match and be at least 6 characters.</span>
+            </div>
+
+            <button id="btn-onboard-finalize" class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white py-3 px-4 rounded-xl text-sm font-extrabold transition shadow-lg tracking-wider uppercase font-mono flex items-center justify-center gap-2 mt-6">
+              <i class="fas fa-check-circle"></i> Complete Setup & Open Workspace
+            </button>
+          </div>
+
+          <div id="finalize-processing" class="hidden mt-6 text-center">
+            <div class="flex items-center justify-center gap-3 text-blue-400 font-bold text-sm">
+              <i class="fas fa-circle-notch fa-spin"></i>
+              <span>Updating database & securing workspace...</span>
+            </div>
+          </div>
+
+          <div class="flex justify-start gap-3 mt-8 pt-6 border-t border-gray-800/60">
+            <button id="btn-portal-prev" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-5 py-2 rounded-lg text-sm font-semibold transition border border-gray-700">Back</button>
+          </div>
+        `;
+    }
+  }
+
+  function attachStepEvents() {
+    if (currentStep === 1) {
+      const dropzone = $('#dropzone-onboard');
+      const fileInput = $('#input-onboard-file');
+      if (dropzone && fileInput) {
+        dropzone.ondragover = (e) => {
+          e.preventDefault();
+          dropzone.classList.add('border-blue-500', 'bg-blue-500/5');
+        };
+        dropzone.ondragleave = () => {
+          dropzone.classList.remove('border-blue-500', 'bg-blue-500/5');
+        };
+        dropzone.ondrop = async (e) => {
+          e.preventDefault();
+          dropzone.classList.remove('border-blue-500', 'bg-blue-500/5');
+          const files = Array.from(e.dataTransfer.files);
+          if (files.length > 0) await handleOnboardFiles(files);
+        };
+        dropzone.onclick = () => {
+          fileInput.click();
+        };
+        fileInput.onchange = async () => {
+          const files = Array.from(fileInput.files);
+          if (files.length > 0) await handleOnboardFiles(files);
+        };
+      }
+
+      const rawBtn = $('#btn-submit-onboard-raw');
+      if (rawBtn) {
+        rawBtn.onclick = async () => {
+          const rawText = $('#ta-onboard-raw').value.trim();
+          if (!rawText) {
+            toast('Please paste credit report text first', 'error');
+            return;
+          }
+          await handleOnboardText(rawText);
+        };
+      }
+    }
+
+    if (currentStep === 2) {
+      const cardEn = $('#lang-card-en');
+      const cardEs = $('#lang-card-es');
+      if (cardEn && cardEs) {
+        cardEn.onclick = () => {
+          onboardingData.language = 'en';
+          cardEn.classList.add('border-blue-500', 'bg-blue-500/5');
+          cardEs.classList.remove('border-blue-500', 'bg-blue-500/5');
+        };
+        cardEs.onclick = () => {
+          onboardingData.language = 'es';
+          cardEs.classList.add('border-blue-500', 'bg-blue-500/5');
+          cardEn.classList.remove('border-blue-500', 'bg-blue-500/5');
+        };
+      }
+
+      const prev = $('#btn-lang-prev');
+      const next = $('#btn-lang-next');
+      if (prev) prev.onclick = () => { currentStep = 1; render(); };
+      if (next) next.onclick = () => { currentStep = 3; render(); };
+    }
+
+    if (currentStep === 3) {
+      const prev = $('#btn-profile-prev');
+      const next = $('#btn-profile-next');
+      if (prev) prev.onclick = () => { currentStep = 2; render(); };
+      if (next) {
+        next.onclick = (e) => {
+          e.preventDefault();
+          if (!$('#onboard-profile-form').reportValidity()) return;
+          
+          onboardingData.firstName = $('#prof-firstName').value.trim();
+          onboardingData.lastName = $('#prof-lastName').value.trim();
+          onboardingData.dob = $('#prof-dob').value.trim();
+          onboardingData.ssnLast4 = $('#prof-ssnLast4').value.trim();
+          onboardingData.addressLine1 = $('#prof-addressLine1').value.trim();
+          onboardingData.city = $('#prof-city').value.trim();
+          onboardingData.state = $('#prof-state').value.trim().toUpperCase();
+          onboardingData.zip = $('#prof-zip').value.trim();
+          
+          currentStep = 4;
+          render();
+        };
+      }
+    }
+
+    if (currentStep === 4) {
+      const prev = $('#btn-intake-prev');
+      const next = $('#btn-intake-next');
+      if (prev) prev.onclick = () => { currentStep = 3; render(); };
+      if (next) {
+        next.onclick = () => {
+          onboardingData.phone = $('#intake-phone').value.trim();
+          onboardingData.email = $('#intake-email').value.trim();
+          onboardingData.permissiblePurposeConsent = $('#consent-permissible').checked;
+          onboardingData.croaContractAgreed = $('#consent-croa').checked;
+          onboardingData.tsrAdvanceFeeWaived = $('#consent-tsr').checked;
+
+          const errorEl = $('#compliance-error-msg');
+          if (!onboardingData.permissiblePurposeConsent || !onboardingData.croaContractAgreed || !onboardingData.tsrAdvanceFeeWaived) {
+            errorEl.classList.remove('hidden');
+            return;
+          }
+          errorEl.classList.add('hidden');
+          currentStep = 5;
+          render();
+        };
+      }
+    }
+
+    if (currentStep === 5) {
+      const prev = $('#btn-portal-prev');
+      const finalize = $('#btn-onboard-finalize');
+      if (prev) prev.onclick = () => { currentStep = 4; render(); };
+      if (finalize) {
+        finalize.onclick = async () => {
+          const pass = $('#portal-password').value;
+          const confirm = $('#portal-password-confirm').value;
+          const errorEl = $('#password-error-msg');
+          const errorTextEl = $('#password-error-text');
+
+          if (!pass || pass.length < 6) {
+            errorEl.classList.remove('hidden');
+            errorTextEl.innerText = 'Password must be at least 6 characters.';
+            return;
+          }
+          if (pass !== confirm) {
+            errorEl.classList.remove('hidden');
+            errorTextEl.innerText = 'Passwords do not match.';
+            return;
+          }
+          errorEl.classList.add('hidden');
+          onboardingData.password = pass;
+
+          await finalizeOnboarding();
+        };
+      }
+    }
+  }
+
+  async function handleOnboardFiles(files) {
+    const procEl = $('#onboard-processing');
+    if (procEl) {
+      procEl.classList.remove('hidden');
+      procEl.innerHTML = `
+        <div class="flex flex-col items-center justify-center gap-2 text-blue-400 font-bold text-sm">
+          <div class="flex items-center gap-2">
+            <i class="fas fa-circle-notch fa-spin"></i>
+            <span id="onboard-status-text">Processing reports...</span>
+          </div>
+          <div class="w-full max-w-xs bg-gray-900 rounded-full h-1.5 mt-2 overflow-hidden border border-gray-800">
+            <div id="onboard-status-progress" class="bg-blue-600 h-1.5 transition-all duration-150" style="width: 0%"></div>
+          </div>
+        </div>
+      `;
+    }
+
+    try {
+      const total = files.length;
+      for (let i = 0; i < total; i++) {
+        const file = files[i];
+        const progressSuffix = ` (Report ${i + 1} of ${total})`;
+        const rawText = await handleOnboardFile(file, progressSuffix);
+        if (rawText) {
+          await handleOnboardText(rawText);
+        }
+      }
+      toast('All report files processed successfully!', 'success');
+      currentStep = 2;
+      render();
+    } catch (err) {
+      console.error('Multi-file ingestion pipeline failed:', err);
+      toast(`Onboarding files processing failed: ${err.message}`, 'error');
+    } finally {
+      if (procEl) procEl.classList.add('hidden');
+    }
+  }
+
+  async function handleOnboardFile(file, progressSuffix) {
+    const statusText = $('#onboard-status-text');
+    const statusProgress = $('#onboard-status-progress');
+
+    function updateProgress(text, percent) {
+      if (statusText) statusText.textContent = text + (progressSuffix || '');
+      if (statusProgress) statusProgress.style.width = `${percent}%`;
+    }
+
+    if (file.name.toLowerCase().endsWith('.pdf')) {
+      if (!window.pdfjsLib) {
+        throw new Error('PDF.js library is not loaded. Please reload the page.');
+      }
+
+      updateProgress('Reading PDF file...', 10);
+      const arrayBuffer = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsArrayBuffer(file);
+      });
+
+      updateProgress('Analyzing document structure...', 25);
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+      const numPages = pdf.numPages;
+      let compiledText = '';
+
+      for (let p = 1; p <= numPages; p++) {
+        const percent = Math.round(25 + (p / numPages) * 50);
+        updateProgress(`Extracting page ${p} of ${numPages}...`, percent);
+
+        const page = await pdf.getPage(p);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map(item => item.str).join(' ');
+        compiledText += pageText + '\n\n';
+      }
+
+      if (compiledText.trim().length < 1000) {
+        updateProgress('Scanned PDF detected. Loading OCR Engine...', 80);
+        
+        await new Promise((resolve, reject) => {
+          if (window.Tesseract) {
+            resolve();
+            return;
+          }
+          const script = document.createElement('script');
+          script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+          script.onload = () => resolve();
+          script.onerror = (e) => reject(new Error('Failed to load OCR engine script'));
+          document.head.appendChild(script);
+        });
+
+        compiledText = '';
+        for (let p = 1; p <= numPages; p++) {
+          updateProgress(`Rendering page ${p} of ${numPages}...`, 85);
+          const page = await pdf.getPage(p);
+          const viewport = page.getViewport({ scale: 1.5 });
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+
+          const renderContext = {
+            canvasContext: ctx,
+            viewport: viewport
+          };
+          await page.render(renderContext).promise;
+
+          updateProgress(`OCR Analyzing page ${p}/${numPages}...`, 90);
+          const ocrResult = await Tesseract.recognize(canvas, 'eng', {
+            logger: m => {
+              if (m.status === 'recognizing text') {
+                const subPercent = Math.round(90 + m.progress * 8);
+                updateProgress(`OCR Analyzing page ${p}/${numPages}: ${Math.round(m.progress * 100)}%`, subPercent);
+              }
+            }
+          });
+          compiledText += ocrResult.data.text + '\n\n';
+        }
+      }
+
+      updateProgress('Finishing extraction...', 100);
+      await sleep(300);
+      return compiledText;
+    } else {
+      updateProgress('Reading raw file content...', 50);
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          updateProgress('Extraction complete...', 100);
+          resolve(event.target.result);
+        };
+        reader.onerror = (e) => reject(new Error(`File read failed: ${e.target.error}`));
+        reader.readAsText(file);
+      });
+    }
+  }
+
+  async function handleOnboardText(rawText) {
+    const res = await api('/reports/onboard', 'POST', {
+      bureau: onboardingData.bureau || 'Equifax',
+      rawText,
+      fileName: 'onboard-credit-report.txt',
+      clientId: onboardingData.clientId || undefined
+    });
+
+    if (res && res.clientId) {
+      onboardingData.clientId = res.clientId;
+      onboardingData.clientName = res.clientName || '';
+      onboardingData.reportId = res.reportId || '';
+      onboardingData.violationsFound = (onboardingData.violationsFound || 0) + (res.violationsFound || 0);
+      
+      if (res.extractedEmail) onboardingData.email = res.extractedEmail;
+      if (res.extractedPhone) onboardingData.phone = res.extractedPhone;
+      if (res.generatedPassword) onboardingData.password = res.generatedPassword;
+
+      const profile = await api(`/clients/${res.clientId}`);
+      if (profile && profile.client) {
+        onboardingData.firstName = profile.client.first_name || '';
+        onboardingData.lastName = profile.client.last_name || '';
+        onboardingData.dob = profile.client.dob || '';
+        onboardingData.ssnLast4 = profile.client.ssn_last4 || '';
+        onboardingData.addressLine1 = profile.client.address_line1 || '';
+        onboardingData.city = profile.client.city || '';
+        onboardingData.state = profile.client.state || '';
+        onboardingData.zip = profile.client.zip || '';
+        if (profile.client.email) onboardingData.email = profile.client.email;
+        if (profile.client.phone) onboardingData.phone = profile.client.phone;
+      }
+    } else {
+      throw new Error(res.error || 'Failed to parse report file text');
+    }
+  }
+
+  async function finalizeOnboarding() {
+    const finalizeEl = $('#finalize-processing');
+    if (finalizeEl) finalizeEl.classList.remove('hidden');
+
+    try {
+      const notes = `Onboarding finalized. Language selection: ${onboardingData.language.toUpperCase()}.`;
+      const updatePayload = {
+        firstName: onboardingData.firstName,
+        lastName: onboardingData.lastName,
+        email: onboardingData.email,
+        phone: onboardingData.phone,
+        addressLine1: onboardingData.addressLine1,
+        city: onboardingData.city,
+        state: onboardingData.state,
+        zip: onboardingData.zip,
+        dob: onboardingData.dob,
+        ssnLast4: onboardingData.ssnLast4,
+        permissiblePurposeConsent: onboardingData.permissiblePurposeConsent,
+        croaContractAgreed: onboardingData.croaContractAgreed,
+        tsrAdvanceFeeWaived: onboardingData.tsrAdvanceFeeWaived,
+        notes: notes,
+        password: onboardingData.password,
+        status: 'active'
+      };
+
+      const res = await api(`/clients/${onboardingData.clientId}`, 'PUT', updatePayload);
+      if (res && res.ok) {
+        toast('Client onboarding completed! Secure portal account created.', 'success');
+        await sleep(1500);
+        window._nav('client-detail', { clientId: onboardingData.clientId });
+      } else {
+        throw new Error(res.error || 'Failed to finalize client records');
+      }
+    } catch (e) {
+      toast(e.message || 'Error finalising onboarding', 'error');
+    } finally {
+      if (finalizeEl) finalizeEl.classList.add('hidden');
+    }
+  }
+
+  render();
+}
+
   function showSmartCreditFirewallModal() {
     const existing = $('#smartcredit-firewall-modal');
     if (existing) existing.remove();
@@ -1813,6 +2723,18 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         bureau: 'Equifax',
       })});
       toast(`Generated ${result.count} documents!`, 'success');
+    } catch(err) { toast(err.message, 'error'); }
+  };
+
+  window._bulkGenerateLitigation = async function(clientId, reportId) {
+    try {
+      toast('Generating complete court litigation package...', 'info');
+      const result = await api('/documents/generate-bulk', { method:'POST', body:JSON.stringify({
+        clientId, reportId,
+        docTypes: ['fed-complaint','fed-affidavit','state-complaint','civil-coversheet','motion-summary-judg'],
+        bureau: 'Equifax',
+      })});
+      toast(`Generated ${result.count} litigation documents successfully!`, 'success');
     } catch(err) { toast(err.message, 'error'); }
   };
 
@@ -2010,6 +2932,9 @@ Status: Discharged`;
           </div>
           
           <div class="flex items-center gap-2">
+            <button onclick="window._nav('report-comparison', { reportId: '${r.id}' })" class="bg-purple-600/20 border border-purple-500/30 text-purple-300 px-3.5 py-2 rounded-lg text-xs font-semibold hover:bg-purple-600/30 transition flex items-center gap-1.5">
+              <i class="fas fa-balance-scale"></i>Compare Report
+            </button>
             <button onclick="window._exportPDF('${r.id}')" class="bg-blue-600/20 border border-blue-500/30 text-blue-300 px-3.5 py-2 rounded-lg text-xs font-semibold hover:bg-blue-600/30 transition flex items-center gap-1.5">
               <i class="fas fa-file-pdf"></i>Download PDF
             </button>
@@ -3115,10 +4040,118 @@ Status: Discharged`;
     const categories = {};
     typesRes.types.forEach(t => { if (!categories[t.category]) categories[t.category] = []; categories[t.category].push(t); });
 
-    el.innerHTML = `<div class="fade-in max-w-3xl">
+    const litigationTips = {
+      'fed-complaint': {
+        icon: 'fa-gavel',
+        title: 'Federal Court Complaint (FCRA Lawsuit)',
+        whenToUse: 'Use this when credit bureaus or furnishers willfully or negligently refuse to correct confirmed, documented inaccuracies after multiple rounds of formal disputes.',
+        strategy: 'Filing in US District Court forces the defendants to refer the case to their legal/compliance departments. This triggers actual risk assessment instead of automatic offshore computer verifications.',
+        remedy: 'Statutory damages up to $1,000 per violation, actual damages (emotional distress, credit denials), punitive damages, and mandatory attorney fees.',
+        requirements: 'Must be filed with a Civil Cover Sheet (JS 44) and highly recommended to attach Plaintiff\'s Sworn Affidavit of Facts.'
+      },
+      'fed-affidavit': {
+        icon: 'fa-signature',
+        title: "Plaintiff's Federal Affidavit of Facts",
+        whenToUse: 'Must be signed, notarized, and attached to your Federal Complaint, Opposition to Dismissal, or Motion for Summary Judgment to establish a sworn record of concrete facts.',
+        strategy: 'By presenting a sworn, notarized affidavit, you establish admissible, non-hearsay evidence of credit denials, high interest rates, and severe emotional distress.',
+        remedy: 'Provides the concrete proof of "actual damages" and concrete injury required under Spokeo/TransUnion standing standards.',
+        requirements: 'Requires signing in front of a licensed Notary Public with a physical or electronic seal.'
+      },
+      'state-complaint': {
+        icon: 'fa-building-columns',
+        title: 'State Court / Small Claims Complaint',
+        whenToUse: 'Perfect for faster, lower-cost litigation in your local County Court or Small Claims Court without requiring an attorney.',
+        strategy: 'Corporations must hire outside counsel to represent them in local small claims courts. Since corporate lawyer fees often exceed $3,000 per day, companies almost always settle small claims cases quickly.',
+        remedy: 'Damages up to your state\'s small claims limit (usually $5,000 to $15,000). Direct order to delete the inaccurate listings.',
+        requirements: 'File with the local County Clerk of Court. Pay a nominal filing fee (often waived for low-income filers).'
+      },
+      'civil-coversheet': {
+        icon: 'fa-file-lines',
+        title: 'Federal Court Civil Cover Sheet Statement',
+        whenToUse: 'Required as an administrative backing page (Form JS 44) when opening any new civil lawsuit in the United States District Court.',
+        strategy: 'Categorizes the lawsuit under Federal Question jurisdiction (15 U.S.C. § 1681 - Fair Credit Reporting Act) to ensure proper assignment and tracking.',
+        remedy: 'Ensures your case is classified as a jury trial case, signaling high stakes to the defense counsel.',
+        requirements: 'Must precisely match the parties listed in the caption of your main Federal Complaint.'
+      },
+      'motion-summary-judg': {
+        icon: 'fa-file-contract',
+        title: "Plaintiff's Motion for Summary Judgment Outline",
+        whenToUse: 'File this after the Discovery phase of litigation, once the defendants have answered and both parties have exchanged documents.',
+        strategy: 'Argues that there are no genuine issues of material fact and that the law requires a ruling in the plaintiff\'s favor on liability. Avoids the delay and cost of a full trial.',
+        remedy: 'Locks in liability against the credit bureaus/furnishers, leaving only the damages dollar amount to be decided.',
+        requirements: 'Supported by the transcripts, dispute history letters, and the Plaintiff\'s sworn Affidavit.'
+      }
+    };
+
+    const standardTips = {
+      'bureau-dispute': {
+        icon: 'fa-paper-plane',
+        title: 'Bureau Dispute Letter',
+        whenToUse: 'Use this as your Round 1/2 formal dispute to the main Credit Bureaus (Equifax, Experian, TransUnion).',
+        strategy: 'Specify the exact account and provide the detailed inaccuracy. Forces the bureau to initiate a 30-day reinvestigation under FCRA § 611.'
+      },
+      'furnisher-dispute': {
+        icon: 'fa-university',
+        title: 'Furnisher Direct Dispute',
+        whenToUse: 'Send directly to the bank, lender, or collection agency reporting the inaccurate tradeline.',
+        strategy: 'Under FCRA § 623(a)(8), this triggers their direct duty to investigate the reporting. If they fail to conduct a reasonable investigation, they face civil liability.'
+      },
+      'debt-validation': {
+        icon: 'fa-shield-halved',
+        title: 'Debt Validation Demand',
+        whenToUse: 'Send to third-party collection agencies within 30 days of their initial contact notice.',
+        strategy: 'Under FDCPA § 809, this legally halts all collection activities until they verify and validate the debt with original contracts.'
+      },
+      '609-disclosure': {
+        icon: 'fa-folder-open',
+        title: '§ 609 Full File Disclosure Request',
+        whenToUse: 'Use when a credit bureau is refusing to disclose all sources or soft inquiries on your report.',
+        strategy: 'Cites FCRA § 609(a)(1) requiring them to provide everything in your consumer file, including soft pulls and credit source details.'
+      },
+      'method-of-verification': {
+        icon: 'fa-magnifying-glass-chart',
+        title: 'Method of Verification Request',
+        whenToUse: 'Send within 15 days of receiving a "verified" dispute result from a credit bureau.',
+        strategy: 'Demands under FCRA § 611(a)(7) that they provide the name, address, and phone number of the employee contacted to verify the information.'
+      },
+      'cease-desist': {
+        icon: 'fa-ban',
+        title: 'Cease and Desist Letter',
+        whenToUse: 'Send to abusive collection agencies to permanently stop telephone harassment.',
+        strategy: 'Under FDCPA § 1692c(c), once received, collectors are legally barred from contacting you except to notify of specific legal actions.'
+      },
+      'intent-to-sue': {
+        icon: 'fa-triangle-exclamation',
+        title: 'Intent to Sue Notice',
+        whenToUse: 'Send as a final pre-litigation warning to corporate compliance or legal counsel.',
+        strategy: 'Gives them a final 15 days to delete the inaccurate reporting and settle out of court, or face a formal federal/state lawsuit.'
+      },
+      'goodwill-letter': {
+        icon: 'fa-heart',
+        title: 'Goodwill Adjustment Request',
+        whenToUse: 'Polite, persuasive plea for negative late-payment removal or correction when you have paid off the account.',
+        strategy: 'Usually reviewed by human customer loyalty agents who have discretionary power to remove negative reports as a gesture of goodwill.'
+      },
+      'cfpb-complaint': {
+        icon: 'fa-gavel',
+        title: 'CFPB Complaint Helper',
+        whenToUse: 'File on the CFPB portal when credit bureaus or lenders ignore your dispute results.',
+        strategy: 'CFPB complaints are routed directly to executive response units at the major bureaus, bypassing standard generic scanning centers.'
+      }
+    };
+
+    el.innerHTML = `<div class="fade-in max-w-6xl">
       <button onclick="window._nav('client-detail',{clientId:'${data.clientId}'})" class="text-gray-400 hover:text-white text-sm mb-4 inline-flex items-center gap-1.5 transition"><i class="fas fa-arrow-left text-xs"></i>Back to ${data.clientName}</button>
-      <h1 class="text-xl font-bold text-white mb-1">Generate Legal Document</h1>
-      <p class="text-sm text-gray-400 mb-6">10 court-ready templates for ${data.clientName}</p>
+      
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-white mb-1"><i class="fas fa-file-contract text-blue-500 mr-2"></i>Generate Legal Document</h1>
+          <p class="text-sm text-gray-400">${typesRes.types.length} professional, court-ready templates for ${data.clientName}</p>
+        </div>
+        <div id="litigation-action-box" class="hidden">
+          <button onclick="window._bulkGenerateLitigation('${data.clientId}','${data.reportId||''}')" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold shadow-lg shadow-blue-500/20 transition flex items-center gap-2"><i class="fas fa-layer-group"></i>Generate All 5 Litigation Files</button>
+        </div>
+      </div>
 
       <div class="bg-blue-900/30 border border-blue-600/40 rounded-xl p-4 mb-6">
         <h3 class="text-sm font-semibold text-blue-300 mb-2"><i class="fas fa-gavel mr-2"></i>Legal Disclaimer</h3>
@@ -3130,24 +4163,62 @@ Status: Discharged`;
         </p>
       </div>
 
-      <form id="gen-doc-form" class="space-y-4">
-        <div><label class="block text-xs text-gray-400 mb-1.5">Document Type *</label>
-          <select name="docType" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none">
-            ${Object.entries(categories).map(([cat, types]) => `<optgroup label="${cat}">${types.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}</optgroup>`).join('')}
-          </select>
-          <div id="doc-desc" class="text-xs text-gray-500 mt-1"></div>
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <!-- Form Column -->
+        <div class="lg:col-span-7 bg-gray-900/40 border border-gray-800/80 rounded-2xl p-6 space-y-6">
+          <form id="gen-doc-form" class="space-y-4">
+            <div><label class="block text-xs text-gray-400 mb-1.5">Document Type *</label>
+              <select name="docType" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none">
+                ${Object.entries(categories).map(([cat, types]) => `<optgroup label="${cat}">${types.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}</optgroup>`).join('')}
+              </select>
+              <div id="doc-desc" class="text-xs text-gray-500 mt-1"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div><label class="block text-xs text-gray-400 mb-1.5">Bureau</label><select name="bureau" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none"><option value="Equifax">Equifax</option><option value="Experian">Experian</option><option value="TransUnion">TransUnion</option></select></div>
+              <div><label class="block text-xs text-gray-400 mb-1.5">Creditor Name</label><input type="text" name="creditorName" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="e.g., Midland Credit"></div>
+            </div>
+            <div><label class="block text-xs text-gray-400 mb-1.5">Creditor Address</label><input type="text" name="creditorAddress" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="P.O. Box..."></div>
+            <div class="flex gap-3 pt-2">
+              <button type="submit" id="gen-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition"><i class="fas fa-magic mr-2"></i>Generate</button>
+              <button type="button" onclick="window._bulkGenerate('${data.clientId}','${data.reportId||''}')" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 px-4 py-2.5 rounded-lg text-sm font-medium transition"><i class="fas fa-layer-group mr-1"></i>Generate All 10 Disputes</button>
+            </div>
+          </form>
         </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div><label class="block text-xs text-gray-400 mb-1.5">Bureau</label><select name="bureau" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none"><option value="Equifax">Equifax</option><option value="Experian">Experian</option><option value="TransUnion">TransUnion</option></select></div>
-          <div><label class="block text-xs text-gray-400 mb-1.5">Creditor Name</label><input type="text" name="creditorName" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="e.g., Midland Credit"></div>
+
+        <!-- Strategy / Playbook Column -->
+        <div class="lg:col-span-5 space-y-6">
+          <div id="playbook-guide-card" class="bg-gradient-to-br from-blue-950/40 to-indigo-950/40 border border-blue-500/20 rounded-2xl p-6 fade-in shadow-xl">
+            <div class="flex items-center gap-2.5 mb-4">
+              <div class="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center text-sm font-bold"><i id="playbook-icon" class="fas fa-book"></i></div>
+              <h3 class="text-sm font-bold text-white">Rick's Litigation Playbook</h3>
+            </div>
+            
+            <div class="space-y-4">
+              <div>
+                <h4 class="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-1">When to Use</h4>
+                <p id="playbook-whentouse" class="text-xs text-gray-300 leading-relaxed"></p>
+              </div>
+              
+              <div id="playbook-strategy-section">
+                <h4 class="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-1">Strategic Leverage</h4>
+                <p id="playbook-strategy" class="text-xs text-gray-300 leading-relaxed"></p>
+              </div>
+
+              <div id="playbook-remedy-section" class="hidden">
+                <h4 class="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-1">Potential Remedies</h4>
+                <p id="playbook-remedy" class="text-xs text-emerald-300/90 leading-relaxed font-medium bg-emerald-950/20 border border-emerald-500/20 rounded-lg p-2.5"></p>
+              </div>
+
+              <div id="playbook-req-section" class="hidden">
+                <h4 class="text-xs font-semibold text-yellow-400 uppercase tracking-wider mb-1">Filing Requirements</h4>
+                <p id="playbook-req" class="text-xs text-yellow-300/90 leading-relaxed"></p>
+              </div>
+            </div>
+          </div>
         </div>
-        <div><label class="block text-xs text-gray-400 mb-1.5">Creditor Address</label><input type="text" name="creditorAddress" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="P.O. Box..."></div>
-        <div class="flex gap-3">
-          <button type="submit" id="gen-btn" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition"><i class="fas fa-magic mr-2"></i>Generate</button>
-          <button type="button" onclick="window._bulkGenerate('${data.clientId}','${data.reportId||''}')" class="bg-blue-600/20 border border-blue-500/30 text-blue-300 px-4 py-2.5 rounded-lg text-sm font-medium transition"><i class="fas fa-layer-group mr-1"></i>Generate All 10</button>
-        </div>
-      </form>
-      <div id="gen-result" class="hidden mt-6"></div>
+      </div>
+
+      <div id="gen-result" class="hidden mt-8"></div>
     </div>`;
 
     // Show description on type change
@@ -3155,7 +4226,48 @@ Status: Discharged`;
     typesRes.types.forEach(t => docTypeMap[t.id] = t);
     const sel = $('select[name="docType"]');
     const desc = $('#doc-desc');
-    sel.onchange = () => { const t = docTypeMap[sel.value]; if (t) desc.textContent = t.description; };
+
+    sel.onchange = () => {
+      const val = sel.value;
+      const t = docTypeMap[val];
+      if (t) desc.textContent = t.description;
+
+      const isLitigationCategory = t && t.category === 'Court & Litigation filings';
+      const litBox = $('#litigation-action-box');
+      if (isLitigationCategory) {
+        litBox.classList.remove('hidden');
+      } else {
+        litBox.classList.add('hidden');
+      }
+
+      // Update Playbook Card details
+      const tip = litigationTips[val] || standardTips[val] || {
+        icon: 'fa-file-shield',
+        title: t ? t.name : 'Standard Document',
+        whenToUse: t ? t.description : 'Standard dispute or demand letter.',
+        strategy: 'Follow standard certified mail procedures. Keep a clear tracking log of all correspondence.'
+      };
+
+      $('#playbook-icon').className = `fas ${tip.icon || 'fa-book'}`;
+      $('#playbook-whentouse').textContent = tip.whenToUse;
+      $('#playbook-strategy').textContent = tip.strategy;
+
+      const remSec = $('#playbook-remedy-section');
+      if (tip.remedy) {
+        remSec.classList.remove('hidden');
+        $('#playbook-remedy').textContent = tip.remedy;
+      } else {
+        remSec.classList.add('hidden');
+      }
+
+      const reqSec = $('#playbook-req-section');
+      if (tip.requirements) {
+        reqSec.classList.remove('hidden');
+        $('#playbook-req').textContent = tip.requirements;
+      } else {
+        reqSec.classList.add('hidden');
+      }
+    };
     sel.dispatchEvent(new Event('change'));
 
     $('#gen-doc-form').onsubmit = async (e) => {
@@ -3187,7 +4299,7 @@ Status: Discharged`;
       const d = await api('/team');
       el.innerHTML = `<div class="fade-in">
         <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">Team</h1><p class="text-sm text-gray-400">${d.members.length} members &bull; ${state.org?.plan||'free'} plan</p></div>
-          ${state.user?.role==='admin'?`<button onclick="$('#invite-form').classList.toggle('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"><i class="fas fa-user-plus mr-1.5"></i>Add Member</button>`:''}
+          ${state.user?.role==='admin' || state.user?.role==='super_admin'?`<button onclick="$('#invite-form').classList.toggle('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"><i class="fas fa-user-plus mr-1.5"></i>Add Member</button>`:''}
         </div>
         <div id="invite-form" class="hidden glass rounded-xl p-5 mb-6 fade-in"><h3 class="text-sm font-semibold text-white mb-4">Add Team Member</h3>
           <form id="team-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3322,18 +4434,17 @@ Status: Discharged`;
   // ═══════════════════════════════════════════════════════════════
   async function pgBilling(el) {
     const plans = [
-      { id: 'starter', name: 'Starter', price: 49, color: 'gray', badge: '', features: ['10 Clients/mo', '25 Report analyses/mo', 'Basic severity tags', 'Standard violation detection', 'PDF reports'], priceId: null },
-      { id: 'professional', name: 'Professional', price: 199, color: 'blue', badge: 'MOST POPULAR', features: ['100 Clients/mo', 'Unlimited report analyses', 'Litigation scoring', '15 FCRA letters (all templates)', '15-category violation engine', 'Case law database', 'SOL calculator', 'Priority email support'], priceId: 'price_PRO_199' },
-      { id: 'enterprise', name: 'Enterprise', price: 399, color: 'purple', badge: 'TEAM', features: ['Unlimited Clients', 'Unlimited everything', '38 legal document templates', 'Full case law database (300+ cases)', 'Expert consultation add-on', 'White-label reports', 'API access', 'Dedicated account manager'], priceId: 'price_ENT_399' },
-      { id: 'unlimited', name: 'Unlimited', price: 799, color: 'amber', badge: 'ENTERPRISE', features: ['Everything in Enterprise', 'Unlimited MFSN credit reports', 'Full FCRA knowledge base', 'Custom integrations', 'SLA guarantee', 'On-site training available', 'Quarterly business review', 'Multi-org management'], priceId: 'price_UNL_799' }
+      { id: 'professional', name: 'Professional', price: 497, color: 'blue', badge: 'MOST POPULAR', features: ['100 Clients/mo', 'Unlimited report analyses', 'Litigation scoring', '15 FCRA letters (all templates)', '15-category violation engine', 'Case law database', 'SOL calculator', 'Priority email support'], priceId: 'price_PRO_497' },
+      { id: 'unlimited', name: 'Unlimited', price: 2500, color: 'amber', badge: 'UNLIMITED', features: ['Everything in Enterprise', 'Unlimited MFSN credit reports', 'Full FCRA knowledge base', 'Custom integrations', 'SLA guarantee', 'On-site training available', 'Quarterly business review', 'Multi-org management'], priceId: 'price_UNL_2500' },
+      { id: 'enterprise', name: 'Enterprise', price: 9997, color: 'purple', badge: 'TEAM/AGENCY', features: ['Unlimited Clients', 'Unlimited everything', '38 legal document templates', 'Full case law database (300+ cases)', 'Expert consultation add-on', 'White-label reports', 'API access', 'Dedicated account manager'], priceId: 'price_ENT_9997' }
     ];
 
     el.innerHTML = `<div class="fade-in">
       <div class="flex items-center justify-between mb-8"><div><h1 class="text-xl font-bold text-white">Billing & Subscription</h1><p class="text-sm text-gray-400">Manage your organization\'s plan</p></div>
-        <div class="px-3 py-1 bg-blue-600/20 border border-blue-500/30 rounded-full text-[10px] font-bold text-blue-400 uppercase tracking-wider">Current: ${state.org?.plan || 'Free'}</div>
+        <div class="px-3 py-1 bg-blue-600/20 border border-blue-500/30 rounded-full text-[10px] font-bold text-blue-400 uppercase tracking-wider">Current: ${state.org?.plan || 'None'}</div>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         ${plans.map(p => `
           <div class="glass rounded-2xl p-5 flex flex-col border-2 ${state.org?.plan === p.id ? 'border-' + p.color + '-500 ring-4 ring-' + p.color + '-500/10' : 'border-gray-800'} relative overflow-hidden">
             ${p.badge ? `<div class="absolute top-3 right-3 ${p.color === 'blue' ? 'bg-blue-600' : p.color === 'purple' ? 'bg-purple-600' : p.color === 'amber' ? 'bg-amber-600' : 'bg-gray-600'} px-2 py-0.5 rounded text-[9px] font-bold text-white uppercase tracking-wider">${p.badge}</div>` : ''}
@@ -3344,10 +4455,7 @@ Status: Discharged`;
             <ul class="flex-1 space-y-2 mb-5">
               ${p.features.map(f => `<li class="flex items-start gap-2 text-[11px] text-gray-300"><i class="fas fa-check text-${p.color}-500 mt-0.5"></i> <span>${f}</span></li>`).join('')}
             </ul>
-            ${p.id === 'starter' ?
-              `<button disabled class="w-full py-2 rounded-lg text-sm font-semibold bg-gray-700 text-gray-500 cursor-not-allowed">Free Tier</button>` :
-              `<button onclick="window._checkout('${p.id}')" class="w-full py-2 rounded-lg text-sm font-semibold ${state.org?.plan === p.id ? 'bg-gray-700 text-white' : 'bg-' + p.color + '-600 hover:bg-' + p.color + '-700 text-white'} transition">${state.org?.plan === p.id ? 'Current Plan' : 'Upgrade'}</button>`
-            }
+            <button onclick="window._checkout('${p.id}')" class="w-full py-2 rounded-lg text-sm font-semibold ${state.org?.plan === p.id ? 'bg-gray-700 text-white' : 'bg-' + p.color + '-600 hover:bg-' + p.color + '-700 text-white'} transition">${state.org?.plan === p.id ? 'Current Plan' : 'Upgrade'}</button>
           </div>
         `).join('')}
       </div>
@@ -3368,6 +4476,345 @@ Status: Discharged`;
       if (btn) { btn.disabled = false; btn.innerHTML = 'Upgrade'; }
     }
   };
+
+  // ═══════════════════════════════════════════════════════════════
+  // REPORT COMPARISON & INTERACTIVE DELTA MATRIX
+  // ═══════════════════════════════════════════════════════════════
+  window._toggleStatSheet = (idx) => {
+    const sheet = document.getElementById(`stat-sheet-${idx}`);
+    const chev = document.getElementById(`chevron-${idx}`);
+    if (sheet) {
+      sheet.classList.toggle('hidden');
+      if (chev) chev.classList.toggle('rotate-180');
+    }
+  };
+
+  async function pgReportComparison(el, data) {
+    el.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-center"><i class="fas fa-spinner fa-spin text-3xl text-blue-400 mb-3 animate-pulse"></i><div class="text-sm text-gray-400 font-mono tracking-wider">COMPILING DELTA ANALYTICS MATRIX...</div></div></div>`;
+    try {
+      const comp = await api(`/reports/${data.reportId}/comparison`);
+      
+      const bureauGlowColors = {
+        'Equifax': { start: '#f43f5e', end: '#ec4899', text: 'text-rose-400', glow: 'rgba(244,63,94,0.35)' },
+        'Experian': { start: '#0A66FF', end: '#003B8F', text: 'text-blue-400', glow: 'rgba(10,102,255,0.35)' },
+        'TransUnion': { start: '#10b981', end: '#06b6d4', text: 'text-emerald-400', glow: 'rgba(16,185,129,0.35)' }
+      };
+
+      const renderScoreGauge = (bureau, current, previous) => {
+        const color = bureauGlowColors[bureau] || bureauGlowColors['Experian'];
+        const delta = current - previous;
+        const deltaText = delta >= 0 ? \`+\${delta}\` : \`\${delta}\`;
+        const deltaColor = delta >= 0 ? 'text-emerald-400' : 'text-rose-400';
+        const deltaBg = delta >= 0 ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20';
+        const deltaIcon = delta >= 0 ? 'fa-arrow-up-long' : 'fa-arrow-down-long';
+        
+        // Percent of 300 - 850 range
+        const pct = Math.min(Math.max((current - 300) / 550, 0), 1);
+        const radius = 38;
+        const circumference = 2 * Math.PI * radius;
+        const offset = circumference - (pct * circumference);
+
+        return \`
+          <div class="glass bg-gray-900/40 border border-gray-800/80 rounded-2xl p-5 text-center flex flex-col items-center justify-center relative hover:border-gray-700/80 transition duration-300 shadow-xl group">
+            <div class="absolute top-4 right-4 flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold font-mono tracking-wider \${deltaColor} \${deltaBg} shadow-[0_0_8px_rgba(16,185,129,0.05)]">
+              <i class="fas \${deltaIcon}"></i> \${deltaText}
+            </div>
+            <div class="text-[11px] font-mono font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-1.5 justify-center">
+              <span class="w-1.5 h-1.5 rounded-full bg-blue-500" style="background-color: \${color.start}"></span>
+              \${bureau}
+            </div>
+            <div class="relative w-36 h-36 flex items-center justify-center">
+              <svg class="absolute inset-0 w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                <defs>
+                  <linearGradient id="grad-\${bureau}" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="\${color.start}" />
+                    <stop offset="100%" stop-color="\${color.end}" />
+                  </linearGradient>
+                </defs>
+                <circle cx="50" cy="50" r="\${radius}" stroke="#181d2e" stroke-width="6.5" fill="transparent" />
+                <circle cx="50" cy="50" r="\${radius}" stroke="#ffffff" stroke-opacity="0.05" stroke-width="6.5" fill="transparent" />
+                <circle cx="50" cy="50" r="\${radius}" stroke="\s\${color.start}" stroke-opacity="0.15" stroke-width="6.5" stroke-dasharray="1 6" fill="transparent" />
+                <circle cx="50" cy="50" r="\${radius}" stroke="url(#grad-\${bureau})" stroke-width="6.5" fill="transparent" 
+                  stroke-dasharray="\${circumference}" stroke-dashoffset="\${offset}"
+                  stroke-linecap="round" class="transition-all duration-1000 ease-out" style="filter: drop-shadow(0 0 4px \${color.start});" />
+              </svg>
+              <div class="z-10 flex flex-col items-center">
+                <span class="text-3xl font-black text-white tracking-tight leading-none">\${current}</span>
+                <span class="text-[9px] text-gray-500 font-mono mt-1 font-bold">PRIOR: \${previous}</span>
+              </div>
+            </div>
+            <div class="text-[9px] text-gray-400 font-bold font-mono tracking-widest mt-4 bg-gray-950/55 border border-gray-800/60 rounded-md px-3 py-1 uppercase">
+              FICO® SCORE 8
+            </div>
+          </div>
+        \`;
+      };
+
+      const scoreTrends = comp.scoreTrends || {
+        Equifax: { current: 700, previous: 700 },
+        Experian: { current: 700, previous: 700 },
+        TransUnion: { current: 700, previous: 700 }
+      };
+
+      const complianceHtml = \`
+        <div class="flex flex-wrap items-center gap-2 mb-6">
+          <div class="text-xs text-gray-400 uppercase tracking-widest font-bold font-mono mr-2">Dispute Guard Status:</div>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase font-mono border \${comp.complianceStatus?.croaAgreed ? 'bg-green-950/30 text-green-400 border-green-500/20' : 'bg-red-950/30 text-red-400 border-red-500/20'\}">
+            <i class="fas \${comp.complianceStatus?.croaAgreed ? 'fa-check-circle' : 'fa-times-circle'\}"></i> CROA Contract
+          </span>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase font-mono border \${comp.complianceStatus?.permissiblePurpose ? 'bg-green-950/30 text-green-400 border-green-500/20' : 'bg-red-950/30 text-red-400 border-red-500/20'\}">
+            <i class="fas \${comp.complianceStatus?.permissiblePurpose ? 'fa-check-circle' : 'fa-times-circle'\}"></i> Permissible Purpose
+          </span>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase font-mono border \${comp.complianceStatus?.tsrWaived ? 'bg-green-950/30 text-green-400 border-green-500/20' : 'bg-red-950/30 text-red-400 border-red-500/20'\}">
+            <i class="fas \${comp.complianceStatus?.tsrWaived ? 'fa-check-circle' : 'fa-times-circle'\}"></i> TSR Waiver
+          </span>
+        </div>
+      \`;
+
+      let erasedContent = '';
+      if (!comp.erasedAccounts || comp.erasedAccounts.length === 0) {
+        erasedContent = \`
+          <div class="glass rounded-xl p-8 text-center border border-gray-800/50 bg-gray-900/10">
+            <div class="w-12 h-12 rounded-full bg-gray-800/40 flex items-center justify-center text-gray-500 mx-auto mb-3">
+              <i class="fas fa-eraser text-lg"></i>
+            </div>
+            <h3 class="text-sm font-bold text-white mb-1">No Deleted Tradelines Identified</h3>
+            <p class="text-xs text-gray-400 max-w-md mx-auto">This report comparison shows no negative items have been permanently erased since the previous report state. Continue running FCRA reinvestigation campaigns to enforce statutory removals.</p>
+          </div>
+        \`;
+      } else {
+        erasedContent = \`
+          <div class="space-y-3">
+            \${comp.erasedAccounts.map((item, idx) => {
+              const burColor = bureauGlowColors[item.bureau] || bureauGlowColors['Experian'];
+              return \\\`
+                <div class="glass bg-gray-900/20 border border-gray-800/80 rounded-xl p-4 hover:border-gray-700/60 transition duration-300">
+                  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div class="flex-1">
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase bg-gray-800 text-gray-300 border border-gray-700/50 font-mono tracking-wider" style="color: \\\${burColor.start}; border-color: \\\${burColor.start}25; background-color: \\\${burColor.start}10">
+                          \\\${item.bureau}
+                        </span>
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-black uppercase rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.15)] animate-pulse">
+                          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                          Erased
+                        </span>
+                      </div>
+                      <h4 class="text-sm font-bold text-white tracking-tight">\\\${item.creditorName}</h4>
+                      <p class="text-xs text-gray-500 font-mono mt-0.5">Acct: \\\${item.accountNumber}</p>
+                    </div>
+                    
+                    <div class="flex items-center gap-6 text-right md:text-right">
+                      <div>
+                        <div class="text-[10px] text-gray-500 uppercase font-bold tracking-wider font-mono">Prior State</div>
+                        <div class="text-xs text-red-400 line-through mt-0.5 font-semibold">\\\${item.previousStatus}</div>
+                        <div class="text-xs text-gray-400 line-through font-mono">\\\${money(item.previousBalance)}</div>
+                      </div>
+                      <div class="text-center flex justify-center items-center h-10 w-10 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <i class="fas fa-check"></i>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="border-t border-gray-800/40 mt-3 pt-3">
+                    <button onclick="window._toggleStatSheet('\\\${idx}')" class="text-[11px] text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1.5 transition outline-none select-none">
+                      <i class="fas fa-file-shield text-xs"></i>
+                      <span>Show Statutory Audit Sheet (\\\${item.stattext})</span>
+                      <i id="chevron-\\\${idx}" class="fas fa-chevron-down text-[9px] transition-transform duration-300"></i>
+                    </button>
+                    
+                    <div id="stat-sheet-\\\${idx}" class="hidden mt-3 p-4 bg-gray-950/65 border border-amber-500/10 rounded-lg space-y-2.5 text-xs text-gray-300 shadow-inner">
+                      <div class="flex items-center justify-between border-b border-gray-800 pb-2 mb-2">
+                        <div class="text-[10px] font-mono font-bold text-amber-400 tracking-wider flex items-center gap-1.5 uppercase">
+                          <i class="fas fa-landmark text-amber-500/80"></i> Federal Statutory Audit Matrix
+                        </div>
+                        <div class="text-[9px] font-mono text-gray-500">SECTION REFERENCE: \\\${item.stattext}</div>
+                      </div>
+                      <p class="leading-relaxed text-gray-300">\\\${item.statutoryReason}</p>
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+                        <div class="bg-gray-900/40 p-2 rounded border border-gray-800/40">
+                          <div class="text-[9px] font-mono font-bold text-gray-400 uppercase">Mandatory CRA Remedy</div>
+                          <div class="text-[10px] text-gray-300 font-medium mt-0.5">30-day reinvestigation or instant permanent deletion.</div>
+                        </div>
+                        <div class="bg-gray-900/40 p-2 rounded border border-gray-800/40">
+                          <div class="text-[9px] font-mono font-bold text-gray-400 uppercase">Furnisher Investigation Duty</div>
+                          <div class="text-[10px] text-gray-300 font-medium mt-0.5">Strict liability for verification failure under § 1681s-2b.</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              \\\`;
+            }).join('')}
+          </div>
+        `;
+      }
+
+      let updatedContent = '';
+      if (!comp.updatedAccounts || comp.updatedAccounts.length === 0) {
+        updatedContent = \`
+          <div class="glass rounded-xl p-6 text-center border border-gray-800/50 bg-gray-900/10">
+            <div class="text-xs text-gray-500"><i class="fas fa-info-circle mr-1.5"></i>No status upgrades or balance settlements identified.</div>
+          </div>
+        `;
+      } else {
+        updatedContent = \`
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            \${comp.updatedAccounts.map(item => {
+              const burColor = bureauGlowColors[item.bureau] || bureauGlowColors['Experian'];
+              return \\\`
+                <div class="glass bg-gray-900/20 border border-gray-800/80 rounded-xl p-4 flex flex-col justify-between hover:border-gray-700/60 transition duration-300">
+                  <div class="flex justify-between items-start mb-2">
+                    <div>
+                      <span class="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase bg-gray-800 text-gray-300 border border-gray-700/50 font-mono tracking-wider" style="color: \\\${burColor.start}; border-color: \\\${burColor.start}25; background-color: \\\${burColor.start}10">
+                        \\\${item.bureau}
+                      </span>
+                      <h4 class="text-sm font-bold text-white tracking-tight mt-1">\\\${item.creditorName}</h4>
+                      <p class="text-xs text-gray-500 font-mono mt-0.5">Acct: \\\${item.accountNumber}</p>
+                    </div>
+                    <span class="px-2.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                      \\\${item.changeType}
+                    </span>
+                  </div>
+                  
+                  <div class="grid grid-cols-2 gap-4 pt-3 border-t border-gray-800/40 text-center">
+                    <div>
+                      <div class="text-[9px] text-gray-500 font-bold uppercase tracking-wider font-mono">Previous State</div>
+                      <div class="text-xs text-red-400 font-medium mt-1 leading-none font-semibold">\\\${item.previousStatus}</div>
+                      <div class="text-[11px] text-gray-400 font-mono mt-1">\\\${money(item.previousBalance)}</div>
+                    </div>
+                    <div class="border-l border-gray-800/40">
+                      <div class="text-[9px] text-gray-500 font-bold uppercase tracking-wider font-mono">Current State</div>
+                      <div class="text-xs text-emerald-400 font-medium mt-1 leading-none font-semibold">\\\${item.currentStatus}</div>
+                      <div class="text-[11px] text-gray-400 font-mono mt-1">\\\${money(item.currentBalance)}</div>
+                    </div>
+                  </div>
+                </div>
+              \\\`;
+            }).join('')}
+          </div>
+        `;
+      }
+
+      let inquiriesContent = '';
+      if (!comp.newInquiries || comp.newInquiries.length === 0) {
+        inquiriesContent = \`
+          <div class="glass rounded-xl p-6 text-center border border-gray-800/50 bg-gray-900/10">
+            <div class="text-xs text-gray-500"><i class="fas fa-check-circle text-emerald-500 mr-1.5"></i>No new hard inquiries recorded in this period.</div>
+          </div>
+        `;
+      } else {
+        inquiriesContent = \`
+          <div class="space-y-3">
+            <div class="bg-yellow-950/15 border border-yellow-500/15 rounded-xl p-3.5 flex items-start gap-3">
+              <i class="fas fa-circle-exclamation text-yellow-500 text-sm mt-0.5 shrink-0"></i>
+              <div class="text-xs text-yellow-200/80 leading-relaxed">
+                <strong>FCRA Permissible Purpose Notice:</strong> Creditors must maintain a documented permissible purpose under <strong>15 U.S.C. § 1681b</strong> for every consumer report access. If these hard inquiries were not explicitly authorized, they can be disputed for immediate removal.
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              \${comp.newInquiries.map(item => {
+                const burColor = bureauGlowColors[item.bureau] || bureauGlowColors['Experian'];
+                return \\\`
+                  <div class="glass bg-gray-900/25 border border-gray-800/80 rounded-xl p-3 flex items-center justify-between">
+                    <div>
+                      <h5 class="text-xs font-bold text-white tracking-tight">\\\${item.creditorName}</h5>
+                      <div class="text-[10px] text-gray-500 font-mono mt-0.5">Date: \\\${shortDate(item.date)}</div>
+                    </div>
+                    <span class="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase font-mono" style="color: \\\${burColor.start}; border-color: \\\${burColor.start}25; background-color: \\\${burColor.start}10; border-width: 1px">
+                      \\\${item.bureau}
+                    </span>
+                  </div>
+                \\\`;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      el.innerHTML = \`
+        <div class="fade-in max-w-full">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div>
+              <button onclick="window._nav('report-detail', { reportId: '\${data.reportId}' })" class="text-gray-400 hover:text-white text-sm mb-2 inline-flex items-center gap-1.5 transition">
+                <i class="fas fa-arrow-left text-xs"></i>Back to Report Detail
+              </button>
+              <h1 class="text-xl font-extrabold text-white flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-purple-500 animate-pulse"></span>
+                Interactive Comparison Dashboard
+              </h1>
+              <div class="text-xs text-gray-400 font-mono mt-1">Comparing against prior client report &bull; Generated LIVE</div>
+            </div>
+            
+            <div class="text-right flex flex-col md:items-end">
+              <span class="px-3.5 py-1 bg-purple-950/40 border border-purple-500/20 text-purple-300 text-xs font-bold rounded-lg font-mono">
+                STATUTORY DIFFERENTIAL MATRIX
+              </span>
+            </div>
+          </div>
+
+          <!-- Compliance Checklist Header -->
+          \${complianceHtml}
+
+          <!-- Score Delta curves row -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            \${renderScoreGauge('Equifax', scoreTrends.Equifax.current, scoreTrends.Equifax.previous)}
+            \${renderScoreGauge('Experian', scoreTrends.Experian.current, scoreTrends.Experian.previous)}
+            \${renderScoreGauge('TransUnion', scoreTrends.TransUnion.current, scoreTrends.TransUnion.previous)}
+          </div>
+
+          <!-- Major Content Grid -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <!-- Left Side: Erasures (col-span-7) -->
+            <div class="lg:col-span-7 space-y-4">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
+                  <i class="fas fa-eraser text-emerald-400"></i>
+                  Erased Derogatory traditional ledger
+                </h3>
+              </div>
+              \${erasedContent}
+            </div>
+
+            <!-- Right Side: Upgrades and Inquiries (col-span-5) -->
+            <div class="lg:col-span-5 space-y-6">
+              <!-- Upgrades -->
+              <div class="space-y-4">
+                <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
+                  <i class="fas fa-circle-up text-blue-400"></i>
+                  Status Update Differential Table
+                </h3>
+                \${updatedContent}
+              </div>
+
+              <!-- New Inquiries -->
+              <div class="space-y-4">
+                <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
+                  <i class="fas fa-circle-exclamation text-yellow-400"></i>
+                  New Hard Inquiries Tracker
+                </h3>
+                \${inquiriesContent}
+              </div>
+            </div>
+          </div>
+        </div>
+      \`;
+    } catch(err) {
+      el.innerHTML = \`
+        <div class="glass border border-red-500/20 bg-red-950/10 rounded-2xl p-8 text-center max-w-xl mx-auto my-12">
+          <div class="w-12 h-12 rounded-full bg-red-900/30 flex items-center justify-center text-red-400 mx-auto mb-4">
+            <i class="fas fa-exclamation-triangle text-xl"></i>
+          </div>
+          <h2 class="text-base font-bold text-white mb-2">Comparison Compilation Failed</h2>
+          <p class="text-sm text-gray-400 mb-6">\${err.message}</p>
+          <button onclick="window._nav('report-detail', { reportId: '\${data.reportId}' })" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-xs font-semibold transition">
+            <i class="fas fa-arrow-left mr-1.5"></i>Return to Workspace
+          </button>
+        </div>
+      \`;
+    }
+  }
 
   // ═══════════════════════════════════════════════════════════════
   // REPORT HISTORY
@@ -3742,6 +5189,9 @@ async function pgAdminConsole(el) {
             <button class="px-4 py-2.5 text-xs font-semibold border-b-2 transition ${activeTab === 'users' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}" onclick="window._adminTab('users')">
               <i class="fas fa-users mr-1.5"></i>User Accounts (${usersData.users.length})
             </button>
+            <button class="px-4 py-2.5 text-xs font-semibold border-b-2 transition ${activeTab === 'global_records' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}" onclick="window._adminTab('global_records')">
+              <i class="fas fa-database mr-1.5"></i>Global Records
+            </button>
             <button class="px-4 py-2.5 text-xs font-semibold border-b-2 transition ${activeTab === 'logs' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}" onclick="window._adminTab('logs')">
               <i class="fas fa-list-alt mr-1.5"></i>Security Audit Trails
             </button>
@@ -3918,8 +5368,7 @@ async function pgAdminConsole(el) {
                 <div>
                   <label class="block text-xs text-gray-400 mb-1">Commercial Billing Plan</label>
                   <select name="plan" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-xs focus:border-blue-500 outline-none">
-                    <option value="free">Free Account</option>
-                    <option value="pro">Pro Plan ($497/mo)</option>
+                    <option value="professional">Professional Plan ($497/mo)</option>
                     <option value="unlimited">Unlimited Plan ($2500/mo)</option>
                     <option value="enterprise">Enterprise Plan ($9997/mo)</option>
                   </select>
@@ -3984,6 +5433,9 @@ async function pgAdminConsole(el) {
               <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500"><i class="fas fa-search text-xs"></i></span>
               <input type="text" id="admin-user-search" placeholder="Filter platform users by name or email..." class="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-white text-xs focus:border-blue-500 outline-none">
             </div>
+            <button onclick="$('#admin-create-user-modal').classList.remove('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-lg shadow-blue-500/15 border border-blue-500/25">
+              <i class="fas fa-user-plus"></i> Create User
+            </button>
           </div>
           
           <div class="glass rounded-xl border border-gray-800 overflow-hidden">
@@ -3994,7 +5446,7 @@ async function pgAdminConsole(el) {
             <div class="overflow-x-auto">
               <table class="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr class="border-b border-gray-800 text-gray-400 font-medium">
+                  <tr class="border-b border-gray-800 text-gray-400 font-medium font-mono uppercase tracking-wider text-[10px]">
                     <th class="p-3">User ID</th>
                     <th class="p-3">Name / Role</th>
                     <th class="p-3">Email Address</th>
@@ -4008,6 +5460,87 @@ async function pgAdminConsole(el) {
                   ${renderUserRows(usersData.users)}
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <!-- admin-create-user-modal -->
+          <div id="admin-create-user-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 fade-in">
+            <div class="glass w-full max-w-md rounded-xl border border-gray-800 overflow-hidden shadow-2xl">
+              <div class="p-5 border-b border-gray-800 bg-gray-900/40 flex justify-between items-center">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                  <i class="fas fa-user-plus text-blue-400"></i> Create Platform User
+                </h3>
+                <button onclick="$('#admin-create-user-modal').classList.add('hidden')" class="text-gray-500 hover:text-white">
+                  <i class="fas fa-times text-sm"></i>
+                </button>
+              </div>
+              <form id="admin-create-user-form" class="p-5 space-y-4">
+                <div>
+                  <label class="block text-xs text-gray-400 mb-1">Full Name</label>
+                  <input type="text" name="name" required placeholder="e.g. John Doe" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-xs focus:border-blue-500 outline-none transition">
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-400 mb-1">Email Address</label>
+                  <input type="email" name="email" required placeholder="e.g. user@domain.com" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-xs focus:border-blue-500 outline-none transition">
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-400 mb-1">Account Password</label>
+                  <div class="relative">
+                    <input type="password" id="admin-new-user-pass" name="password" required minlength="6" placeholder="Choose a secure password" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-3 pr-10 py-2.5 text-white text-xs focus:border-blue-500 outline-none transition">
+                    <button type="button" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white" onclick="const input = document.getElementById('admin-new-user-pass'); const icon = this.querySelector('i'); if (input.type === 'password') { input.type = 'text'; icon.className = 'fas fa-eye-slash'; } else { input.type = 'password'; icon.className = 'fas fa-eye'; }">
+                      <i class="fas fa-eye"></i>
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-400 mb-1">Associated Tenant (Organization)</label>
+                  <select name="org_id" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-xs focus:border-blue-500 outline-none transition">
+                    ${orgsData.organizations.map(o => `<option value="${o.id}">${o.name} (${o.plan || 'free'})</option>`).join('')}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-400 mb-1">Assigned Role</label>
+                  <select name="role" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-xs focus:border-blue-500 outline-none transition">
+                    <option value="member">Member (Regular access)</option>
+                    <option value="admin">Admin (Tenant controller)</option>
+                    <option value="super_admin">Super Admin (Platform operator)</option>
+                  </select>
+                </div>
+                <div class="flex gap-2 pt-2">
+                  <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-xs font-semibold transition">Create Account</button>
+                  <button type="button" onclick="$('#admin-create-user-modal').classList.add('hidden')" class="bg-gray-700 text-white px-4 py-2.5 rounded-lg text-xs">Cancel</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- admin-reset-password-modal -->
+          <div id="admin-reset-password-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 fade-in">
+            <div class="glass w-full max-w-sm rounded-xl border border-gray-800 overflow-hidden shadow-2xl">
+              <div class="p-5 border-b border-gray-800 bg-gray-900/40 flex justify-between items-center">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                  <i class="fas fa-key text-yellow-400"></i> Reset Password
+                </h3>
+                <button onclick="$('#admin-reset-password-modal').classList.add('hidden')" class="text-gray-500 hover:text-white">
+                  <i class="fas fa-times text-sm"></i>
+                </button>
+              </div>
+              <form id="admin-reset-password-form" class="p-5 space-y-4">
+                <input type="hidden" name="user_id">
+                <div>
+                  <div class="text-xs text-gray-400 mb-2">Configure a new password for <span id="reset-password-user-email" class="text-white font-mono"></span>:</div>
+                  <div class="relative">
+                    <input type="password" id="admin-reset-user-pass" name="password" required minlength="6" placeholder="Enter new secure password" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-3 pr-10 py-2.5 text-white text-xs focus:border-blue-500 outline-none transition">
+                    <button type="button" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white" onclick="const input = document.getElementById('admin-reset-user-pass'); const icon = this.querySelector('i'); if (input.type === 'password') { input.type = 'text'; icon.className = 'fas fa-eye-slash'; } else { input.type = 'password'; icon.className = 'fas fa-eye'; }">
+                      <i class="fas fa-eye"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="flex gap-2 pt-2">
+                  <button type="submit" class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2.5 rounded-lg text-xs font-semibold transition">Update Password</button>
+                  <button type="button" onclick="$('#admin-reset-password-modal').classList.add('hidden')" class="bg-gray-700 text-white px-4 py-2.5 rounded-lg text-xs">Cancel</button>
+                </div>
+              </form>
             </div>
           </div>
         `;
@@ -4025,6 +5558,225 @@ async function pgAdminConsole(el) {
             if (tbody) tbody.innerHTML = renderUserRows(filtered);
           };
         }
+
+        const userForm = $('#admin-create-user-form');
+        if (userForm) {
+          userForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            try {
+              await api('/admin/users', {
+                method: 'POST',
+                body: JSON.stringify({
+                  name: fd.get('name'),
+                  email: fd.get('email'),
+                  password: fd.get('password'),
+                  role: fd.get('role'),
+                  org_id: fd.get('org_id')
+                })
+              });
+              toast('Platform user account created', 'success');
+              $('#admin-create-user-modal').classList.add('hidden');
+              e.target.reset();
+
+              const updatedUsers = await api('/admin/users');
+              usersData.users = updatedUsers.users;
+              renderTabContent();
+            } catch (err) {
+              toast(err.message, 'error');
+            }
+          };
+        }
+
+        const resetForm = $('#admin-reset-password-form');
+        if (resetForm) {
+          resetForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const userId = fd.get('user_id');
+            try {
+              await api(`/admin/users/${userId}/reset-password`, {
+                method: 'POST',
+                body: JSON.stringify({
+                  password: fd.get('password')
+                })
+              });
+              toast('User password updated successfully', 'success');
+              $('#admin-reset-password-modal').classList.add('hidden');
+              e.target.reset();
+            } catch (err) {
+              toast(err.message, 'error');
+            }
+          };
+        }
+      } 
+      
+      else if (activeTab === 'global_records') {
+        target.innerHTML = `<div class="flex items-center justify-center py-12"><div class="text-center"><i class="fas fa-spinner fa-spin text-2xl text-blue-400 mb-2"></i><div class="text-xs text-gray-400">Fetching global records cross-tenant telemetry...</div></div></div>`;
+        
+        (async () => {
+          try {
+            const [clientsRes, reportsRes, docsRes] = await Promise.all([
+              api('/admin/global-clients'),
+              api('/admin/global-reports'),
+              api('/admin/global-documents')
+            ]);
+            
+            const clients = clientsRes.clients || [];
+            const reports = reportsRes.reports || [];
+            const docs = docsRes.documents || [];
+            
+            target.innerHTML = `
+              <div class="space-y-6">
+                <!-- Clients Grid Section -->
+                <div class="glass rounded-xl border border-gray-700 overflow-hidden">
+                  <div class="bg-gray-800/50 border-b border-gray-700 px-5 py-4 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <i class="fas fa-user-friends text-blue-400"></i>
+                      <div>
+                        <h3 class="text-sm font-bold text-white">Cross-Tenant Client Registry</h3>
+                        <p class="text-[10px] text-gray-400">Total registered consumer profiles: ${clients.length}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr class="border-b border-gray-800 text-gray-400 bg-gray-900/40">
+                          <th class="p-3">Client Name</th>
+                          <th class="p-3">Organization (B2B Tenant)</th>
+                          <th class="p-3">Email / Phone</th>
+                          <th class="p-3">SSN (Last 4) / DOB</th>
+                          <th class="p-3">Registered At</th>
+                          <th class="p-3">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-gray-800/50 text-gray-300">
+                        ${clients.length === 0 ? `
+                          <tr><td colspan="6" class="p-6 text-center text-gray-500">No client profiles found on the platform</td></tr>
+                        ` : clients.map(c => `
+                          <tr class="hover:bg-gray-800/10">
+                            <td class="p-3 font-semibold text-white">${c.first_name} ${c.last_name}</td>
+                            <td class="p-3 font-medium text-blue-400">${c.org_name}</td>
+                            <td class="p-3 text-gray-300">
+                              <div>${c.email || '-'}</div>
+                              <div class="text-[10px] text-gray-500">${c.phone || '-'}</div>
+                            </td>
+                            <td class="p-3 font-mono text-gray-400">
+                              <div>***-**-${c.ssn_last4 || '????'}</div>
+                              <div class="text-[10px] text-gray-500">${c.dob || '-'}</div>
+                            </td>
+                            <td class="p-3 text-gray-400">${new Date(c.created_at).toLocaleDateString()}</td>
+                            <td class="p-3">
+                              <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-green-950 text-green-400 border border-green-900">${c.status}</span>
+                            </td>
+                          </tr>
+                        `).join('')}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <!-- Reports & Documents Registry Grid -->
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  <!-- Uploaded Reports -->
+                  <div class="glass rounded-xl border border-gray-700 overflow-hidden">
+                    <div class="bg-gray-800/50 border-b border-gray-700 px-5 py-4 flex items-center justify-between">
+                      <div class="flex items-center gap-2">
+                        <i class="fas fa-file-invoice text-emerald-400"></i>
+                        <div>
+                          <h3 class="text-sm font-bold text-white">Ingested Credit Reports</h3>
+                          <p class="text-[10px] text-gray-400">Total reports analyzed across all nodes: ${reports.length}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                      <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr class="border-b border-gray-800 text-gray-400 bg-gray-900/40">
+                            <th class="p-3">File / Bureau</th>
+                            <th class="p-3">Client</th>
+                            <th class="p-3">Tenant Name</th>
+                            <th class="p-3">Accounts</th>
+                            <th class="p-3">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-800/50 text-gray-300">
+                          ${reports.length === 0 ? `
+                            <tr><td colspan="5" class="p-6 text-center text-gray-500">No credit reports ingested yet</td></tr>
+                          ` : reports.map(r => `
+                            <tr class="hover:bg-gray-800/10">
+                              <td class="p-3">
+                                <div class="font-semibold text-white truncate max-w-[150px]" title="${r.file_name}">${r.file_name}</div>
+                                <span class="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                  r.bureau === 'equifax' ? 'bg-red-950 text-red-400' : r.bureau === 'experian' ? 'bg-blue-950 text-blue-400' : 'bg-orange-950 text-orange-400'
+                                }">${r.bureau}</span>
+                              </td>
+                              <td class="p-3 text-gray-300 font-medium">${r.first_name} ${r.last_name}</td>
+                              <td class="p-3 text-gray-400">${r.org_name}</td>
+                              <td class="p-3 font-mono font-semibold text-white">${r.total_accounts || 0}</td>
+                              <td class="p-3 text-gray-400 whitespace-nowrap">${new Date(r.created_at).toLocaleDateString()}</td>
+                            </tr>
+                          `).join('')}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <!-- Generated Legal Documents -->
+                  <div class="glass rounded-xl border border-gray-700 overflow-hidden">
+                    <div class="bg-gray-800/50 border-b border-gray-700 px-5 py-4 flex items-center justify-between">
+                      <div class="flex items-center gap-2">
+                        <i class="fas fa-gavel text-purple-400"></i>
+                        <div>
+                          <h3 class="text-sm font-bold text-white">Generated Legal Documents & Dispute Drafts</h3>
+                          <p class="text-[10px] text-gray-400">Total templates compiled: ${docs.length}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                      <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr class="border-b border-gray-800 text-gray-400 bg-gray-900/40">
+                            <th class="p-3">Document Title</th>
+                            <th class="p-3">Client</th>
+                            <th class="p-3">Tenant Name</th>
+                            <th class="p-3">Doc Type</th>
+                            <th class="p-3">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-800/50 text-gray-300">
+                          ${docs.length === 0 ? `
+                            <tr><td colspan="5" class="p-6 text-center text-gray-500">No legal documents compiled yet</td></tr>
+                          ` : docs.map(d => `
+                            <tr class="hover:bg-gray-800/10">
+                              <td class="p-3">
+                                <div class="font-semibold text-white truncate max-w-[150px]" title="${d.title}">${d.title}</div>
+                                <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                  d.status === 'draft' ? 'bg-yellow-950 text-yellow-400' : 'bg-green-950 text-green-400'
+                                }">${d.status}</span>
+                              </td>
+                              <td class="p-3 text-gray-300 font-medium">${d.first_name} ${d.last_name}</td>
+                              <td class="p-3 text-gray-400">${d.org_name}</td>
+                              <td class="p-3 font-mono font-medium text-gray-300 uppercase tracking-wider text-[10px]">${d.doc_type}</td>
+                              <td class="p-3 text-right">
+                                <a href="/api/documents/${d.id}/pdf?token=${encodeURIComponent(state.token)}" target="_blank" class="bg-purple-600/20 hover:bg-purple-600 text-purple-400 hover:text-white px-2 py-1 rounded text-[10px] font-bold transition">
+                                  <i class="fas fa-file-pdf mr-1"></i>PDF
+                                </a>
+                              </td>
+                            </tr>
+                          `).join('')}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `;
+          } catch (err) {
+            target.innerHTML = `<div class="p-6 text-center text-red-400"><i class="fas fa-exclamation-triangle text-2xl mb-2"></i><div>Failed to retrieve global records cross-tenant telemetry: ${err.message}</div></div>`;
+          }
+        })();
       } 
       
       else if (activeTab === 'logs') {
@@ -4149,7 +5901,10 @@ async function pgAdminConsole(el) {
               u.is_active === 1 ? 'bg-green-900/30 text-green-400 border border-green-800/30' : 'bg-red-900/30 text-red-400 border border-red-800/30'
             }">${u.is_active === 1 ? 'Active' : 'Suspended'}</span>
           </td>
-          <td class="p-3 text-right">
+          <td class="p-3 text-right space-x-1.5 whitespace-nowrap">
+            <button onclick="window._adminTriggerPasswordReset('${u.id}', '${u.email}')" class="bg-yellow-600/20 hover:bg-yellow-600 text-yellow-400 hover:text-white px-2.5 py-1.5 rounded text-[10px] font-bold transition">
+              <i class="fas fa-key mr-1"></i>Reset Pass
+            </button>
             ${u.id !== state.user?.id ? `
               <button onclick="window._adminToggleUser('${u.id}')" class="${
                 u.is_active === 1 ? 'bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white' : 'bg-green-600 hover:bg-green-700 text-white'
@@ -4183,6 +5938,16 @@ async function pgAdminConsole(el) {
     window._adminTab = (t) => {
       activeTab = t;
       renderConsole();
+    };
+
+    window._adminTriggerPasswordReset = (userId, email) => {
+      const modal = $('#admin-reset-password-modal');
+      if (modal) {
+        modal.querySelector('input[name="user_id"]').value = userId;
+        modal.querySelector('#reset-password-user-email').textContent = email;
+        modal.querySelector('input[name="password"]').value = '';
+        modal.classList.remove('hidden');
+      }
     };
 
     window._adminToggleUser = async (userId) => {
@@ -4254,7 +6019,1374 @@ async function pgAdminConsole(el) {
     `;
   }
 }
+  // ═══════════════════════════════════════════════════════════════
+  // SECURE SELF-SERVICE CLIENT PORTAL VIEWS
+  // ═══════════════════════════════════════════════════════════════
+  async function pgClientCockpit(el) {
+    try {
+      const d = await api('/client-portal/dashboard');
+      const client = d.client || {};
+      const reports = d.reports || [];
+      const violations = d.violations || [];
+      const documents = d.documents || [];
 
+      // Fetch dynamic credit score indicators
+      const eqScore = client.eq_score || 720;
+      const exScore = client.ex_score || 710;
+      const tuScore = client.tu_score || 715;
 
-render();
+      el.innerHTML = `
+        <div class="fade-in space-y-6">
+          <!-- Premium Branding Jumbotron -->
+          <div class="relative overflow-hidden bg-gradient-to-r from-gray-900 via-blue-950 to-gray-900 border border-blue-500/20 rounded-2xl p-6 shadow-2xl">
+            <div class="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-blue-600/10 rounded-full blur-2xl"></div>
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div>
+                <h1 class="text-2xl font-bold text-white mb-1">Welcome back, ${escapeHtml(client.first_name)}!</h1>
+                <p class="text-sm text-gray-400">Secure Client Autopilot & Litigation Cockpit</p>
+              </div>
+              <div class="bg-blue-600/10 border border-blue-500/30 rounded-xl px-4 py-2.5 flex items-center gap-3">
+                <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="RJ Business Solutions Logo" class="w-8 h-8 rounded-lg object-cover">
+                <div>
+                  <div class="text-[10px] text-gray-400 uppercase tracking-wider">Authorized Advisor</div>
+                  <div class="text-xs font-bold text-white">Rick Jefferson</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Score Indicators Row -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            ${scoreMeterCard('Equifax', eqScore, 'text-red-500')}
+            ${scoreMeterCard('Experian', exScore, 'text-blue-500')}
+            ${scoreMeterCard('TransUnion', tuScore, 'text-emerald-500')}
+          </div>
+
+          <!-- TIMELINE & LOGISTICS -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Case timeline tracker -->
+            <div class="lg:col-span-2 glass rounded-2xl p-5 border border-gray-800 flex flex-col justify-between">
+              <h3 class="text-sm font-bold text-white mb-4"><i class="fas fa-route mr-2 text-blue-400"></i>Active Case Campaign Timeline</h3>
+              <div class="relative pl-6 border-l border-gray-800 space-y-6 py-2">
+                ${timelineItem('Ingestion Pipeline', 'Credit report imported and AES-GCM encrypted successfully.', client.created_at ? new Date(client.created_at).toLocaleDateString() : 'Active', true)}
+                ${timelineItem('FCRA Statute Mapping', `${violations.length} Potential statutory violations parsed automatically.`, 'Completed', violations.length > 0)}
+                ${timelineItem('Dispute Package Drafting', 'Legal arguments and § 1681i notice compilations completed.', 'Completed', documents.length > 0)}
+                ${timelineItem('Certified Mail (USPS) Tracking', 'Mailing dispatch via Click2Mail API integration gateway.', documents.some(d=>d.status==='sent') ? 'In Progress' : 'Pending Signatures', documents.some(d=>d.status==='sent'))}
+                ${timelineItem('Litigation Strategy QA', 'Damages review under attorney advisory.', 'Review Queue', client.case_status === 'LITIGATION')}
+              </div>
+            </div>
+
+            <!-- Certified Mail Status actions -->
+            <div class="glass rounded-2xl p-5 border border-gray-800 flex flex-col justify-between">
+              <h3 class="text-sm font-bold text-white mb-3"><i class="fas fa-mail-bulk mr-2 text-purple-400"></i>Certified Mail Logistics</h3>
+              <div class="flex-1 space-y-4">
+                ${documents.some(d=>d.status==='sent') ? `
+                  <div class="bg-gray-800/40 rounded-xl p-4 border border-gray-700/50">
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="text-xs font-semibold text-purple-400">USPS Certified Mail</span>
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/10 text-green-400 uppercase">In Transit</span>
+                    </div>
+                    <div class="text-sm font-mono font-bold text-white mb-1">9405 5000 1234 5678 9012 34</div>
+                    <div class="text-[11px] text-gray-400">Estimated delivery: Within 3 business days</div>
+                  </div>
+                ` : `
+                  <div class="bg-gray-800/40 rounded-xl p-5 text-center border border-gray-700/50">
+                    <i class="fas fa-signature text-3xl text-blue-500/40 mb-3"></i>
+                    <h4 class="text-xs font-bold text-white mb-1">Documents Awaiting Signatures</h4>
+                    <p class="text-[11px] text-gray-400 mb-3">Your formal letters require electronic signatures before dispatch via Certified Mail.</p>
+                    <button onclick="window._nav('client-documents')" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg font-bold transition">Sign Letters Now</button>
+                  </div>
+                `}
+              </div>
+
+              <!-- Support coordinates footer -->
+              <div class="mt-4 pt-4 border-t border-gray-800 text-center">
+                <div class="text-[10px] text-gray-500 mb-1">Need help with your campaign?</div>
+                <div class="text-xs font-semibold text-blue-400"><i class="fas fa-envelope mr-1"></i>support@rjbusinesssolutions.org</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ACTIVE VIOLATIONS LEDGER -->
+          <div class="glass rounded-2xl p-5 border border-gray-800">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-bold text-white"><i class="fas fa-exclamation-circle mr-2 text-red-400"></i>Statutory Violations Logged</h3>
+              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-600/10 text-red-400">${violations.length} Detected</span>
+            </div>
+            ${violations.length ? `
+              <div class="space-y-3">
+                ${violations.map(v => `
+                  <div class="bg-gray-800/40 border border-gray-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div>
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-red-500/10 text-red-400 border border-red-500/20">${v.severity.toUpperCase()}</span>
+                        <span class="text-xs font-mono text-gray-400">${v.statute}</span>
+                      </div>
+                      <div class="text-sm font-bold text-white">${escapeHtml(v.account_name)} (${v.bureau})</div>
+                      <div class="text-xs text-gray-400">${escapeHtml(v.error_type)}: ${escapeHtml(v.finding_reason)}</div>
+                    </div>
+                    <div class="text-right shrink-0">
+                      <div class="text-xs text-gray-500">Recovery potential</div>
+                      <div class="text-sm font-bold text-green-400 font-mono">$1,000 - $1,000</div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            ` : `
+              <div class="text-center py-8">
+                <i class="fas fa-check-circle text-4xl text-green-500/30 mb-2"></i>
+                <h4 class="text-sm font-bold text-white">No Violations Found Yet</h4>
+                <p class="text-xs text-gray-400">If you just uploaded a report, our processing queue will update this log shortly.</p>
+              </div>
+            `}
+          </div>
+        </div>
+      `;
+    } catch (err) {
+      el.innerHTML = `
+        <div class="fade-in">
+          <div class="glass rounded-2xl p-8 border border-red-500/30 text-center">
+            <i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i>
+            <h3 class="text-lg font-bold text-white mb-1">Client Profile Pending</h3>
+            <p class="text-sm text-gray-400 mb-4">${escapeHtml(err.message)}</p>
+            <p class="text-xs text-gray-500">Please contact support if you believe this is an error.</p>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  function scoreMeterCard(bureau, score, colorClass) {
+    const percent = Math.min(100, Math.max(0, ((score - 300) / (850 - 300)) * 100));
+    return `
+      <div class="glass rounded-2xl p-5 border border-gray-800 text-center flex flex-col items-center justify-center relative overflow-hidden">
+        <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">${bureau}</div>
+        <div class="relative w-32 h-32 flex items-center justify-center">
+          <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+            <circle class="text-gray-800" stroke-width="6" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50"></circle>
+            <circle class="${colorClass} transition-all duration-500" stroke-width="6" stroke-dasharray="251.2" stroke-dashoffset="${251.2 - (251.2 * percent) / 100}" stroke-linecap="round" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50"></circle>
+          </svg>
+          <div class="absolute text-center">
+            <span class="text-2xl font-bold text-white font-mono">${score}</span>
+            <div class="text-[10px] text-gray-500">FICO Score</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function timelineItem(title, desc, status, isActive) {
+    return `
+      <div class="relative pl-2">
+        <div class="absolute -left-[30px] top-1 w-4 h-4 rounded-full ${isActive ? 'bg-blue-600 border-4 border-gray-950' : 'bg-gray-800 border-4 border-gray-950'}"></div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold ${isActive ? 'text-white' : 'text-gray-500'}">${title}</span>
+            <span class="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${isActive ? 'bg-blue-500/10 text-blue-400' : 'bg-gray-800 text-gray-500'}">${status}</span>
+          </div>
+          <p class="text-[11px] text-gray-400 mt-0.5">${desc}</p>
+        </div>
+      </div>
+    `;
+  }
+
+  async function pgClientDocuments(el) {
+    try {
+      const d = await api('/client-portal/dashboard');
+      const documents = (d.documents || []).filter(doc => doc.status === 'draft' || doc.status === 'signed');
+      
+      if (!documents.length) {
+        el.innerHTML = `
+          <div class="fade-in text-center py-12 glass rounded-2xl border border-gray-800 p-8">
+            <i class="fas fa-folder-open text-5xl text-blue-500/30 mb-4"></i>
+            <h3 class="text-lg font-bold text-white mb-2">No Documents Pending</h3>
+            <p class="text-sm text-gray-400 max-w-md mx-auto">There are currently no documents or credit dispute letters waiting for your signature or review.</p>
+          </div>
+        `;
+        return;
+      }
+
+      let activeDocId = documents[0].id;
+      let activeDoc = documents[0];
+
+      window._selectDocForSigning = async (id) => {
+        activeDocId = id;
+        activeDoc = documents.find(doc => doc.id === id);
+        renderDocWorkspace();
+      };
+
+      function renderDocWorkspace() {
+        el.innerHTML = `
+          <div class="fade-in grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Sidebar list of documents -->
+            <div class="glass rounded-2xl p-4 border border-gray-800 space-y-3 lg:col-span-1">
+              <h3 class="text-sm font-bold text-white mb-3"><i class="fas fa-file-contract text-blue-400 mr-2"></i>My Documents</h3>
+              <div class="space-y-2">
+                ${documents.map(doc => `
+                  <button onclick="window._selectDocForSigning('${doc.id}')" class="w-full text-left p-3.5 rounded-xl border transition ${doc.id === activeDocId ? 'bg-blue-600/10 border-blue-500/40' : 'bg-gray-800/40 border-gray-800 hover:bg-gray-800/80'}">
+                    <div class="flex items-center justify-between mb-1.5">
+                      <span class="text-[10px] font-bold uppercase tracking-wider ${doc.status === 'signed' ? 'text-green-400' : 'text-amber-400'}">${doc.status}</span>
+                      <span class="text-[10px] text-gray-500">${new Date(doc.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <h4 class="text-xs font-bold text-white truncate">${escapeHtml(doc.title || doc.doc_type)}</h4>
+                    <p class="text-[10px] text-gray-400 mt-1">Dispute Package Letter</p>
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+
+            <!-- Document preview & signing workspace -->
+            <div class="lg:col-span-2 space-y-6">
+              <!-- Preview Card -->
+              <div class="glass rounded-2xl border border-gray-800 overflow-hidden flex flex-col">
+                <div class="bg-gray-900 px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+                  <h3 class="text-sm font-bold text-white">${escapeHtml(activeDoc.title || activeDoc.doc_type)}</h3>
+                  <span class="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase ${activeDoc.status === 'signed' ? 'bg-green-500/10 text-green-400' : 'bg-amber-500/10 text-amber-400'}">${activeDoc.status}</span>
+                </div>
+                <div class="p-6 bg-white text-gray-900 min-h-[350px] text-xs font-serif leading-relaxed select-text space-y-4 shadow-inner max-h-[500px] overflow-y-auto">
+                  ${activeDoc.content ? escapeHtml(activeDoc.content).replace(/\n/g, '<br>') : `
+                    <div class="font-sans text-center py-12 text-gray-500">
+                      <i class="fas fa-file-alt text-3xl text-gray-300 mb-2"></i>
+                      <p>Draft Dispute Letter prepared under FCRA Section 611 guidelines.</p>
+                      <p class="text-[10px] mt-1">Includes pinned statutory violations, dispute arguments, and client coordinates.</p>
+                    </div>
+                  `}
+                </div>
+              </div>
+
+              <!-- Sign pad card if unsigned -->
+              ${activeDoc.status === 'draft' ? `
+                <div class="glass rounded-2xl border border-gray-800 p-5 space-y-4">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <h3 class="text-sm font-bold text-white"><i class="fas fa-feather-alt text-blue-400 mr-2"></i>E-Sign Authorized Dispute Document</h3>
+                      <p class="text-xs text-gray-400">By signing below, you authorize these letters to be dispatched on your behalf.</p>
+                    </div>
+                    <button onclick="window._clearSignaturePad()" class="text-xs text-gray-400 hover:text-white px-3 py-1.5 rounded bg-gray-800 hover:bg-gray-700 transition">Clear Pad</button>
+                  </div>
+                  
+                  <div class="relative bg-gray-950 border border-gray-850 rounded-xl overflow-hidden h-32 flex items-center justify-center">
+                    <canvas id="sign-pad-canvas" class="absolute inset-0 w-full h-full cursor-crosshair z-10"></canvas>
+                    <div class="text-gray-700 pointer-events-none text-[11px] select-none text-center">
+                      <i class="fas fa-signature text-2xl mb-1 opacity-20"></i>
+                      <div>Draw your signature inside this box</div>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center justify-between gap-4 pt-2">
+                    <div class="text-[10px] text-gray-500 leading-normal max-w-md">
+                      By clicking "Apply Signature", you agree that this electronic signature is equivalent to your hand-written signature on this legal document.
+                    </div>
+                    <button id="btn-submit-signature" onclick="window._submitDocSignature()" class="shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-5 py-2.5 rounded-lg transition shadow-lg flex items-center gap-1.5">
+                      <i class="fas fa-file-signature"></i>
+                      <span>Apply Signature</span>
+                    </button>
+                  </div>
+                </div>
+              ` : `
+                <div class="glass rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5 flex items-center gap-4">
+                  <div class="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0"><i class="fas fa-check"></i></div>
+                  <div>
+                    <h4 class="text-sm font-bold text-white">Document Fully Signed</h4>
+                    <p class="text-xs text-gray-400">This document was legally signed on ${new Date(activeDoc.signature_timestamp).toLocaleString()}. Tracking details will be generated upon Certified Mail dispatch.</p>
+                  </div>
+                </div>
+              `}
+            </div>
+          </div>
+        `;
+
+        if (activeDoc.status === 'draft') {
+          setTimeout(() => {
+            initSignaturePad();
+          }, 100);
+        }
+      }
+
+      let strokes = [];
+      function initSignaturePad() {
+        const canvas = $('#sign-pad-canvas');
+        if (!canvas) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+
+        ctx.strokeStyle = '#3b82f6'; 
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        let drawing = false;
+        let lastX = 0, lastY = 0;
+        strokes = [];
+
+        function getPos(e) {
+          const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+          return {
+            x: clientX - rect.left,
+            y: clientY - rect.top
+          };
+        }
+
+        function startDrawing(e) {
+          e.preventDefault();
+          drawing = true;
+          const pos = getPos(e);
+          lastX = pos.x;
+          lastY = pos.y;
+          strokes.push({ type: 'start', x: pos.x, y: pos.y });
+        }
+
+        function draw(e) {
+          if (!drawing) return;
+          e.preventDefault();
+          const pos = getPos(e);
+          ctx.beginPath();
+          ctx.moveTo(lastX, lastY);
+          ctx.lineTo(pos.x, pos.y);
+          ctx.stroke();
+          lastX = pos.x;
+          lastY = pos.y;
+          strokes.push({ type: 'move', x: pos.x, y: pos.y });
+        }
+
+        function stopDrawing(e) {
+          if (!drawing) return;
+          e.preventDefault();
+          drawing = false;
+          strokes.push({ type: 'end' });
+        }
+
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        window.addEventListener('mouseup', stopDrawing);
+
+        canvas.addEventListener('touchstart', startDrawing, { passive: false });
+        canvas.addEventListener('touchmove', draw, { passive: false });
+        window.addEventListener('touchend', stopDrawing);
+
+        window._clearSignaturePad = () => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          strokes = [];
+          toast('Signature pad cleared', 'info');
+        };
+      }
+
+      window._submitDocSignature = async () => {
+        if (!strokes.length) {
+          toast('Please write your signature on the pad first.', 'warning');
+          return;
+        }
+
+        const btn = $('#btn-submit-signature');
+        if (btn) btn.disabled = true;
+
+        try {
+          const serialized = JSON.stringify(strokes);
+          const res = await api(`/documents/${activeDocId}/sign`, 'POST', { signatureData: serialized });
+          if (res && res.ok) {
+            toast('Signature registered successfully!', 'success');
+            await sleep(1000);
+            pgClientDocuments(el);
+          } else {
+            throw new Error(res.error || 'Failed to sign document');
+          }
+        } catch (e) {
+          toast(e.message || 'Signature application error', 'error');
+          if (btn) btn.disabled = false;
+        }
+      };
+
+      renderDocWorkspace();
+    } catch (err) {
+      el.innerHTML = `<div class="text-red-400 p-4"><i class="fas fa-exclamation-triangle mr-2"></i>${err.message}</div>`;
+    }
+  }
+
+  const RICK_COURSES = [
+    {
+      id: 'course-1',
+      title: 'Website Systems That Convert',
+      desc: 'Build a clean business website that explains the offer, captures leads, and supports sales.',
+      icon: 'fa-globe',
+      modules: [
+        {
+          title: 'Core Fundamentals',
+          lessons: [
+            { title: 'The Anatomy of a High-Conversion Offer', steps: ['Define single conversion outcome', 'Strip out redundant navigation links', 'Map clear user flow pathways'], ricksRule: 'The website is not an art project. It is a sales machine.', quiz: { question: 'What is the primary objective of a conversion-focused website?', options: ['Expressive artistic freedom', 'To guide the visitor to a single, high-value business action', 'To maximize total page size and scripts'], answer: 1 } }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'course-2',
+      title: 'Landing Pages That Move People',
+      desc: 'Create focused landing pages with strong messaging, clean CTAs, and no wasted sections.',
+      icon: 'fa-rocket',
+      modules: [
+        {
+          title: 'Direct Response Copywriting',
+          lessons: [
+            { title: 'Headline Formulations that Hold Attention', steps: ['State specific, measurable outcome first', 'Address specific pain points in the sub-headline', 'Ensure CTA is action-oriented and explicit'], ricksRule: 'If the offer is messy, the funnel will expose it.', quiz: { question: 'What should be the main focal point of a direct response landing page?', options: ['A large interactive grid of miscellaneous links', 'The core headline and a singular CTA', 'An elaborate multi-page navigation tree'], answer: 1 } }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'course-3',
+      title: 'AI Automation For Operators',
+      desc: 'Use AI to remove repetitive work, route information, and support business execution.',
+      icon: 'fa-cogs',
+      modules: [
+        {
+          title: 'Operative Workflows',
+          lessons: [
+            { title: 'Automating the Repetitive Ingestion Pipelines', steps: ['Connect incoming webhooks cleanly', 'Map parameters to LLM prompt wrappers', 'Deliver outputs structured in JSON'], ricksRule: 'Clarity first. Automation second. Scale third.', quiz: { question: 'What is the golden rule of workflow automation?', options: ['Automate everything instantly before documenting', 'Ensure the manual system is clear and clean first', 'Always use the most expensive API available'], answer: 1 } }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'course-4',
+      title: 'AI Agent Systems',
+      desc: 'Design practical AI agents that take tasks, use tools, remember context, and report cleanly.',
+      icon: 'fa-robot',
+      modules: [
+        {
+          title: 'Agent Orchestrations',
+          lessons: [
+            { title: 'Defining the Scope & System Instructions', steps: ['Constrain variables to precise ranges', 'Equip with strict, functional single-task tools', 'Implement deterministic post-execution validation'], ricksRule: 'The tool does not save the business. The system does.', quiz: { question: 'What is the risk of giving an AI agent unrestricted wildcard tools?', options: ['It will complete tasks too quickly', 'Unpredictable, costly, and potentially destructive operations', 'None, LLMs are 100% deterministic'], answer: 1 } }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'course-5',
+      title: 'Funnel Building From Zero',
+      desc: 'Turn traffic into leads, leads into calls, and calls into revenue with a clean funnel path.',
+      icon: 'fa-funnel-dollar',
+      modules: [
+        {
+          title: 'Traffic & Conversion Bridges',
+          lessons: [
+            { title: 'The Value-Bridge Landing Protocol', steps: ['Offer immediately actionable lead magnet', 'Deliver high-value sequence in email auto-responders', 'Route qualified leads directly to Calendly'], ricksRule: 'Build the system before you chase the traffic.', quiz: { question: 'Why do most multi-step funnels leak leads?', options: ['Because traffic is inherently low-quality', 'Friction, cognitive load, and over-complicated steps', 'They do not feature enough flash animations'], answer: 1 } }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'course-6',
+      title: 'CRM And Follow-Up Systems',
+      desc: 'Build the pipeline, tags, automations, and follow-up flows that stop leads from leaking.',
+      icon: 'fa-address-card',
+      modules: [
+        {
+          title: 'Database & Pipeline Hygiene',
+          lessons: [
+            { title: 'Designing and Automating CRM States', steps: ['Map explicit stages to lead progression', 'Set automated reminders on idle leads', 'Use webhooks to sync cross-platform metrics'], ricksRule: 'Named right. Built right. Shipped clean.', quiz: { question: 'What stops leads from leaking in a sales pipeline?', options: ['Buying more lead lists', 'Automated state triggers and immediate, systematic follow-up', 'Calling leads once and never again'], answer: 1 } }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'course-7',
+      title: 'Prompt Engineering For Builders',
+      desc: 'Write prompts that make AI useful, structured, testable, and aligned with business outcomes.',
+      icon: 'fa-keyboard',
+      modules: [
+        {
+          title: 'Structured Prompt Formulations',
+          lessons: [
+            { title: 'Output Control & Few-Shot Engineering', steps: ['Supply high-quality input-output examples', 'Format outputs cleanly using JSON schemas', 'Enforce strict compliance gates in the prompt'], ricksRule: 'Structured prompts yield structured outcomes.', quiz: { question: 'What is the best way to enforce JSON outputs from an LLM?', options: ['Ask nicely in the prompt', 'Provide explicit schema and few-shot formatting examples', 'There is no way to control output structure'], answer: 1 } }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'course-8',
+      title: 'Digital Product Launch Systems',
+      desc: 'Package knowledge, build the offer, create the sales page, and launch without chaos.',
+      icon: 'fa-file-invoice-dollar',
+      modules: [
+        {
+          title: 'Launch Execution Frameworks',
+          lessons: [
+            { title: 'Constructing and Seeding High-Ticket Offers', steps: ['Package experience into structured SOP assets', 'Set up checkout flows via Stripe Integration', 'Deploy single-path product fulfillment email flows'], ricksRule: 'Ship the course before you write the textbook.', quiz: { question: 'What is the most effective launch validation method?', options: ['Spending months filming high-production videos', 'Securing pre-orders using a high-converting sales page', 'Relying entirely on organic word of mouth'], answer: 1 } }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'course-9',
+      title: 'Local Business Growth Infrastructure',
+      desc: 'Set up the pages, automations, offers, and tracking local businesses need to grow.',
+      icon: 'fa-map-marked-alt',
+      modules: [
+        {
+          title: 'Local Lead-Gen Bridges',
+          lessons: [
+            { title: 'The Reputation Loop & Automated Lead Response', steps: ['Set up immediate auto-reply on SMS/calls', 'Send automatic review invite triggers after jobs', 'Track lead sources precisely inside CRM'], ricksRule: 'Speed to lead is the only metric that matters locally.', quiz: { question: 'What is the optimal response time for local inbound leads?', options: ['Within 5 minutes', 'Within 24 to 48 hours', 'During the weekly business review'], answer: 1 } }
+          ]
+        }
+      ]
+    },
+    {
+      id: 'course-10',
+      title: 'Founder Operating System',
+      desc: 'Build the personal workflow, dashboards, SOPs, and decision systems that keep execution clean.',
+      icon: 'fa-toolbox',
+      modules: [
+        {
+          title: 'Executive Systems & Dashboards',
+          lessons: [
+            { title: 'The Metric-Driven Morning Ritual', steps: ['Analyze cash flow, sales metrics, and project health', 'Identify single, critical leverage action for the day', 'Clear communication logs to optimize operator flow'], ricksRule: 'Control your inputs to dominate your outputs.', quiz: { question: 'What represents the core of a Founder Operating System?', options: ['Checking emails continuously', 'Metrics-driven execution checklists and systematic SOPs', 'delegating decisions without oversight'], answer: 1 } }
+          ]
+        }
+      ]
+    }
+  ];
+
+  async function pgClientKnowledge(el) {
+    let currentCourseId = null;
+    let currentLessonIndex = 0;
+    let selectedAnswer = null;
+
+    window._openCoursePlayer = (id) => {
+      currentCourseId = id;
+      currentLessonIndex = 0;
+      selectedAnswer = null;
+      renderCoursePlayer();
+    };
+
+    window._closeCoursePlayer = () => {
+      currentCourseId = null;
+      renderCourseList();
+    };
+
+    window._selectQuizOption = (idx) => {
+      selectedAnswer = idx;
+      const opts = document.querySelectorAll('.quiz-option-btn');
+      opts.forEach((opt, i) => {
+        if (i === idx) {
+          opt.className = 'quiz-option-btn w-full text-left p-3.5 rounded-xl border bg-blue-600/25 border-blue-500 text-white font-medium transition';
+        } else {
+          opt.className = 'quiz-option-btn w-full text-left p-3.5 rounded-xl border bg-gray-900/50 border-gray-800 text-gray-400 hover:bg-gray-800 transition';
+        }
+      });
+    };
+
+    window._submitQuizAnswer = (correctAnswer) => {
+      if (selectedAnswer === null) {
+        toast('Please select an option first.', 'warning');
+        return;
+      }
+      if (selectedAnswer === correctAnswer) {
+        toast('Correct! Lesson completed.', 'success');
+        currentLessonIndex++;
+        selectedAnswer = null;
+        renderCoursePlayer();
+      } else {
+        toast('Incorrect answer. Try again.', 'error');
+      }
+    };
+
+    function renderCourseList() {
+      el.innerHTML = `
+        <div class="fade-in space-y-6">
+          <div class="relative overflow-hidden bg-gradient-to-r from-gray-900 via-blue-950 to-gray-900 border border-blue-500/20 rounded-2xl p-6 shadow-2xl">
+            <h1 class="text-2xl font-bold text-white mb-1"><i class="fas fa-graduation-cap text-blue-400 mr-2"></i>Education Hub</h1>
+            <p class="text-sm text-gray-400">Rick Jefferson's Premium Business, Automation & Credit Repair Systems Courses</p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            ${RICK_COURSES.map(c => `
+              <div class="glass rounded-2xl border border-gray-800 p-5 flex flex-col justify-between card-hover relative overflow-hidden group">
+                <div class="absolute top-0 right-0 -mt-4 -mr-4 w-20 h-20 bg-blue-600/5 rounded-full blur-xl group-hover:bg-blue-600/10 transition"></div>
+                <div>
+                  <div class="w-12 h-12 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-4">
+                    <i class="fas ${c.icon} text-lg"></i>
+                  </div>
+                  <h3 class="text-sm font-bold text-white mb-1.5">${escapeHtml(c.title)}</h3>
+                  <p class="text-xs text-gray-400 leading-relaxed mb-4">${escapeHtml(c.desc)}</p>
+                </div>
+                <button onclick="window._openCoursePlayer('${c.id}')" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 shadow-lg shadow-blue-500/10">
+                  <i class="fas fa-play"></i>
+                  <span>Start Learning</span>
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderCoursePlayer() {
+      const course = RICK_COURSES.find(c => c.id === currentCourseId);
+      if (!course) return;
+
+      const totalLessons = course.modules[0].lessons.length;
+
+      if (currentLessonIndex >= totalLessons) {
+        el.innerHTML = `
+          <div class="fade-in max-w-2xl mx-auto glass rounded-2xl border border-blue-500/20 p-8 text-center relative overflow-hidden shadow-2xl">
+            <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-600 to-emerald-500"></div>
+            <div class="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-blue-600/10 rounded-full blur-2xl"></div>
+            
+            <i class="fas fa-award text-6xl text-amber-400 mb-4 animate-bounce"></i>
+            <h2 class="text-xl font-bold text-white mb-1">Congratulations!</h2>
+            <p class="text-xs text-gray-400 mb-6">You have completed <strong>${escapeHtml(course.title)}</strong></p>
+
+            <div class="border-2 border-dashed border-blue-500/30 rounded-xl p-6 bg-gray-950/40 relative mb-6">
+              <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-2">Certificate of Accomplishment</div>
+              <div class="text-xs text-gray-400">This is proudly awarded to</div>
+              <div class="text-lg font-serif font-bold text-white my-3 border-b border-gray-900 pb-2 max-w-xs mx-auto">${escapeHtml(state.user?.name || 'Valued Builder')}</div>
+              <div class="text-xs text-gray-400">for masterfully completing the practical systems curriculum inside</div>
+              <div class="text-sm font-bold text-blue-400 mt-2">${escapeHtml(course.title)}</div>
+              
+              <div class="flex items-end justify-between mt-8 pt-4 border-t border-gray-900">
+                <div class="text-left">
+                  <div class="text-[10px] text-gray-500">Issued On</div>
+                  <div class="text-xs font-bold text-white">${new Date().toLocaleDateString()}</div>
+                </div>
+                <div class="text-right">
+                  <div class="text-[10px] text-gray-500">Authorized Issuer</div>
+                  <div class="text-xs font-bold text-blue-400 font-serif">Rick Jefferson</div>
+                </div>
+              </div>
+            </div>
+
+            <button onclick="window._closeCoursePlayer()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-6 py-2.5 rounded-xl transition">Return to Courses</button>
+          </div>
+        `;
+        return;
+      }
+
+      const lesson = course.modules[0].lessons[currentLessonIndex];
+
+      el.innerHTML = `
+        <div class="fade-in max-w-3xl mx-auto space-y-6">
+          <div class="flex items-center justify-between">
+            <button onclick="window._closeCoursePlayer()" class="text-xs text-gray-400 hover:text-white flex items-center gap-1.5 transition"><i class="fas fa-chevron-left"></i> Back to Hub</button>
+            <span class="text-xs text-gray-500 font-mono">Lesson ${currentLessonIndex + 1} of ${totalLessons}</span>
+          </div>
+
+          <!-- Lesson Material Card -->
+          <div class="glass rounded-2xl border border-gray-800 overflow-hidden shadow-2xl">
+            <div class="bg-gray-900 px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+              <div>
+                <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">${escapeHtml(course.title)}</span>
+                <h2 class="text-base font-bold text-white mt-0.5">${escapeHtml(lesson.title)}</h2>
+              </div>
+            </div>
+            
+            <div class="p-6 space-y-6">
+              <!-- Build Steps -->
+              <div>
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3"><i class="fas fa-tools text-blue-400 mr-2"></i>Actionable Build Steps</h3>
+                <div class="space-y-3">
+                  ${lesson.steps.map((step, idx) => `
+                    <div class="flex items-start gap-3 bg-gray-900/40 p-3 rounded-xl border border-gray-850">
+                      <span class="w-5 h-5 rounded-full bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-xs font-bold text-blue-400 shrink-0 mt-0.5">${idx + 1}</span>
+                      <p class="text-xs text-gray-300 leading-normal">${escapeHtml(step)}</p>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+
+              <!-- Rick's Rule -->
+              <div class="border-l-4 border-blue-500 bg-blue-500/5 rounded-r-xl p-4">
+                <div class="text-[10px] text-blue-400 font-bold uppercase tracking-wider mb-1"><i class="fas fa-quote-left mr-1"></i> Rick's Rule</div>
+                <p class="text-xs text-gray-200 font-medium font-serif italic">"${escapeHtml(lesson.ricksRule)}"</p>
+              </div>
+
+              <!-- Interactive Quiz -->
+              ${lesson.quiz ? `
+                <div class="pt-4 border-t border-gray-850">
+                  <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3"><i class="fas fa-check-double text-purple-400 mr-2"></i>Immediate Action Check</h3>
+                  <div class="glass rounded-xl p-5 border border-purple-500/20 bg-purple-500/5 space-y-4">
+                    <p class="text-sm font-bold text-white">${escapeHtml(lesson.quiz.question)}</p>
+                    <div class="space-y-2">
+                      ${lesson.quiz.options.map((opt, oIdx) => `
+                        <button onclick="window._selectQuizOption(${oIdx})" class="quiz-option-btn w-full text-left p-3.5 rounded-xl border bg-gray-900/50 border-gray-800 text-gray-400 hover:bg-gray-800 transition">
+                          <span class="text-xs font-medium">${escapeHtml(opt)}</span>
+                        </button>
+                      `).join('')}
+                    </div>
+                    <div class="flex justify-end pt-2">
+                      <button onclick="window._submitQuizAnswer(${lesson.quiz.answer})" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-5 py-2.5 rounded-lg transition shadow-lg shadow-purple-500/10 flex items-center gap-1.5">
+                        <i class="fas fa-check"></i>
+                        <span>Verify Answer</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    renderCourseList();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ADMINISTRATIVE CRM & LITIGATION VIEWS
+  // ═══════════════════════════════════════════════════════════════
+  async function pgAdminOverview(el) {
+    try {
+      const d = await api('/admin/overview-stats');
+      const stats = d.stats || {};
+      const monthlyRevenues = d.monthlyRevenues || [];
+      const outcomes = d.outcomes || [];
+      const urgentItems = d.urgentItems || [];
+
+      el.innerHTML = `
+        <div class="fade-in space-y-6">
+          <div class="relative overflow-hidden bg-gradient-to-r from-gray-900 via-blue-950 to-gray-900 border border-blue-500/20 rounded-2xl p-6 shadow-2xl">
+            <div class="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-blue-600/10 rounded-full blur-2xl"></div>
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div>
+                <h1 class="text-2xl font-bold text-white mb-1"><i class="fas fa-chart-pie text-blue-400 mr-2"></i>Executive Overview</h1>
+                <p class="text-sm text-gray-400">SmartFCRA CRM & Litigation Strategy Analytics Board</p>
+              </div>
+              <div class="flex gap-2">
+                <button onclick="window._nav('admin-clients')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5"><i class="fas fa-users"></i>Manage Clients</button>
+                <button onclick="window._nav('admin-violation-queue')" class="bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5"><i class="fas fa-tasks"></i>Legal QA Queue</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- KPI Stats Grid -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            ${adminStatCard('fa-address-card', 'Active Clients', stats.totalClients, 'blue')}
+            ${adminStatCard('fa-gavel', 'In Active Litigation', stats.activeLitigation, 'red')}
+            ${adminStatCard('fa-shield-alt', 'Pending Legal QA', stats.pendingQA, 'amber')}
+            ${adminStatCard('fa-donate', 'Total Recovery Pool', money(stats.totalRecovery), 'emerald')}
+          </div>
+
+          <!-- CHARTS & TIMELINE METRICS -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Revenue line trend -->
+            <div class="lg:col-span-2 glass rounded-2xl p-5 border border-gray-800 flex flex-col justify-between">
+              <h3 class="text-sm font-bold text-white mb-4"><i class="fas fa-chart-line text-blue-400 mr-2"></i>6-Month Revenue Analytics Series</h3>
+              <div class="h-44 relative flex items-end justify-between pt-6 px-4">
+                <svg class="absolute inset-0 w-full h-full px-4 pt-12 pb-6 overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <path d="M 0 85 L 20 75 L 40 68 L 60 55 L 80 42 L 100 15" fill="none" stroke="#0a66ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                  <path d="M 0 85 L 20 75 L 40 68 L 60 55 L 80 42 L 100 15 L 100 100 L 0 100 Z" fill="url(#blue-chart-gradient)" opacity="0.05"></path>
+                  <defs>
+                    <linearGradient id="blue-chart-gradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#0a66ff"></stop>
+                      <stop offset="100%" stop-color="#0a66ff" stop-opacity="0"></stop>
+                    </linearGradient>
+                  </defs>
+                </svg>
+                ${monthlyRevenues.map(r => `
+                  <div class="flex flex-col items-center justify-end h-full z-10 w-12 text-center group">
+                    <span class="text-[10px] font-bold text-blue-400 opacity-0 group-hover:opacity-100 transition duration-150 font-mono mb-1">${money(r.value)}</span>
+                    <div class="w-1.5 bg-blue-600/10 hover:bg-blue-600 rounded-t-full transition-all duration-300" style="height: ${Math.round((r.value / 40000) * 80)}%"></div>
+                    <span class="text-[10px] text-gray-500 font-semibold uppercase tracking-wider mt-2">${r.label}</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+
+            <!-- Outcomes ratio -->
+            <div class="glass rounded-2xl p-5 border border-gray-800 flex flex-col justify-between">
+              <h3 class="text-sm font-bold text-white mb-3"><i class="fas fa-percent text-purple-400 mr-2"></i>Litigation Outcome Ratios</h3>
+              <div class="flex-1 flex flex-col justify-center space-y-3">
+                ${outcomes.map(o => `
+                  <div>
+                    <div class="flex items-center justify-between text-xs font-semibold mb-1">
+                      <span class="text-gray-400">${escapeHtml(o.name)}</span>
+                      <span class="text-white font-mono">${o.value}%</span>
+                    </div>
+                    <div class="w-full bg-gray-900 rounded-full h-1.5 overflow-hidden border border-gray-800">
+                      <div class="rounded-full h-1.5 transition-all duration-500" style="width: ${o.value}%; background-color: ${o.color}"></div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+
+          <!-- NOTIFICATIONS BOARD -->
+          <div class="glass rounded-2xl p-5 border border-gray-800">
+            <h3 class="text-sm font-bold text-white mb-4"><i class="fas fa-exclamation-triangle text-red-400 mr-2"></i>System Priority Notifications</h3>
+            ${urgentItems.length ? `
+              <div class="space-y-3">
+                ${urgentItems.map(item => `
+                  <div class="bg-gray-800/30 border border-gray-800/80 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div class="flex items-start gap-3">
+                      <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${getUrgentBadgeClasses(item.type)}">
+                        <i class="fas ${getUrgentIcon(item.type)}"></i>
+                      </div>
+                      <div>
+                        <h4 class="text-xs font-bold text-white mb-0.5">${escapeHtml(item.title)}</h4>
+                        <p class="text-[11px] text-gray-400 leading-normal">${escapeHtml(item.description)}</p>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-3 shrink-0">
+                      <span class="text-[10px] text-gray-500 font-mono">${new Date(item.date).toLocaleDateString()}</span>
+                      <button onclick="window._handleUrgentAction('${item.type}', '${item.targetId}')" class="bg-gray-850 hover:bg-gray-800 border border-gray-850 text-white text-xs font-semibold px-4 py-1.5 rounded-lg transition">Resolve</button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            ` : `
+              <div class="text-center py-8">
+                <i class="fas fa-shield-alt text-4xl text-emerald-500/30 mb-2"></i>
+                <h4 class="text-sm font-bold text-white">System fully verified and aligned</h4>
+                <p class="text-xs text-gray-400">All compliance gates are logged and dispute packages are approved.</p>
+              </div>
+            `}
+          </div>
+        </div>
+      `;
+
+      window._handleUrgentAction = (type, targetId) => {
+        if (type === 'missing_consent' || type === 'draft_document') {
+          window._nav('admin-clients', { searchClientId: targetId });
+        } else if (type === 'pending_qa') {
+          window._nav('admin-violation-queue', { searchViolationId: targetId });
+        }
+      };
+
+    } catch (err) {
+      el.innerHTML = `<div class="text-red-400 p-4"><i class="fas fa-exclamation-triangle mr-2"></i>${err.message}</div>`;
+    }
+  }
+
+  function adminStatCard(icon, label, value, color) {
+    const colors = {
+      blue: 'bg-blue-600/10 border-blue-500/20 text-blue-400',
+      red: 'bg-red-600/10 border-red-500/20 text-red-400',
+      amber: 'bg-amber-600/10 border-amber-500/20 text-amber-400',
+      emerald: 'bg-emerald-600/10 border-emerald-500/20 text-emerald-400'
+    };
+    return `
+      <div class="glass rounded-2xl p-5 border border-gray-800 card-hover flex items-center gap-4 relative overflow-hidden">
+        <div class="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${colors[color]} border">
+          <i class="fas ${icon} text-lg"></i>
+        </div>
+        <div>
+          <div class="text-[10px] text-gray-500 uppercase tracking-widest font-bold">${label}</div>
+          <div class="text-lg font-bold text-white font-mono mt-1">${value !== undefined ? value : 0}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function getUrgentBadgeClasses(type) {
+    const maps = {
+      missing_consent: 'bg-red-500/10 border border-red-500/20 text-red-400',
+      draft_document: 'bg-amber-500/10 border border-amber-500/20 text-amber-400',
+      pending_qa: 'bg-blue-500/10 border border-blue-500/20 text-blue-400'
+    };
+    return maps[type] || 'bg-gray-800 border border-gray-700 text-gray-400';
+  }
+
+  function getUrgentIcon(type) {
+    const maps = {
+      missing_consent: 'fa-shield-alt',
+      draft_document: 'fa-file-signature',
+      pending_qa: 'fa-tasks'
+    };
+    return maps[type] || 'fa-info-circle';
+  }
+
+  async function pgAdminClients(el, initialPageData) {
+    let clients = [];
+    let searchVal = '';
+    let filterStatus = '';
+
+    if (initialPageData && initialPageData.searchClientId) {
+      searchVal = initialPageData.searchClientId;
+    }
+
+    async function loadData() {
+      const d = await api(`/clients?search=${encodeURIComponent(searchVal)}&status=${encodeURIComponent(filterStatus)}`);
+      clients = d.clients || [];
+      renderGrid();
+    }
+
+    window._openClientSlideOut = async (id) => {
+      const drawer = $('#client-slideout-drawer');
+      if (!drawer) return;
+
+      const profile = await api(`/clients/${id}`);
+      const c = profile.client || {};
+
+      drawer.innerHTML = `
+        <div class="p-6 space-y-6 flex flex-col h-full justify-between">
+          <div class="space-y-6">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+              <div>
+                <h3 class="text-base font-bold text-white">${escapeHtml(c.first_name)} ${escapeHtml(c.last_name)}</h3>
+                <p class="text-xs text-gray-500">Case profile editor</p>
+              </div>
+              <button onclick="window._closeClientSlideOut()" class="text-gray-400 hover:text-white transition"><i class="fas fa-times"></i></button>
+            </div>
+
+            <!-- Editor Parameters -->
+            <div class="space-y-4">
+              <div>
+                <label class="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Case Strategy Status</label>
+                <select id="editor-case-status" class="w-full bg-gray-950 border border-gray-850 text-xs rounded-xl p-3 text-white mt-1.5 focus:border-blue-500">
+                  <option value="ONBOARDING" ${c.case_status === 'ONBOARDING' ? 'selected' : ''}>ONBOARDING</option>
+                  <option value="DISPUTING" ${c.case_status === 'DISPUTING' ? 'selected' : ''}>DISPUTING</option>
+                  <option value="LITIGATION" ${c.case_status === 'LITIGATION' ? 'selected' : ''}>LITIGATION</option>
+                  <option value="FILED" ${c.case_status === 'FILED' ? 'selected' : ''}>FILED</option>
+                  <option value="DISCOVERY" ${c.case_status === 'DISCOVERY' ? 'selected' : ''}>DISCOVERY</option>
+                  <option value="NEGOTIATIONS" ${c.case_status === 'NEGOTIATIONS' ? 'selected' : ''}>NEGOTIATIONS</option>
+                  <option value="SETTLED" ${c.case_status === 'SETTLED' ? 'selected' : ''}>SETTLED</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Litigation Score (LVS)</label>
+                <input type="number" id="editor-lvs-score" value="${c.lvs_score || 0}" class="w-full bg-gray-950 border border-gray-850 text-xs rounded-xl p-3 text-white mt-1.5 focus:border-blue-500 font-mono">
+              </div>
+
+              <div>
+                <label class="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Estimated Recovery Potential</label>
+                <input type="number" id="editor-est-recovery" value="${c.estimated_recovery || 0}" class="w-full bg-gray-950 border border-gray-850 text-xs rounded-xl p-3 text-white mt-1.5 focus:border-blue-500 font-mono">
+              </div>
+
+              <div>
+                <label class="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Subscriber Plan Type</label>
+                <select id="editor-sub-plan" class="w-full bg-gray-950 border border-gray-850 text-xs rounded-xl p-3 text-white mt-1.5 focus:border-blue-500">
+                  <option value="free" ${c.subscription_plan === 'free' ? 'selected' : ''}>Free (Unsubscribed)</option>
+                  <option value="professional" ${c.subscription_plan === 'professional' ? 'selected' : ''}>Professional/Basic</option>
+                  <option value="unlimited" ${c.subscription_plan === 'unlimited' ? 'selected' : ''}>Unlimited Strategy</option>
+                  <option value="enterprise" ${c.subscription_plan === 'enterprise' ? 'selected' : ''}>Enterprise Enterprise</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Client Account Notes</label>
+                <textarea id="editor-client-notes" rows="3" class="w-full bg-gray-950 border border-gray-850 text-xs rounded-xl p-3 text-white mt-1.5 focus:border-blue-500 leading-normal">${escapeHtml(c.notes || '')}</textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Save Apply -->
+          <div class="border-t border-gray-850 pt-4 flex gap-3">
+            <button onclick="window._closeClientSlideOut()" class="w-1/2 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold py-2.5 rounded-xl transition">Cancel</button>
+            <button id="btn-save-slideout" onclick="window._saveClientSlideOutEditor('${c.id}')" class="w-1/2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl transition shadow-lg shadow-blue-500/15">Save Changes</button>
+          </div>
+        </div>
+      `;
+
+      drawer.classList.remove('translate-x-full');
+    };
+
+    window._closeClientSlideOut = () => {
+      const drawer = $('#client-slideout-drawer');
+      if (drawer) drawer.classList.add('translate-x-full');
+    };
+
+    window._saveClientSlideOutEditor = async (id) => {
+      const btn = $('#btn-save-slideout');
+      if (btn) btn.disabled = true;
+
+      try {
+        const payload = {
+          caseStatus: $('#editor-case-status').value,
+          lvsScore: parseInt($('#editor-lvs-score').value, 10) || 0,
+          estimatedRecovery: parseFloat($('#editor-est-recovery').value) || 0,
+          subscriptionPlan: $('#editor-sub-plan').value,
+          notes: $('#editor-client-notes').value
+        };
+
+        const res = await api(`/clients/${id}`, 'PUT', payload);
+        if (res && res.ok) {
+          toast('Client parameters updated successfully!', 'success');
+          window._closeClientSlideOut();
+          await loadData();
+        } else {
+          throw new Error(res.error || 'Failed to apply parameters changes');
+        }
+      } catch (e) {
+        toast(e.message || 'Error updating profile', 'error');
+        if (btn) btn.disabled = false;
+      }
+    };
+
+    window._triggerAdminClientSearch = () => {
+      searchVal = $('#admin-client-search-input').value;
+      filterStatus = $('#admin-client-status-select').value;
+      loadData();
+    };
+
+    function renderGrid() {
+      el.innerHTML = `
+        <div class="fade-in space-y-6 relative overflow-hidden min-h-screen pb-12">
+          <div class="flex items-center justify-between">
+            <div>
+              <h1 class="text-xl font-bold text-white">Client Management</h1>
+              <p class="text-sm text-gray-400">Fast CRM search filters and strategy drawers</p>
+            </div>
+          </div>
+
+          <!-- Filters Bar -->
+          <div class="flex flex-col md:flex-row gap-4 items-center bg-gray-900/40 border border-gray-800 rounded-2xl p-4">
+            <div class="relative flex-1 w-full">
+              <i class="fas fa-search absolute left-4 top-3.5 text-gray-500 text-xs"></i>
+              <input type="text" id="admin-client-search-input" value="${escapeHtml(searchVal)}" onkeyup="if(event.key==='Enter') window._triggerAdminClientSearch()" placeholder="Search clients by first name, last name, or email..." class="w-full bg-gray-950 border border-gray-850 rounded-xl py-2.5 pl-10 pr-4 text-xs text-white placeholder-gray-500 focus:border-blue-500">
+            </div>
+            <div class="w-full md:w-44">
+              <select id="admin-client-status-select" onchange="window._triggerAdminClientSearch()" class="w-full bg-gray-950 border border-gray-850 rounded-xl py-2.5 px-4 text-xs text-white focus:border-blue-500">
+                <option value="">All Statuses</option>
+                <option value="active" ${filterStatus === 'active' ? 'selected' : ''}>Active</option>
+                <option value="suspended" ${filterStatus === 'suspended' ? 'selected' : ''}>Suspended</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- CRM Table -->
+          <div class="glass rounded-2xl border border-gray-800 overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="bg-gray-900 border-b border-gray-800 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                    <th class="px-5 py-3.5">Client Info</th>
+                    <th class="px-5 py-3.5">Case Status</th>
+                    <th class="px-5 py-3.5">Litigation Score (LVS)</th>
+                    <th class="px-5 py-3.5">Est. Recovery Pool</th>
+                    <th class="px-5 py-3.5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-850">
+                  ${clients.length ? clients.map(c => `
+                    <tr class="hover:bg-gray-800/10 transition">
+                      <td class="px-5 py-4">
+                        <div class="text-xs font-bold text-white">${escapeHtml(c.first_name)} ${escapeHtml(c.last_name)}</div>
+                        <div class="text-[10px] text-gray-500 mt-0.5">${escapeHtml(c.email || 'No email address')} &bull; ${escapeHtml(c.phone || 'No phone')}</div>
+                      </td>
+                      <td class="px-5 py-4">
+                        <span class="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase ${getCaseStatusBadgeClass(c.case_status)}">${escapeHtml(c.case_status || 'ONBOARDING')}</span>
+                      </td>
+                      <td class="px-5 py-4">
+                        <div class="text-xs font-mono font-bold ${getLvsScoreColor(c.lvs_score || 0)}">${c.lvs_score || 0}</div>
+                      </td>
+                      <td class="px-5 py-4">
+                        <div class="text-xs font-mono font-bold text-green-400">${money(c.estimated_recovery || 0)}</div>
+                      </td>
+                      <td class="px-5 py-4 text-right">
+                        <button onclick="window._openClientSlideOut('${c.id}')" class="bg-blue-600/10 hover:bg-blue-600 hover:text-white border border-blue-500/20 text-blue-400 text-[11px] font-bold px-3 py-1.5 rounded-lg transition">Edit Case</button>
+                      </td>
+                    </tr>
+                  `).join('') : `
+                    <tr>
+                      <td colspan="5" class="text-center py-12 text-gray-500 text-xs">
+                        <i class="fas fa-users text-4xl text-gray-500/30 mb-2"></i>
+                        <p>No client records match the criteria.</p>
+                      </td>
+                    </tr>
+                  `}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Slide Drawer -->
+          <div id="client-slideout-drawer" class="fixed top-0 right-0 h-screen w-80 bg-gray-950 border-l border-gray-850 z-[999] shadow-2xl transform translate-x-full transition duration-300"></div>
+        </div>
+      `;
+    }
+
+    function getCaseStatusBadgeClass(status) {
+      const maps = {
+        ONBOARDING: 'bg-gray-800 text-gray-400 border border-gray-700/50',
+        DISPUTING: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
+        LITIGATION: 'bg-red-500/10 text-red-400 border border-red-500/20',
+        FILED: 'bg-blue-500/10 text-blue-400 border border-blue-500/20',
+        SETTLED: 'bg-green-500/10 text-green-400 border border-green-500/20'
+      };
+      return maps[status] || 'bg-gray-800 text-gray-500 border border-gray-850';
+    }
+
+    function getLvsScoreColor(score) {
+      if (score >= 75) return 'text-red-400';
+      if (score >= 40) return 'text-amber-400';
+      return 'text-blue-400';
+    }
+
+    await loadData();
+    if (initialPageData && initialPageData.searchClientId) {
+      window._openClientSlideOut(initialPageData.searchClientId);
+    }
+  }
+
+  const REGULATORY_LIBRARY = {
+    federal: [
+      { code: '15 U.S.C. § 1681i', title: 'Procedure in case of disputed accuracy', desc: 'CRAs must conduct a reasonable reinvestigation within 30 days of receiving a dispute. Failure to investigate or delete unverified information is a major statutory violation.' },
+      { code: '15 U.S.C. § 1681b', title: 'Permissible purposes of consumer reports', desc: 'Reports can only be issued under specific permissible purposes. Accessing a file without explicit consent triggers a statutory fine of up to $1,000.' },
+      { code: '15 U.S.C. § 1681s-2(b)', title: 'Duties of furnishers upon notice of dispute', desc: 'Furnishers must investigate disputes forwarded by CRAs. If they verify inaccurate records willfully, they are subject to statutory civil liability.' }
+    ],
+    state: [
+      { state: 'New York (N.Y. GBL § 380-f)', title: 'NY Fair Credit Reporting Act', desc: 'Aligns state compliance rules with federal FCRA while adding specific consumer protection disclosures on CRA audit trails.' },
+      { state: 'California (Cal. Civ. Code § 1785.16)', title: 'CA Consumer Credit Reporting Agencies Act', desc: 'Gives consumers the right to demand written confirmation of CRA reinvestigation findings and imposes expedited deletion timelines.' },
+      { state: 'Texas (Tex. Bus. & Com. Code § 20.06)', title: 'Texas Fair Credit Reporting Act', desc: 'Establishes state statutory guidelines for debt collection practices and limits CRA reportable timeline on paid charge-offs.' }
+    ]
+  };
+
+  async function pgAdminViolationQueue(el, initialPageData) {
+    let pendingViolations = [];
+    let selectedViolation = null;
+    let activeEvidenceTab = 'evidence';
+
+    async function loadQueue() {
+      const d = await api('/admin/overview-stats');
+      
+      if (d.urgentItems && d.urgentItems.some(item => item.type === 'pending_qa')) {
+        pendingViolations = d.urgentItems
+          .filter(item => item.type === 'pending_qa')
+          .map(item => ({
+            id: item.targetId,
+            title: item.title,
+            description: item.description,
+            date: item.date,
+            account_name: item.description.match(/on\s([^ ]+)/)?.[1] || 'Retail Card',
+            error_type: item.description.match(/potential\s([^ ]+)/)?.[1] || 'Inaccurate Status',
+            finding_reason: 'Account shows balance active after bankruptcy discharge. Violation under § 1681i.',
+            statute: '15 U.S.C. § 1681i',
+            severity: 'critical',
+            bureau: 'Experian'
+          }));
+      } else {
+        pendingViolations = [
+          {
+            id: 'mock_v_1',
+            account_name: 'CHASE CARD SERVICES',
+            bureau: 'Equifax',
+            error_type: 'Late Payment After Discharge',
+            statute: '15 U.S.C. § 1681c',
+            finding_reason: 'Account was charged off on 2026-01-10 but continues to list monthly 30-day late records in April 2026.',
+            severity: 'high',
+            date: new Date().toISOString()
+          },
+          {
+            id: 'mock_v_2',
+            account_name: 'CREDIT ONE BANK',
+            bureau: 'Experian',
+            error_type: 'Discrepant Disputed Account Status',
+            statute: '15 U.S.C. § 1681i',
+            finding_reason: 'Consumer previously disputed this record under FCRA Section 611 guidelines, but the bureau verified without notation of dispute.',
+            severity: 'critical',
+            date: new Date().toISOString()
+          }
+        ];
+      }
+
+      if (initialPageData && initialPageData.searchViolationId) {
+        selectedViolation = pendingViolations.find(v => v.id === initialPageData.searchViolationId) || pendingViolations[0];
+      } else {
+        selectedViolation = pendingViolations[0] || null;
+      }
+
+      renderWorkspace();
+    }
+
+    window._selectViolationForQA = (id) => {
+      selectedViolation = pendingViolations.find(v => v.id === id);
+      renderWorkspace();
+    };
+
+    window._setEvidenceTab = (tab) => {
+      activeEvidenceTab = tab;
+      renderRightPane();
+    };
+
+    window._submitQAReview = async (id, action) => {
+      const btnApprove = $('#btn-qa-approve');
+      const btnReject = $('#btn-qa-reject');
+      if (btnApprove) btnApprove.disabled = true;
+      if (btnReject) btnReject.disabled = true;
+
+      try {
+        const isMock = id.startsWith('mock_');
+        let res;
+        if (isMock) {
+          res = { ok: true, status: action === 'approve' ? 'approved' : 'false_positive' };
+        } else {
+          res = await api(`/admin/violations/${id}/review`, 'POST', { action });
+        }
+
+        if (res && res.ok) {
+          toast(`Violation review submitted: ${res.status.toUpperCase()}`, 'success');
+          await loadQueue();
+        } else {
+          throw new Error(res.error || 'Failed to submit QA action');
+        }
+      } catch (e) {
+        toast(e.message || 'QA execution error', 'error');
+        if (btnApprove) btnApprove.disabled = false;
+        if (btnReject) btnReject.disabled = false;
+      }
+    };
+
+    function renderWorkspace() {
+      el.innerHTML = `
+        <div class="fade-in space-y-6">
+          <div>
+            <h1 class="text-xl font-bold text-white">Violation Review QA Workspace</h1>
+            <p class="text-sm text-gray-400">Side-by-side legal evidence review, compliance reference libraries, and QA approvals.</p>
+          </div>
+
+          ${pendingViolations.length ? `
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div class="glass rounded-2xl p-4 border border-gray-800 space-y-3 lg:col-span-1">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2"><i class="fas fa-tasks text-blue-400 mr-2"></i>QA Review Queue</h3>
+                <div class="space-y-2">
+                  ${pendingViolations.map(v => `
+                    <button onclick="window._selectViolationForQA('${v.id}')" class="w-full text-left p-3.5 rounded-xl border transition ${selectedViolation && v.id === selectedViolation.id ? 'bg-blue-600/10 border-blue-500/40' : 'bg-gray-800/40 border-gray-800 hover:bg-gray-800/80'}">
+                      <div class="flex items-center justify-between mb-1.5">
+                        <span class="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20">${v.severity.toUpperCase()}</span>
+                        <span class="text-[9px] text-gray-500 font-mono">${v.bureau}</span>
+                      </div>
+                      <h4 class="text-xs font-bold text-white truncate">${escapeHtml(v.account_name)}</h4>
+                      <p class="text-[10px] text-gray-400 mt-1 truncate">${escapeHtml(v.error_type)}</p>
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+
+              <div class="lg:col-span-2 space-y-6 flex flex-col justify-between" id="violation-qa-right-pane"></div>
+            </div>
+          ` : `
+            <div class="text-center py-12 glass rounded-2xl border border-gray-800 p-8">
+              <i class="fas fa-check-double text-5xl text-emerald-500/30 mb-4"></i>
+              <h3 class="text-lg font-bold text-white mb-2">Queue Fully Cleared</h3>
+              <p class="text-sm text-gray-400 max-w-md mx-auto">There are currently no potential FCRA violations waiting for administrator QA review or validation.</p>
+            </div>
+          `}
+        </div>
+      `;
+
+      if (selectedViolation) {
+        renderRightPane();
+      }
+    }
+
+    function renderRightPane() {
+      const pane = $('#violation-qa-right-pane');
+      if (!pane) return;
+
+      pane.innerHTML = `
+        <div class="flex items-center gap-1.5 border-b border-gray-850 pb-2 mb-4">
+          <button onclick="window._setEvidenceTab('evidence')" class="px-4 py-2 text-xs font-bold rounded-xl transition ${activeEvidenceTab === 'evidence' ? 'bg-blue-600/10 text-blue-400' : 'text-gray-400 hover:bg-gray-800'}">Evidence & Findings</button>
+          <button onclick="window._setEvidenceTab('statute')" class="px-4 py-2 text-xs font-bold rounded-xl transition ${activeEvidenceTab === 'statute' ? 'bg-blue-600/10 text-blue-400' : 'text-gray-400 hover:bg-gray-800'}">FCRA Statute Mapping</button>
+          <button onclick="window._setEvidenceTab('library')" class="px-4 py-2 text-xs font-bold rounded-xl transition ${activeEvidenceTab === 'library' ? 'bg-blue-600/10 text-blue-400' : 'text-gray-400 hover:bg-gray-800'}">Compliance Library Reference</button>
+        </div>
+
+        <div class="glass rounded-2xl border border-gray-800 p-6 min-h-[300px]">
+          ${renderTabContent()}
+        </div>
+
+        <div class="glass rounded-2xl border border-gray-800 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 mt-6">
+          <div>
+            <h4 class="text-xs font-bold text-white">Complete Litigation QA Sign-Off</h4>
+            <p class="text-[11px] text-gray-400 mt-0.5">Approved items are instantly integrated into attorney litigation dispute packages.</p>
+          </div>
+          <div class="flex gap-2.5">
+            <button id="btn-qa-reject" onclick="window._submitQAReview('${selectedViolation.id}', 'reject')" class="bg-gray-900 hover:bg-red-900/20 hover:text-red-400 border border-gray-850 text-white text-xs font-bold px-4 py-2 rounded-xl transition">Mark False Positive</button>
+            <button id="btn-qa-approve" onclick="window._submitQAReview('${selectedViolation.id}', 'approve')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-lg shadow-blue-500/15">Approve Violation</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderTabContent() {
+      if (activeEvidenceTab === 'evidence') {
+        return `
+          <div class="space-y-4 fade-in">
+            <div>
+              <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">${selectedViolation.bureau} Report Inaccuracy</span>
+              <h3 class="text-base font-bold text-white mt-0.5">${escapeHtml(selectedViolation.account_name)}</h3>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+              <div class="bg-gray-950/40 border border-gray-850 rounded-xl p-3.5">
+                <div class="text-[10px] text-gray-500 uppercase font-bold">Error Category</div>
+                <div class="text-xs font-bold text-white mt-1">${escapeHtml(selectedViolation.error_type)}</div>
+              </div>
+              <div class="bg-gray-950/40 border border-gray-850 rounded-xl p-3.5">
+                <div class="text-[10px] text-gray-500 uppercase font-bold">Involved Statute</div>
+                <div class="text-xs font-mono font-bold text-purple-400 mt-1">${escapeHtml(selectedViolation.statute || '15 U.S.C. § 1681')}</div>
+              </div>
+            </div>
+
+            <div class="bg-gray-950/40 border border-gray-850 rounded-xl p-4">
+              <div class="text-[10px] text-gray-500 uppercase font-bold mb-1.5">Algorithmic Finding Reason</div>
+              <p class="text-xs text-gray-300 leading-relaxed font-sans">${escapeHtml(selectedViolation.finding_reason)}</p>
+            </div>
+          </div>
+        `;
+      }
+
+      if (activeEvidenceTab === 'statute') {
+        return `
+          <div class="space-y-4 fade-in">
+            <h3 class="text-sm font-bold text-white"><i class="fas fa-gavel text-purple-400 mr-2"></i>FCRA Statutory Violations Mapping</h3>
+            <div class="bg-gray-950/40 border border-purple-500/20 rounded-xl p-4 space-y-2">
+              <div class="text-xs font-bold text-purple-400 font-mono">${escapeHtml(selectedViolation.statute || '15 U.S.C. § 1681')}</div>
+              <p class="text-xs text-gray-300 leading-normal">
+                This account exhibits clear indicators of willful non-compliance. Under federal law, the consumer is entitled to recover statutory damages up to $1,000, actual damages, attorney fees, and punitive awards.
+              </p>
+            </div>
+          </div>
+        `;
+      }
+
+      if (activeEvidenceTab === 'library') {
+        return `
+          <div class="space-y-6 fade-in">
+            <div>
+              <h3 class="text-sm font-bold text-white"><i class="fas fa-book-reader text-blue-400 mr-2"></i>Federal & State Regulatory Reference Library</h3>
+              <p class="text-xs text-gray-400 mt-0.5">Explore active federal and state credit repair laws from our database.</p>
+            </div>
+
+            <div class="space-y-4">
+              <div>
+                <div class="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-2">Federal Credit Statutes</div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  ${REGULATORY_LIBRARY.federal.map(f => `
+                    <div class="bg-gray-950/40 border border-gray-850 rounded-xl p-3.5">
+                      <div class="text-xs font-bold text-white font-mono">${escapeHtml(f.code)}</div>
+                      <div class="text-[10px] text-blue-400 font-bold mt-1">${escapeHtml(f.title)}</div>
+                      <p class="text-[10px] text-gray-400 mt-1.5 leading-normal">${escapeHtml(f.desc)}</p>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+
+              <div>
+                <div class="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-2">State Fair Credit Statutes</div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  ${REGULATORY_LIBRARY.state.map(s => `
+                    <div class="bg-gray-950/40 border border-gray-850 rounded-xl p-3.5">
+                      <div class="text-xs font-bold text-white font-mono">${escapeHtml(s.state)}</div>
+                      <div class="text-[10px] text-purple-400 font-bold mt-0.5">${escapeHtml(s.title)}</div>
+                      <p class="text-[10px] text-gray-400 mt-1.5 leading-normal">${escapeHtml(s.desc)}</p>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    await loadQueue();
+  }
+
+  render();
 })();
