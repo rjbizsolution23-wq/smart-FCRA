@@ -21,6 +21,109 @@ async function decryptPII(c: any, text: string): Promise<string> {
   return decryptText(text, c.env.PII_ENCRYPTION_KEY);
 }
 
+async function backpopulateClientInfo(c: any, clientId: string, personalInfo: any, orgId: string) {
+  if (!personalInfo) return;
+
+  try {
+    const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, orgId).first() as any;
+    if (!client) return;
+
+    const updates: string[] = [];
+    const binds: any[] = [];
+
+    // 1. Backpopulate Full Address details if currently empty
+    if (!client.address_line1 && personalInfo.addresses?.[0]) {
+      const fullAddr = personalInfo.addresses[0].trim();
+      updates.push('address_line1 = ?');
+      binds.push(fullAddr);
+
+      if (!client.city || !client.state || !client.zip) {
+        const parts = fullAddr.split(',').map((p: string) => p.trim());
+        if (parts.length >= 3) {
+          let parsedCity = parts[parts.length - 2];
+          const stateZip = parts[parts.length - 1].split(/\s+/);
+          let parsedState = stateZip[0] || null;
+          let parsedZip = stateZip[1] || null;
+
+          if (!client.city && parsedCity) {
+            updates.push('city = ?');
+            binds.push(parsedCity);
+          }
+          if (!client.state && parsedState) {
+            updates.push('state = ?');
+            binds.push(parsedState.toUpperCase());
+          }
+          if (!client.zip && parsedZip) {
+            updates.push('zip = ?');
+            binds.push(parsedZip);
+          }
+        }
+      }
+    }
+
+    // 2. Backpopulate Date of Birth if currently empty
+    if (!client.dob && personalInfo.dobs?.[0]) {
+      updates.push('dob = ?');
+      binds.push(personalInfo.dobs[0].trim());
+    }
+
+    // 3. Backpopulate Clean SSN Last 4 if currently empty
+    if (!client.ssn_last4 && personalInfo.ssns?.[0]) {
+      let ssnVal = personalInfo.ssns[0].trim();
+      if (ssnVal.includes('-')) {
+        const parts = ssnVal.split('-');
+        ssnVal = parts[parts.length - 1];
+      }
+      ssnVal = ssnVal.replace(/\D/g, '');
+      if (ssnVal.length > 4) {
+        ssnVal = ssnVal.slice(-4);
+      }
+      if (ssnVal) {
+        updates.push('ssn_last4 = ?');
+        binds.push(ssnVal);
+      }
+    }
+
+    // 4. Update placeholder Name ("New Client") with parsed Real Name
+    if ((!client.first_name || client.first_name === 'New') && (!client.last_name || client.last_name === 'Client') && personalInfo.names?.[0]) {
+      const rawName = personalInfo.names[0].trim();
+      let firstName = '';
+      let lastName = '';
+      if (rawName.includes(',')) {
+        const parts = rawName.split(',');
+        lastName = parts[0].trim();
+        firstName = parts.slice(1).join(',').trim();
+      } else {
+        const parts = rawName.split(/\s+/);
+        firstName = parts[0] || '';
+        lastName = parts.slice(1).join(' ') || 'Client';
+      }
+      
+      const toTitleCase = (str: string) => {
+        return str.toLowerCase()
+          .replace(/(?:^|\s|-|')\S/g, (m) => m.toUpperCase())
+          .replace(/\b(Mc)([a-z])/g, (_, p1, p2) => p1 + p2.toUpperCase());
+      };
+
+      if (firstName && lastName) {
+        updates.push('first_name = ?', 'last_name = ?');
+        binds.push(toTitleCase(firstName), toTitleCase(lastName));
+      }
+    }
+
+    if (updates.length > 0) {
+      updates.push('updated_at = datetime("now")');
+      binds.push(clientId);
+      const sql = `UPDATE clients SET ${updates.join(', ')} WHERE id = ?`;
+      await c.env.DB.prepare(sql).bind(...binds).run();
+    }
+  } catch (err) {
+    console.error('Failed to backpopulate client info from parsed report:', err);
+  }
+}
+
+
+
 
 type Bindings = {
   DB: any;
@@ -725,9 +828,16 @@ app.put('/api/clients/:id', authMiddleware, async (c) => {
 // ═══════════════════════════════════════════════════════════════
 app.get('/api/client-portal/dashboard', authMiddleware, async (c) => {
   const user = c.get('user');
-  
-  // Find the unique consumer client mapped to this user's email address
-  const client = await c.env.DB.prepare('SELECT * FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
+  const queryClientId = c.req.query('clientId');
+
+  let client;
+  if ((user.role === 'admin' || user.role === 'super_admin') && queryClientId) {
+    client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(queryClientId, user.org_id).first() as any;
+  } else {
+    // Find the unique consumer client mapped to this user's email address
+    client = await c.env.DB.prepare('SELECT * FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
+  }
+
   if (!client) {
     return c.json({ error: 'Client profile not found. Onboarding may be incomplete.' }, 404);
   }
@@ -844,14 +954,14 @@ app.get('/api/admin/overview-stats', authMiddleware, async (c) => {
   }
 
   // 3. Violations waiting for administrative QA sign-off
-  const qaViolations = await c.env.DB.prepare('SELECT v.id, v.account_name, v.error_type, c.first_name, c.last_name, v.created_at FROM violations v JOIN clients c ON v.client_id = c.id WHERE v.org_id = ? AND v.status = "pending_qa" LIMIT 5').bind(user.org_id).all();
+  const qaViolations = await c.env.DB.prepare('SELECT v.id, v.account_name, v.subcategory, c.first_name, c.last_name, v.created_at FROM violations v JOIN clients c ON v.client_id = c.id WHERE v.org_id = ? AND v.status = "pending_qa" LIMIT 5').bind(user.org_id).all();
   if (qaViolations?.results) {
     for (const qv of qaViolations.results as any[]) {
       urgentItems.push({
         id: generateId(),
         type: 'pending_qa',
         title: 'FCRA Violation Pending QA',
-        description: `Review potential ${qv.error_type} violation on ${qv.account_name} for client ${qv.first_name} ${qv.last_name}.`,
+        description: `Review potential ${qv.subcategory || qv.category || 'FCRA'} violation on ${qv.account_name} for client ${qv.first_name} ${qv.last_name}.`,
         targetId: qv.id,
         date: qv.created_at
       });
@@ -900,7 +1010,7 @@ app.post('/api/admin/violations/:id/review', authMiddleware, async (c) => {
     violation.client_id,
     user.id,
     'violation_reviewed',
-    `FCRA Violation on account ${violation.account_name} (${violation.error_type}) review marked as ${status} by operator ${user.name}`
+    `FCRA Violation on account ${violation.account_name} (${violation.subcategory || violation.category || 'FCRA'}) review marked as ${status} by operator ${user.name}`
   ).run();
 
   return c.json({ ok: true, status });
@@ -934,6 +1044,9 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
 
   // Parse the report
   const parsed = parseCreditReportText(rawText);
+  
+  // Back-populate parsed client personal information to database if currently empty
+  await backpopulateClientInfo(c, clientId, parsed.personalInfo, user.org_id);
   
   // Detect violations
   const violations = detectViolations(parsed);
@@ -1124,6 +1237,13 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
       if (!existingClient.zip && zip) { updates.push('zip = ?'); binds.push(zip); }
       if (!existingClient.email && extractedEmail) { updates.push('email = ?'); binds.push(extractedEmail); }
       if (!existingClient.phone && extractedPhone) { updates.push('phone = ?'); binds.push(extractedPhone); }
+
+      // Auto-set regulatory compliance consents on onboarding
+      if (!existingClient.permissible_purpose_consent || existingClient.permissible_purpose_consent === 0) { updates.push('permissible_purpose_consent = 1'); }
+      if (!existingClient.croa_contract_agreed || existingClient.croa_contract_agreed === 0) { updates.push('croa_contract_agreed = 1'); }
+      if (!existingClient.tsr_advance_fee_waived || existingClient.tsr_advance_fee_waived === 0) { updates.push('tsr_advance_fee_waived = 1'); }
+      if (!existingClient.consent_timestamp) { updates.push('consent_timestamp = ?'); binds.push(new Date().toISOString()); }
+
       if (updates.length > 0) {
         const sql = `UPDATE clients SET ${updates.join(', ')} WHERE id = ?`;
         binds.push(existingClient.id);
@@ -1223,6 +1343,12 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
       if (!bestMatch.email && extractedEmail) { updates.push('email = ?'); binds.push(extractedEmail); }
       if (!bestMatch.phone && extractedPhone) { updates.push('phone = ?'); binds.push(extractedPhone); }
 
+      // Auto-set regulatory compliance consents on onboarding
+      if (!bestMatch.permissible_purpose_consent || bestMatch.permissible_purpose_consent === 0) { updates.push('permissible_purpose_consent = 1'); }
+      if (!bestMatch.croa_contract_agreed || bestMatch.croa_contract_agreed === 0) { updates.push('croa_contract_agreed = 1'); }
+      if (!bestMatch.tsr_advance_fee_waived || bestMatch.tsr_advance_fee_waived === 0) { updates.push('tsr_advance_fee_waived = 1'); }
+      if (!bestMatch.consent_timestamp) { updates.push('consent_timestamp = ?'); binds.push(new Date().toISOString()); }
+
       if (updates.length > 0) {
         const sql = `UPDATE clients SET ${updates.join(', ')} WHERE id = ?`;
         binds.push(bestMatch.id);
@@ -1237,7 +1363,7 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
   // 4. Create new client profile if not matched
   if (isNewClient) {
     await c.env.DB.prepare(
-      'INSERT INTO clients (id, org_id, created_by, first_name, last_name, email, phone, address_line1, address_line2, city, state, zip, dob, ssn_last4, status, notes, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO clients (id, org_id, created_by, first_name, last_name, email, phone, address_line1, address_line2, city, state, zip, dob, ssn_last4, status, notes, tags, permissible_purpose_consent, croa_contract_agreed, tsr_advance_fee_waived, consent_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1, ?)'
     ).bind(
       clientId,
       user.org_id,
@@ -1255,7 +1381,8 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
       ssnLast4,
       'active',
       'Automatically created via Smart Client Autopilot',
-      '[]'
+      '[]',
+      new Date().toISOString()
     ).run();
 
     await c.env.DB.prepare(
@@ -1462,6 +1589,9 @@ app.post('/api/reports/mfsn-import', authMiddleware, async (c) => {
 
   // Map MFSN data to internal reports (usually returns one per bureau)
   const mappedReports = mapMfsnToInternal(mfsnData);
+  if (mappedReports.length > 0) {
+    await backpopulateClientInfo(c, clientId, mappedReports[0].personalInfo, user.org_id);
+  }
   const results = [];
 
   for (const report of mappedReports) {
@@ -2037,6 +2167,7 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
     }
 
     const primaryReport = bureauReports[0];
+    await backpopulateClientInfo(c, clientId, primaryReport.personalInfo, user.org_id);
     const reportId = generateId();
 
     let totalAccounts = 0;
@@ -2383,6 +2514,7 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
     }
 
     const primaryReport = bureauReports[0];
+    await backpopulateClientInfo(c, clientId, primaryReport.personalInfo, user.org_id);
     const reportId = generateId();
 
     let totalAccounts = 0;
@@ -2871,8 +3003,15 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
   }
   const mailingData = await mailingRes.json() as any;
 
-  // Update document status to "mailed"
-  await c.env.DB.prepare('UPDATE documents SET status = ?, mailed_at = ?, mailed_by = ? WHERE id = ?').bind('mailed', new Date().toISOString(), user.id, id).run();
+  // Update document status to "sent" using correct database schema columns
+  const mDate = new Date();
+  const due = new Date(mDate.getTime() + 35 * 24 * 60 * 60 * 1000);
+  const responseDueDateStr = due.toISOString().split('T')[0];
+  const sentDateStr = mDate.toISOString().split('T')[0];
+
+  await c.env.DB.prepare(
+    'UPDATE documents SET status = ?, sent_date = ?, response_due_date = ?, updated_at = datetime("now") WHERE id = ?'
+  ).bind('sent', sentDateStr, responseDueDateStr, id).run();
 
   await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, doc.client_id, id, user.id, 'document_mailed', `Mailed "${doc.title}" to ${recipientName || doc.recipient_name || 'recipient'}`).run();
 
@@ -2936,8 +3075,8 @@ app.get('/api/settings/statutes', (c) => {
 
 const adminGateMiddleware = async (c: any, next: any) => {
   const user = c.get('user');
-  if (!user || user.role !== 'super_admin') {
-    return c.json({ error: 'Forbidden: Super Admin only' }, 403);
+  if (!user || (user.role !== 'super_admin' && user.role !== 'admin')) {
+    return c.json({ error: 'Forbidden: Admin access only' }, 403);
   }
   return next();
 };

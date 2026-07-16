@@ -983,13 +983,15 @@ function checkECOAViolations(accounts: ParsedAccount[]): Violation[] {
   return violations;
 }
 
+import { detectEnhancedViolations } from './violations-enhanced';
+
 // ===============================================================
 // MASTER DETECTION ENGINE  -  Runs ALL 15 categories
 // ===============================================================
 export function detectViolations(report: CreditReportData): Violation[] {
   const allAccounts = [...report.accounts, ...report.collections];
 
-  const violations: Violation[] = [
+  const baseViolations: Violation[] = [
     ...checkObsoleteAccounts(allAccounts),
     ...checkReAging(allAccounts),
     ...checkDuplicates(report.accounts, report.collections),
@@ -1007,11 +1009,103 @@ export function detectViolations(report: CreditReportData): Violation[] {
     ...checkECOAViolations(allAccounts),
   ];
 
-  return violations.sort((a, b) => {
+  // Map to enhanced structure
+  try {
+    const newReport: any = {
+      bureau: report.bureau,
+      reportDate: report.reportDate,
+      personalInfo: report.personalInfo,
+      accounts: report.accounts.map(a => ({
+        ...a,
+        currentBalance: String(a.currentBalance || '0'),
+        originalBalance: String(a.originalAmount || '0'),
+        creditLimit: String(a.creditLimit || '0'),
+        highBalance: String(a.highBalance || '0'),
+        monthlyPayment: String(a.monthlyPayment || '0'),
+        pastDueAmount: String((a as any).pastDueAmount || '0'),
+      })),
+      inquiries: report.inquiries.map(i => ({
+        inquirerName: i.creditorName,
+        inquiryDate: i.inquiryDate,
+        inquiryType: i.inquiryType as any,
+        permissiblePurpose: i.purpose
+      })),
+      publicRecords: report.publicRecords.map(p => ({
+        recordType: p.recordType as any,
+        filingDate: p.filingDate,
+        courtName: p.court,
+        status: p.status,
+        amount: String(p.amount || '0'),
+        chapter: p.chapter
+      })),
+      collections: report.collections.map(a => ({
+        ...a,
+        currentBalance: String(a.currentBalance || '0'),
+        originalBalance: String(a.originalAmount || '0'),
+        creditLimit: String(a.creditLimit || '0'),
+        highBalance: String(a.highBalance || '0'),
+        monthlyPayment: String(a.monthlyPayment || '0'),
+        pastDueAmount: String((a as any).pastDueAmount || '0'),
+      }))
+    };
+
+    const enhancedViolations = detectEnhancedViolations(
+      newReport,
+      (report as any).id || 'default_report',
+      (report as any).clientId || 'default_client',
+      (report as any).state || 'US'
+    );
+
+    const mappedEnhanced: Violation[] = enhancedViolations.map(ev => ({
+      id: ev.id,
+      category: ev.category,
+      subcategory: ev.subcategory,
+      severity: ev.severity as any,
+      statute: ev.statute,
+      statuteText: ev.statuteText,
+      legalStandard: ev.legalStandard,
+      evidence: ev.evidence,
+      explanation: ev.explanation,
+      caseLaw: ev.caseLaw || '',
+      accountName: ev.accountName,
+      accountNumber: ev.accountNumber,
+      dofd: ev.dofd,
+      falloffDate: ev.falloffDate,
+      daysOverdue: ev.daysOverdue,
+      statutoryDamagesMin: ev.statutoryDamagesMin,
+      statutoryDamagesMax: ev.statutoryDamagesMax,
+      actualDamagesEst: ev.actualDamagesEst,
+      punitiveDamagesEst: ev.punitiveDamagesEst,
+      attorneyFeesEst: ev.attorneyFeesEst,
+      totalDamagesMin: ev.totalDamagesMin,
+      totalDamagesMax: ev.totalDamagesMax,
+      defendantType: ev.defendantType,
+      defendantName: ev.defendantName,
+      remedialAction: ev.explanation,
+      errorPeriod: ev.falloffDate,
+      disputeStrategy: ev.bureauDisputeText?.equifax || ev.explanation
+    }));
+
+    baseViolations.push(...mappedEnhanced);
+  } catch (err) {
+    console.error('Error running enhanced violations engine:', err);
+  }
+
+  // Deduplicate violations by subcategory and account number to avoid noise
+  const seenKeys = new Set<string>();
+  const filteredViolations = baseViolations.filter(v => {
+    const key = `${v.subcategory}_${v.accountNumber || ''}_${v.defendantName || ''}`;
+    if (seenKeys.has(key)) return false;
+    seenKeys.add(key);
+    return true;
+  });
+
+  return filteredViolations.sort((a, b) => {
     const sev = { critical: 0, high: 1, medium: 2, low: 3 };
     return sev[a.severity] - sev[b.severity];
   });
 }
+
 
 // ===============================================================
 // LITIGATION VALUE SCORE CALCULATOR

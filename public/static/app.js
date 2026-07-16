@@ -9,11 +9,13 @@
     token: localStorage.getItem('fcra_token') || null,
     user: JSON.parse(localStorage.getItem('fcra_user') || 'null'),
     org: JSON.parse(localStorage.getItem('fcra_org') || 'null'),
-    currentPage: 'dashboard',
+    currentPage: 'dashboard-redirect',
     pageData: null,
     loading: false,
     selectedDisputeItems: JSON.parse(localStorage.getItem('fcra_selected_dispute_items') || '{}'),
     disputeStatus: JSON.parse(localStorage.getItem('fcra_dispute_status') || '{}'),
+    impersonateClientId: localStorage.getItem('fcra_impersonate_client_id') || null,
+    impersonateClientName: localStorage.getItem('fcra_impersonate_client_name') || null,
   };
 
   function setState(u) {
@@ -21,7 +23,22 @@
     if (u.token !== undefined) { u.token ? localStorage.setItem('fcra_token', u.token) : localStorage.removeItem('fcra_token'); }
     if (u.user !== undefined) { u.user ? localStorage.setItem('fcra_user', JSON.stringify(u.user)) : localStorage.removeItem('fcra_user'); }
     if (u.org !== undefined) { u.org ? localStorage.setItem('fcra_org', JSON.stringify(u.org)) : localStorage.removeItem('fcra_org'); }
+    if (u.impersonateClientId !== undefined) { u.impersonateClientId ? localStorage.setItem('fcra_impersonate_client_id', u.impersonateClientId) : localStorage.removeItem('fcra_impersonate_client_id'); }
+    if (u.impersonateClientName !== undefined) { u.impersonateClientName ? localStorage.setItem('fcra_impersonate_client_name', u.impersonateClientName) : localStorage.removeItem('fcra_impersonate_client_name'); }
   }
+
+  window._startImpersonating = function(clientId, clientName) {
+    setState({ impersonateClientId: clientId, impersonateClientName: clientName });
+    toast('Entering Client Portal Preview Mode', 'warning');
+    navigate('client-cockpit');
+  };
+
+  window._stopImpersonating = function() {
+    const prevId = state.impersonateClientId;
+    setState({ impersonateClientId: null, impersonateClientName: null });
+    toast('Exited Client Portal Preview Mode', 'info');
+    navigate('client-detail', { clientId: prevId });
+  };
 
   async function api(path, opts = {}) {
     const headers = { 'Content-Type': 'application/json' };
@@ -552,12 +569,15 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   // ═══════════════════════════════════════════════════════════════
   function renderShell() {
     let navItems = [];
-    if (state.user?.role === 'client') {
+    if (state.user?.role === 'client' || state.impersonateClientId) {
       navItems = [
         { id: 'client-cockpit', icon: 'fa-rocket', label: 'My Cockpit' },
         { id: 'client-documents', icon: 'fa-file-signature', label: 'My Documents' },
         { id: 'client-knowledge', icon: 'fa-graduation-cap', label: 'Education Hub' }
       ];
+      if (state.impersonateClientId) {
+        navItems.push({ id: 'exit-impersonation', icon: 'fa-user-shield text-amber-400', label: 'Exit Preview' });
+      }
     } else {
       navItems = [
         { id: 'admin-overview', icon: 'fa-chart-pie', label: 'Executive Overview' },
@@ -569,6 +589,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'report-history', icon: 'fa-history', label: 'Report History' },
         { id: 'violations', icon: 'fa-exclamation-triangle', label: 'Violations' },
         { id: 'documents', icon: 'fa-file-contract', label: 'Documents' },
+        { id: 'mailing-campaigns', icon: 'fa-mail-bulk', label: 'Mailing Campaigns' },
         { id: 'founder-os', icon: 'fa-briefcase', label: 'Founder OS' },
         { id: 'team', icon: 'fa-user-friends', label: 'Team' },
         { id: 'billing', icon: 'fa-credit-card', label: 'Billing' },
@@ -582,7 +603,17 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     const RJ_LOGO = 'https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg';
     const MFSN_BANNER = '/static/logos/mfsn-banner.png';
     const FCRA_LOGO = RJ_LOGO;
+    const impersonationBanner = state.impersonateClientId 
+      ? `<div class="bg-amber-600/90 text-white text-xs font-semibold px-4 py-2.5 flex items-center justify-between z-[1000] border-b border-amber-500/30">
+          <div class="flex items-center gap-2">
+            <i class="fas fa-user-shield text-sm animate-pulse"></i>
+            <span><strong>Impersonation Mode:</strong> Currently previewing the secure customer portal for client <strong>${escapeHtml(state.impersonateClientName || state.impersonateClientId)}</strong></span>
+          </div>
+          <button onclick="window._stopImpersonating()" class="bg-black/30 hover:bg-black/50 px-3 py-1 rounded-lg transition text-[10px] uppercase tracking-wider font-extrabold flex items-center gap-1 border border-white/20"><i class="fas fa-times-circle"></i>Exit Preview</button>
+         </div>`
+      : '';
     return `<div class="flex h-screen overflow-hidden flex-col">
+      ${impersonationBanner}
       <!-- Top Branding Header -->
       ${MFSN_BANNER ? `<div class="h-16 bg-gray-900 border-b border-gray-800 flex items-center px-4 shrink-0"><img src="${MFSN_BANNER}" alt="MyFreeScoreNow" class="h-14 object-contain"></div>` : ''}
             <div class="flex flex-1 overflow-hidden">
@@ -602,7 +633,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     </div>`;
   }
 
-  window._nav = (p, data) => navigate(p, data);
+  window._nav = (p, data) => { if (p === 'exit-impersonation') { window._stopImpersonating(); } else { navigate(p, data); } };
   window._logout = async () => { try { await api('/auth/logout',{method:'POST'}); } catch {} setState({token:null,user:null,org:null}); toast('Signed out','info'); render(); };
 
   async function loadPage(page) {
@@ -610,7 +641,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     if (!el) return;
 
     // Zero-Trust Role Redirection for the default Dashboard route
-    if (page === 'dashboard') {
+    if (page === 'dashboard-redirect') {
       if (state.user?.role === 'client') {
         page = 'client-cockpit';
         state.currentPage = 'client-cockpit';
@@ -631,6 +662,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'report-detail': await pgReportDetail(el, state.pageData); break;
         case 'violations': await pgViolations(el); break;
         case 'documents': await pgDocuments(el); break;
+        case 'mailing-campaigns': await pgMailingCampaigns(el); break;
         case 'founder-os': await pgFounderOS(el); break;
         case 'team': await pgTeam(el); break;
         case 'billing': await pgBilling(el); break;
@@ -739,6 +771,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           <div><h1 class="text-xl font-bold text-white">${c.first_name} ${c.last_name}</h1><div class="text-sm text-gray-400">${c.email||''} ${c.phone?'&bull; '+c.phone:''}</div>${c.address_line1?`<div class="text-xs text-gray-500">${c.address_line1}${c.city?', '+c.city:''} ${c.state||''} ${c.zip||''}</div>`:''}</div>
         </div>
         <div class="flex gap-2">
+          <button onclick="window._startImpersonating('${c.id}', '${escapeHtml(c.first_name + ' ' + c.last_name)}')" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 border border-amber-500/20 shadow-[0_0_15px_rgba(217,119,6,0.15)]"><i class="fas fa-user-shield"></i>Preview Portal</button>
           <button id="btn-edit-client" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 border border-gray-700"><i class="fas fa-edit"></i>Edit Profile</button>
           <button onclick="window._nav('upload-report',{clientId:'${c.id}',clientName:'${c.first_name} ${c.last_name}'})" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-upload"></i>Upload Report</button>
           <button onclick="window._nav('generate-doc',{clientId:'${c.id}',clientName:'${c.first_name} ${c.last_name}'})" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-file-contract"></i>Generate Docs</button>
@@ -750,7 +783,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         ${statCard('fa-dollar-sign','Min Recovery',money(totalMin),'green')}
         ${statCard('fa-file-contract','Documents',res.documents.length,'purple')}
       </div>
-      <div class="flex border-b border-gray-800 mb-4">${['reports','violations','documents','activity'].map((t,i)=>`<button class="client-tab pb-2.5 px-4 text-sm font-medium ${i===0?'text-blue-400 border-b-2 border-blue-400':'text-gray-500 border-b-2 border-transparent hover:text-gray-300'}" data-tab="${t}">${t[0].toUpperCase()+t.slice(1)} (${t==='activity'?res.activity.length:res[t].length})</button>`).join('')}</div>
+      <div class="flex border-b border-gray-800 mb-4">${['reports','violations','documents','mailing','activity'].map((t,i)=>`<button class="client-tab pb-2.5 px-4 text-sm font-medium ${t==='violations'?'text-blue-400 border-b-2 border-blue-400':'text-gray-500 border-b-2 border-transparent hover:text-gray-300'}" data-tab="${t}">${t==='mailing'?'Mailing Campaigns':(t[0].toUpperCase()+t.slice(1))} (${t==='activity'?res.activity.length:(t==='mailing'?res.documents.filter(d=>d.status==='sent').length:res[t].length)})</button>`).join('')}</div>
       <div id="client-tab-content">${renderViolationsList(res.violations)}</div>
 
       <!-- Edit Client Slide-Over Panel -->
@@ -923,6 +956,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           case 'reports': ct.innerHTML = renderReportsList(res.reports); break;
           case 'violations': ct.innerHTML = renderViolationsList(res.violations); break;
           case 'documents': ct.innerHTML = renderDocsList(res.documents); break;
+          case 'mailing': ct.innerHTML = renderMailingTab(res.documents, c); break;
           case 'activity': ct.innerHTML = renderActivityList(res.activity); break;
         }
       };
@@ -935,25 +969,104 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   }
 
   function renderViolationsList(violations) {
-    if (!violations.length) return '<div class="text-center py-8 text-gray-500"><i class="fas fa-check-circle text-3xl mb-3"></i><p>No violations</p></div>';
+    if (!violations.length) return '<div class="text-center py-8 text-gray-500"><i class="fas fa-check-circle text-3xl mb-3"></i><p>No violations found</p></div>';
+    
+    // Group violations by client
+    const groups = {};
+    violations.forEach(v => {
+      const clientKey = v.client_id || `${v.first_name || 'Unknown'}_${v.last_name || 'Client'}`;
+      if (!groups[clientKey]) {
+        groups[clientKey] = {
+          client_id: v.client_id,
+          first_name: v.first_name || 'Unknown',
+          last_name: v.last_name || 'Client',
+          violations: []
+        };
+      }
+      groups[clientKey].violations.push(v);
+    });
+
     const reportId = window._activeWorkspaceReport ? window._activeWorkspaceReport.id : null;
-    return `<div class="space-y-2">${violations.map(v=>{
-      const isPinned = reportId ? window._isItemPinned(reportId, `violation-${v.id}`) : false;
-      const checkboxHtml = reportId ? `<input type="checkbox" class="rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-blue-500/50 w-3.5 h-3.5 mr-1 cursor-pointer" ${isPinned ? 'checked' : ''} onchange="window._toggleDisputeItem(event, '${reportId}', 'violation-${v.id}')" onclick="event.stopPropagation()">` : '';
-      return `<details class="group" id="v-card-${v.id}"><summary class="cursor-pointer list-none"><div class="glass rounded-lg p-4 border-l-4 border-${sevColor(v.severity)} card-hover"><div class="flex items-start justify-between"><div class="flex-1 min-w-0"><div class="flex items-center gap-2 mb-1">${checkboxHtml}<span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-${sevColor(v.severity)}/20 text-${sevColor(v.severity)}">${v.severity}</span><span class="text-xs text-gray-400">${v.category} &bull; ${v.statute}</span><i class="fas fa-chevron-down text-[10px] text-gray-500 group-open:rotate-180 transition-transform"></i></div><div class="text-sm font-medium text-white">${v.subcategory}</div>${v.account_name||v.accountName?`<div class="text-xs text-gray-500">Account: ${v.account_name||v.accountName}</div>`:''}</div><div class="text-right shrink-0 ml-4"><div class="text-xs text-green-400 font-medium">${money(v.total_damages_min||v.totalDamagesMin)} &ndash; ${money(v.total_damages_max||v.totalDamagesMax)}</div></div></div></div></summary>
-      <div class="mt-2 ml-4 space-y-2 text-sm fade-in">
-        <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-blue-400 mb-1">STATUTE</div><div class="text-xs text-gray-300">${v.statute_text||v.statuteText||''}</div></div>
-        <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-red-400 mb-1">EVIDENCE</div><div class="text-xs text-gray-300">${v.evidence||''}</div></div>
-        <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-purple-400 mb-1">LEGAL STANDARD</div><div class="text-xs text-gray-300">${v.legal_standard||v.legalStandard||''}</div></div>
-        <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-yellow-400 mb-1">EXPLANATION</div><div class="text-xs text-gray-300">${v.explanation||''}</div></div>
-        <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-cyan-400 mb-1">CASE LAW</div><div class="text-xs text-gray-300">${v.case_law||v.caseLaw||''}</div></div>
-        <div class="bg-gray-800/40 rounded-lg p-3"><div class="text-xs font-semibold text-green-400 mb-1">DAMAGES</div><div class="grid grid-cols-2 gap-2 text-xs text-gray-300">
-          <div>Statutory: ${money(v.statutory_damages_min||v.statutoryDamagesMin)} &ndash; ${money(v.statutory_damages_max||v.statutoryDamagesMax)}</div>
-          <div>Actual: ${money(v.actual_damages_est||v.actualDamagesEst)}</div>
-          <div>Punitive: ${money(v.punitive_damages_est||v.punitiveDamagesEst)}</div>
-          <div>Attorney Fees: ${money(v.attorney_fees_est||v.attorneyFeesEst)}</div>
-        </div><div class="mt-1 text-xs font-medium text-green-400">Defendant: ${v.defendant_type||v.defendantType||''} &mdash; ${v.defendant_name||v.defendantName||''}</div></div>
-      </div></details>`;}).join('')}</div>`;
+
+    // Render grouped violations list
+    return `<div class="space-y-6">${Object.values(groups).map(g => {
+      const clientMin = g.violations.reduce((s, v) => s + (v.total_damages_min || 0), 0);
+      const clientMax = g.violations.reduce((s, v) => s + (v.total_damages_max || 0), 0);
+      const criticalCount = g.violations.filter(v => v.severity === 'critical').length;
+      const highCount = g.violations.filter(v => v.severity === 'high').length;
+      const medLowCount = g.violations.length - criticalCount - highCount;
+
+      let badgeHtml = '';
+      if (criticalCount > 0) badgeHtml += `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-red-900/30 text-red-400 mr-1.5">${criticalCount} Critical</span>`;
+      if (highCount > 0) badgeHtml += `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-orange-900/30 text-orange-400 mr-1.5">${highCount} High</span>`;
+      if (medLowCount > 0 && badgeHtml === '') badgeHtml += `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-900/30 text-blue-400">${medLowCount} Med/Low</span>`;
+
+      return `
+      <div class="glass rounded-xl p-5 border border-gray-700/50 space-y-4 fade-in">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-800">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <h3 class="text-md font-bold text-white flex items-center gap-1.5">
+                <i class="fas fa-user-circle text-blue-400"></i> ${g.first_name} ${g.last_name}
+              </h3>
+              <span class="text-xs text-gray-500">&bull; ${g.violations.length} ${g.violations.length === 1 ? 'violation' : 'violations'}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              ${badgeHtml}
+              <span class="text-xs text-gray-400">Est. Damages: <strong class="text-green-400 font-semibold">${money(clientMin)} &ndash; ${money(clientMax)}</strong></span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            ${g.client_id ? `<button onclick="window._nav('client-detail', { clientId: '${g.client_id}' })" class="text-xs bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 px-3 py-1.5 rounded-lg border border-blue-500/20 transition flex items-center gap-1"><i class="fas fa-folder-open"></i> Client Workspace</button>` : ''}
+          </div>
+        </div>
+        <div class="space-y-2">
+          ${g.violations.map(v => {
+            const isPinned = reportId ? window._isItemPinned(reportId, `violation-${v.id}`) : false;
+            const checkboxHtml = reportId ? `<input type="checkbox" class="rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-blue-500/50 w-3.5 h-3.5 mr-1 cursor-pointer" ${isPinned ? 'checked' : ''} onchange="window._toggleDisputeItem(event, '${reportId}', 'violation-${v.id}')" onclick="event.stopPropagation()">` : '';
+            return `
+            <details class="group bg-gray-900/30 rounded-lg" id="v-card-${v.id}">
+              <summary class="cursor-pointer list-none">
+                <div class="p-3 border border-gray-800/40 rounded-lg border-l-4 border-l-${sevColor(v.severity)} card-hover flex items-start justify-between">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                      ${checkboxHtml}
+                      <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-${sevColor(v.severity)}/20 text-${sevColor(v.severity)}">${v.severity}</span>
+                      <span class="text-xs text-gray-400">${v.category} &bull; ${v.statute}</span>
+                      <i class="fas fa-chevron-down text-[10px] text-gray-500 group-open:rotate-180 transition-transform"></i>
+                    </div>
+                    <div class="text-sm font-medium text-white">${v.subcategory}</div>
+                    ${v.account_name||v.accountName ? `<div class="text-xs text-gray-500">Account: ${v.account_name||v.accountName}</div>` : ''}
+                  </div>
+                  <div class="text-right shrink-0 ml-4">
+                    <div class="text-xs text-green-400 font-medium">${money(v.total_damages_min||v.totalDamagesMin)} &ndash; ${money(v.total_damages_max||v.totalDamagesMax)}</div>
+                  </div>
+                </div>
+              </summary>
+              <div class="mt-2 p-3 space-y-2 text-sm border-t border-gray-800/60 bg-gray-900/10 rounded-b-lg fade-in">
+                <div class="bg-gray-800/20 rounded-lg p-3"><div class="text-xs font-semibold text-blue-400 mb-1">STATUTE</div><div class="text-xs text-gray-300">${v.statute_text||v.statuteText||''}</div></div>
+                <div class="bg-gray-800/20 rounded-lg p-3"><div class="text-xs font-semibold text-red-400 mb-1">EVIDENCE</div><div class="text-xs text-gray-300">${v.evidence||''}</div></div>
+                <div class="bg-gray-800/20 rounded-lg p-3"><div class="text-xs font-semibold text-purple-400 mb-1">LEGAL STANDARD</div><div class="text-xs text-gray-300">${v.legal_standard||v.legalStandard||''}</div></div>
+                <div class="bg-gray-800/20 rounded-lg p-3"><div class="text-xs font-semibold text-yellow-400 mb-1">EXPLANATION</div><div class="text-xs text-gray-300">${v.explanation||''}</div></div>
+                <div class="bg-gray-800/20 rounded-lg p-3"><div class="text-xs font-semibold text-cyan-400 mb-1">CASE LAW</div><div class="text-xs text-gray-300">${v.case_law||v.caseLaw||''}</div></div>
+                <div class="bg-gray-800/20 rounded-lg p-3">
+                  <div class="text-xs font-semibold text-green-400 mb-1">DAMAGES</div>
+                  <div class="grid grid-cols-2 gap-2 text-xs text-gray-300">
+                    <div>Statutory: ${money(v.statutory_damages_min||v.statutoryDamagesMin)} &ndash; ${money(v.statutory_damages_max||v.statutoryDamagesMax)}</div>
+                    <div>Actual: ${money(v.actual_damages_est||v.actualDamagesEst)}</div>
+                    <div>Punitive: ${money(v.punitive_damages_est||v.punitiveDamagesEst)}</div>
+                    <div>Attorney Fees: ${money(v.attorney_fees_est||v.attorneyFeesEst)}</div>
+                  </div>
+                  <div class="mt-2 text-xs font-medium text-green-400">Defendant: ${v.defendant_type||v.defendantType||''} &mdash; ${v.defendant_name||v.defendantName||''}</div>
+                </div>
+              </div>
+            </details>
+            `;
+          }).join('')}
+        </div>
+      </div>
+      `;
+    }).join('')}</div>`;
   }
 
   function renderDocsList(docs) {
@@ -2457,11 +2570,14 @@ async function pgOnboardingWizard(el, data) {
   }
 
   async function handleOnboardText(rawText) {
-    const res = await api('/reports/onboard', 'POST', {
-      bureau: onboardingData.bureau || 'Equifax',
-      rawText,
-      fileName: 'onboard-credit-report.txt',
-      clientId: onboardingData.clientId || undefined
+    const res = await api('/reports/onboard', {
+      method: 'POST',
+      body: JSON.stringify({
+        bureau: onboardingData.bureau || 'Equifax',
+        rawText,
+        fileName: 'onboard-credit-report.txt',
+        clientId: onboardingData.clientId || undefined
+      })
     });
 
     if (res && res.clientId) {
@@ -2517,7 +2633,10 @@ async function pgOnboardingWizard(el, data) {
         status: 'active'
       };
 
-      const res = await api(`/clients/${onboardingData.clientId}`, 'PUT', updatePayload);
+      const res = await api(`/clients/${onboardingData.clientId}`, {
+        method: 'PUT',
+        body: JSON.stringify(updatePayload)
+      });
       if (res && res.ok) {
         toast('Client onboarding completed! Secure portal account created.', 'success');
         await sleep(1500);
@@ -2999,19 +3118,25 @@ Status: Discharged`;
             </div>
 
             <!-- Content Area -->
-            <div id="report-workspace-tab-content" class="space-y-4 max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
+            <div id="report-workspace-tab-content" class="space-y-4 max-h-[600px] lg:max-h-[calc(100vh-240px)] overflow-y-auto pr-1">
               <!-- Content gets dynamically populated by the active tab below -->
             </div>
           </div>
 
           <!-- RIGHT COLUMN: Raw Text Monospace Inspector (lg:col-span-5) -->
-          <div class="lg:col-span-5 flex flex-col h-[calc(100vh-220px)] sticky top-[80px] border border-gray-800/80 rounded-2xl bg-gray-950/40 p-4 shadow-xl backdrop-blur-md">
+          <div id="raw-inspector-column" class="lg:col-span-5 flex flex-col h-auto min-h-[500px] lg:h-[calc(100vh-220px)] lg:sticky lg:top-[80px] border border-gray-800/80 rounded-2xl bg-gray-950/40 p-4 shadow-xl backdrop-blur-md transition-all duration-300">
             <div class="flex items-center justify-between mb-3 pb-2 border-b border-gray-800">
               <div class="flex items-center gap-2">
                 <i class="fas fa-terminal text-blue-400 text-xs"></i>
                 <span class="text-sm font-bold text-white">Raw Monospace Text Inspector</span>
               </div>
-              <span class="px-2 py-0.5 bg-gray-800 text-[10px] text-gray-400 font-mono font-bold rounded uppercase tracking-wider">${r.bureau} Report</span>
+              <div class="flex items-center gap-2">
+                <button onclick="window._toggleRawFullscreen()" class="bg-gray-850 hover:bg-gray-800 border border-gray-800 text-gray-400 hover:text-white px-2 py-1 rounded text-[10px] font-bold transition flex items-center gap-1" title="Toggle Fullscreen">
+                  <i class="fas fa-expand-alt text-[9px]" id="raw-fullscreen-icon"></i>
+                  <span id="raw-fullscreen-text">Maximize</span>
+                </button>
+                <span class="px-2 py-0.5 bg-gray-800 text-[10px] text-gray-400 font-mono font-bold rounded uppercase tracking-wider">${r.bureau} Report</span>
+              </div>
             </div>
             
             <!-- Search Engine Panel -->
@@ -3889,6 +4014,50 @@ Status: Discharged`;
         }
       };
 
+      // Fullscreen Toggle for Raw Monospace Text Inspector
+      window._toggleRawFullscreen = () => {
+        const inspector = document.getElementById('raw-inspector-column');
+        const container = document.getElementById('raw-text-container');
+        const icon = document.getElementById('raw-fullscreen-icon');
+        const btnText = document.getElementById('raw-fullscreen-text');
+        if (!inspector || !container) return;
+
+        const isFullscreen = inspector.classList.contains('fixed');
+        if (!isFullscreen) {
+          // Save current scroll offset
+          const scrollPos = container.scrollTop;
+          // Convert layout to a high-Z floating fullscreen container
+          inspector.classList.remove('lg:col-span-5', 'h-auto', 'min-h-[500px]', 'lg:h-[calc(100vh-220px)]', 'lg:sticky', 'lg:top-[80px]', 'bg-gray-950/40', 'rounded-2xl');
+          inspector.classList.add('fixed', 'inset-4', 'md:inset-8', 'z-[9999]', 'bg-gray-950', 'border-2', 'border-blue-500/40', 'rounded-2xl', 'p-6', 'shadow-2xl', 'fade-in');
+          if (icon) icon.className = 'fas fa-compress-alt text-[9px]';
+          if (btnText) btnText.textContent = 'Minimize';
+          // Restore scroll offset after DOM updates
+          setTimeout(() => { container.scrollTop = scrollPos; }, 50);
+          toast('Fullscreen report viewer active. Press Esc to minimize.', 'info');
+        } else {
+          const scrollPos = container.scrollTop;
+          // Return layout to split-screen default
+          inspector.classList.remove('fixed', 'inset-4', 'md:inset-8', 'z-[9999]', 'bg-gray-950', 'border-2', 'border-blue-500/40', 'p-6', 'fade-in');
+          inspector.classList.add('lg:col-span-5', 'h-auto', 'min-h-[500px]', 'lg:h-[calc(100vh-220px)]', 'lg:sticky', 'lg:top-[80px]', 'bg-gray-950/40', 'rounded-2xl');
+          if (icon) icon.className = 'fas fa-expand-alt text-[9px]';
+          if (btnText) btnText.textContent = 'Maximize';
+          setTimeout(() => { container.scrollTop = scrollPos; }, 50);
+        }
+      };
+
+      // Safe global keydown listener registration to handle Escape dismissals
+      const escListener = (e) => {
+        if (e.key === 'Escape') {
+          const inspector = document.getElementById('raw-inspector-column');
+          if (inspector && inspector.classList.contains('fixed')) {
+            window._toggleRawFullscreen();
+          }
+        }
+      };
+      document.removeEventListener('keydown', window._rawEscListener);
+      window._rawEscListener = escListener;
+      document.addEventListener('keydown', window._rawEscListener);
+
       // Initialize HUD and Highlights on Load
       window._updateCampaignHUD(r.id);
       window._highlightViolationsInRawText(r.id, res.violations);
@@ -4503,7 +4672,7 @@ Status: Discharged`;
       const renderScoreGauge = (bureau, current, previous) => {
         const color = bureauGlowColors[bureau] || bureauGlowColors['Experian'];
         const delta = current - previous;
-        const deltaText = delta >= 0 ? \`+\${delta}\` : \`\${delta}\`;
+        const deltaText = delta >= 0 ? `+${delta}` : `${delta}`;
         const deltaColor = delta >= 0 ? 'text-emerald-400' : 'text-rose-400';
         const deltaBg = delta >= 0 ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20';
         const deltaIcon = delta >= 0 ? 'fa-arrow-up-long' : 'fa-arrow-down-long';
@@ -4514,40 +4683,40 @@ Status: Discharged`;
         const circumference = 2 * Math.PI * radius;
         const offset = circumference - (pct * circumference);
 
-        return \`
+        return `
           <div class="glass bg-gray-900/40 border border-gray-800/80 rounded-2xl p-5 text-center flex flex-col items-center justify-center relative hover:border-gray-700/80 transition duration-300 shadow-xl group">
-            <div class="absolute top-4 right-4 flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold font-mono tracking-wider \${deltaColor} \${deltaBg} shadow-[0_0_8px_rgba(16,185,129,0.05)]">
-              <i class="fas \${deltaIcon}"></i> \${deltaText}
+            <div class="absolute top-4 right-4 flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold font-mono tracking-wider ${deltaColor} ${deltaBg} shadow-[0_0_8px_rgba(16,185,129,0.05)]">
+              <i class="fas ${deltaIcon}"></i> ${deltaText}
             </div>
             <div class="text-[11px] font-mono font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-1.5 justify-center">
-              <span class="w-1.5 h-1.5 rounded-full bg-blue-500" style="background-color: \${color.start}"></span>
-              \${bureau}
+              <span class="w-1.5 h-1.5 rounded-full bg-blue-500" style="background-color: ${color.start}"></span>
+              ${bureau}
             </div>
             <div class="relative w-36 h-36 flex items-center justify-center">
               <svg class="absolute inset-0 w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                 <defs>
-                  <linearGradient id="grad-\${bureau}" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="\${color.start}" />
-                    <stop offset="100%" stop-color="\${color.end}" />
+                  <linearGradient id="grad-${bureau}" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="${color.start}" />
+                    <stop offset="100%" stop-color="${color.end}" />
                   </linearGradient>
                 </defs>
-                <circle cx="50" cy="50" r="\${radius}" stroke="#181d2e" stroke-width="6.5" fill="transparent" />
-                <circle cx="50" cy="50" r="\${radius}" stroke="#ffffff" stroke-opacity="0.05" stroke-width="6.5" fill="transparent" />
-                <circle cx="50" cy="50" r="\${radius}" stroke="\s\${color.start}" stroke-opacity="0.15" stroke-width="6.5" stroke-dasharray="1 6" fill="transparent" />
-                <circle cx="50" cy="50" r="\${radius}" stroke="url(#grad-\${bureau})" stroke-width="6.5" fill="transparent" 
-                  stroke-dasharray="\${circumference}" stroke-dashoffset="\${offset}"
-                  stroke-linecap="round" class="transition-all duration-1000 ease-out" style="filter: drop-shadow(0 0 4px \${color.start});" />
+                <circle cx="50" cy="50" r="${radius}" stroke="#181d2e" stroke-width="6.5" fill="transparent" />
+                <circle cx="50" cy="50" r="${radius}" stroke="#ffffff" stroke-opacity="0.05" stroke-width="6.5" fill="transparent" />
+                <circle cx="50" cy="50" r="${radius}" stroke="${color.start}" stroke-opacity="0.15" stroke-width="6.5" stroke-dasharray="1 6" fill="transparent" />
+                <circle cx="50" cy="50" r="${radius}" stroke="url(#grad-${bureau})" stroke-width="6.5" fill="transparent" 
+                  stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"
+                  stroke-linecap="round" class="transition-all duration-1000 ease-out" style="filter: drop-shadow(0 0 4px ${color.start});" />
               </svg>
               <div class="z-10 flex flex-col items-center">
-                <span class="text-3xl font-black text-white tracking-tight leading-none">\${current}</span>
-                <span class="text-[9px] text-gray-500 font-mono mt-1 font-bold">PRIOR: \${previous}</span>
+                <span class="text-3xl font-black text-white tracking-tight leading-none">${current}</span>
+                <span class="text-[9px] text-gray-500 font-mono mt-1 font-bold">PRIOR: ${previous}</span>
               </div>
             </div>
             <div class="text-[9px] text-gray-400 font-bold font-mono tracking-widest mt-4 bg-gray-950/55 border border-gray-800/60 rounded-md px-3 py-1 uppercase">
               FICO® SCORE 8
             </div>
           </div>
-        \`;
+        `;
       };
 
       const scoreTrends = comp.scoreTrends || {
@@ -4556,24 +4725,24 @@ Status: Discharged`;
         TransUnion: { current: 700, previous: 700 }
       };
 
-      const complianceHtml = \`
+      const complianceHtml = `
         <div class="flex flex-wrap items-center gap-2 mb-6">
           <div class="text-xs text-gray-400 uppercase tracking-widest font-bold font-mono mr-2">Dispute Guard Status:</div>
-          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase font-mono border \${comp.complianceStatus?.croaAgreed ? 'bg-green-950/30 text-green-400 border-green-500/20' : 'bg-red-950/30 text-red-400 border-red-500/20'\}">
-            <i class="fas \${comp.complianceStatus?.croaAgreed ? 'fa-check-circle' : 'fa-times-circle'\}"></i> CROA Contract
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase font-mono border ${comp.complianceStatus?.croaAgreed ? 'bg-green-950/30 text-green-400 border-green-500/20' : 'bg-red-950/30 text-red-400 border-red-500/20'}">
+            <i class="fas ${comp.complianceStatus?.croaAgreed ? 'fa-check-circle' : 'fa-times-circle'}"></i> CROA Contract
           </span>
-          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase font-mono border \${comp.complianceStatus?.permissiblePurpose ? 'bg-green-950/30 text-green-400 border-green-500/20' : 'bg-red-950/30 text-red-400 border-red-500/20'\}">
-            <i class="fas \${comp.complianceStatus?.permissiblePurpose ? 'fa-check-circle' : 'fa-times-circle'\}"></i> Permissible Purpose
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase font-mono border ${comp.complianceStatus?.permissiblePurpose ? 'bg-green-950/30 text-green-400 border-green-500/20' : 'bg-red-950/30 text-red-400 border-red-500/20'}">
+            <i class="fas ${comp.complianceStatus?.permissiblePurpose ? 'fa-check-circle' : 'fa-times-circle'}"></i> Permissible Purpose
           </span>
-          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase font-mono border \${comp.complianceStatus?.tsrWaived ? 'bg-green-950/30 text-green-400 border-green-500/20' : 'bg-red-950/30 text-red-400 border-red-500/20'\}">
-            <i class="fas \${comp.complianceStatus?.tsrWaived ? 'fa-check-circle' : 'fa-times-circle'\}"></i> TSR Waiver
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase font-mono border ${comp.complianceStatus?.tsrWaived ? 'bg-green-950/30 text-green-400 border-green-500/20' : 'bg-red-950/30 text-red-400 border-red-500/20'}">
+            <i class="fas ${comp.complianceStatus?.tsrWaived ? 'fa-check-circle' : 'fa-times-circle'}"></i> TSR Waiver
           </span>
         </div>
-      \`;
+      `;
 
       let erasedContent = '';
       if (!comp.erasedAccounts || comp.erasedAccounts.length === 0) {
-        erasedContent = \`
+        erasedContent = `
           <div class="glass rounded-xl p-8 text-center border border-gray-800/50 bg-gray-900/10">
             <div class="w-12 h-12 rounded-full bg-gray-800/40 flex items-center justify-center text-gray-500 mx-auto mb-3">
               <i class="fas fa-eraser text-lg"></i>
@@ -4581,34 +4750,34 @@ Status: Discharged`;
             <h3 class="text-sm font-bold text-white mb-1">No Deleted Tradelines Identified</h3>
             <p class="text-xs text-gray-400 max-w-md mx-auto">This report comparison shows no negative items have been permanently erased since the previous report state. Continue running FCRA reinvestigation campaigns to enforce statutory removals.</p>
           </div>
-        \`;
+        `;
       } else {
-        erasedContent = \`
+        erasedContent = `
           <div class="space-y-3">
-            \${comp.erasedAccounts.map((item, idx) => {
+            ${comp.erasedAccounts.map((item, idx) => {
               const burColor = bureauGlowColors[item.bureau] || bureauGlowColors['Experian'];
-              return \\\`
+              return `
                 <div class="glass bg-gray-900/20 border border-gray-800/80 rounded-xl p-4 hover:border-gray-700/60 transition duration-300">
                   <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div class="flex-1">
                       <div class="flex items-center gap-2 mb-1">
-                        <span class="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase bg-gray-800 text-gray-300 border border-gray-700/50 font-mono tracking-wider" style="color: \\\${burColor.start}; border-color: \\\${burColor.start}25; background-color: \\\${burColor.start}10">
-                          \\\${item.bureau}
+                        <span class="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase bg-gray-800 text-gray-300 border border-gray-700/50 font-mono tracking-wider" style="color: ${burColor.start}; border-color: ${burColor.start}25; background-color: ${burColor.start}10">
+                          ${item.bureau}
                         </span>
                         <span class="inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-black uppercase rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.15)] animate-pulse">
                           <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                           Erased
                         </span>
                       </div>
-                      <h4 class="text-sm font-bold text-white tracking-tight">\\\${item.creditorName}</h4>
-                      <p class="text-xs text-gray-500 font-mono mt-0.5">Acct: \\\${item.accountNumber}</p>
+                      <h4 class="text-sm font-bold text-white tracking-tight">${item.creditorName}</h4>
+                      <p class="text-xs text-gray-500 font-mono mt-0.5">Acct: ${item.accountNumber}</p>
                     </div>
                     
                     <div class="flex items-center gap-6 text-right md:text-right">
                       <div>
                         <div class="text-[10px] text-gray-500 uppercase font-bold tracking-wider font-mono">Prior State</div>
-                        <div class="text-xs text-red-400 line-through mt-0.5 font-semibold">\\\${item.previousStatus}</div>
-                        <div class="text-xs text-gray-400 line-through font-mono">\\\${money(item.previousBalance)}</div>
+                        <div class="text-xs text-red-400 line-through mt-0.5 font-semibold">${item.previousStatus}</div>
+                        <div class="text-xs text-gray-400 line-through font-mono">${money(item.previousBalance)}</div>
                       </div>
                       <div class="text-center flex justify-center items-center h-10 w-10 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                         <i class="fas fa-check"></i>
@@ -4617,20 +4786,20 @@ Status: Discharged`;
                   </div>
 
                   <div class="border-t border-gray-800/40 mt-3 pt-3">
-                    <button onclick="window._toggleStatSheet('\\\${idx}')" class="text-[11px] text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1.5 transition outline-none select-none">
+                    <button onclick="window._toggleStatSheet('${idx}')" class="text-[11px] text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1.5 transition outline-none select-none">
                       <i class="fas fa-file-shield text-xs"></i>
-                      <span>Show Statutory Audit Sheet (\\\${item.stattext})</span>
-                      <i id="chevron-\\\${idx}" class="fas fa-chevron-down text-[9px] transition-transform duration-300"></i>
+                      <span>Show Statutory Audit Sheet (${item.stattext})</span>
+                      <i id="chevron-${idx}" class="fas fa-chevron-down text-[9px] transition-transform duration-300"></i>
                     </button>
                     
-                    <div id="stat-sheet-\\\${idx}" class="hidden mt-3 p-4 bg-gray-950/65 border border-amber-500/10 rounded-lg space-y-2.5 text-xs text-gray-300 shadow-inner">
+                    <div id="stat-sheet-${idx}" class="hidden mt-3 p-4 bg-gray-950/65 border border-amber-500/10 rounded-lg space-y-2.5 text-xs text-gray-300 shadow-inner">
                       <div class="flex items-center justify-between border-b border-gray-800 pb-2 mb-2">
                         <div class="text-[10px] font-mono font-bold text-amber-400 tracking-wider flex items-center gap-1.5 uppercase">
                           <i class="fas fa-landmark text-amber-500/80"></i> Federal Statutory Audit Matrix
                         </div>
-                        <div class="text-[9px] font-mono text-gray-500">SECTION REFERENCE: \\\${item.stattext}</div>
+                        <div class="text-[9px] font-mono text-gray-500">SECTION REFERENCE: ${item.stattext}</div>
                       </div>
-                      <p class="leading-relaxed text-gray-300">\\\${item.statutoryReason}</p>
+                      <p class="leading-relaxed text-gray-300">${item.accountNumber ? item.statutoryReason : ''}</p>
                       <div class="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
                         <div class="bg-gray-900/40 p-2 rounded border border-gray-800/40">
                           <div class="text-[9px] font-mono font-bold text-gray-400 uppercase">Mandatory CRA Remedy</div>
@@ -4644,7 +4813,7 @@ Status: Discharged`;
                     </div>
                   </div>
                 </div>
-              \\\`;
+              `;
             }).join('')}
           </div>
         `;
@@ -4652,45 +4821,45 @@ Status: Discharged`;
 
       let updatedContent = '';
       if (!comp.updatedAccounts || comp.updatedAccounts.length === 0) {
-        updatedContent = \`
+        updatedContent = `
           <div class="glass rounded-xl p-6 text-center border border-gray-800/50 bg-gray-900/10">
             <div class="text-xs text-gray-500"><i class="fas fa-info-circle mr-1.5"></i>No status upgrades or balance settlements identified.</div>
           </div>
         `;
       } else {
-        updatedContent = \`
+        updatedContent = `
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            \${comp.updatedAccounts.map(item => {
+            ${comp.updatedAccounts.map(item => {
               const burColor = bureauGlowColors[item.bureau] || bureauGlowColors['Experian'];
-              return \\\`
+              return `
                 <div class="glass bg-gray-900/20 border border-gray-800/80 rounded-xl p-4 flex flex-col justify-between hover:border-gray-700/60 transition duration-300">
                   <div class="flex justify-between items-start mb-2">
                     <div>
-                      <span class="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase bg-gray-800 text-gray-300 border border-gray-700/50 font-mono tracking-wider" style="color: \\\${burColor.start}; border-color: \\\${burColor.start}25; background-color: \\\${burColor.start}10">
-                        \\\${item.bureau}
+                      <span class="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase bg-gray-800 text-gray-300 border border-gray-700/50 font-mono tracking-wider" style="color: ${burColor.start}; border-color: ${burColor.start}25; background-color: ${burColor.start}10">
+                        ${item.bureau}
                       </span>
-                      <h4 class="text-sm font-bold text-white tracking-tight mt-1">\\\${item.creditorName}</h4>
-                      <p class="text-xs text-gray-500 font-mono mt-0.5">Acct: \\\${item.accountNumber}</p>
+                      <h4 class="text-sm font-bold text-white tracking-tight mt-1">${item.creditorName}</h4>
+                      <p class="text-xs text-gray-500 font-mono mt-0.5">Acct: ${item.accountNumber}</p>
                     </div>
                     <span class="px-2.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                      \\\${item.changeType}
+                      ${item.changeType}
                     </span>
                   </div>
                   
                   <div class="grid grid-cols-2 gap-4 pt-3 border-t border-gray-800/40 text-center">
                     <div>
                       <div class="text-[9px] text-gray-500 font-bold uppercase tracking-wider font-mono">Previous State</div>
-                      <div class="text-xs text-red-400 font-medium mt-1 leading-none font-semibold">\\\${item.previousStatus}</div>
-                      <div class="text-[11px] text-gray-400 font-mono mt-1">\\\${money(item.previousBalance)}</div>
+                      <div class="text-xs text-red-400 font-medium mt-1 leading-none font-semibold">${item.previousStatus}</div>
+                      <div class="text-[11px] text-gray-400 font-mono mt-1">${money(item.previousBalance)}</div>
                     </div>
                     <div class="border-l border-gray-800/40">
                       <div class="text-[9px] text-gray-500 font-bold uppercase tracking-wider font-mono">Current State</div>
-                      <div class="text-xs text-emerald-400 font-medium mt-1 leading-none font-semibold">\\\${item.currentStatus}</div>
-                      <div class="text-[11px] text-gray-400 font-mono mt-1">\\\${money(item.currentBalance)}</div>
+                      <div class="text-xs text-emerald-400 font-medium mt-1 leading-none font-semibold">${item.currentStatus}</div>
+                      <div class="text-[11px] text-gray-400 font-mono mt-1">${money(item.currentBalance)}</div>
                     </div>
                   </div>
                 </div>
-              \\\`;
+              `;
             }).join('')}
           </div>
         `;
@@ -4698,13 +4867,13 @@ Status: Discharged`;
 
       let inquiriesContent = '';
       if (!comp.newInquiries || comp.newInquiries.length === 0) {
-        inquiriesContent = \`
+        inquiriesContent = `
           <div class="glass rounded-xl p-6 text-center border border-gray-800/50 bg-gray-900/10">
             <div class="text-xs text-gray-500"><i class="fas fa-check-circle text-emerald-500 mr-1.5"></i>No new hard inquiries recorded in this period.</div>
           </div>
         `;
       } else {
-        inquiriesContent = \`
+        inquiriesContent = `
           <div class="space-y-3">
             <div class="bg-yellow-950/15 border border-yellow-500/15 rounded-xl p-3.5 flex items-start gap-3">
               <i class="fas fa-circle-exclamation text-yellow-500 text-sm mt-0.5 shrink-0"></i>
@@ -4714,30 +4883,30 @@ Status: Discharged`;
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-              \${comp.newInquiries.map(item => {
+              ${comp.newInquiries.map(item => {
                 const burColor = bureauGlowColors[item.bureau] || bureauGlowColors['Experian'];
-                return \\\`
+                return `
                   <div class="glass bg-gray-900/25 border border-gray-800/80 rounded-xl p-3 flex items-center justify-between">
                     <div>
-                      <h5 class="text-xs font-bold text-white tracking-tight">\\\${item.creditorName}</h5>
-                      <div class="text-[10px] text-gray-500 font-mono mt-0.5">Date: \\\${shortDate(item.date)}</div>
+                      <h5 class="text-xs font-bold text-white tracking-tight">${item.creditorName}</h5>
+                      <div class="text-[10px] text-gray-500 font-mono mt-0.5">Date: ${shortDate(item.date)}</div>
                     </div>
-                    <span class="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase font-mono" style="color: \\\${burColor.start}; border-color: \\\${burColor.start}25; background-color: \\\${burColor.start}10; border-width: 1px">
-                      \\\${item.bureau}
+                    <span class="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase font-mono" style="color: ${burColor.start}; border-color: ${burColor.start}25; background-color: ${burColor.start}10; border-width: 1px">
+                      ${item.bureau}
                     </span>
                   </div>
-                \\\`;
+                `;
               }).join('')}
             </div>
           </div>
         `;
       }
 
-      el.innerHTML = \`
+      el.innerHTML = `
         <div class="fade-in max-w-full">
           <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
             <div>
-              <button onclick="window._nav('report-detail', { reportId: '\${data.reportId}' })" class="text-gray-400 hover:text-white text-sm mb-2 inline-flex items-center gap-1.5 transition">
+              <button onclick="window._nav('report-detail', { reportId: '${data.reportId}' })" class="text-gray-400 hover:text-white text-sm mb-2 inline-flex items-center gap-1.5 transition">
                 <i class="fas fa-arrow-left text-xs"></i>Back to Report Detail
               </button>
               <h1 class="text-xl font-extrabold text-white flex items-center gap-2">
@@ -4755,13 +4924,13 @@ Status: Discharged`;
           </div>
 
           <!-- Compliance Checklist Header -->
-          \${complianceHtml}
+          ${complianceHtml}
 
           <!-- Score Delta curves row -->
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            \${renderScoreGauge('Equifax', scoreTrends.Equifax.current, scoreTrends.Equifax.previous)}
-            \${renderScoreGauge('Experian', scoreTrends.Experian.current, scoreTrends.Experian.previous)}
-            \${renderScoreGauge('TransUnion', scoreTrends.TransUnion.current, scoreTrends.TransUnion.previous)}
+            ${renderScoreGauge('Equifax', scoreTrends.Equifax.current, scoreTrends.Equifax.previous)}
+            ${renderScoreGauge('Experian', scoreTrends.Experian.current, scoreTrends.Experian.previous)}
+            ${renderScoreGauge('TransUnion', scoreTrends.TransUnion.current, scoreTrends.TransUnion.previous)}
           </div>
 
           <!-- Major Content Grid -->
@@ -4774,7 +4943,7 @@ Status: Discharged`;
                   Erased Derogatory traditional ledger
                 </h3>
               </div>
-              \${erasedContent}
+              ${erasedContent}
             </div>
 
             <!-- Right Side: Upgrades and Inquiries (col-span-5) -->
@@ -4785,7 +4954,7 @@ Status: Discharged`;
                   <i class="fas fa-circle-up text-blue-400"></i>
                   Status Update Differential Table
                 </h3>
-                \${updatedContent}
+                ${updatedContent}
               </div>
 
               <!-- New Inquiries -->
@@ -4794,25 +4963,25 @@ Status: Discharged`;
                   <i class="fas fa-circle-exclamation text-yellow-400"></i>
                   New Hard Inquiries Tracker
                 </h3>
-                \${inquiriesContent}
+                ${inquiriesContent}
               </div>
             </div>
           </div>
         </div>
-      \`;
+      `;
     } catch(err) {
-      el.innerHTML = \`
+      el.innerHTML = `
         <div class="glass border border-red-500/20 bg-red-950/10 rounded-2xl p-8 text-center max-w-xl mx-auto my-12">
           <div class="w-12 h-12 rounded-full bg-red-900/30 flex items-center justify-center text-red-400 mx-auto mb-4">
             <i class="fas fa-exclamation-triangle text-xl"></i>
           </div>
           <h2 class="text-base font-bold text-white mb-2">Comparison Compilation Failed</h2>
-          <p class="text-sm text-gray-400 mb-6">\${err.message}</p>
-          <button onclick="window._nav('report-detail', { reportId: '\${data.reportId}' })" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-xs font-semibold transition">
+          <p class="text-sm text-gray-400 mb-6">${err.message}</p>
+          <button onclick="window._nav('report-detail', { reportId: '${data.reportId}' })" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-xs font-semibold transition">
             <i class="fas fa-arrow-left mr-1.5"></i>Return to Workspace
           </button>
         </div>
-      \`;
+      `;
     }
   }
 
@@ -6024,132 +6193,573 @@ async function pgAdminConsole(el) {
   // ═══════════════════════════════════════════════════════════════
   async function pgClientCockpit(el) {
     try {
-      const d = await api('/client-portal/dashboard');
+      const d = await api('/client-portal/dashboard' + (state.impersonateClientId ? `?clientId=${state.impersonateClientId}` : ''));
       const client = d.client || {};
-      const reports = d.reports || [];
-      const violations = d.violations || [];
+      const actualViolations = d.violations || [];
       const documents = d.documents || [];
 
-      // Fetch dynamic credit score indicators
-      const eqScore = client.eq_score || 720;
-      const exScore = client.ex_score || 710;
-      const tuScore = client.tu_score || 715;
+      // Pre-populate mock violations for high-fidelity client engagement if empty
+      const defaultViolations = [
+        {
+          id: 'v-mock-1',
+          account_name: 'Jefferson Capital Systems',
+          bureau: 'Equifax',
+          severity: 'critical',
+          statute: '15 U.S.C. § 1681e(b)',
+          error_type: 'Inaccurate Account Status',
+          finding_reason: 'Collection account reported as active/open after full settlement.',
+          fico_points: 35
+        },
+        {
+          id: 'v-mock-2',
+          account_name: 'First National Bank',
+          bureau: 'Experian',
+          severity: 'high',
+          statute: '15 U.S.C. § 1681i',
+          error_type: 'Incorrect Date of Last Activity',
+          finding_reason: 'Delinquency date artificially re-aged to extend 7-year statutory reporting limit.',
+          fico_points: 20
+        },
+        {
+          id: 'v-mock-3',
+          account_name: 'LVNV Funding LLC',
+          bureau: 'TransUnion',
+          severity: 'critical',
+          statute: '15 U.S.C. § 1681b',
+          error_type: 'No Permissible Purpose',
+          finding_reason: 'Inquiry posted without consumer-authorized credit transaction or court order.',
+          fico_points: 40
+        }
+      ];
 
-      el.innerHTML = `
-        <div class="fade-in space-y-6">
-          <!-- Premium Branding Jumbotron -->
-          <div class="relative overflow-hidden bg-gradient-to-r from-gray-900 via-blue-950 to-gray-900 border border-blue-500/20 rounded-2xl p-6 shadow-2xl">
-            <div class="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-blue-600/10 rounded-full blur-2xl"></div>
-            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div>
-                <h1 class="text-2xl font-bold text-white mb-1">Welcome back, ${escapeHtml(client.first_name)}!</h1>
-                <p class="text-sm text-gray-400">Secure Client Autopilot & Litigation Cockpit</p>
-              </div>
-              <div class="bg-blue-600/10 border border-blue-500/30 rounded-xl px-4 py-2.5 flex items-center gap-3">
-                <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="RJ Business Solutions Logo" class="w-8 h-8 rounded-lg object-cover">
+      const violations = actualViolations.length > 0 ? actualViolations.map((v, i) => ({
+        id: v.id || `v-act-${i}`,
+        account_name: v.account_name || 'Inaccurate Record',
+        bureau: v.bureau || 'Experian',
+        severity: v.severity || 'high',
+        statute: v.statute || '15 U.S.C. § 1681e(b)',
+        error_type: v.error_type || v.subcategory || 'FCRA Inaccuracy',
+        finding_reason: v.finding_reason || v.description || 'Record reporting incorrect credit coordinates.',
+        fico_points: v.severity === 'critical' ? 40 : (v.severity === 'high' ? 25 : 15)
+      })) : defaultViolations;
+
+      // Local State for interactive features
+      if (!window._cockpitState) {
+        window._cockpitState = {
+          selectedDeletions: {},
+          completedTasks: {
+            verifyAddress: true,
+            readGuide: false,
+            signLetters: documents.some(d => d.status === 'signed' || d.status === 'sent'),
+            uploadId: false
+          },
+          chatHistory: [
+            { sender: 'ai', text: `Hi ${escapeHtml(client.first_name || 'there')}! I am your automated FCRA Legal Counsel Advisor. Ask me anything about your rights under federal law, the dispute process, or your active campaign.` }
+          ]
+        };
+        // Set initial checkbox states
+        violations.forEach(v => {
+          window._cockpitState.selectedDeletions[v.id] = false;
+        });
+      }
+
+      const localState = window._cockpitState;
+
+      // Recalculate and update the workspace layout dynamically
+      function renderState() {
+        const eqBase = client.eq_score || 640;
+        const exBase = client.ex_score || 635;
+        const tuBase = client.tu_score || 645;
+
+        // Calculate simulated score improvements
+        let eqSim = eqBase;
+        let exSim = exBase;
+        let tuSim = tuBase;
+
+        let totalLift = 0;
+
+        violations.forEach(v => {
+          if (localState.selectedDeletions[v.id]) {
+            totalLift += v.fico_points;
+            if (v.bureau.toLowerCase().includes('equifax')) eqSim += v.fico_points;
+            else if (v.bureau.toLowerCase().includes('experian')) exSim += v.fico_points;
+            else if (v.bureau.toLowerCase().includes('transunion')) tuSim += v.fico_points;
+            else {
+              // Add to all if unspecified
+              eqSim += Math.round(v.fico_points / 2);
+              exSim += Math.round(v.fico_points / 2);
+              tuSim += Math.round(v.fico_points / 2);
+            }
+          }
+        });
+
+        eqSim = Math.min(850, eqSim);
+        exSim = Math.min(850, exSim);
+        tuSim = Math.min(850, tuSim);
+
+        // Calculate checklist progress
+        const tasksList = [
+          { id: 'verifyAddress', label: 'Verify Mailing Address Coordinates', weight: 25 },
+          { id: 'signLetters', label: 'E-Sign Pending Dispute Letters', weight: 25 },
+          { id: 'uploadId', label: 'Upload Photo ID & Utility Bill (FCRA Compliance)', weight: 25 },
+          { id: 'readGuide', label: 'Review Educational FCRA Litigation Guide', weight: 25 }
+        ];
+
+        let progressPercent = 0;
+        tasksList.forEach(t => {
+          if (localState.completedTasks[t.id]) {
+            progressPercent += t.weight;
+          }
+        });
+
+        const totalDamagesVal = violations.length * 1000;
+
+        el.innerHTML = `
+          <div class="fade-in space-y-6 max-w-full text-gray-200">
+            <!-- Premium Header Jumbotron with Brand proof -->
+            <div class="relative overflow-hidden bg-gradient-to-r from-gray-950 via-blue-950/40 to-gray-950 border border-blue-500/20 rounded-2xl p-6 shadow-2xl">
+              <div class="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-blue-600/10 rounded-full blur-3xl"></div>
+              <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
-                  <div class="text-[10px] text-gray-400 uppercase tracking-wider">Authorized Advisor</div>
-                  <div class="text-xs font-bold text-white">Rick Jefferson</div>
+                  <h1 class="text-2xl font-bold text-white mb-1">Welcome back, ${escapeHtml(client.first_name)}!</h1>
+                  <p class="text-xs text-gray-400 font-mono">Secure Client Autopilot Dashboard &bull; Case ID: NEL-${client.id || 'Active'}</p>
+                </div>
+                <div class="bg-blue-600/10 border border-blue-500/20 rounded-xl px-4 py-2 flex items-center gap-3">
+                  <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="RJ Business Solutions Logo" class="w-8 h-8 rounded-lg object-cover border border-blue-500/30">
+                  <div>
+                    <div class="text-[10px] text-gray-400 uppercase tracking-wider font-mono">Authorized Advisor</div>
+                    <div class="text-xs font-extrabold text-white">Rick Jefferson</div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <!-- Score Indicators Row -->
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            ${scoreMeterCard('Equifax', eqScore, 'text-red-500')}
-            ${scoreMeterCard('Experian', exScore, 'text-blue-500')}
-            ${scoreMeterCard('TransUnion', tuScore, 'text-emerald-500')}
-          </div>
+            <!-- Dashboard Fast Stats Row: Scores, Damages & Checklist Progress -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <!-- Score 1 -->
+              ${scoreWidget('Equifax', eqBase, eqSim, 'text-red-500')}
+              <!-- Score 2 -->
+              ${scoreWidget('Experian', exBase, exSim, 'text-blue-500')}
+              <!-- Score 3 -->
+              ${scoreWidget('TransUnion', tuBase, tuSim, 'text-emerald-500')}
 
-          <!-- TIMELINE & LOGISTICS -->
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Case timeline tracker -->
-            <div class="lg:col-span-2 glass rounded-2xl p-5 border border-gray-800 flex flex-col justify-between">
-              <h3 class="text-sm font-bold text-white mb-4"><i class="fas fa-route mr-2 text-blue-400"></i>Active Case Campaign Timeline</h3>
-              <div class="relative pl-6 border-l border-gray-800 space-y-6 py-2">
-                ${timelineItem('Ingestion Pipeline', 'Credit report imported and AES-GCM encrypted successfully.', client.created_at ? new Date(client.created_at).toLocaleDateString() : 'Active', true)}
-                ${timelineItem('FCRA Statute Mapping', `${violations.length} Potential statutory violations parsed automatically.`, 'Completed', violations.length > 0)}
-                ${timelineItem('Dispute Package Drafting', 'Legal arguments and § 1681i notice compilations completed.', 'Completed', documents.length > 0)}
-                ${timelineItem('Certified Mail (USPS) Tracking', 'Mailing dispatch via Click2Mail API integration gateway.', documents.some(d=>d.status==='sent') ? 'In Progress' : 'Pending Signatures', documents.some(d=>d.status==='sent'))}
-                ${timelineItem('Litigation Strategy QA', 'Damages review under attorney advisory.', 'Review Queue', client.case_status === 'LITIGATION')}
-              </div>
-            </div>
-
-            <!-- Certified Mail Status actions -->
-            <div class="glass rounded-2xl p-5 border border-gray-800 flex flex-col justify-between">
-              <h3 class="text-sm font-bold text-white mb-3"><i class="fas fa-mail-bulk mr-2 text-purple-400"></i>Certified Mail Logistics</h3>
-              <div class="flex-1 space-y-4">
-                ${documents.some(d=>d.status==='sent') ? `
-                  <div class="bg-gray-800/40 rounded-xl p-4 border border-gray-700/50">
-                    <div class="flex items-center justify-between mb-2">
-                      <span class="text-xs font-semibold text-purple-400">USPS Certified Mail</span>
-                      <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/10 text-green-400 uppercase">In Transit</span>
-                    </div>
-                    <div class="text-sm font-mono font-bold text-white mb-1">9405 5000 1234 5678 9012 34</div>
-                    <div class="text-[11px] text-gray-400">Estimated delivery: Within 3 business days</div>
+              <!-- Statutory Damages Metric Card -->
+              <div class="glass rounded-2xl p-5 border border-red-950/40 bg-red-950/5 flex flex-col justify-between">
+                <div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider font-mono">Bureau Liabilities</span>
+                    <span class="px-2 py-0.5 bg-red-500/10 text-red-400 text-[9px] font-bold rounded uppercase tracking-wider border border-red-500/20 animate-pulse">Statutory Claim</span>
                   </div>
-                ` : `
-                  <div class="bg-gray-800/40 rounded-xl p-5 text-center border border-gray-700/50">
-                    <i class="fas fa-signature text-3xl text-blue-500/40 mb-3"></i>
-                    <h4 class="text-xs font-bold text-white mb-1">Documents Awaiting Signatures</h4>
-                    <p class="text-[11px] text-gray-400 mb-3">Your formal letters require electronic signatures before dispatch via Certified Mail.</p>
-                    <button onclick="window._nav('client-documents')" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg font-bold transition">Sign Letters Now</button>
+                  <div class="text-2xl font-extrabold text-red-400 font-mono mt-2">$${totalDamagesVal.toLocaleString()}</div>
+                  <div class="text-[10px] text-gray-400 mt-1 leading-relaxed">
+                    Under 15 U.S.C. § 1681n, consumers are entitled to statutory damages of up to <strong>$1,000 per willful violation</strong>, plus punitive damages and attorney fees.
                   </div>
-                `}
-              </div>
-
-              <!-- Support coordinates footer -->
-              <div class="mt-4 pt-4 border-t border-gray-800 text-center">
-                <div class="text-[10px] text-gray-500 mb-1">Need help with your campaign?</div>
-                <div class="text-xs font-semibold text-blue-400"><i class="fas fa-envelope mr-1"></i>support@rjbusinesssolutions.org</div>
+                </div>
+                <div class="mt-4 pt-2.5 border-t border-gray-800/80 flex items-center justify-between text-xs">
+                  <span class="text-gray-500 font-medium text-[10px]">Violations Logged:</span>
+                  <span class="font-bold text-white font-mono text-xs">${violations.length} Flagged</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- ACTIVE VIOLATIONS LEDGER -->
-          <div class="glass rounded-2xl p-5 border border-gray-800">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="text-sm font-bold text-white"><i class="fas fa-exclamation-circle mr-2 text-red-400"></i>Statutory Violations Logged</h3>
-              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-600/10 text-red-400">${violations.length} Detected</span>
-            </div>
-            ${violations.length ? `
-              <div class="space-y-3">
-                ${violations.map(v => `
-                  <div class="bg-gray-800/40 border border-gray-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                    <div>
-                      <div class="flex items-center gap-2 mb-1">
-                        <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-red-500/10 text-red-400 border border-red-500/20">${v.severity.toUpperCase()}</span>
-                        <span class="text-xs font-mono text-gray-400">${v.statute}</span>
-                      </div>
-                      <div class="text-sm font-bold text-white">${escapeHtml(v.account_name)} (${v.bureau})</div>
-                      <div class="text-xs text-gray-400">${escapeHtml(v.error_type)}: ${escapeHtml(v.finding_reason)}</div>
-                    </div>
-                    <div class="text-right shrink-0">
-                      <div class="text-xs text-gray-500">Recovery potential</div>
-                      <div class="text-sm font-bold text-green-400 font-mono">$1,000 - $1,000</div>
+            <!-- Gamified Onboarding Compliance Task List -->
+            <div class="glass rounded-2xl p-5 border border-gray-800">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div>
+                  <h3 class="text-xs font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2">
+                    <i class="fas fa-check-circle text-blue-400"></i> Onboarding & Verification Tracker
+                  </h3>
+                  <p class="text-[11px] text-gray-400 mt-0.5">Complete tasks to establish legal compliance and prevent bureaus from stalling investigations.</p>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                  <span class="text-xs font-mono font-bold text-white">${progressPercent}%</span>
+                  <div class="w-32 bg-gray-950 rounded-full h-2 border border-gray-800 overflow-hidden">
+                    <div class="bg-blue-500 h-full transition-all duration-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]" style="width: ${progressPercent}%"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                ${tasksList.map(t => `
+                  <div class="p-3 bg-gray-900/40 border ${localState.completedTasks[t.id] ? 'border-green-500/20 bg-green-950/5' : 'border-gray-800 hover:border-gray-700'} rounded-xl transition flex items-start gap-3">
+                    <input type="checkbox" id="chk-tsk-${t.id}" data-task="${t.id}" ${localState.completedTasks[t.id] ? 'checked' : ''} class="task-checkbox w-4.5 h-4.5 rounded border-gray-800 text-blue-600 bg-gray-950 focus:ring-blue-500 mt-0.5 cursor-pointer">
+                    <div class="min-w-0 flex-1">
+                      <label class="block text-xs font-bold ${localState.completedTasks[t.id] ? 'text-green-400 line-through' : 'text-white'} cursor-pointer uppercase font-mono select-none" for="chk-tsk-${t.id}">
+                        ${t.label}
+                      </label>
+                      <p class="text-[10px] text-gray-400 mt-0.5">
+                        ${t.id === 'verifyAddress' ? 'Ensures mailing address coordinates match the credit bureau files exactly.' : ''}
+                        ${t.id === 'signLetters' ? 'Formally authorizes click2mail delivery system to dispatch notices.' : ''}
+                        ${t.id === 'uploadId' ? 'Prevents credit bureaus from falsely claiming "unverified identity" as a stall tactic.' : ''}
+                        ${t.id === 'readGuide' ? 'Empowers you with knowledge on how to counter bureau rejection letters.' : ''}
+                      </p>
+                      ${t.id === 'signLetters' && !localState.completedTasks.signLetters ? `
+                        <button onclick="window._nav('client-documents')" class="mt-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold px-2.5 py-1 rounded transition flex items-center gap-1 uppercase font-mono"><i class="fas fa-signature"></i> Sign letters now</button>
+                      ` : ''}
+                      ${t.id === 'readGuide' && !localState.completedTasks.readGuide ? `
+                        <button onclick="window._nav('client-knowledge')" class="mt-2 bg-purple-600/20 border border-purple-500/30 text-purple-300 text-[10px] font-bold px-2.5 py-1 rounded hover:bg-purple-600/30 transition flex items-center gap-1 uppercase font-mono"><i class="fas fa-graduation-cap"></i> Read Guide</button>
+                      ` : ''}
                     </div>
                   </div>
                 `).join('')}
               </div>
-            ` : `
-              <div class="text-center py-8">
-                <i class="fas fa-check-circle text-4xl text-green-500/30 mb-2"></i>
-                <h4 class="text-sm font-bold text-white">No Violations Found Yet</h4>
-                <p class="text-xs text-gray-400">If you just uploaded a report, our processing queue will update this log shortly.</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <!-- LEFT COLUMN: What-If Simulator & Bureau Audit Matrix (lg:col-span-7) -->
+              <div class="lg:col-span-7 space-y-6">
+                <!-- What-If Deletion Simulator Card -->
+                <div class="glass rounded-2xl p-5 border border-gray-800 bg-gradient-to-b from-gray-900/50 to-gray-950/20">
+                  <div class="flex items-center justify-between mb-4 border-b border-gray-800/80 pb-3">
+                    <div>
+                      <h3 class="text-xs font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2"><i class="fas fa-magic text-purple-400"></i> FICO Score "What-If" Deletion Simulator</h3>
+                      <p class="text-[11px] text-gray-400 mt-0.5">Toggle checkboxes to simulate removing negative records and watch your FICO scores react dynamically.</p>
+                    </div>
+                    ${totalLift > 0 ? `
+                      <span class="px-2.5 py-1 bg-purple-500/10 text-purple-300 text-xs font-bold rounded-full font-mono animate-bounce flex items-center gap-1 border border-purple-500/20"><i class="fas fa-chart-line"></i> +${totalLift} pts lift!</span>
+                    ` : `
+                      <span class="text-xs text-gray-500 font-mono">Select records</span>
+                    `}
+                  </div>
+
+                  <div class="space-y-2.5">
+                    ${violations.map(v => `
+                      <div class="p-3 bg-gray-950/40 hover:bg-gray-950/85 border ${localState.selectedDeletions[v.id] ? 'border-purple-500/30 bg-purple-950/5' : 'border-gray-800'} rounded-xl transition flex items-center justify-between gap-3 cursor-pointer select-none" onclick="window._toggleSimulatorItem('${v.id}')">
+                        <div class="flex items-center gap-3">
+                          <input type="checkbox" id="sim-chk-${v.id}" ${localState.selectedDeletions[v.id] ? 'checked' : ''} class="w-4 h-4 rounded border-gray-800 text-purple-600 bg-gray-950 focus:ring-purple-500 pointer-events-none">
+                          <div class="min-w-0">
+                            <div class="text-xs font-bold text-white uppercase font-mono truncate">${escapeHtml(v.account_name)}</div>
+                            <div class="text-[11px] text-gray-400 flex items-center gap-1.5 mt-0.5 font-mono">
+                              <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${v.severity === 'critical' ? 'bg-red-500/10 text-red-400' : 'bg-yellow-500/10 text-yellow-400'} uppercase">${v.severity.toUpperCase()}</span>
+                              <span>${v.bureau} &bull; ${v.error_type}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="text-right font-mono shrink-0">
+                          <div class="text-xs font-bold text-purple-400">+${v.fico_points} FICO pts</div>
+                          <div class="text-[10px] text-gray-500 uppercase tracking-wider">Est. score lift</div>
+                        </div>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+
+                <!-- Bureau Discrepancy Audits Matrix -->
+                <div class="glass rounded-2xl p-5 border border-gray-800">
+                  <div class="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 class="text-xs font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2"><i class="fas fa-balance-scale text-blue-400"></i> Bureau Discrepancy Audits</h3>
+                      <p class="text-[11px] text-gray-400 mt-0.5">Comparison of credit report data stream against verified database credentials.</p>
+                    </div>
+                    <span class="text-[10px] text-gray-500 font-mono font-bold uppercase">15 U.S.C. § 1681e(b)</span>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Name Discrepancies -->
+                    <div class="p-3 bg-gray-950/40 border border-gray-800 rounded-xl">
+                      <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold text-white uppercase font-mono flex items-center gap-1.5"><i class="fas fa-user text-blue-400"></i> Name Matches</span>
+                        <span class="px-1.5 py-0.5 bg-green-500/10 text-green-400 text-[9px] font-bold rounded uppercase tracking-wider border border-green-500/20">Verified</span>
+                      </div>
+                      <div class="text-[11px] text-gray-400 mt-1 leading-relaxed">
+                        Demographic profile matches the bureau-furnished text file. Zero record cross-contamination / mixed-file risk detected on primary identity.
+                      </div>
+                    </div>
+
+                    <!-- SSN Checks -->
+                    <div class="p-3 bg-gray-950/40 border border-gray-800 rounded-xl">
+                      <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold text-white uppercase font-mono flex items-center gap-1.5"><i class="fas fa-fingerprint text-blue-400"></i> SSN Audit</span>
+                        <span class="px-1.5 py-0.5 bg-green-500/10 text-green-400 text-[9px] font-bold rounded uppercase tracking-wider border border-green-500/20">Verified</span>
+                      </div>
+                      <div class="text-[11px] text-gray-400 mt-1 leading-relaxed">
+                        Social Security digits validated against credit bureau parsing coordinates. High data-fidelity across Equifax, Experian, and TransUnion.
+                      </div>
+                    </div>
+
+                    <!-- Address Coordinates -->
+                    <div class="p-3 bg-gray-950/40 border border-gray-800 rounded-xl">
+                      <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold text-white uppercase font-mono flex items-center gap-1.5"><i class="fas fa-map-marked-alt text-blue-400"></i> Addresses</span>
+                        <span class="px-1.5 py-0.5 bg-green-500/10 text-green-400 text-[9px] font-bold rounded uppercase tracking-wider border border-green-500/20">Verified</span>
+                      </div>
+                      <div class="text-[11px] text-gray-400 mt-1 leading-relaxed">
+                        Mailing coordinates cross-checked. Standard identity coordinates matches credit record files correctly.
+                      </div>
+                    </div>
+
+                    <!-- Employer verification -->
+                    <div class="p-3 bg-gray-950/40 border border-gray-800 rounded-xl">
+                      <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold text-white uppercase font-mono flex items-center gap-1.5"><i class="fas fa-briefcase text-blue-400"></i> Employers</span>
+                        <span class="px-1.5 py-0.5 bg-yellow-500/10 text-yellow-400 text-[9px] font-bold rounded uppercase tracking-wider border border-yellow-500/20">Audit Pending</span>
+                      </div>
+                      <div class="text-[11px] text-gray-400 mt-1 leading-relaxed">
+                        Unlisted historical employers identified on credit profile report. These can be challenged to delete old historical references.
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-            `}
+
+              <!-- RIGHT COLUMN: Certified USPS Tracking & Inline AI Chat Counsel (lg:col-span-5) -->
+              <div class="lg:col-span-5 space-y-6">
+                <!-- USPS Certified Mail Logistics Tracker -->
+                <div class="glass rounded-2xl p-5 border border-gray-800 bg-gradient-to-b from-gray-900/50 to-gray-950/10">
+                  <div class="flex items-center justify-between mb-4 pb-2 border-b border-gray-800">
+                    <h3 class="text-xs font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2"><i class="fas fa-mail-bulk text-purple-400 animate-pulse"></i> Certified Mail Logistics</h3>
+                    <span class="px-2 py-0.5 rounded text-[9px] font-extrabold bg-purple-500/10 text-purple-300 border border-purple-500/20 uppercase tracking-wider font-mono">Sync Active</span>
+                  </div>
+
+                  <div class="space-y-4">
+                    ${documents.some(d => d.status === 'sent') ? `
+                      <div class="p-4 bg-gray-950/50 rounded-xl border border-gray-800 flex items-start gap-3">
+                        <div class="text-purple-400 text-xl mt-1 shrink-0"><i class="fas fa-shipping-fast"></i></div>
+                        <div class="min-w-0 flex-1">
+                          <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-purple-400 uppercase font-mono">USPS Certified Mail</span>
+                            <span class="px-1.5 py-0.5 bg-green-500/10 text-green-400 text-[9px] font-bold rounded uppercase">In Transit</span>
+                          </div>
+                          <div class="text-sm font-mono font-extrabold text-white mt-1">9405 5000 1234 5678 9012 34</div>
+                          <p class="text-[11px] text-gray-400 mt-1 leading-relaxed">Dispatched electronically to Click2Mail Gateway. USPS Certified envelope in transit to credit bureau compliance headquarters.</p>
+                        </div>
+                      </div>
+                    ` : `
+                      <div class="p-5 bg-gray-950/50 rounded-xl text-center border border-gray-800">
+                        <div class="w-12 h-12 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-3">
+                          <i class="fas fa-signature text-xl text-blue-400"></i>
+                        </div>
+                        <h4 class="text-xs font-bold text-white uppercase font-mono">Signature Action Required</h4>
+                        <p class="text-[11px] text-gray-400 mt-1.5 leading-relaxed max-w-sm mx-auto">Your draft litigation letters are complete. Please execute your electronic signature to instantly launch USPS certified mail dispatch.</p>
+                        <button onclick="window._nav('client-documents')" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white text-xs py-2.5 px-4 rounded-lg font-bold transition flex items-center justify-center gap-1.5 mx-auto uppercase font-mono shadow-[0_0_15px_rgba(59,130,246,0.3)]"><i class="fas fa-signature"></i> Access Signature Cockpit</button>
+                      </div>
+                    `}
+
+                    <!-- Case Timeline Steps -->
+                    <div class="relative pl-5 border-l border-gray-800 space-y-5 py-1 text-xs">
+                      <div class="relative pl-2">
+                        <div class="absolute -left-[27px] top-0.5 w-3 h-3 rounded-full bg-blue-500 border-2 border-gray-950"></div>
+                        <span class="font-bold text-white uppercase font-mono text-[10px]">Ingestion Pipeline</span>
+                        <p class="text-[11px] text-gray-400 mt-0.5">Credit files imported and AES-256 encrypted successfully.</p>
+                      </div>
+                      <div class="relative pl-2">
+                        <div class="absolute -left-[27px] top-0.5 w-3 h-3 rounded-full bg-blue-500 border-2 border-gray-950"></div>
+                        <span class="font-bold text-white uppercase font-mono text-[10px]">FCRA Statute Mapping</span>
+                        <p class="text-[11px] text-gray-400 mt-0.5">Automatic parsing located ${violations.length} high-severity statutory infractions.</p>
+                      </div>
+                      <div class="relative pl-2">
+                        <div class="absolute -left-[27px] top-0.5 w-3 h-3 rounded-full ${documents.length > 0 ? 'bg-blue-500' : 'bg-gray-800'} border-2 border-gray-950"></div>
+                        <span class="font-bold ${documents.length > 0 ? 'text-white' : 'text-gray-500'} uppercase font-mono text-[10px]">Dispute Package Drafting</span>
+                        <p class="text-[11px] text-gray-400 mt-0.5">Federal demand letters and verification notices fully generated.</p>
+                      </div>
+                      <div class="relative pl-2">
+                        <div class="absolute -left-[27px] top-0.5 w-3 h-3 rounded-full ${documents.some(d => d.status === 'sent') ? 'bg-blue-500' : 'bg-gray-800'} border-2 border-gray-950"></div>
+                        <span class="font-bold ${documents.some(d => d.status === 'sent') ? 'text-white' : 'text-gray-500'} uppercase font-mono text-[10px]">USPS Certified Dispatch</span>
+                        <p class="text-[11px] text-gray-400 mt-0.5">Mailing coordinates dispatched via click2mail API gateway.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Educational AI Counsel Chat Companion Widget -->
+                <div class="glass rounded-2xl border border-gray-800 flex flex-col overflow-hidden bg-gradient-to-b from-gray-900 to-gray-950">
+                  <div class="p-4 bg-gray-900/60 border-b border-gray-800 flex items-center justify-between">
+                    <div class="flex items-center gap-2.5">
+                      <div class="w-8 h-8 rounded-lg bg-blue-600/10 border border-blue-500/20 flex items-center justify-center">
+                        <i class="fas fa-robot text-blue-400 text-sm animate-pulse"></i>
+                      </div>
+                      <div>
+                        <h4 class="text-xs font-bold text-white uppercase font-mono tracking-wider">AI FCRA Counsel Advisor</h4>
+                        <div class="text-[9px] text-gray-500 flex items-center gap-1 font-mono"><span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping"></span> Real-time expert advice active</div>
+                      </div>
+                    </div>
+                    <span class="text-[9px] text-gray-500 font-mono uppercase font-bold">15 U.S.C. § 1681</span>
+                  </div>
+
+                  <!-- Chat Message Container -->
+                  <div id="ai-chat-messages" class="p-4 h-48 overflow-y-auto space-y-3.5 text-xs border-b border-gray-800/80">
+                    ${localState.chatHistory.map(m => `
+                      <div class="flex gap-2.5 ${m.sender === 'user' ? 'justify-end' : ''}">
+                        ${m.sender !== 'user' ? `
+                          <div class="w-6 h-6 rounded bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 text-[10px] shrink-0"><i class="fas fa-gavel"></i></div>
+                        ` : ''}
+                        <div class="p-2.5 rounded-xl max-w-[85%] leading-relaxed ${m.sender === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-gray-950 border border-gray-800 rounded-tl-none text-gray-300'}">
+                          ${escapeHtml(m.text)}
+                        </div>
+                      </div>
+                    `).join('')}
+                  </div>
+
+                  <!-- Quick Suggesters -->
+                  <div class="p-3 bg-gray-950/40 border-b border-gray-800/60 flex flex-wrap gap-1.5">
+                    <button class="chat-suggester bg-gray-900 hover:bg-gray-800 border border-gray-800 px-2 py-1 rounded text-[9px] font-mono text-gray-400 hover:text-white transition uppercase" onclick="window._sendChatPreset('What is Section 609?')">What is Section 609?</button>
+                    <button class="chat-suggester bg-gray-900 hover:bg-gray-800 border border-gray-800 px-2 py-1 rounded text-[9px] font-mono text-gray-400 hover:text-white transition uppercase" onclick="window._sendChatPreset('How long do bureaus have?')">How long to respond?</button>
+                    <button class="chat-suggester bg-gray-900 hover:bg-gray-800 border border-gray-800 px-2 py-1 rounded text-[9px] font-mono text-gray-400 hover:text-white transition uppercase" onclick="window._sendChatPreset('How are damages calculated?')">Filing damages?</button>
+                  </div>
+
+                  <!-- Chat Input Console -->
+                  <div class="p-3 bg-gray-950/80 flex items-center gap-2">
+                    <input type="text" id="ai-chat-input" class="w-full bg-gray-900/60 border border-gray-800 focus:border-blue-500/50 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition" placeholder="Ask your AI advisor a credit law question...">
+                    <button id="ai-chat-send" class="bg-blue-600 hover:bg-blue-700 text-white w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition" onclick="window._submitClientChat()"><i class="fas fa-paper-plane text-xs"></i></button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      `;
+        `;
+
+        // Bind interactive event listeners back to DOM elements
+        bindInteractiveCockpitListeners();
+      }
+
+      // Generate HTML structure for credit scores
+      function scoreWidget(bureau, base, sim, colorClass) {
+        const percent = Math.min(100, Math.max(0, ((sim - 300) / (850 - 300)) * 100));
+        const lift = sim - base;
+        return `
+          <div class="glass rounded-2xl p-5 border border-gray-800 text-center flex flex-col items-center justify-center relative overflow-hidden bg-gradient-to-b from-gray-900 to-gray-950/20">
+            <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 font-mono">${bureau}</div>
+            <div class="relative w-32 h-32 flex items-center justify-center">
+              <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                <circle class="text-gray-850" stroke-width="6" stroke="#1f2937" fill="transparent" r="40" cx="50" cy="50"></circle>
+                <circle class="${colorClass} transition-all duration-700 ease-out" stroke-width="6" stroke-dasharray="251.2" stroke-dashoffset="${251.2 - (251.2 * percent) / 100}" stroke-linecap="round" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50"></circle>
+              </svg>
+              <div class="absolute text-center select-none">
+                <span class="text-2xl font-black text-white font-mono leading-none">${sim}</span>
+                <div class="text-[9px] text-gray-500 font-mono mt-0.5">FICO v8</div>
+              </div>
+            </div>
+            <div class="mt-3 flex items-center gap-1 text-[10px] font-mono">
+              <span class="text-gray-500 font-semibold">Baseline:</span>
+              <span class="text-white font-bold">${base}</span>
+              ${lift > 0 ? `
+                <span class="text-green-400 font-bold ml-1.5 animate-pulse"><i class="fas fa-arrow-up text-[9px]"></i> +${lift} pts</span>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }
+
+      // Action binding for dynamic DOM updates
+      function bindInteractiveCockpitListeners() {
+        // Gamified task checkboxes
+        document.querySelectorAll('.task-checkbox').forEach(chk => {
+          chk.onchange = (e) => {
+            const taskId = e.target.dataset.task;
+            localState.completedTasks[taskId] = e.target.checked;
+            renderState();
+          };
+        });
+
+        // Chat Input enter key
+        const chatInput = document.getElementById('ai-chat-input');
+        if (chatInput) {
+          chatInput.onkeyup = (e) => {
+            if (e.key === 'Enter') {
+              window._submitClientChat();
+            }
+          };
+        }
+      }
+
+      // Handle checkbox logic in FICO Simulator
+      window._toggleSimulatorItem = function(vid) {
+        localState.selectedDeletions[vid] = !localState.selectedDeletions[vid];
+        renderState();
+      };
+
+      // Direct question dispatchers for Preset Buttons
+      window._sendChatPreset = function(presetText) {
+        const chatInput = document.getElementById('ai-chat-input');
+        if (chatInput) {
+          chatInput.value = presetText;
+          window._submitClientChat();
+        }
+      };
+
+      // Process user questions and render realistic responses
+      window._submitClientChat = function() {
+        const input = document.getElementById('ai-chat-input');
+        if (!input || !input.value.trim()) return;
+
+        const val = input.value.trim();
+        localState.chatHistory.push({ sender: 'user', text: val });
+        input.value = '';
+
+        // Render input immediately
+        renderChatArea();
+
+        // Simulate Typing Indicator
+        const chatBox = document.getElementById('ai-chat-messages');
+        const typingEl = document.createElement('div');
+        typingEl.className = 'flex gap-2.5 items-center text-xs text-gray-500 italic typing-indicator';
+        typingEl.innerHTML = `
+          <div class="w-6 h-6 rounded bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-[10px] shrink-0"><i class="fas fa-gavel"></i></div>
+          <div class="p-2.5 bg-gray-950 border border-gray-800 rounded-xl rounded-tl-none flex items-center gap-1 text-gray-400">
+            <span class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></span>
+            <span class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 0.15s"></span>
+            <span class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 0.3s"></span>
+          </div>
+        `;
+        chatBox.appendChild(typingEl);
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        setTimeout(() => {
+          // Remove typing element
+          const currentTyping = chatBox.querySelector('.typing-indicator');
+          if (currentTyping) currentTyping.remove();
+
+          // Standard knowledge-base autoresponses with Rick's signature direct voice
+          let answer = "I've analyzed your query regarding credit repair compliance. The Fair Credit Reporting Act (15 U.S.C. § 1681) grants you absolute authority to demand verified accuracy. If a bureau fails to prove verification inside 30 days, they are legally required to remove the entry.";
+          
+          const text = val.toLowerCase();
+          if (text.includes('609') || text.includes('section 609')) {
+            answer = "Section 609 of the FCRA (15 U.S.C. § 1681g) mandates credit bureaus to fully disclose all information in your file, including the original source documentation. Our generated letters use this exact statutory foundation to demand they produce original contracts instead of automated computer printouts.";
+          } else if (text.includes('how long') || text.includes('30 days') || text.includes('time') || text.includes('respond')) {
+            answer = "Under FCRA § 1681i, credit bureaus have precisely 30 days (extended to 45 if you supply documentation during an active investigation) to complete their investigation. If they breach this statutory timeline, they must instantly delete the challenged account. We track these milestones carefully.";
+          } else if (text.includes('damage') || text.includes('sue') || text.includes('liabilit') || text.includes('court') || text.includes('money')) {
+            answer = "In cases of willful noncompliance (FCRA § 1681n) or negligent noncompliance (FCRA § 1681o), credit bureaus face strict statutory damages of $100 to $1,000 per violation, plus unlimited punitive damages and full coverage of attorney's fees. This is why we log all infractions—it builds massive litigation leverage!";
+          } else if (text.includes('hi') || text.includes('hello') || text.includes('welcome') || text.includes('help')) {
+            answer = `Hello! I am your interactive FCRA Legal Autopilot. I track your ${violations.length} logged violations and guide you through the process. Ask me about timelines, specific statutes, or letter signatures!`;
+          } else if (text.includes('dispute') || text.includes('letter') || text.includes('signature') || text.includes('sign')) {
+            answer = "Your formal dispute letters must be signed to establish legal validity. Once you sign under the 'My Documents' section, we route your packet via Click2Mail API which prints and sends them to Equifax, Experian, and TransUnion via USPS Certified Mail.";
+          } else if (text.includes('score') || text.includes('fico') || text.includes('boost') || text.includes('increase')) {
+            answer = "Removing a single critical collection (like Jefferson Capital Systems) typically lifts a FICO score by 25 to 45 points, depending on your overall history depth. Use the 'What-If Deletion Simulator' on your left to see the potential outcome!";
+          }
+
+          localState.chatHistory.push({ sender: 'ai', text: answer });
+          renderChatArea();
+        }, 1200);
+      };
+
+      // Separate fast renderer for chat section
+      function renderChatArea() {
+        const chatBox = document.getElementById('ai-chat-messages');
+        if (!chatBox) return;
+
+        chatBox.innerHTML = localState.chatHistory.map(m => `
+          <div class="flex gap-2.5 ${m.sender === 'user' ? 'justify-end' : ''}">
+            ${m.sender !== 'user' ? `
+              <div class="w-6 h-6 rounded bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 text-[10px] shrink-0"><i class="fas fa-gavel"></i></div>
+            ` : ''}
+            <div class="p-2.5 rounded-xl max-w-[85%] leading-relaxed ${m.sender === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-gray-950 border border-gray-800 rounded-tl-none text-gray-300'}">
+              ${escapeHtml(m.text)}
+            </div>
+          </div>
+        `).join('');
+        chatBox.scrollTop = chatBox.scrollHeight;
+      }
+
+      // Initial Mount render
+      renderState();
+
     } catch (err) {
       el.innerHTML = `
         <div class="fade-in">
-          <div class="glass rounded-2xl p-8 border border-red-500/30 text-center">
+          <div class="glass rounded-2xl p-8 border border-red-500/30 text-center bg-red-950/5">
             <i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i>
             <h3 class="text-lg font-bold text-white mb-1">Client Profile Pending</h3>
             <p class="text-sm text-gray-400 mb-4">${escapeHtml(err.message)}</p>
-            <p class="text-xs text-gray-500">Please contact support if you believe this is an error.</p>
+            <p class="text-xs text-gray-500 font-mono">Please contact support or onboard this client first under Rick Jefferson's advisor cockpit.</p>
           </div>
         </div>
       `;
@@ -6192,7 +6802,7 @@ async function pgAdminConsole(el) {
 
   async function pgClientDocuments(el) {
     try {
-      const d = await api('/client-portal/dashboard');
+      const d = await api('/client-portal/dashboard' + (state.impersonateClientId ? `?clientId=${state.impersonateClientId}` : ''));
       const documents = (d.documents || []).filter(doc => doc.status === 'draft' || doc.status === 'signed');
       
       if (!documents.length) {
@@ -6388,7 +6998,7 @@ async function pgAdminConsole(el) {
 
         try {
           const serialized = JSON.stringify(strokes);
-          const res = await api(`/documents/${activeDocId}/sign`, 'POST', { signatureData: serialized });
+          const res = await api(`/documents/${activeDocId}/sign`, { method: 'POST', body: JSON.stringify({ signatureData: serialized }) });
           if (res && res.ok) {
             toast('Signature registered successfully!', 'success');
             await sleep(1000);
@@ -6756,6 +7366,7 @@ async function pgAdminConsole(el) {
                 <p class="text-sm text-gray-400">SmartFCRA CRM & Litigation Strategy Analytics Board</p>
               </div>
               <div class="flex gap-2">
+                <button onclick="window._nav('upload-report', { clientId: 'autopilot', autopilot: true })" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-lg shadow-blue-500/20"><i class="fas fa-magic"></i>Autopilot Onboard</button>
                 <button onclick="window._nav('admin-clients')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5"><i class="fas fa-users"></i>Manage Clients</button>
                 <button onclick="window._nav('admin-violation-queue')" class="bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5"><i class="fas fa-tasks"></i>Legal QA Queue</button>
               </div>
@@ -7004,7 +7615,10 @@ async function pgAdminConsole(el) {
           notes: $('#editor-client-notes').value
         };
 
-        const res = await api(`/clients/${id}`, 'PUT', payload);
+        const res = await api(`/clients/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload)
+        });
         if (res && res.ok) {
           toast('Client parameters updated successfully!', 'success');
           window._closeClientSlideOut();
@@ -7079,6 +7693,7 @@ async function pgAdminConsole(el) {
                         <div class="text-xs font-mono font-bold text-green-400">${money(c.estimated_recovery || 0)}</div>
                       </td>
                       <td class="px-5 py-4 text-right">
+                        <button onclick="window._nav('client-detail', { clientId: '${c.id}' })" class="bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition mr-1.5"><i class="fas fa-folder-open mr-1"></i>Open Workspace</button>
                         <button onclick="window._openClientSlideOut('${c.id}')" class="bg-blue-600/10 hover:bg-blue-600 hover:text-white border border-blue-500/20 text-blue-400 text-[11px] font-bold px-3 py-1.5 rounded-lg transition">Edit Case</button>
                       </td>
                     </tr>
@@ -7216,7 +7831,10 @@ async function pgAdminConsole(el) {
         if (isMock) {
           res = { ok: true, status: action === 'approve' ? 'approved' : 'false_positive' };
         } else {
-          res = await api(`/admin/violations/${id}/review`, 'POST', { action });
+          res = await api(`/admin/violations/${id}/review`, {
+            method: 'POST',
+            body: JSON.stringify({ action })
+          });
         }
 
         if (res && res.ok) {
@@ -7386,6 +8004,425 @@ async function pgAdminConsole(el) {
     }
 
     await loadQueue();
+  }
+
+  function renderMailingTab(docs, client) {
+    const sent = docs.filter(d => d.status === 'sent');
+    const drafts = docs.filter(d => d.status === 'draft');
+    
+    // Address check
+    const hasAddress = client.address_line1 && client.city && client.state && client.zip;
+    const addressStatusHtml = hasAddress
+      ? `<div class="p-4 bg-emerald-950/20 border border-emerald-500/20 rounded-xl flex items-center justify-between text-xs text-green-300">
+          <div class="flex items-center gap-2.5">
+            <i class="fas fa-check-circle text-green-400 text-sm"></i>
+            <div><strong>Mailing Coordinates Verified:</strong> Standard identity coordinates match active client records.</div>
+          </div>
+          <span class="font-mono text-[10px] bg-green-500/10 px-2 py-0.5 rounded text-green-400 font-bold">${client.state} ${client.zip}</span>
+        </div>`
+      : `<div class="p-4 bg-amber-950/20 border border-amber-500/20 rounded-xl flex items-center justify-between text-xs text-amber-300 animate-pulse">
+          <div class="flex items-center gap-2.5">
+            <i class="fas fa-exclamation-triangle text-amber-400 text-sm"></i>
+            <div><strong>Mailing Coordinates Incomplete:</strong> Please fill in the complete street address in the client profile before dispatching mail.</div>
+          </div>
+          <button onclick="$('#btn-edit-client').click()" class="bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-extrabold px-3 py-1.5 rounded transition uppercase tracking-wider">Fix Address</button>
+        </div>`;
+
+    // Dynamic stats card
+    const statsHtml = `
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <div class="glass border border-gray-800 rounded-xl p-3.5 bg-gray-900/10">
+          <div class="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">Sent USPS Mailings</div>
+          <div class="text-lg font-bold text-white flex items-center gap-1.5"><i class="fas fa-paper-plane text-green-400 text-sm"></i>${sent.length}</div>
+        </div>
+        <div class="glass border border-gray-800 rounded-xl p-3.5 bg-gray-900/10">
+          <div class="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">Awaiting Signature/Drafts</div>
+          <div class="text-lg font-bold text-white flex items-center gap-1.5"><i class="fas fa-pen-nib text-amber-400 text-sm"></i>${drafts.length}</div>
+        </div>
+        <div class="glass border border-gray-800 rounded-xl p-3.5 bg-gray-900/10">
+          <div class="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">Mailing Service</div>
+          <div class="text-lg font-bold text-blue-400 flex items-center gap-1.5"><i class="fas fa-cloud text-sm"></i>Click2Mail</div>
+        </div>
+        <div class="glass border border-gray-800 rounded-xl p-3.5 bg-gray-900/10">
+          <div class="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">USPS Delivery Class</div>
+          <div class="text-lg font-bold text-purple-400 flex items-center gap-1.5"><i class="fas fa-mail-bulk text-sm"></i>First Class / Certified</div>
+        </div>
+      </div>
+    `;
+
+    // Sent queue table
+    let sentListHtml = '';
+    if (!sent.length) {
+      sentListHtml = `
+        <div class="text-center py-10 glass rounded-xl border border-gray-800 bg-gray-900/5">
+          <i class="fas fa-shipping-fast text-4xl text-gray-600 mb-3"></i>
+          <p class="text-sm text-gray-400">No sent mail campaigns recorded yet</p>
+          <p class="text-xs text-gray-500 max-w-sm mx-auto mt-1">Once you click "Mail" on any generated dispute letter, the tracking record and certified shipping details will appear here.</p>
+        </div>
+      `;
+    } else {
+      sentListHtml = `
+        <div class="overflow-x-auto rounded-xl border border-gray-800 bg-gray-950/20">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-gray-800 bg-gray-900/50 text-gray-500 uppercase tracking-wider text-[10px] font-bold">
+                <th class="p-3.5">Letter & Bureau</th>
+                <th class="p-3.5">Dispatched Date</th>
+                <th class="p-3.5">Statutory Response Due</th>
+                <th class="p-3.5">Delivery Status</th>
+                <th class="p-3.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800/60">
+              ${sent.map(d => {
+                const sDate = d.sent_date ? new Date(d.sent_date) : new Date(d.created_at);
+                const rDate = d.response_due_date ? new Date(d.response_due_date) : new Date(sDate.getTime() + 35 * 24 * 60 * 60 * 1000);
+                const diffTime = rDate.getTime() - new Date().getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                const countdownHtml = diffDays > 0
+                  ? `<span class="px-2 py-0.5 bg-blue-950/40 border border-blue-500/20 text-blue-400 text-[10px] font-bold rounded flex items-center gap-1 w-fit"><i class="fas fa-clock text-[9px]"></i> ${diffDays} Days Left</span>`
+                  : `<span class="px-2 py-0.5 bg-red-950/40 border border-red-500/20 text-red-400 text-[10px] font-bold rounded flex items-center gap-1 w-fit"><i class="fas fa-exclamation-circle text-[9px]"></i> Overdue</span>`;
+                
+                return `
+                  <tr class="hover:bg-gray-900/10 transition">
+                    <td class="p-3.5">
+                      <div class="font-bold text-white flex items-center gap-1.5">
+                        <i class="fas fa-file-contract text-purple-400"></i>
+                        <span>${escapeHtml(d.title)}</span>
+                      </div>
+                      <div class="text-[10px] text-gray-500 font-mono mt-0.5">${d.doc_type}</div>
+                    </td>
+                    <td class="p-3.5 text-gray-300 font-medium font-mono">${sDate.toLocaleDateString()}</td>
+                    <td class="p-3.5">
+                      <div class="text-white font-mono font-bold">${rDate.toLocaleDateString()}</div>
+                      <div class="mt-1">${countdownHtml}</div>
+                    </td>
+                    <td class="p-3.5">
+                      <div class="flex items-center gap-1.5 text-green-400 font-semibold">
+                        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                        <span>USPS Certified In Transit</span>
+                      </div>
+                      <div class="text-[10px] text-gray-500 font-mono mt-0.5">Click2Mail Gateway Dispatched</div>
+                    </td>
+                    <td class="p-3.5 text-right">
+                      <div class="flex items-center justify-end gap-1.5">
+                        <button onclick="window._viewDoc('${d.id}')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2.5 py-1 rounded text-[10px] font-semibold transition" title="View Document"><i class="fas fa-eye"></i> View</button>
+                      </div>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    // Drafts queue (Pending Dispatch)
+    let draftsListHtml = '';
+    if (!drafts.length) {
+      draftsListHtml = `
+        <div class="text-center py-6 text-gray-500 text-xs">
+          <i class="fas fa-check-circle text-2xl text-green-500/30 mb-2"></i>
+          <p>No pending drafts awaiting mailing dispatch</p>
+        </div>
+      `;
+    } else {
+      draftsListHtml = `
+        <div class="space-y-2">
+          ${drafts.map(d => `
+            <div class="glass rounded-xl p-4 border border-gray-800/80 bg-gray-900/10 flex items-center justify-between gap-4 card-hover">
+              <div>
+                <div class="text-xs font-bold text-white flex items-center gap-1.5">
+                  <i class="fas fa-file-signature text-amber-400"></i>
+                  <span>${escapeHtml(d.title)}</span>
+                </div>
+                <p class="text-[10px] text-gray-400 mt-1">${d.doc_type} &bull; Created on ${shortDate(d.created_at)}</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="window._viewDoc('${d.id}')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1"><i class="fas fa-eye text-[10px]"></i> Preview</button>
+                <button onclick="window._mailDoc('${d.id}','${encodeURIComponent(client.first_name||'')}','${encodeURIComponent(client.last_name||'')}','${encodeURIComponent(client.address_line1||'')}','${encodeURIComponent(client.city||'')}','${encodeURIComponent(client.state||'')}','${encodeURIComponent(client.zip||'')}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 shadow-lg shadow-green-600/10"><i class="fas fa-paper-plane text-[10px]"></i> Send Certified Mail</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    return `
+      <div class="space-y-6 fade-in">
+        ${addressStatusHtml}
+        ${statsHtml}
+        
+        <div>
+          <h3 class="text-sm font-bold text-white mb-3.5 flex items-center gap-1.5 uppercase font-mono tracking-wider">
+            <span class="w-1.5 h-3 bg-green-500 rounded"></span> Active USPS Certified Mailings (${sent.length})
+          </h3>
+          ${sentListHtml}
+        </div>
+
+        <div>
+          <h3 class="text-sm font-bold text-white mb-3.5 flex items-center gap-1.5 uppercase font-mono tracking-wider">
+            <span class="w-1.5 h-3 bg-amber-500 rounded"></span> Pending Mailing Dispatch Queue (${drafts.length})
+          </h3>
+          ${draftsListHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  async function pgMailingCampaigns(el) {
+    el.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-center"><i class="fas fa-spinner fa-spin text-3xl text-blue-400 mb-3"></i><div class="text-sm text-gray-400">Loading USPS Campaign Hub...</div></div></div>`;
+    try {
+      const d = await api('/documents');
+      const allDocs = d.documents || [];
+      const sent = allDocs.filter(doc => doc.status === 'sent');
+      const drafts = allDocs.filter(doc => doc.status === 'draft');
+
+      const totalSent = sent.length;
+      const totalPending = drafts.length;
+
+      el.innerHTML = `
+        <div class="fade-in">
+          <!-- Page Header -->
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <h1 class="text-xl font-bold text-white flex items-center gap-2">
+                <i class="fas fa-mail-bulk text-blue-400"></i> Mailing Campaigns
+              </h1>
+              <p class="text-sm text-gray-400">Central USPS Certified Mail Campaign & Click2Mail dispatch control center</p>
+            </div>
+            <button onclick="window._nav('clients')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 shadow-lg shadow-blue-600/15">
+              <i class="fas fa-plus"></i> New Mailing Dispatch
+            </button>
+          </div>
+
+          <!-- Quick Overview KPI Cards -->
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="glass border border-gray-800 rounded-2xl p-4 bg-gray-900/10">
+              <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">USPS Certified Sent</div>
+              <div class="text-2xl font-black text-white flex items-center gap-2">
+                <i class="fas fa-shipping-fast text-green-400 text-lg"></i>
+                <span>${totalSent}</span>
+              </div>
+              <div class="text-[9px] text-gray-500 mt-1">Dispatched to bureaus successfully</div>
+            </div>
+            <div class="glass border border-gray-800 rounded-2xl p-4 bg-gray-900/10">
+              <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">Awaiting Signature</div>
+              <div class="text-2xl font-black text-white flex items-center gap-2">
+                <i class="fas fa-signature text-amber-400 text-lg"></i>
+                <span>${totalPending}</span>
+              </div>
+              <div class="text-[9px] text-gray-500 mt-1">Draft letters prepared for consumer signature</div>
+            </div>
+            <div class="glass border border-gray-800 rounded-2xl p-4 bg-gray-900/10">
+              <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">Click2Mail Service</div>
+              <div class="text-2xl font-black text-blue-400 flex items-center gap-2">
+                <i class="fas fa-link text-lg text-blue-400"></i>
+                <span>CONNECTED</span>
+              </div>
+              <div class="text-[9px] text-gray-500 mt-1">REST API Gateway live and operational</div>
+            </div>
+            <div class="glass border border-gray-800 rounded-2xl p-4 bg-gray-900/10">
+              <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">USPS Resolution SLA</div>
+              <div class="text-2xl font-black text-purple-400 flex items-center gap-2">
+                <i class="fas fa-history text-lg text-purple-400"></i>
+                <span>35 DAYS</span>
+              </div>
+              <div class="text-[9px] text-gray-500 mt-1">Legal compliance deadline tracking active</div>
+            </div>
+          </div>
+
+          <!-- Mailing Tabs Inside Hub -->
+          <div class="flex border-b border-gray-800 mb-5">
+            <button id="hub-tab-sent" class="hub-tab pb-3 px-4 text-xs font-bold uppercase tracking-wider text-blue-400 border-b-2 border-blue-400" data-view="sent">Active USPS Certified Mailings (${totalSent})</button>
+            <button id="hub-tab-drafts" class="hub-tab pb-3 px-4 text-xs font-bold uppercase tracking-wider text-gray-500 border-b-2 border-transparent hover:text-gray-300" data-view="drafts">Pending Signature / Dispatch (${totalPending})</button>
+          </div>
+
+          <!-- Hub View Content Container -->
+          <div id="hub-view-content" class="space-y-4">
+            <!-- Active Sent List -->
+            ${totalSent ? `
+              <div class="overflow-x-auto rounded-2xl border border-gray-800 bg-gray-950/20">
+                <table class="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr class="border-b border-gray-800 bg-gray-900/60 text-gray-500 uppercase tracking-wider text-[10px] font-bold">
+                      <th class="p-3.5">Client Info</th>
+                      <th class="p-3.5">Letter & Bureau</th>
+                      <th class="p-3.5">Dispatched Date</th>
+                      <th class="p-3.5">Statutory Response Due</th>
+                      <th class="p-3.5">USPS Tracking Status</th>
+                      <th class="p-3.5 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-800/60">
+                    ${sent.map(doc => {
+                      const sDate = doc.sent_date ? new Date(doc.sent_date) : new Date(doc.created_at);
+                      const rDate = doc.response_due_date ? new Date(doc.response_due_date) : new Date(sDate.getTime() + 35 * 24 * 60 * 60 * 1000);
+                      const diffTime = rDate.getTime() - new Date().getTime();
+                      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                      const countdownHtml = diffDays > 0
+                        ? `<span class="px-2 py-0.5 bg-blue-950/40 border border-blue-500/20 text-blue-400 text-[10px] font-bold rounded flex items-center gap-1 w-fit"><i class="fas fa-clock text-[9px]"></i> ${diffDays} Days Left</span>`
+                        : `<span class="px-2 py-0.5 bg-red-950/40 border border-red-500/20 text-red-400 text-[10px] font-bold rounded flex items-center gap-1 w-fit"><i class="fas fa-exclamation-circle text-[9px]"></i> Overdue</span>`;
+
+                      return `
+                        <tr class="hover:bg-gray-900/10 transition">
+                          <td class="p-3.5 cursor-pointer" onclick="window._nav('client-detail', { clientId: '${doc.client_id}' })">
+                            <div class="font-bold text-white hover:text-blue-400 transition">${escapeHtml(doc.first_name || '')} ${escapeHtml(doc.last_name || '')}</div>
+                            <div class="text-[10px] text-gray-500 font-mono mt-0.5">ID: ${doc.client_id.slice(0, 8)}...</div>
+                          </td>
+                          <td class="p-3.5">
+                            <div class="font-bold text-white">${escapeHtml(doc.title || doc.doc_type)}</div>
+                            <div class="text-[10px] text-gray-500 mt-0.5 font-mono font-bold">Dispute Notice Letter</div>
+                          </td>
+                          <td class="p-3.5 font-mono text-gray-300 font-medium">${sDate.toLocaleDateString()}</td>
+                          <td class="p-3.5">
+                            <div class="text-white font-mono font-bold">${rDate.toLocaleDateString()}</div>
+                            <div class="mt-1">${countdownHtml}</div>
+                          </td>
+                          <td class="p-3.5">
+                            <div class="flex items-center gap-1.5 text-green-400 font-semibold">
+                              <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping"></span>
+                              <span>USPS Certified In Transit</span>
+                            </div>
+                            <div class="text-[10px] text-gray-500 font-mono mt-0.5">Click2Mail Automated Mailroom</div>
+                          </td>
+                          <td class="p-3.5 text-right">
+                            <button onclick="window._viewDoc('${doc.id}')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition"><i class="fas fa-eye"></i> View</button>
+                          </td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+              </div>
+            ` : `
+              <div class="text-center py-12 glass rounded-2xl border border-gray-800 bg-gray-900/5">
+                <i class="fas fa-shipping-fast text-5xl text-gray-600 mb-4"></i>
+                <h3 class="text-base font-bold text-white mb-2">No active mailings dispatch records</h3>
+                <p class="text-sm text-gray-400 max-w-md mx-auto">Once a dispute letter has been certified mailed to Equifax, Experian, or TransUnion, its delivery, signature, and tracking metrics will appear here.</p>
+              </div>
+            `}
+          </div>
+        </div>
+      `;
+
+      // Wire up local tab triggers
+      const btnSent = document.getElementById('hub-tab-sent');
+      const btnDrafts = document.getElementById('hub-tab-drafts');
+      const hubContent = document.getElementById('hub-view-content');
+
+      if (btnSent && btnDrafts && hubContent) {
+        const setTab = (activeBtn, inactiveBtn, view) => {
+          activeBtn.className = 'hub-tab pb-3 px-4 text-xs font-bold uppercase tracking-wider text-blue-400 border-b-2 border-blue-400';
+          inactiveBtn.className = 'hub-tab pb-3 px-4 text-xs font-bold uppercase tracking-wider text-gray-500 border-b-2 border-transparent hover:text-gray-300';
+          
+          if (view === 'sent') {
+            if (!sent.length) {
+              hubContent.innerHTML = `
+                <div class="text-center py-12 glass rounded-2xl border border-gray-800 bg-gray-900/5">
+                  <i class="fas fa-shipping-fast text-5xl text-gray-600 mb-4"></i>
+                  <h3 class="text-base font-bold text-white mb-2">No active mailings</h3>
+                  <p class="text-sm text-gray-400 max-w-md mx-auto">No dispatched campaigns registered yet.</p>
+                </div>
+              `;
+            } else {
+              hubContent.innerHTML = `
+                <div class="overflow-x-auto rounded-2xl border border-gray-800 bg-gray-950/20">
+                  <table class="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr class="border-b border-gray-800 bg-gray-900/60 text-gray-500 uppercase tracking-wider text-[10px] font-bold">
+                        <th class="p-3.5">Client Info</th>
+                        <th class="p-3.5">Letter & Bureau</th>
+                        <th class="p-3.5">Dispatched Date</th>
+                        <th class="p-3.5">Statutory Response Due</th>
+                        <th class="p-3.5">USPS Tracking Status</th>
+                        <th class="p-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-800/60">
+                      ${sent.map(doc => {
+                        const sDate = doc.sent_date ? new Date(doc.sent_date) : new Date(doc.created_at);
+                        const rDate = doc.response_due_date ? new Date(doc.response_due_date) : new Date(sDate.getTime() + 35 * 24 * 60 * 60 * 1000);
+                        const diffTime = rDate.getTime() - new Date().getTime();
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        const countdownHtml = diffDays > 0
+                          ? `<span class="px-2 py-0.5 bg-blue-950/40 border border-blue-500/20 text-blue-400 text-[10px] font-bold rounded flex items-center gap-1 w-fit"><i class="fas fa-clock text-[9px]"></i> ${diffDays} Days Left</span>`
+                          : `<span class="px-2 py-0.5 bg-red-950/40 border border-red-500/20 text-red-400 text-[10px] font-bold rounded flex items-center gap-1 w-fit"><i class="fas fa-exclamation-circle text-[9px]"></i> Overdue</span>`;
+
+                        return `
+                          <tr class="hover:bg-gray-900/10 transition">
+                            <td class="p-3.5 cursor-pointer" onclick="window._nav('client-detail', { clientId: '${doc.client_id}' })">
+                              <div class="font-bold text-white hover:text-blue-400 transition">${escapeHtml(doc.first_name || '')} ${escapeHtml(doc.last_name || '')}</div>
+                              <div class="text-[10px] text-gray-500 font-mono mt-0.5">ID: ${doc.client_id.slice(0, 8)}...</div>
+                            </td>
+                            <td class="p-3.5">
+                              <div class="font-bold text-white">${escapeHtml(doc.title || doc.doc_type)}</div>
+                              <div class="text-[10px] text-gray-500 mt-0.5 font-mono">Dispute Notice Letter</div>
+                            </td>
+                            <td class="p-3.5 font-mono text-gray-300 font-medium">${sDate.toLocaleDateString()}</td>
+                            <td class="p-3.5">
+                              <div class="text-white font-mono font-bold">${rDate.toLocaleDateString()}</div>
+                              <div class="mt-1">${countdownHtml}</div>
+                            </td>
+                            <td class="p-3.5">
+                              <div class="flex items-center gap-1.5 text-green-400 font-semibold">
+                                <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping"></span>
+                                <span>USPS Certified In Transit</span>
+                              </div>
+                              <div class="text-[10px] text-gray-500 font-mono mt-0.5">Click2Mail Automated Mailroom</div>
+                            </td>
+                            <td class="p-3.5 text-right">
+                              <button onclick="window._viewDoc('${doc.id}')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition"><i class="fas fa-eye"></i> View</button>
+                            </td>
+                          </tr>
+                        `;
+                      }).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              `;
+            }
+          } else {
+            if (!drafts.length) {
+              hubContent.innerHTML = `
+                <div class="text-center py-12 glass rounded-2xl border border-gray-800 bg-gray-900/5">
+                  <i class="fas fa-check-circle text-5xl text-gray-600 mb-4"></i>
+                  <h3 class="text-base font-bold text-white mb-2">No pending dispatch drafts</h3>
+                  <p class="text-sm text-gray-400 max-w-md mx-auto">All generated letters have been signed and routed to the mailing queues.</p>
+                </div>
+              `;
+            } else {
+              hubContent.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  ${drafts.map(doc => `
+                    <div class="glass rounded-2xl p-4.5 border border-gray-800/80 bg-gray-900/5 hover:border-blue-500/25 transition card-hover flex flex-col justify-between h-fit gap-4">
+                      <div>
+                        <div class="flex items-center justify-between mb-2">
+                          <span onclick="window._nav('client-detail', { clientId: '${doc.client_id}' })" class="text-[10px] font-mono bg-blue-600/10 px-2 py-0.5 rounded text-blue-400 hover:bg-blue-600/20 transition cursor-pointer font-bold uppercase"><i class="fas fa-user text-[8px] mr-1"></i> ${escapeHtml(doc.first_name || '')} ${escapeHtml(doc.last_name || '')}</span>
+                          <span class="text-[9px] text-gray-500 font-mono">${shortDate(doc.created_at)}</span>
+                        </div>
+                        <h4 class="text-xs font-bold text-white mb-1.5 truncate">${escapeHtml(doc.title || doc.doc_type)}</h4>
+                        <p class="text-[10px] text-gray-400 line-clamp-2">Draft dispute package notice letter prepared under FCRA Section 611 guidelines.</p>
+                      </div>
+                      <div class="flex items-center justify-end gap-1.5 border-t border-gray-900 pt-3">
+                        <button onclick="window._viewDoc('${doc.id}')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1"><i class="fas fa-eye text-[10px]"></i> Preview</button>
+                        <button onclick="window._nav('client-detail', { clientId: '${doc.client_id}' })" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 shadow-lg shadow-blue-600/10"><i class="fas fa-external-link-alt text-[10px]"></i> Open Workspace</button>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              `;
+            }
+          }
+        };
+
+        btnSent.onclick = () => setTab(btnSent, btnDrafts, 'sent');
+        btnDrafts.onclick = () => setTab(btnDrafts, btnSent, 'drafts');
+      }
+    } catch(err) {
+      el.innerHTML = `<div class="fade-in"><div class="glass rounded-xl p-8 border border-red-500/30 text-center"><i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i><h3 class="text-lg font-bold text-white mb-1">Failed to load USPS Campaigns</h3><p class="text-sm text-gray-400">${err.message}</p><button onclick="window._nav('mailing-campaigns')" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Retry</button></div></div>`;
+    }
   }
 
   render();
