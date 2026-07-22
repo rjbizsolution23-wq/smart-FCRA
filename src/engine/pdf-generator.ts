@@ -279,11 +279,21 @@ function cleanTextForPDF(text: string): string {
   return processedLines.join('\n');
 }
 
+export interface CustomLetterhead {
+  orgName: string;
+  logoBase64?: string;      // Graphic corporate banner (Base64 PNG/JPEG)
+  headerText?: string;      // Custom top header text
+  customSubtext?: string;   // Secondary subtext/contact line
+  isHiredAdvocate?: boolean; // Toggles CROA/FCRA representation disclosure
+  repAgreementAttached?: boolean; // Appends verification of Power of Attorney
+}
+
 /**
  * Compiles a long text-based document template into a clean, premium, and multi-page PDF.
- * It uses Helvetica layout, a custom deep blue header band, and adds a custom footer on every page.
+ * It uses Helvetica layout, a custom deep blue header band or custom uploaded graphic letterhead banner, 
+ * and adds a custom footer on every page.
  */
-export function generatePDFFromText(title: string, text: string): Uint8Array {
+export function generatePDFFromText(title: string, text: string, customLetterhead?: CustomLetterhead): Uint8Array {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -295,7 +305,7 @@ export function generatePDFFromText(title: string, text: string): Uint8Array {
   const margin = 20;
   const contentWidth = pageWidth - 2 * margin;
 
-  let y = 55; // Start text below the header band
+  let y = customLetterhead?.logoBase64 ? 45 : 55; // Start text lower if we have a default banner
 
   const deepBlue = [0, 59, 143];      // #003B8F
   const darkGray = [11, 18, 32];      // #0B1220
@@ -314,7 +324,28 @@ export function generatePDFFromText(title: string, text: string): Uint8Array {
   };
 
   // Helper to draw the header on a page
-  const drawHeader = () => {
+  const drawHeader = (isFirstPage = false) => {
+    if (isFirstPage && customLetterhead?.logoBase64) {
+      try {
+        let cleanBase64 = customLetterhead.logoBase64;
+        if (cleanBase64.startsWith('data:image')) {
+          const match = cleanBase64.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/);
+          if (match) {
+            cleanBase64 = match[2];
+          }
+        }
+        // Draw the graphic letterhead banner beautifully
+        doc.addImage(cleanBase64, 'PNG', margin, 10, contentWidth, 25);
+      } catch (e) {
+        console.warn('Failed to render graphic logo, falling back to blue banner:', e);
+        drawFallbackHeader(title);
+      }
+    } else {
+      drawFallbackHeader(customLetterhead?.headerText || title);
+    }
+  };
+
+  const drawFallbackHeader = (headerTitle: string) => {
     setFillColor(deepBlue);
     doc.rect(0, 0, pageWidth, 40, 'F');
 
@@ -322,18 +353,30 @@ export function generatePDFFromText(title: string, text: string): Uint8Array {
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(14);
     doc.setTextColor(255, 255, 255);
-    doc.text(title.toUpperCase(), margin, 18);
+    doc.text(headerTitle.toUpperCase(), margin, 18);
 
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(9);
-    doc.text('Built by Rick Jefferson | Powered by RJ Business Solutions', margin, 26);
+    const subText = customLetterhead?.customSubtext || 'Official Dispute Document | FCRA Compliance Engine';
+    doc.text(subText, margin, 26);
   };
 
-  // Render first page header
-  drawHeader();
+  // Render first page header (accepts logoBase64)
+  drawHeader(true);
+
+  // Standard Legal Representation and Advocate Disclosure (CROA & FCRA Compliant)
+  let rawTextContent = text;
+  if (customLetterhead?.isHiredAdvocate) {
+    const org = customLetterhead.orgName || 'RJ Business Solutions';
+    rawTextContent += `\n\n--------------------------------------------------\n` +
+      `NOTICE OF AUTHORIZED REPRESENTATION & COMPLIANT DISCLOSURE\n` +
+      `This reinvestigation demand is prepared and submitted on behalf of the consumer by their legally retained advocate, ${org}, pursuant to a written representation agreement executed in full compliance with the Credit Repair Organizations Act (CROA), 15 U.S.C. § 1679 et seq. and the Fair Credit Reporting Act (FCRA), 15 U.S.C. § 1681 et seq.\n\n` +
+      `Pursuant to the signed agreement and express written consent, ${org} has been authorized to execute dispute actions and coordinate reinvestigations on behalf of the consumer. Please route all verified outcomes directly to the consumer and their authorized representative.\n` +
+      (customLetterhead.repAgreementAttached ? `[VERIFICATION NOTICE: A copy of the signed Limited Power of Attorney / representation authority is securely attached on file.]` : '');
+  }
 
   // Transliterate and clean text
-  const cleanedText = cleanTextForPDF(text);
+  const cleanedText = cleanTextForPDF(rawTextContent);
   const paragraphs = cleanedText.split(/\r?\n/);
   
   doc.setFont('Helvetica', 'normal');
@@ -347,7 +390,7 @@ export function generatePDFFromText(title: string, text: string): Uint8Array {
       y += lineSpacing;
       if (y > pageHeight - margin - 15) {
         doc.addPage();
-        drawHeader();
+        drawHeader(false);
         y = 55;
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(9.5);
@@ -360,7 +403,7 @@ export function generatePDFFromText(title: string, text: string): Uint8Array {
     for (const line of lines) {
       if (y > pageHeight - margin - 15) {
         doc.addPage();
-        drawHeader();
+        drawHeader(false);
         y = 55;
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(9.5);
@@ -383,7 +426,10 @@ export function generatePDFFromText(title: string, text: string): Uint8Array {
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(8);
     setTextColor(darkGray);
-    doc.text('Built by Rick Jefferson | Powered by RJ Business Solutions', margin, pageHeight - 10);
+    const footerText = customLetterhead?.orgName 
+      ? `Prepared by ${customLetterhead.orgName} | Authorized Credit Representative` 
+      : 'Built by Rick Jefferson | Powered by RJ Business Solutions';
+    doc.text(footerText, margin, pageHeight - 10);
     doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
   }
 

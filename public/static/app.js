@@ -591,6 +591,8 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'documents', icon: 'fa-file-contract', label: 'Documents' },
         { id: 'mailing-campaigns', icon: 'fa-mail-bulk', label: 'Mailing Campaigns' },
         { id: 'founder-os', icon: 'fa-briefcase', label: 'Founder OS' },
+        { id: 'sales-tools', icon: 'fa-chart-pie', label: 'Sales Tools' },
+        { id: 'roi-calculator', icon: 'fa-calculator', label: 'ROI Calculator' },
         { id: 'team', icon: 'fa-user-friends', label: 'Team' },
         { id: 'billing', icon: 'fa-credit-card', label: 'Billing' },
         { id: 'legal', icon: 'fa-gavel', label: 'Legal' },
@@ -664,6 +666,8 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'documents': await pgDocuments(el); break;
         case 'mailing-campaigns': await pgMailingCampaigns(el); break;
         case 'founder-os': await pgFounderOS(el); break;
+        case 'sales-tools': await pgSalesTools(el); break;
+        case 'roi-calculator': await pgROICalculator(el); break;
         case 'team': await pgTeam(el); break;
         case 'billing': await pgBilling(el); break;
         case 'legal': await pgLegal(el); break;
@@ -3638,6 +3642,19 @@ Status: Discharged`;
                 <h4 class="text-xs font-bold text-white uppercase tracking-wider border-b border-gray-800 pb-1.5 flex items-center gap-1.5">
                   <i class="fas fa-rocket text-blue-400"></i> Action controls
                 </h4>
+
+                <!-- Compliance Toggles -->
+                <div class="space-y-1.5 pb-2 border-b border-gray-800/80">
+                  <label class="block text-[10px] text-gray-400 font-bold uppercase tracking-wider">Compliance Options</label>
+                  <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer select-none">
+                    <input type="checkbox" id="builder-toggle-hired" checked class="w-3.5 h-3.5 rounded border-gray-800 text-blue-600 bg-gray-900 focus:ring-blue-500">
+                    <span>Attach Representation Notice</span>
+                  </label>
+                  <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer select-none">
+                    <input type="checkbox" id="builder-toggle-rep" checked class="w-3.5 h-3.5 rounded border-gray-800 text-blue-600 bg-gray-900 focus:ring-blue-500">
+                    <span>Certify POA Attached</span>
+                  </label>
+                </div>
                 
                 <button id="builder-btn-save-draft" class="w-full bg-blue-600 hover:bg-blue-700 text-white p-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-lg shadow-blue-600/10">
                   <i class="fas fa-save"></i> Save Dispute Draft
@@ -3980,9 +3997,14 @@ Status: Discharged`;
               }
               
               // Trigger PDF download
+              const chkHired = document.getElementById('builder-toggle-hired');
+              const chkRep = document.getElementById('builder-toggle-rep');
+              const isHiredAdvocate = chkHired ? chkHired.checked : true;
+              const repAgreementAttached = chkRep ? chkRep.checked : true;
+
               const headers = {};
               if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
-              const pdfRes = await fetch(`/api/documents/${docId}/pdf`, { headers });
+              const pdfRes = await fetch(`/api/documents/${docId}/pdf?isHiredAdvocate=${isHiredAdvocate}&repAgreementAttached=${repAgreementAttached}`, { headers });
               if (!pdfRes.ok) throw new Error('PDF compilation failed.');
               
               const blob = await pdfRes.blob();
@@ -5100,6 +5122,20 @@ Status: Discharged`;
 
               <!-- Actions Controls Card -->
               <div class="glass rounded-xl p-5 border border-gray-800/80 space-y-4 shrink-0 font-sans text-white">
+                <!-- Legal Compliance Options -->
+                <div class="space-y-2 border-b border-gray-800/80 pb-3">
+                  <h4 class="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <i class="fas fa-shield-alt text-emerald-400"></i>Legal Compliance Options
+                  </h4>
+                  <label class="flex items-center gap-2.5 cursor-pointer select-none">
+                    <input type="checkbox" id="chk-is-hired-advocate" checked class="rounded border-gray-700 bg-gray-850 text-blue-500 focus:ring-blue-500/30 focus:ring-offset-0 focus:ring-2 w-3.5 h-3.5 transition">
+                    <span class="text-xs text-gray-300 font-medium hover:text-white transition">Attach Authorized Advocate Disclosure</span>
+                  </label>
+                  <label class="flex items-center gap-2.5 cursor-pointer select-none">
+                    <input type="checkbox" id="chk-rep-attached" checked class="rounded border-gray-700 bg-gray-850 text-blue-500 focus:ring-blue-500/30 focus:ring-offset-0 focus:ring-2 w-3.5 h-3.5 transition">
+                    <span class="text-xs text-gray-300 font-medium hover:text-white transition">Certify Representation Agreement on File</span>
+                  </label>
+                </div>
                 <div class="flex gap-3">
                   <button id="btn-save-draft" class="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-2.5 px-4 rounded-lg transition-all transform hover:scale-[1.01] active:scale-[0.99] text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-900/30" disabled>
                     <i class="fas fa-save"></i>Save Draft
@@ -5305,7 +5341,11 @@ Status: Discharged`;
 
       btnDownload.onclick = () => {
         if (!currentDocId) return;
-        const cleanUrl = `/api/documents/${currentDocId}/pdf?token=${encodeURIComponent(state.token)}`;
+        const chkHired = document.getElementById('chk-is-hired-advocate');
+        const chkRep = document.getElementById('chk-rep-attached');
+        const isHiredAdvocate = chkHired ? chkHired.checked : true;
+        const repAgreementAttached = chkRep ? chkRep.checked : true;
+        const cleanUrl = `/api/documents/${currentDocId}/pdf?token=${encodeURIComponent(state.token)}&isHiredAdvocate=${isHiredAdvocate}&repAgreementAttached=${repAgreementAttached}`;
         window.open(cleanUrl, '_blank');
       };
 
@@ -8422,6 +8462,587 @@ async function pgAdminConsole(el) {
       }
     } catch(err) {
       el.innerHTML = `<div class="fade-in"><div class="glass rounded-xl p-8 border border-red-500/30 text-center"><i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i><h3 class="text-lg font-bold text-white mb-1">Failed to load USPS Campaigns</h3><p class="text-sm text-gray-400">${err.message}</p><button onclick="window._nav('mailing-campaigns')" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Retry</button></div></div>`;
+    }
+  }
+
+  async function pgROICalculator(el) {
+    el.innerHTML = `
+      <div class="fade-in max-w-6xl mx-auto space-y-6">
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800 pb-5">
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-blue-500 bg-blue-500/10 px-2.5 py-1 rounded-full"><i class="fas fa-calculator mr-1"></i> Interactive Valuation Tool</span>
+            <h1 class="text-2xl font-black text-white tracking-tight mt-2">SmartFCRA™ Enterprise ROI & Value Calculator</h1>
+            <p class="text-xs text-gray-400 mt-1">Analyze operational speedup, resource cost offsets, and recaptured damages valuations.</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <button onclick="window._nav('dashboard')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded-xl text-xs font-semibold transition border border-gray-700/50 flex items-center gap-2"><i class="fas fa-arrow-left"></i> Back to Dashboard</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Input Sliders -->
+          <div class="lg:col-span-5 space-y-6">
+            <div class="glass border border-gray-800/80 rounded-3xl p-6 bg-gray-950/20 shadow-2xl relative overflow-hidden">
+              <div class="absolute -right-20 -top-20 w-40 h-40 bg-blue-600/5 rounded-full blur-3xl"></div>
+              <h3 class="text-sm font-bold text-white mb-5 flex items-center gap-2 border-b border-gray-900 pb-3"><i class="fas fa-sliders-h text-blue-400"></i> Adjust Operational Metrics</h3>
+              
+              <div class="space-y-6">
+                <!-- Slider 1 -->
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs font-bold text-gray-300">Active Monthly Clients</label>
+                    <span id="val-clients" class="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">50</span>
+                  </div>
+                  <input type="range" id="slide-clients" min="10" max="500" value="50" class="w-full accent-blue-500 bg-gray-800 h-1.5 rounded-lg cursor-pointer">
+                  <div class="flex justify-between text-[9px] text-gray-500 mt-1 font-mono">
+                    <span>10 clients</span>
+                    <span>500 clients</span>
+                  </div>
+                </div>
+
+                <!-- Slider 2 -->
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs font-bold text-gray-300">Manual Hours / Client Review</label>
+                    <span id="val-hours" class="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">5 hrs</span>
+                  </div>
+                  <input type="range" id="slide-hours" min="1" max="20" value="5" class="w-full accent-blue-500 bg-gray-800 h-1.5 rounded-lg cursor-pointer">
+                  <div class="flex justify-between text-[9px] text-gray-500 mt-1 font-mono">
+                    <span>1 hr</span>
+                    <span>20 hrs</span>
+                  </div>
+                </div>
+
+                <!-- Slider 3 -->
+                <div>
+                  <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs font-bold text-gray-300">Average Missed Violations / Report</label>
+                    <span id="val-violations" class="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">2</span>
+                  </div>
+                  <input type="range" id="slide-violations" min="1" max="5" value="2" class="w-full accent-blue-500 bg-gray-800 h-1.5 rounded-lg cursor-pointer">
+                  <div class="flex justify-between text-[9px] text-gray-500 mt-1 font-mono">
+                    <span>1 violation</span>
+                    <span>5 violations</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Standard Value Offsets Explanation -->
+            <div class="glass border border-gray-800/80 rounded-3xl p-5 bg-gray-900/5 text-xs text-gray-400 space-y-3">
+              <p class="font-bold text-white flex items-center gap-1.5"><i class="fas fa-info-circle text-blue-400"></i> Calculator Invariants & Formulae</p>
+              <ul class="list-disc pl-4 space-y-1">
+                <li><strong class="text-gray-300">Labor Rate Assumption:</strong> Pre-loaded at <strong class="text-gray-200">$100/hour</strong> average operational value of certified paralegals/reviewers.</li>
+                <li><strong class="text-gray-300">Time-Value Multiplier:</strong> Calculated against an <strong class="text-gray-200">80% automated speedup rate</strong> (saving 4 hours out of 5 per file).</li>
+                <li><strong class="text-gray-300">Statutory Damages:</strong> Capped at the standard statutory damages of <strong class="text-gray-200">$1,000 per violation</strong> under 15 U.S.C. § 1681n and 15 U.S.C. § 1681o.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Dynamic Output Metrics -->
+          <div class="lg:col-span-7 space-y-6">
+            <div class="glass border border-gray-800/80 rounded-3xl p-6 bg-gray-950/20 shadow-2xl relative overflow-hidden flex flex-col justify-between min-h-[400px]">
+              <div class="absolute -left-20 -bottom-20 w-40 h-40 bg-blue-600/5 rounded-full blur-3xl"></div>
+              
+              <div>
+                <h3 class="text-sm font-bold text-white mb-5 flex items-center gap-2 border-b border-gray-900 pb-3"><i class="fas fa-chart-line text-blue-400"></i> Dynamic Value Realization Output</h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <!-- Card 1 -->
+                  <div class="border border-gray-800/60 bg-gray-900/10 rounded-2xl p-4 flex items-start gap-3">
+                    <div class="p-2.5 bg-blue-600/10 text-blue-400 rounded-xl"><i class="fas fa-clock text-sm"></i></div>
+                    <div>
+                      <p class="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Labor Hours Saved / Yr</p>
+                      <h4 id="calc-hours-saved" class="text-lg font-black text-white mt-1">2,400 hrs</h4>
+                    </div>
+                  </div>
+
+                  <!-- Card 2 -->
+                  <div class="border border-gray-800/60 bg-gray-900/10 rounded-2xl p-4 flex items-start gap-3">
+                    <div class="p-2.5 bg-green-600/10 text-green-400 rounded-xl"><i class="fas fa-wallet text-sm"></i></div>
+                    <div>
+                      <p class="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Overhead Offsets / Yr</p>
+                      <h4 id="calc-overhead-saved" class="text-lg font-black text-green-400 mt-1">$240,000</h4>
+                    </div>
+                  </div>
+
+                  <!-- Card 3 -->
+                  <div class="border border-gray-800/60 bg-gray-900/10 rounded-2xl p-4 flex items-start gap-3">
+                    <div class="p-2.5 bg-amber-600/10 text-amber-400 rounded-xl"><i class="fas fa-gavel text-sm"></i></div>
+                    <div>
+                      <p class="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Missed Damages Recaptured / Yr</p>
+                      <h4 id="calc-damages-recaptured" class="text-lg font-black text-amber-400 mt-1">$1,200,000</h4>
+                    </div>
+                  </div>
+
+                  <!-- Card 4 -->
+                  <div class="border border-blue-500/20 bg-blue-950/10 rounded-2xl p-4 flex items-start gap-3 relative overflow-hidden">
+                    <div class="absolute right-0 top-0 text-[35px] font-black text-blue-500/5 leading-none select-none font-mono">ROI</div>
+                    <div class="p-2.5 bg-blue-600/20 text-blue-400 rounded-xl"><i class="fas fa-percent text-sm"></i></div>
+                    <div>
+                      <p class="text-[10px] uppercase font-bold text-blue-400 tracking-wider">Net Subscription ROI Multiple</p>
+                      <h4 id="calc-roi-multiple" class="text-lg font-black text-blue-400 mt-1">241x</h4>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Interactive Comparison Bar Chart -->
+                <div class="mt-6 border-t border-gray-900 pt-5 space-y-4">
+                  <p class="text-[11px] uppercase font-bold text-gray-400 tracking-wider">Estimated Recaptured Business Valuation (Annualized)</p>
+                  
+                  <div class="space-y-3 font-mono">
+                    <!-- Manual Row -->
+                    <div>
+                      <div class="flex items-center justify-between text-[10px] text-gray-500 mb-1">
+                        <span>Manual Review Approach</span>
+                        <span>$0 (100% Leakage)</span>
+                      </div>
+                      <div class="w-full bg-gray-900 h-3 rounded-full overflow-hidden border border-gray-800/50">
+                        <div class="bg-gray-700 h-full rounded-full transition-all duration-300" style="width: 2%"></div>
+                      </div>
+                    </div>
+
+                    <!-- SmartFCRA Row -->
+                    <div>
+                      <div class="flex items-center justify-between text-[10px] text-blue-400 font-bold mb-1">
+                        <span class="flex items-center gap-1"><i class="fas fa-shield-alt text-[8px]"></i> SmartFCRA™ Automation Model</span>
+                        <span id="lbl-chart-val">$1,440,000 / yr</span>
+                      </div>
+                      <div class="w-full bg-gray-900 h-3 rounded-full overflow-hidden border border-gray-800/50">
+                        <div id="bar-chart-val" class="bg-gradient-to-r from-blue-600 to-blue-400 h-full rounded-full shadow-lg shadow-blue-500/20 transition-all duration-300" style="width: 80%"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Stripe Checkout CTA -->
+              <div class="mt-8 pt-5 border-t border-gray-900 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="text-center sm:text-left">
+                  <p class="text-xs text-gray-300 font-bold">Ready to automate your credit review workflows?</p>
+                  <p class="text-[10px] text-gray-500">Lock in your dedicated license workspace and start parsing instantly.</p>
+                </div>
+                <button id="btn-activate-plan" class="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-6 py-3 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/25 border border-blue-400/20"><i class="fas fa-bolt"></i> Activate Professional Plan ($497/mo) <i class="fas fa-arrow-right text-[10px]"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Sliders
+    const sClients = $('#slide-clients'), sHours = $('#slide-hours'), sViolations = $('#slide-violations');
+    // Labels
+    const lClients = $('#val-clients'), lHours = $('#val-hours'), lViolations = $('#val-violations');
+    // Calculated Outputs
+    const oHoursSaved = $('#calc-hours-saved'), oOverheadSaved = $('#calc-overhead-saved'), oDamages = $('#calc-damages-recaptured'), oRoi = $('#calc-roi-multiple');
+    const chartLbl = $('#lbl-chart-val'), chartBar = $('#bar-chart-val');
+
+    function recalculate() {
+      const clients = parseInt(sClients.value, 10);
+      const hours = parseInt(sHours.value, 10);
+      const violations = parseInt(sViolations.value, 10);
+
+      lClients.textContent = clients;
+      lHours.textContent = hours + ' hrs';
+      lViolations.textContent = violations;
+
+      // Calculations
+      // Labor Saved per client = hours * 0.8 (since we save 80% of time)
+      const monthlyHoursSaved = Math.round(clients * hours * 0.8);
+      const annualHoursSaved = monthlyHoursSaved * 12;
+
+      // Annual Overhead Saved = annualHoursSaved * $100
+      const annualOverheadSaved = annualHoursSaved * 100;
+
+      // Annual Missed Damages = clients * violations * $1,000 * 12
+      const annualDamagesRecaptured = clients * violations * 1000 * 12;
+
+      // Total Value
+      const totalValue = annualOverheadSaved + annualDamagesRecaptured;
+
+      // ROI Multiple against $497/mo Professional Plan ($5,964/yr)
+      const annualLicenseCost = 497 * 12;
+      const roiMultiple = Math.round(totalValue / annualLicenseCost);
+
+      // Format Outputs
+      oHoursSaved.textContent = annualHoursSaved.toLocaleString() + ' hrs';
+      oOverheadSaved.textContent = '$' + annualOverheadSaved.toLocaleString();
+      oDamages.textContent = '$' + annualDamagesRecaptured.toLocaleString();
+      oRoi.textContent = roiMultiple + 'x';
+
+      // Update Chart Label and Bar Width
+      chartLbl.textContent = '$' + totalValue.toLocaleString() + ' / yr';
+      
+      // Calculate a relative percentage width for the chart (max-width represents total valuation at max inputs = $6.24M)
+      const maxPossibleVal = 6240000;
+      const barPct = Math.min(100, Math.max(8, (totalValue / maxPossibleVal) * 100));
+      chartBar.style.width = barPct + '%';
+    }
+
+    sClients.oninput = recalculate;
+    sHours.oninput = recalculate;
+    sViolations.oninput = recalculate;
+
+    // Run initial calculations
+    recalculate();
+
+    // Stripe checkout wiring
+    const btnActivate = $('#btn-activate-plan');
+    btnActivate.onclick = async () => {
+      btnActivate.disabled = true;
+      btnActivate.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Creating Checkout Session...';
+      try {
+        const d = await api('/api/billing/checkout', {
+          method: 'POST',
+          body: JSON.stringify({ planId: 'professional' })
+        });
+        if (d.url) {
+          toast('Redirecting to secure Stripe Checkout...', 'info');
+          window.location.href = d.url;
+        } else {
+          throw new Error('No checkout URL returned from server.');
+        }
+      } catch (err) {
+        toast('Stripe Checkout failed: ' + err.message, 'error');
+        btnActivate.disabled = false;
+        btnActivate.innerHTML = '<i class="fas fa-bolt"></i> Activate Professional Plan ($497/mo) <i class="fas fa-arrow-right text-[10px]"></i>';
+      }
+    };
+  }
+
+  async function pgSalesTools(el) {
+    // 1. Fetch available clients to enable campaign-trigger simulation
+    let clients = [];
+    try {
+      const d = await api('/clients');
+      clients = d.clients || [];
+    } catch(err) {
+      console.warn('Failed to load clients for campaign triggers:', err.message);
+    }
+
+    el.innerHTML = `
+      <div class="fade-in max-w-6xl mx-auto space-y-6">
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800 pb-5">
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-blue-500 bg-blue-500/10 px-2.5 py-1 rounded-full"><i class="fas fa-chart-pie mr-1"></i> Sales Enablement Panel</span>
+            <h1 class="text-2xl font-black text-white tracking-tight mt-2">SmartFCRA™ Outbound Sales Cockpit</h1>
+            <p class="text-xs text-gray-400 mt-1">RJ Business Solutions | Core Sales materials, competitive battlecards, and drip campaigns.</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <button onclick="window._nav('dashboard')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded-xl text-xs font-semibold transition border border-gray-700/50 flex items-center gap-2"><i class="fas fa-arrow-left"></i> Back to Dashboard</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Main Content: Battlecard Sub-tabs -->
+          <div class="lg:col-span-8 space-y-6">
+            <div class="glass border border-gray-800/80 rounded-3xl p-6 bg-gray-950/20 shadow-2xl relative overflow-hidden">
+              <!-- Sub-tab Navigation -->
+              <div class="flex flex-wrap border-b border-gray-900 pb-3 gap-1.5 mb-6">
+                <button id="sub-tab-pitch" class="px-4 py-2 text-xs font-bold rounded-xl transition bg-blue-600 text-white shadow-lg shadow-blue-600/15">30s Elevator Pitch</button>
+                <button id="sub-tab-shield" class="px-4 py-2 text-xs font-bold rounded-xl transition bg-transparent text-gray-400 hover:text-gray-200">Competitive Shield</button>
+                <button id="sub-tab-objections" class="px-4 py-2 text-xs font-bold rounded-xl transition bg-transparent text-gray-400 hover:text-gray-200">Objection Rebuttals</button>
+                <button id="sub-tab-pricing" class="px-4 py-2 text-xs font-bold rounded-xl transition bg-transparent text-gray-400 hover:text-gray-200">Corporate Pricing</button>
+                <button id="sub-tab-bant" class="px-4 py-2 text-xs font-bold rounded-xl transition bg-transparent text-gray-400 hover:text-gray-200">BANT Discovery</button>
+              </div>
+
+              <!-- Interactive Card Area -->
+              <div id="battlecard-content" class="min-h-[350px] flex flex-col justify-between">
+                <!-- Content will be injected dynamically -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Sidebar: Outbound marketing campaign dispatcher with real clients -->
+          <div class="lg:col-span-4 space-y-6">
+            <div class="glass border border-gray-800/80 rounded-3xl p-5 bg-gray-950/30 relative overflow-hidden flex flex-col justify-between min-h-[460px]">
+              <div class="absolute -right-20 -top-20 w-40 h-40 bg-blue-600/5 rounded-full blur-3xl"></div>
+              
+              <div>
+                <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2 border-b border-gray-900 pb-3"><i class="fas fa-paper-plane text-blue-400"></i> Outbound Marketing Engine</h3>
+                <p class="text-[11px] text-gray-400 mb-5 leading-relaxed">Select an analyzed client to auto-populate their parsed metrics (violation count and estimated damages) into Rick Jefferson's customized outreach templates, then dispatch simulated sequences.</p>
+                
+                <div class="space-y-4">
+                  <!-- Client dropdown -->
+                  <div>
+                    <label class="text-[10px] font-bold uppercase text-gray-500 tracking-wider block mb-1.5">Target Client Profile</label>
+                    <select id="disp-client-id" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500/50 transition">
+                      ${clients.length > 0 
+                        ? clients.map(c => `<option value="${c.id}">${escapeHtml(c.first_name)} ${escapeHtml(c.last_name)} (${escapeHtml(c.city || 'US Client')})</option>`).join('')
+                        : '<option value="">-- No Active Clients Found --</option>'
+                      }
+                    </select>
+                  </div>
+
+                  <!-- Campaign type selection -->
+                  <div>
+                    <label class="text-[10px] font-bold uppercase text-gray-500 tracking-wider block mb-1.5">Outreach Campaign Sequence</label>
+                    <select id="disp-campaign-id" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500/50 transition">
+                      <option value="cold-outreach">Rick Jefferson's Cold Outreach Sequence</option>
+                    </select>
+                  </div>
+
+                  <!-- Sequence Step selection -->
+                  <div>
+                    <label class="text-[10px] font-bold uppercase text-gray-500 tracking-wider block mb-1.5">Drip Sequence Step</label>
+                    <div class="grid grid-cols-3 gap-2">
+                      <button id="step-btn-1" class="step-btn px-3 py-2 text-xs font-bold rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/25 transition">Step 1 (Cold)</button>
+                      <button id="step-btn-2" class="step-btn px-3 py-2 text-xs font-bold rounded-xl bg-gray-900 text-gray-400 border border-gray-800 transition">Step 2 (Follow-up)</button>
+                      <button id="step-btn-3" class="step-btn px-3 py-2 text-xs font-bold rounded-xl bg-gray-900 text-gray-400 border border-gray-800 transition">Step 3 (Case Study)</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-8 border-t border-gray-900 pt-4">
+                <button id="btn-dispatch-campaign" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/10" ${clients.length === 0 ? 'disabled' : ''}><i class="fas fa-paper-plane"></i> Dispatch Outbound Drip Email</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Tab content map
+    const contentMap = {
+      'pitch': `
+        <div class="space-y-4 font-sans">
+          <div>
+            <h4 class="text-sm font-extrabold text-blue-400 flex items-center gap-1.5"><i class="fas fa-quote-left text-xs text-blue-500"></i> The Core Narrative ("Systems Over Noise")</h4>
+            <p class="text-xs text-gray-300 mt-2 leading-relaxed">
+              "Most credit repair software sells a list of dispute templates. We don't. We sell a complete, automated legal compliance system. SmartFCRA™ parses credit files, isolates exactly where the furnishers and bureaus violated statutory law (over 75+ rigorous checks spanning FCRA, FDCPA, and ECOA), and compiles lawsuit-grade dispute notices citing precise federal statutes and state case law. We reduce review times by 80% and uncover thousands in statutory leverage."
+            </p>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 border-t border-gray-900 pt-4">
+            <div class="border border-gray-800/50 bg-gray-900/10 p-3.5 rounded-2xl">
+              <p class="text-[10px] font-bold text-blue-400 uppercase tracking-wide">Target Outcome</p>
+              <p class="text-xs text-gray-200 mt-1">Saves over 4 hours per audit and uncovers hidden cashflow leverage under 15 U.S.C. § 1681.</p>
+            </div>
+            <div class="border border-gray-800/50 bg-gray-900/10 p-3.5 rounded-2xl">
+              <p class="text-[10px] font-bold text-blue-400 uppercase tracking-wide">Signature Principle</p>
+              <p class="text-xs text-gray-200 mt-1">"Build the system before you chase the traffic. Clarity first. Automation second. Scale third."</p>
+            </div>
+          </div>
+        </div>
+      `,
+      'shield': `
+        <div class="space-y-4">
+          <h4 class="text-sm font-extrabold text-blue-400 flex items-center gap-1.5"><i class="fas fa-shield-alt"></i> Competitive Shield Matrix</h4>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="border-b border-gray-800 text-[10px] text-gray-500 uppercase font-mono">
+                  <th class="py-2">Feature / Attribute</th>
+                  <th class="py-2">Standard Competitors</th>
+                  <th class="py-2 text-blue-400">SmartFCRA™ Model</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-900 text-gray-300">
+                <tr>
+                  <td class="py-2.5 font-bold text-white">Detection Base</td>
+                  <td class="py-2.5">Basic template checklist (5-10 rules)</td>
+                  <td class="py-2.5 text-blue-300 font-bold">75+ Rule legal violations engine</td>
+                </tr>
+                <tr>
+                  <td class="py-2.5 font-bold text-white">Damages Modeling</td>
+                  <td class="py-2.5">None (Manual estimates)</td>
+                  <td class="py-2.5 text-blue-300 font-bold">Dynamic statutory damages calculator</td>
+                </tr>
+                <tr>
+                  <td class="py-2.5 font-bold text-white">State Statutes (SOL)</td>
+                  <td class="py-2.5">Not integrated</td>
+                  <td class="py-2.5 text-blue-300 font-bold">50-state localized SOL database built-in</td>
+                </tr>
+                <tr>
+                  <td class="py-2.5 font-bold text-white">Automation Rate</td>
+                  <td class="py-2.5">20% (Manual matching)</td>
+                  <td class="py-2.5 text-blue-300 font-bold">80%+ (Full JSON/XML parser)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `,
+      'objections': `
+        <div class="space-y-4">
+          <h4 class="text-sm font-extrabold text-blue-400 flex items-center gap-1.5"><i class="fas fa-lightbulb"></i> Objection Rebuttal Matrix</h4>
+          <div class="space-y-3">
+            <div class="border border-gray-800/80 bg-gray-950/20 p-3.5 rounded-2xl">
+              <p class="text-xs font-extrabold text-white">Objection: "It's too expensive to pay $497/mo."</p>
+              <p class="text-xs text-gray-400 mt-1.5"><strong class="text-blue-400">Rebuttal:</strong> "At $100/hr internal paralegal/review time, saving just 5 hours a month pays for the software completely. On top of that, identifying just one missed violation pays back 200% of your licensing costs in statutory leverage. It's an investment that pays for itself."</p>
+            </div>
+            <div class="border border-gray-800/80 bg-gray-950/20 p-3.5 rounded-2xl">
+              <p class="text-xs font-extrabold text-white">Objection: "Our manual credit review process is fine."</p>
+              <p class="text-xs text-gray-400 mt-1.5"><strong class="text-blue-400">Rebuttal:</strong> "No human reviewer can manually compare 75 distinct legal rules across Experian, Equifax, and TransUnion files in seconds without making errors. If you miss even 20% of actionable violations, you are leaking thousands in real customer value. Let automation handle the audit, and let your team focus on litigation."</p>
+            </div>
+          </div>
+        </div>
+      `,
+      'pricing': `
+        <div class="space-y-4">
+          <h4 class="text-sm font-extrabold text-blue-400 flex items-center gap-1.5"><i class="fas fa-tag"></i> Modern Enterprise Pricing Model</h4>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+            <!-- Tier 1 -->
+            <div class="border border-gray-800 bg-gray-900/5 rounded-2xl p-4 flex flex-col justify-between">
+              <div>
+                <span class="text-[9px] uppercase font-bold text-gray-400 tracking-wider">Professional License</span>
+                <h5 class="text-lg font-black text-white mt-1">$497<span class="text-xs font-normal text-gray-500">/mo</span></h5>
+                <p class="text-[10px] text-gray-400 mt-2 leading-relaxed">Perfect for standard credit operations and local boutiques.</p>
+              </div>
+              <ul class="text-[10px] text-gray-300 mt-3 space-y-1.5 border-t border-gray-900 pt-3">
+                <li><i class="fas fa-check text-blue-500 mr-1 text-[8px]"></i> 100 Parsed Reports / mo</li>
+                <li><i class="fas fa-check text-blue-500 mr-1 text-[8px]"></i> Core 75+ Rules Engine</li>
+                <li><i class="fas fa-check text-blue-500 mr-1 text-[8px]"></i> Letter Draft Compiler</li>
+              </ul>
+            </div>
+            <!-- Tier 2 -->
+            <div class="border border-blue-500/20 bg-blue-950/5 rounded-2xl p-4 flex flex-col justify-between relative">
+              <span class="absolute right-3 top-3 text-[9px] font-bold uppercase tracking-wider text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">Popular</span>
+              <div>
+                <span class="text-[9px] uppercase font-bold text-blue-400 tracking-wider">Unlimited Volume</span>
+                <h5 class="text-lg font-black text-white mt-1">$2,500<span class="text-xs font-normal text-gray-500">/mo</span></h5>
+                <p class="text-[10px] text-gray-400 mt-2 leading-relaxed">Designed for growing credit repair firms and high-volume agencies.</p>
+              </div>
+              <ul class="text-[10px] text-gray-300 mt-3 space-y-1.5 border-t border-gray-900 pt-3">
+                <li><i class="fas fa-check text-blue-500 mr-1 text-[8px]"></i> Unlimited Monthly Reports</li>
+                <li><i class="fas fa-check text-blue-500 mr-1 text-[8px]"></i> Advanced 50-State SOL</li>
+                <li><i class="fas fa-check text-blue-500 mr-1 text-[8px]"></i> Full Case Law Databases</li>
+              </ul>
+            </div>
+            <!-- Tier 3 -->
+            <div class="border border-gray-800 bg-gray-900/5 rounded-2xl p-4 flex flex-col justify-between">
+              <div>
+                <span class="text-[9px] uppercase font-bold text-gray-400 tracking-wider">Enterprise Network</span>
+                <h5 class="text-lg font-black text-white mt-1">$9,997<span class="text-xs font-normal text-gray-500">/mo</span></h5>
+                <p class="text-[10px] text-gray-400 mt-2 leading-relaxed">Dedicated server resources, API access and customized rules routing.</p>
+              </div>
+              <ul class="text-[10px] text-gray-300 mt-3 space-y-1.5 border-t border-gray-900 pt-3">
+                <li><i class="fas fa-check text-blue-500 mr-1 text-[8px]"></i> Full Whitelabel Portal</li>
+                <li><i class="fas fa-check text-blue-500 mr-1 text-[8px]"></i> 24/7 Dedicated Support</li>
+                <li><i class="fas fa-check text-blue-500 mr-1 text-[8px]"></i> Custom API Webhooks</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      `,
+      'bant': `
+        <div class="space-y-4">
+          <h4 class="text-sm font-extrabold text-blue-400 flex items-center gap-1.5"><i class="fas fa-question-circle"></i> BANT Lead Qualification Sequence</h4>
+          <div class="space-y-3 font-mono text-[11px] text-gray-300 leading-relaxed">
+            <div>
+              <p class="font-bold text-white uppercase text-[10px] tracking-wider text-blue-400">1. BUDGET (Cost offset):</p>
+              <p class="mt-1">"How much do you currently spend on manual credit file analysis and certified legal staff? If we could cut that cost by 80% while identifying missed statutory leverage, what would that be worth to your operations?"</p>
+            </div>
+            <div class="border-t border-gray-900 pt-2">
+              <p class="font-bold text-white uppercase text-[10px] tracking-wider text-blue-400">2. AUTHORITY (Operations):</p>
+              <p class="mt-1">"Who is currently in charge of reviewing credit reports and signing off on the dispute letters? Are they comfortable switching to an automated legal compliance dashboard?"</p>
+            </div>
+            <div class="border-t border-gray-900 pt-2">
+              <p class="font-bold text-white uppercase text-[10px] tracking-wider text-blue-400">3. NEED (Efficiency bottleneck):</p>
+              <p class="mt-1">"What is the single biggest roadblock in your credit repair operations? Is it report review speed, letter compiling accuracy, or missing specific FCRA/FDCPA violations?"</p>
+            </div>
+            <div class="border-t border-gray-900 pt-2">
+              <p class="font-bold text-white uppercase text-[10px] tracking-wider text-blue-400">4. TIMELINE (Deployment):</p>
+              <p class="mt-1">"If the ROI calculator numbers look solid, when would you want to have your automated compliance workspace live for your client files?"</p>
+            </div>
+          </div>
+        </div>
+      `
+    };
+
+    // Sub-tabs switches
+    const tabPitch = $('#sub-tab-pitch'), tabShield = $('#sub-tab-shield'), tabObjections = $('#sub-tab-objections'), tabPricing = $('#sub-tab-pricing'), tabBant = $('#sub-tab-bant');
+    const displayEl = $('#battlecard-content');
+
+    const tabs = [
+      { btn: tabPitch, id: 'pitch' },
+      { btn: tabShield, id: 'shield' },
+      { btn: tabObjections, id: 'objections' },
+      { btn: tabPricing, id: 'pricing' },
+      { btn: tabBant, id: 'bant' }
+    ];
+
+    function setSubTab(activeId) {
+      tabs.forEach(t => {
+        if (t.id === activeId) {
+          t.btn.className = 'px-4 py-2 text-xs font-bold rounded-xl transition bg-blue-600 text-white shadow-lg shadow-blue-600/15';
+        } else {
+          t.btn.className = 'px-4 py-2 text-xs font-bold rounded-xl transition bg-transparent text-gray-400 hover:text-gray-200';
+        }
+      });
+      displayEl.innerHTML = contentMap[activeId];
+    }
+
+    tabs.forEach(t => {
+      t.btn.onclick = () => setSubTab(t.id);
+    });
+
+    // Default tab
+    setSubTab('pitch');
+
+    // Campaign dispatch step selection
+    let activeStep = 1;
+    const sBtn1 = $('#step-btn-1'), sBtn2 = $('#step-btn-2'), sBtn3 = $('#step-btn-3');
+    const stepBtns = [
+      { btn: sBtn1, step: 1 },
+      { btn: sBtn2, step: 2 },
+      { btn: sBtn3, step: 3 }
+    ];
+
+    function selectStep(stepNum) {
+      activeStep = stepNum;
+      stepBtns.forEach(sb => {
+        if (sb.step === stepNum) {
+          sb.btn.className = 'step-btn px-3 py-2 text-xs font-bold rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/25 transition';
+        } else {
+          sb.btn.className = 'step-btn px-3 py-2 text-xs font-bold rounded-xl bg-gray-900 text-gray-400 border border-gray-800 transition';
+        }
+      });
+    }
+
+    stepBtns.forEach(sb => {
+      sb.btn.onclick = () => selectStep(sb.step);
+    });
+
+    // Handle Campaign Dispatch Action
+    const btnDispatch = $('#btn-dispatch-campaign');
+    if (btnDispatch) {
+      btnDispatch.onclick = async () => {
+        const cSel = $('#disp-client-id');
+        const campSel = $('#disp-campaign-id');
+        if (!cSel || !cSel.value) {
+          toast('Please select a target client first.', 'error');
+          return;
+        }
+
+        btnDispatch.disabled = true;
+        btnDispatch.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Dispatched outreach...';
+
+        try {
+          const res = await api('/api/marketing/campaign/trigger', {
+            method: 'POST',
+            body: JSON.stringify({
+              clientId: cSel.value,
+              campaignId: campSel.value,
+              step: activeStep
+            })
+          });
+
+          if (res.success) {
+            toast(`Campaign step ${activeStep} triggered! Message subject: "${res.subject}"`, 'success');
+          } else {
+            throw new Error(res.error || 'Outreach dispatch failed.');
+          }
+        } catch(err) {
+          toast('Marketing Trigger error: ' + err.message, 'error');
+        } finally {
+          btnDispatch.disabled = false;
+          btnDispatch.innerHTML = '<i class="fas fa-paper-plane"></i> Dispatch Outbound Drip Email';
+        }
+      };
     }
   }
 

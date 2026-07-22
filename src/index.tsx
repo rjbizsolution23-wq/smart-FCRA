@@ -2913,12 +2913,37 @@ app.get('/api/documents/:id/pdf', authMiddleware, async (c) => {
   const doc = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
   if (!doc) return c.json({ error: 'Document not found' }, 404);
 
-  const pdfBytes = generatePDFFromText(doc.title, doc.content);
+  // Load B2B organization settings for letterhead and brand personalization
+  const org = await c.env.DB.prepare('SELECT name, settings FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+  const settings = JSON.parse(org?.settings || '{}');
+
+  // Support real-time UI overrides via query parameters
+  const queryHiredAdvocate = c.req.query('isHiredAdvocate');
+  const queryRepAttached = c.req.query('repAgreementAttached');
+
+  const isHiredAdvocate = queryHiredAdvocate !== undefined
+    ? queryHiredAdvocate === 'true'
+    : (settings.is_hired_advocate === true || settings.is_hired_advocate === 1);
+
+  const repAgreementAttached = queryRepAttached !== undefined
+    ? queryRepAttached === 'true'
+    : (settings.rep_agreement_attached === true || settings.rep_agreement_attached === 1);
+
+  const customLetterhead = {
+    orgName: org?.name || 'RJ Business Solutions',
+    logoBase64: settings.letterhead_logo_base64 || undefined,
+    headerText: settings.letterhead_title || doc.title,
+    customSubtext: settings.letterhead_subtext || (settings.business_address ? `Official Communication from ${org?.name} • ${settings.business_address}` : `Official Dispute Document • FCRA Compliance Engine`),
+    isHiredAdvocate,
+    repAgreementAttached
+  };
+
+  const pdfBytes = generatePDFFromText(doc.title, doc.content, customLetterhead);
 
   return new Response(pdfBytes, {
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="FounderOS-${id}.pdf"`,
+      'Content-Disposition': `attachment; filename="DisputeLetter-${id}.pdf"`,
     },
   });
 });
@@ -3415,6 +3440,143 @@ app.post('/api/send-email', authMiddleware, async (c) => {
   ).run();
 
   return c.json({ success: true, sent, details });
+});
+
+// 12. POST /api/marketing/campaign/trigger (FCRA Outreach Campaign Dispatch)
+app.post('/api/marketing/campaign/trigger', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const { clientId, campaignId, step } = await c.req.json();
+
+  if (!clientId || !campaignId || !step) {
+    return c.json({ error: 'Missing required parameters (clientId, campaignId, step)' }, 400);
+  }
+
+  try {
+    // 1. Fetch client details
+    const client = await c.env.DB.prepare(
+      'SELECT * FROM clients WHERE id = ? AND org_id = ?'
+    ).bind(clientId, user.org_id).first();
+
+    if (!client) {
+      return c.json({ error: 'Client not found' }, 404);
+    }
+
+    // 2. Query violations count and estimate damages
+    const violationSummary = await c.env.DB.prepare(
+      'SELECT COUNT(*) as count, SUM(total_damages_max) as total_damages FROM violations WHERE client_id = ? AND org_id = ?'
+    ).bind(clientId, user.org_id).first();
+
+    const violationCount = violationSummary?.count || 0;
+    const estimatedDamages = violationSummary?.total_damages || 0;
+
+    // 3. Define outreach email templates based on 06_EMAIL_CAMPAIGNS.md
+    const campaigns: Record<string, Record<number, { subject: string; body: string }>> = {
+      'cold-outreach': {
+        1: {
+          subject: `Quick question about ${client.first_name}'s credit report workflow`,
+          body: `Hi ${client.first_name},<br><br>
+            Quick question: How many credit reports are you analyzing per week right now?<br><br>
+            I ask because our automated scan found <strong>${violationCount} core violations</strong> on your report, representing up to <strong>$${(estimatedDamages || violationCount * 1000).toLocaleString()}</strong> in estimated statutory damages under the FCRA and FDCPA (15 U.S.C. § 1681).<br><br>
+            We built software that does this analysis in 15 minutes, uncovering re-aging, Metro 2 formatting errors, and state law violations that manual reviews completely miss.<br><br>
+            Worth a 15-minute call to see if it fits your workflow?<br><br>
+            Best,<br>
+            ${user.name}<br>
+            RJ Business Solutions`
+        },
+        2: {
+          subject: `Re: Quick question about ${client.first_name}'s credit report`,
+          body: `Hi ${client.first_name},<br><br>
+            Following up on my previous message. Most credit repair operators miss up to 40% of actionable violations because manual reviews cannot catch:<br>
+            - Re-aging (DOFD manipulation)<br>
+            - Technical Metro 2 formatting mismatches<br>
+            - Unlawful collection on state statute-of-limitation (SOL) expired debts<br><br>
+            We found <strong>${violationCount} specific violations</strong> on your report. Our automated letter generator compiles lawsuit-grade dispute documents citing exact case law in seconds.<br><br>
+            Would a 15-minute demo be worth your time?<br><br>
+            Best,<br>
+            ${user.name}`
+        },
+        3: {
+          subject: `How we recovered $${(estimatedDamages || violationCount * 1000).toLocaleString()} in statutory violations`,
+          body: `Hi ${client.first_name},<br><br>
+            I wanted to share a quick case study of how we help operators turn credit inaccuracies into heavy leverage.<br><br>
+            By identifying the exact <strong>${violationCount} violations</strong> on your file (representing a valuation of up to $${(estimatedDamages || violationCount * 1000).toLocaleString()}), our platform automatically constructs dispute packages that force bureau and creditor liability.<br><br>
+            Instead of spending hours manually drafting letters, let our automated system do the heavy lifting in seconds.<br><br>
+            Let's grab 15 minutes to review your parsed dashboard: [CALENDAR_LINK]<br><br>
+            Best,<br>
+            ${user.name}`
+        }
+      }
+    };
+
+    const campaign = campaigns[campaignId];
+    if (!campaign) {
+      return c.json({ error: 'Invalid campaign ID' }, 400);
+    }
+
+    const template = campaign[parseInt(step, 10)];
+    if (!template) {
+      return c.json({ error: 'Invalid campaign step' }, 400);
+    }
+
+    // 4. In a production system, this would send an email. We will invoke our send-email simulation/Resend flow
+    let sent = false;
+    let details = 'Simulated Outreach Delivery';
+
+    if (c.env.RESEND_API_KEY && client.email) {
+      try {
+        const resendResponse = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${c.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: 'SmartFCRA™ Campaign <notifications@rjbusinesssolutions.org>',
+            to: client.email,
+            subject: template.subject,
+            html: `
+              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                  <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="RJ Business Solutions" style="max-height: 50px; border-radius: 8px;">
+                </div>
+                <div style="color: #1e293b; line-height: 1.6; font-size: 14px;">
+                  ${template.body}
+                </div>
+                <div style="margin-top: 30px; border-t: 1px solid #e2e8f0; padding-top: 15px; font-size: 11px; color: #64748b; text-align: center;">
+                  RJ Business Solutions | 1342 NM 333, Tijeras, New Mexico 87059
+                </div>
+              </div>
+            `
+          })
+        });
+
+        if (resendResponse.ok) {
+          sent = true;
+          details = 'Delivered via Resend';
+        }
+      } catch (err: any) {
+        console.warn('[CAMPAIGN] Resend failed, fell back to simulation:', err.message);
+      }
+    }
+
+    // Always log the campaign dispatch in activity_log
+    const logId = generateId();
+    await c.env.DB.prepare(
+      'INSERT INTO activity_log (id, org_id, client_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      logId,
+      user.org_id,
+      clientId,
+      user.id,
+      'marketing_campaign_sent',
+      `Triggered ${campaignId} (Step ${step}) email to ${client.first_name} ${client.last_name}: "${template.subject}"`,
+      JSON.stringify({ campaignId, step, sent, details })
+    ).run();
+
+    return c.json({ success: true, sent, details, subject: template.subject });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════
