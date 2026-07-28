@@ -11,7 +11,9 @@
     "db:create": "wrangler d1 create fcra-detector-v2",
     "db:migrate:local": "wrangler d1 migrations apply fcra-detector-v2 --local",
     "db:seed": "wrangler d1 execute fcra-detector-v2 --local --file=./seed.sql",
-    "db:reset": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local && npm run db:seed"
+    "db:reset": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local && npm run db:seed",
+    "test:unit": "npx tsx tests/unit-auth-crypto.mjs",
+    "test:e2e": "npx playwright test"
   },
   "dependencies": {
     "argon2": "^0.41.1",
