@@ -20,6 +20,9 @@ node_modules/
 .env.development
 .dev.vars
 .env.example
+*secrets*.env
+*credentials*
+!docs/SECRETS_INTAKE_TEMPLATE.env
 
 # logs
 logs/
