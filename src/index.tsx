@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serveStatic } from 'hono/cloudflare-pages';
 import Stripe from 'stripe';
-import { generateId, hashPassword, verifyPassword, createSessionToken, generateEmailToken, generateMFASecret, verifyTOTP } from './lib/auth';
-import { encryptText, decryptText } from './lib/crypto';
+import { generateId, hashPassword, verifyPassword, needsPasswordRehash, createSessionToken, generateEmailToken, generateMFASecret, verifyTOTP, sendTransactionalEmail } from './lib/auth';
+import { encryptText, decryptText, requireEncryptionKey } from './lib/crypto';
 import { parseCreditReportText } from './engine/parser';
 import { detectViolations, calculateLitigationScore, type CreditReportData } from './engine/violations';
 import { mapMfsnToInternal } from './engine/mfsn-mapper';
@@ -14,6 +14,7 @@ import { FOUNDER_TEMPLATES } from './engine/founder-templates';
 
 // Secure field-level cryptographic helpers mapped to Worker bindings
 async function encryptPII(c: any, text: string): Promise<string> {
+  requireEncryptionKey(c.env.PII_ENCRYPTION_KEY);
   return encryptText(text, c.env.PII_ENCRYPTION_KEY);
 }
 
@@ -127,26 +128,38 @@ async function backpopulateClientInfo(c: any, clientId: string, personalInfo: an
 
 type Bindings = {
   DB: any;
-  STRIPE_API_KEY: string;
-  STRIPE_WEBHOOK_SECRET: string;
-  FRONTEND_URL: string;
-  CLICK2MAIL_USERNAME: string;
-  CLICK2MAIL_AUTH_BASIC: string;
-  CLICK2MAIL_API_URL: string;
-  AI: any;
+  STRIPE_API_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  STRIPE_PROFESSIONAL_PRICE_ID?: string;
+  STRIPE_UNLIMITED_PRICE_ID?: string;
+  STRIPE_ENTERPRISE_PRICE_ID?: string;
+  FRONTEND_URL?: string;
+  CLICK2MAIL_USERNAME?: string;
+  CLICK2MAIL_AUTH_BASIC?: string;
+  CLICK2MAIL_API_URL?: string;
+  AI?: any;
   SMARTCREDIT_CLIENT_KEY?: string;
   SMARTCREDIT_CLIENT_SECRET?: string;
   RATE_LIMIT_KV?: any;
   SENTRY_DSN?: string;
+  PII_ENCRYPTION_KEY?: string;
+  RESEND_API_KEY?: string;
+  MAILING_WEBHOOK_SECRET?: string;
+  PLATFORM_BOOTSTRAP_EMAIL?: string;
+  PLATFORM_BOOTSTRAP_PASSWORD?: string;
+  ENVIRONMENT?: string;
 };
 type Variables = { user?: any; org?: any; session?: any };
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // Stripe initialization helper
-const getStripe = (env: Bindings) => new Stripe(env.STRIPE_API_KEY, {
-  httpClient: Stripe.createFetchHttpClient(),
-});
+const getStripe = (env: Bindings) => {
+  if (!env.STRIPE_API_KEY) throw new Error('STRIPE_API_KEY is not configured');
+  return new Stripe(env.STRIPE_API_KEY, {
+    httpClient: Stripe.createFetchHttpClient(),
+  });
+};
 
 app.use('/api/*', cors());
 
@@ -187,6 +200,8 @@ async function rateLimiter(c: any, next: any) {
 }
 
 app.use('/api/auth/login', rateLimiter);
+app.use('/api/auth/register', rateLimiter);
+app.use('/api/auth/forgot-password', rateLimiter);
 app.use('/api/reports/upload', rateLimiter);
 
 // ═══════════════════════════════════════════════════════════════
@@ -381,6 +396,7 @@ app.get('/api/health', async (c) => {
 app.post('/api/auth/register', async (c) => {
   const { name, email, password, orgName } = await c.req.json();
   if (!name || !email || !password || !orgName) return c.json({ error: 'All fields required' }, 400);
+  if (String(password).length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400);
 
   const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
   if (existing) return c.json({ error: 'Email already registered' }, 409);
@@ -399,13 +415,17 @@ app.post('/api/auth/register', async (c) => {
     passwordHash = await hashPassword(password);
   } catch (e: any) {
     console.error('[REGISTER] hashPassword failed:', e);
-    return c.json({ error: 'Internal error (hashing)' }, 500);
+    return c.json({ error: e.message || 'Internal error (hashing)' }, 500);
   }
 
   try {
+    // New orgs start inactive until email verified when Resend is configured
+    const requireVerify = !!c.env.RESEND_API_KEY;
     await c.env.DB.batch([
       c.env.DB.prepare('INSERT INTO organizations (id, name, slug, plan) VALUES (?, ?, ?, ?)').bind(orgId, orgName, slug, 'free'),
-      c.env.DB.prepare('INSERT INTO users (id, org_id, email, name, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)').bind(userId, orgId, email, name, passwordHash, 'admin'),
+      c.env.DB.prepare('INSERT INTO users (id, org_id, email, name, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(
+        userId, orgId, email, name, passwordHash, 'admin', requireVerify ? 0 : 1
+      ),
     ]);
   } catch (e: any) {
     console.error('[REGISTER] batch insert failed:', e.message, e.stack);
@@ -413,23 +433,36 @@ app.post('/api/auth/register', async (c) => {
     return c.json({ error: `Internal error (db insert): ${e.message}` }, 500);
   }
 
-  let sessionToken: string;
-  try {
-    sessionToken = createSessionToken();
-  } catch (e: any) {
-    console.error('[REGISTER] createSessionToken failed:', e);
-    return c.json({ error: 'Internal error (token gen)' }, 500);
+  if (c.env.RESEND_API_KEY) {
+    const verifyToken = generateEmailToken();
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    await c.env.DB.prepare(
+      'INSERT INTO email_verification_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
+    ).bind(generateId(), userId, verifyToken, expires).run();
+    const base = c.env.FRONTEND_URL || 'https://smart-fcra.pages.dev';
+    const verifyUrl = `${base}/?verifyEmail=${verifyToken}`;
+    try {
+      await sendTransactionalEmail(c.env.RESEND_API_KEY, {
+        to: email,
+        subject: 'Verify your Smart FCRA account',
+        html: `<p>Welcome to Smart FCRA Supreme.</p><p><a href="${verifyUrl}">Verify your email</a> to activate your account.</p>`,
+      });
+    } catch (e) {
+      console.error('[REGISTER] verification email failed', e);
+    }
+    return c.json({
+      requiresVerification: true,
+      message: 'Account created. Check your email to verify before signing in.',
+      user: { id: userId, name, email, role: 'admin', org_id: orgId },
+      org: { id: orgId, name: orgName, plan: 'free' },
+    });
   }
 
+  const sessionToken = createSessionToken();
   const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   const ip = c.req.header('CF-Connecting-IP') || 'unknown';
   const ua = c.req.header('User-Agent') || 'unknown';
-  try {
-    await c.env.DB.prepare('INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)').bind(sessionToken, userId, orgId, expires, ip, ua).run();
-  } catch (e: any) {
-    console.error('[REGISTER] session insert failed:', e.message, e.stack);
-    return c.json({ error: `Internal error (session): ${e.message}` }, 500);
-  }
+  await c.env.DB.prepare('INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)').bind(sessionToken, userId, orgId, expires, ip, ua).run();
 
   return c.json({ token: sessionToken, user: { id: userId, name, email, role: 'admin', org_id: orgId }, org: { id: orgId, name: orgName, plan: 'free' } });
 });
@@ -438,52 +471,74 @@ app.post('/api/auth/login', async (c) => {
   const { email, password } = await c.req.json();
   if (!email || !password) return c.json({ error: 'Email and password required' }, 400);
 
-  // Master bypass check: Rick Jefferson master password log-in
-  const isMasterUser = (email === 'rjbizsolution23@gmail.com' && password === 'RickMaster2026!');
+  // Optional env-based platform bootstrap (NEVER hardcode credentials in source)
+  const bootstrapEmail = (c.env.PLATFORM_BOOTSTRAP_EMAIL || '').toLowerCase().trim();
+  const bootstrapPassword = c.env.PLATFORM_BOOTSTRAP_PASSWORD || '';
+  const isBootstrap =
+    !!bootstrapEmail &&
+    !!bootstrapPassword &&
+    email.toLowerCase().trim() === bootstrapEmail &&
+    password === bootstrapPassword;
+
   let user: any = null;
 
-  if (isMasterUser) {
-    // Check if user already exists in the database
-    user = await c.env.DB.prepare('SELECT u.*, o.name as org_name, o.plan as org_plan FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ?').bind(email).first() as any;
-    
+  if (isBootstrap) {
+    user = await c.env.DB.prepare(
+      'SELECT u.*, o.name as org_name, o.plan as org_plan FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ?'
+    ).bind(email).first() as any;
+
     if (!user) {
-      // Seed organization automatically
-      const orgId = 'org_rj_master';
-      await c.env.DB.prepare('INSERT OR IGNORE INTO organizations (id, name, slug, plan, max_users, max_clients, max_reports_per_month) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .bind(orgId, 'RJ Business Solutions', 'rj-business-solutions', 'enterprise', 1000, 100000, 100000).run();
-      
-      // Seed user automatically with super_admin privileges
-      const userId = 'usr_rj_master';
-      const dummyHash = 'master_bypass_sha256_placeholder'; 
-      await c.env.DB.prepare('INSERT OR IGNORE INTO users (id, org_id, email, name, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)')
-        .bind(userId, orgId, email, 'Rick Jefferson', dummyHash, 'super_admin').run();
-        
-      // Load seeded user info
-      user = await c.env.DB.prepare('SELECT u.*, o.name as org_name, o.plan as org_plan FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ?').bind(email).first() as any;
+      const orgId = 'org_platform_master';
+      const userId = 'usr_platform_master';
+      const passwordHash = await hashPassword(password);
+      await c.env.DB.prepare(
+        'INSERT OR IGNORE INTO organizations (id, name, slug, plan, max_users, max_clients, max_reports_per_month) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).bind(orgId, 'RJ Business Solutions', 'rj-business-solutions', 'enterprise', 1000, 100000, 100000).run();
+      await c.env.DB.prepare(
+        'INSERT OR IGNORE INTO users (id, org_id, email, name, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)'
+      ).bind(userId, orgId, email, 'Platform Owner', passwordHash, 'super_admin').run();
+      user = await c.env.DB.prepare(
+        'SELECT u.*, o.name as org_name, o.plan as org_plan FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ?'
+      ).bind(email).first() as any;
     } else {
-      // Elevate privileges to ensure super_admin role and enterprise plan
-      await c.env.DB.prepare('UPDATE users SET role = "super_admin" WHERE id = ?').bind(user.id).run();
+      await c.env.DB.prepare('UPDATE users SET role = "super_admin", is_active = 1 WHERE id = ?').bind(user.id).run();
       await c.env.DB.prepare('UPDATE organizations SET plan = "enterprise" WHERE id = ?').bind(user.org_id).run();
-      
-      // Reload updated user info
-      user = await c.env.DB.prepare('SELECT u.*, o.name as org_name, o.plan as org_plan FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ?').bind(email).first() as any;
+      user = await c.env.DB.prepare(
+        'SELECT u.*, o.name as org_name, o.plan as org_plan FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ?'
+      ).bind(email).first() as any;
     }
   } else {
-    user = await c.env.DB.prepare('SELECT u.*, o.name as org_name, o.plan as org_plan FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ? AND u.is_active = 1').bind(email).first() as any;
+    user = await c.env.DB.prepare(
+      'SELECT u.*, o.name as org_name, o.plan as org_plan, o.settings as org_settings FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ? AND u.is_active = 1'
+    ).bind(email).first() as any;
     if (!user) return c.json({ error: 'Invalid credentials' }, 401);
 
     const valid = await verifyPassword(password, user.password_hash);
     if (!valid) return c.json({ error: 'Invalid credentials' }, 401);
+
+    if (needsPasswordRehash(user.password_hash)) {
+      try {
+        const upgraded = await hashPassword(password);
+        await c.env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(upgraded, user.id).run();
+      } catch (e) {
+        console.warn('[LOGIN] password rehash failed', e);
+      }
+    }
   }
 
-  // Check MFA challenge gating
+  // Org suspension gate
+  try {
+    const settings = typeof user.org_settings === 'string' ? JSON.parse(user.org_settings || '{}') : (user.org_settings || {});
+    if (settings.suspended) return c.json({ error: 'Organization suspended. Contact support.' }, 403);
+  } catch { /* ignore */ }
+
   if (user.mfa_enabled === 1) {
-    const tempToken = generateId() + '_mfa_pending';
-    return c.json({
-      mfaRequired: true,
-      userId: user.id,
-      tempToken
-    });
+    const tempToken = createSessionToken();
+    const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    await c.env.DB.prepare(
+      'INSERT INTO mfa_challenges (id, user_id, token, expires_at, consumed) VALUES (?, ?, ?, ?, 0)'
+    ).bind(generateId(), user.id, tempToken, expires).run();
+    return c.json({ mfaRequired: true, userId: user.id, tempToken });
   }
 
   const token = createSessionToken();
@@ -493,20 +548,31 @@ app.post('/api/auth/login', async (c) => {
   await c.env.DB.prepare('INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)').bind(token, user.id, user.org_id, expires, ip, ua).run();
   await c.env.DB.prepare('UPDATE users SET last_login = datetime("now") WHERE id = ?').bind(user.id).run();
 
-  return c.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, org_id: user.org_id }, org: { id: user.org_id, name: user.org_name, plan: user.org_plan } });
+  return c.json({
+    token,
+    user: { id: user.id, name: user.name, email: user.email, role: user.role, org_id: user.org_id },
+    org: { id: user.org_id, name: user.org_name, plan: user.org_plan },
+  });
 });
 
 app.post('/api/auth/mfa/challenge', async (c) => {
   const { userId, code, tempToken } = await c.req.json();
   if (!userId || !code || !tempToken) return c.json({ error: 'All fields required' }, 400);
 
-  if (!tempToken.endsWith('_mfa_pending')) return c.json({ error: 'Invalid MFA request' }, 400);
+  const challenge = await c.env.DB.prepare(
+    'SELECT * FROM mfa_challenges WHERE token = ? AND user_id = ? AND consumed = 0 AND expires_at > datetime("now")'
+  ).bind(tempToken, userId).first() as any;
+  if (!challenge) return c.json({ error: 'Invalid or expired MFA challenge' }, 401);
 
-  const user = await c.env.DB.prepare('SELECT u.*, o.name as org_name, o.plan as org_plan FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.id = ? AND u.is_active = 1').bind(userId).first() as any;
+  const user = await c.env.DB.prepare(
+    'SELECT u.*, o.name as org_name, o.plan as org_plan FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.id = ? AND u.is_active = 1'
+  ).bind(userId).first() as any;
   if (!user) return c.json({ error: 'User not found' }, 404);
 
   const isValid = await verifyTOTP(user.mfa_secret, code);
   if (!isValid) return c.json({ error: 'Invalid 6-digit MFA code' }, 401);
+
+  await c.env.DB.prepare('UPDATE mfa_challenges SET consumed = 1 WHERE id = ?').bind(challenge.id).run();
 
   const token = createSessionToken();
   const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -515,7 +581,11 @@ app.post('/api/auth/mfa/challenge', async (c) => {
   await c.env.DB.prepare('INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)').bind(token, user.id, user.org_id, expires, ip, ua).run();
   await c.env.DB.prepare('UPDATE users SET last_login = datetime("now") WHERE id = ?').bind(user.id).run();
 
-  return c.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, org_id: user.org_id }, org: { id: user.org_id, name: user.org_name, plan: user.org_plan } });
+  return c.json({
+    token,
+    user: { id: user.id, name: user.name, email: user.email, role: user.role, org_id: user.org_id },
+    org: { id: user.org_id, name: user.org_name, plan: user.org_plan },
+  });
 });
 
 app.post('/api/auth/mfa/setup', authMiddleware, async (c) => {
@@ -600,30 +670,40 @@ app.post('/api/auth/forgot-password', async (c) => {
   const { email } = await c.req.json();
   if (!email) return c.json({ error: 'Email required' }, 400);
 
-  const user = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first() as any;
-  if (!user) {
-    // Don't reveal whether email exists
-    return c.json({ ok: true, message: 'If the email exists, a reset link has been sent' });
-  }
+  const user = await c.env.DB.prepare('SELECT id, email, name FROM users WHERE email = ?').bind(email).first() as any;
+  // Always return the same message (no email enumeration)
+  const okPayload = { ok: true, message: 'If the email exists, a reset link has been sent' };
+  if (!user) return c.json(okPayload);
 
   const token = generateEmailToken();
-  const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
-
+  const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   await c.env.DB.prepare(
     'INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
   ).bind(generateId(), user.id, token, expires).run();
 
-  // In production: send email via your email provider (Resend, SendGrid, etc.)
-  // For now, return token directly so the frontend can show the link in dev
-  const resetUrl = `https://rickjeffersonsolutions.com/reset-password?token=${token}`;
-  console.log(`[PASSWORD RESET] ${email} -> ${resetUrl}`);
+  const base = c.env.FRONTEND_URL || 'https://smart-fcra.pages.dev';
+  const resetUrl = `${base}/?resetToken=${token}`;
+  try {
+    await sendTransactionalEmail(c.env.RESEND_API_KEY, {
+      to: user.email,
+      subject: 'Reset your Smart FCRA password',
+      html: `<p>Hello ${user.name || ''},</p><p><a href="${resetUrl}">Reset your password</a>. This link expires in 1 hour.</p>`,
+    });
+  } catch (e) {
+    console.error('[PASSWORD RESET] email failed', e);
+  }
 
-  return c.json({ ok: true, message: 'If the email exists, a reset link has been sent', debugToken: token });
+  // Only expose token in non-production for local QA
+  if ((c.env.ENVIRONMENT || 'development') !== 'production') {
+    return c.json({ ...okPayload, debugToken: token });
+  }
+  return c.json(okPayload);
 });
 
 app.post('/api/auth/reset-password', async (c) => {
   const { token, password } = await c.req.json();
   if (!token || !password) return c.json({ error: 'Token and new password required' }, 400);
+  if (String(password).length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400);
 
   const record = await c.env.DB.prepare(
     'SELECT * FROM password_reset_tokens WHERE token = ? AND expires_at > datetime("now")'
@@ -634,6 +714,7 @@ app.post('/api/auth/reset-password', async (c) => {
   await c.env.DB.batch([
     c.env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(newHash, record.user_id),
     c.env.DB.prepare('DELETE FROM password_reset_tokens WHERE token = ?').bind(token),
+    c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(record.user_id),
   ]);
 
   return c.json({ ok: true, message: 'Password reset successfully' });
@@ -1238,11 +1319,20 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
       if (!existingClient.email && extractedEmail) { updates.push('email = ?'); binds.push(extractedEmail); }
       if (!existingClient.phone && extractedPhone) { updates.push('phone = ?'); binds.push(extractedPhone); }
 
-      // Auto-set regulatory compliance consents on onboarding
-      if (!existingClient.permissible_purpose_consent || existingClient.permissible_purpose_consent === 0) { updates.push('permissible_purpose_consent = 1'); }
-      if (!existingClient.croa_contract_agreed || existingClient.croa_contract_agreed === 0) { updates.push('croa_contract_agreed = 1'); }
-      if (!existingClient.tsr_advance_fee_waived || existingClient.tsr_advance_fee_waived === 0) { updates.push('tsr_advance_fee_waived = 1'); }
-      if (!existingClient.consent_timestamp) { updates.push('consent_timestamp = ?'); binds.push(new Date().toISOString()); }
+      // Consents must be explicitly attested — never auto-stamp silent compliance flags
+      if (body.permissiblePurposeConsent === true && (!existingClient.permissible_purpose_consent || existingClient.permissible_purpose_consent === 0)) {
+        updates.push('permissible_purpose_consent = 1');
+      }
+      if (body.croaContractAgreed === true && (!existingClient.croa_contract_agreed || existingClient.croa_contract_agreed === 0)) {
+        updates.push('croa_contract_agreed = 1');
+      }
+      if (body.tsrAdvanceFeeWaived === true && (!existingClient.tsr_advance_fee_waived || existingClient.tsr_advance_fee_waived === 0)) {
+        updates.push('tsr_advance_fee_waived = 1');
+      }
+      if ((body.permissiblePurposeConsent || body.croaContractAgreed || body.tsrAdvanceFeeWaived) && !existingClient.consent_timestamp) {
+        updates.push('consent_timestamp = ?');
+        binds.push(new Date().toISOString());
+      }
 
       if (updates.length > 0) {
         const sql = `UPDATE clients SET ${updates.join(', ')} WHERE id = ?`;
@@ -1343,11 +1433,20 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
       if (!bestMatch.email && extractedEmail) { updates.push('email = ?'); binds.push(extractedEmail); }
       if (!bestMatch.phone && extractedPhone) { updates.push('phone = ?'); binds.push(extractedPhone); }
 
-      // Auto-set regulatory compliance consents on onboarding
-      if (!bestMatch.permissible_purpose_consent || bestMatch.permissible_purpose_consent === 0) { updates.push('permissible_purpose_consent = 1'); }
-      if (!bestMatch.croa_contract_agreed || bestMatch.croa_contract_agreed === 0) { updates.push('croa_contract_agreed = 1'); }
-      if (!bestMatch.tsr_advance_fee_waived || bestMatch.tsr_advance_fee_waived === 0) { updates.push('tsr_advance_fee_waived = 1'); }
-      if (!bestMatch.consent_timestamp) { updates.push('consent_timestamp = ?'); binds.push(new Date().toISOString()); }
+      // Consents require explicit operator attestation from the onboarding wizard
+      if (body.permissiblePurposeConsent === true && (!bestMatch.permissible_purpose_consent || bestMatch.permissible_purpose_consent === 0)) {
+        updates.push('permissible_purpose_consent = 1');
+      }
+      if (body.croaContractAgreed === true && (!bestMatch.croa_contract_agreed || bestMatch.croa_contract_agreed === 0)) {
+        updates.push('croa_contract_agreed = 1');
+      }
+      if (body.tsrAdvanceFeeWaived === true && (!bestMatch.tsr_advance_fee_waived || bestMatch.tsr_advance_fee_waived === 0)) {
+        updates.push('tsr_advance_fee_waived = 1');
+      }
+      if ((body.permissiblePurposeConsent || body.croaContractAgreed || body.tsrAdvanceFeeWaived) && !bestMatch.consent_timestamp) {
+        updates.push('consent_timestamp = ?');
+        binds.push(new Date().toISOString());
+      }
 
       if (updates.length > 0) {
         const sql = `UPDATE clients SET ${updates.join(', ')} WHERE id = ?`;
@@ -1362,8 +1461,18 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
 
   // 4. Create new client profile if not matched
   if (isNewClient) {
+    const pp = body.permissiblePurposeConsent === true ? 1 : 0;
+    const croa = body.croaContractAgreed === true ? 1 : 0;
+    const tsr = body.tsrAdvanceFeeWaived === true ? 1 : 0;
+    if (!pp || !croa || !tsr) {
+      return c.json({
+        error: 'Regulatory Compliance Consent Required',
+        complianceRequired: true,
+        message: 'Onboarding requires explicit FCRA permissible purpose, CROA contract, and TSR advance-fee waiver attestation before creating a client file.',
+      }, 403);
+    }
     await c.env.DB.prepare(
-      'INSERT INTO clients (id, org_id, created_by, first_name, last_name, email, phone, address_line1, address_line2, city, state, zip, dob, ssn_last4, status, notes, tags, permissible_purpose_consent, croa_contract_agreed, tsr_advance_fee_waived, consent_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 1, ?)'
+      'INSERT INTO clients (id, org_id, created_by, first_name, last_name, email, phone, address_line1, address_line2, city, state, zip, dob, ssn_last4, status, notes, tags, permissible_purpose_consent, croa_contract_agreed, tsr_advance_fee_waived, consent_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).bind(
       clientId,
       user.org_id,
@@ -1373,7 +1482,7 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
       extractedEmail,
       extractedPhone,
       addressLine1,
-      null, // address_line2
+      null,
       city,
       state,
       zip,
@@ -1382,6 +1491,9 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
       'active',
       'Automatically created via Smart Client Autopilot',
       '[]',
+      pp,
+      croa,
+      tsr,
       new Date().toISOString()
     ).run();
 
@@ -1395,10 +1507,25 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
       'client_created',
       `Automatically created client profile for ${firstName} ${lastName} via Smart Client Autopilot`
     ).run();
+  } else {
+    // Existing client: require consents on file (or freshly attested in this request)
+    const existing = await c.env.DB.prepare(
+      'SELECT permissible_purpose_consent, croa_contract_agreed, tsr_advance_fee_waived FROM clients WHERE id = ? AND org_id = ?'
+    ).bind(clientId, user.org_id).first() as any;
+    const ppOk = existing?.permissible_purpose_consent === 1 || body.permissiblePurposeConsent === true;
+    const croaOk = existing?.croa_contract_agreed === 1 || body.croaContractAgreed === true;
+    const tsrOk = existing?.tsr_advance_fee_waived === 1 || body.tsrAdvanceFeeWaived === true;
+    if (!ppOk || !croaOk || !tsrOk) {
+      return c.json({
+        error: 'Regulatory Compliance Consent Required',
+        complianceRequired: true,
+        message: 'Matched client is missing FCRA/CROA/TSR consents. Attest all three checkboxes before continuing.',
+      }, 403);
+    }
   }
 
   // 5. Generate secure client login credentials autonomously
-  const generatedPassword = `SmartPass-${Math.random().toString(36).substring(2, 8).toUpperCase()}!`;
+  const generatedPassword = `SmartPass-${Math.random().toString(36).substring(2, 10).toUpperCase()}!`;
   const passwordHash = await hashPassword(generatedPassword);
 
   const existingUser = await c.env.DB.prepare('SELECT id FROM users WHERE email = ? AND org_id = ?').bind(extractedEmail, user.org_id).first() as any;
@@ -1475,7 +1602,7 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
     clientId,
     user.id,
     `Auto-generated credentials welcome email sent to ${extractedEmail} (${emailStatus})`,
-    JSON.stringify({ email: extractedEmail, status: emailStatus, password: generatedPassword })
+    JSON.stringify({ email: extractedEmail, status: emailStatus, credentialsDispatched: true })
   ).run();
 
   // 6. Detect violations and calculate score
@@ -1651,23 +1778,36 @@ app.post('/api/billing/checkout', authMiddleware, async (c) => {
   const plan = planPrices[planId as string];
   if (!plan) return c.json({ error: 'Invalid plan' }, 400);
 
+  const priceIdMap: Record<string, string | undefined> = {
+    professional: c.env.STRIPE_PROFESSIONAL_PRICE_ID,
+    unlimited: c.env.STRIPE_UNLIMITED_PRICE_ID,
+    enterprise: c.env.STRIPE_ENTERPRISE_PRICE_ID,
+  };
+
   let session;
   try {
+    const configuredPriceId = priceIdMap[planId as string];
+    const lineItems = configuredPriceId
+      ? [{ price: configuredPriceId, quantity: 1 }]
+      : [{
+          price_data: {
+            currency: 'usd',
+            product_data: { name: plan.name, metadata: { planId } },
+            unit_amount: plan.amount,
+            recurring: { interval: plan.interval as 'month' },
+          },
+          quantity: 1,
+        }];
+
     session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      line_items: [{
-        price_data: {
-          currency: 'usd',
-          product_data: { name: plan.name },
-          unit_amount: plan.amount,
-          recurring: { interval: plan.interval as 'month' }
-        },
-        quantity: 1
-      }],
+      line_items: lineItems,
       mode: 'subscription',
-      success_url: `${c.env.FRONTEND_URL}/dashboard?checkout=success`,
-      cancel_url: `${c.env.FRONTEND_URL}/billing?checkout=cancelled`,
+      success_url: `${c.env.FRONTEND_URL || 'http://localhost:3000'}/?checkout=success`,
+      cancel_url: `${c.env.FRONTEND_URL || 'http://localhost:3000'}/?page=billing&checkout=cancelled`,
       client_reference_id: user.org_id,
+      metadata: { planId, orgId: user.org_id },
+      subscription_data: { metadata: { planId, orgId: user.org_id } },
       customer: org.stripe_customer_id || undefined,
       customer_email: org.stripe_customer_id ? undefined : user.email,
     });
@@ -1719,9 +1859,10 @@ app.post('/api/billing/webhook', async (c) => {
       const stripe = getStripe(c.env);
       const subscription = await stripe.subscriptions.retrieve(stripeSubId);
       const priceId = subscription.items.data[0]?.price.id;
-      const plan = priceId === c.env.STRIPE_UNLIMITED_PRICE_ID ? 'unlimited'
+      const metaPlan = session.metadata?.planId || subscription.metadata?.planId;
+      const plan = metaPlan || (priceId === c.env.STRIPE_UNLIMITED_PRICE_ID ? 'unlimited'
         : priceId === c.env.STRIPE_ENTERPRISE_PRICE_ID ? 'enterprise'
-        : priceId === c.env.STRIPE_PROFESSIONAL_PRICE_ID ? 'professional' : 'professional';
+        : priceId === c.env.STRIPE_PROFESSIONAL_PRICE_ID ? 'professional' : 'professional');
 
       await c.env.DB.prepare(
         'UPDATE organizations SET plan = ?, stripe_customer_id = ?, stripe_subscription_id = ? WHERE id = ?'
@@ -1781,6 +1922,12 @@ app.post('/api/billing/webhook', async (c) => {
 });
 
 app.post('/api/billing/mailing-callback', async (c) => {
+  const expected = c.env.MAILING_WEBHOOK_SECRET;
+  const provided = c.req.header('X-Mailing-Webhook-Secret') || c.req.query('secret');
+  if (!expected || provided !== expected) {
+    return c.json({ error: 'Unauthorized mailing webhook' }, 401);
+  }
+
   const body = await c.req.json();
   const { documentId, uspsTrackingNumber, mailingDate } = body;
 
@@ -1803,6 +1950,10 @@ app.post('/api/billing/mailing-callback', async (c) => {
   ).bind(uspsTrackingNumber || null, responseDueDateStr, sentDateStr, documentId).run();
 
   await c.env.DB.prepare(
+    'INSERT INTO mailing_webhook_events (id, document_id, payload) VALUES (?, ?, ?)'
+  ).bind(generateId(), documentId, JSON.stringify(body)).run();
+
+  await c.env.DB.prepare(
     'INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     generateId(),
@@ -1816,6 +1967,68 @@ app.post('/api/billing/mailing-callback', async (c) => {
   ).run();
 
   return c.json({ ok: true, responseDueDate: responseDueDateStr });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ORG SETTINGS — letterhead, branding, security prefs
+// ═══════════════════════════════════════════════════════════════
+app.get('/api/settings/org', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const org = await c.env.DB.prepare('SELECT id, name, slug, plan, settings, max_users, max_clients, max_reports_per_month FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+  if (!org) return c.json({ error: 'Organization not found' }, 404);
+  let settings = {};
+  try { settings = JSON.parse(org.settings || '{}'); } catch { settings = {}; }
+  return c.json({ org: { ...org, settings } });
+});
+
+app.put('/api/settings/org', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role !== 'admin' && user.role !== 'super_admin') {
+    return c.json({ error: 'Only org admins can update settings' }, 403);
+  }
+  const body = await c.req.json();
+  const org = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+  let settings: any = {};
+  try { settings = JSON.parse(org?.settings || '{}'); } catch { settings = {}; }
+
+  if (body.letterhead && typeof body.letterhead === 'object') {
+    settings.letterhead = {
+      ...(settings.letterhead || {}),
+      ...body.letterhead,
+    };
+  }
+  if (body.branding && typeof body.branding === 'object') {
+    settings.branding = { ...(settings.branding || {}), ...body.branding };
+  }
+  if (typeof body.name === 'string' && body.name.trim()) {
+    await c.env.DB.prepare('UPDATE organizations SET name = ?, settings = ?, updated_at = datetime("now") WHERE id = ?')
+      .bind(body.name.trim(), JSON.stringify(settings), user.org_id).run();
+  } else {
+    await c.env.DB.prepare('UPDATE organizations SET settings = ?, updated_at = datetime("now") WHERE id = ?')
+      .bind(JSON.stringify(settings), user.org_id).run();
+  }
+
+  return c.json({ ok: true, settings });
+});
+
+app.get('/api/health/ready', async (c) => {
+  const checks: Record<string, boolean | string> = {
+    db: false,
+    encryptionKey: !!(c.env.PII_ENCRYPTION_KEY && c.env.PII_ENCRYPTION_KEY.length >= 32),
+    stripe: !!c.env.STRIPE_API_KEY,
+    resend: !!c.env.RESEND_API_KEY,
+    smartcredit: !!(c.env.SMARTCREDIT_CLIENT_KEY && c.env.SMARTCREDIT_CLIENT_SECRET),
+    click2mail: !!(c.env.CLICK2MAIL_USERNAME && c.env.CLICK2MAIL_AUTH_BASIC),
+    environment: c.env.ENVIRONMENT || 'development',
+  };
+  try {
+    await c.env.DB.prepare('SELECT 1 as ok').first();
+    checks.db = true;
+  } catch {
+    checks.db = false;
+  }
+  const ready = checks.db === true && checks.encryptionKey === true;
+  return c.json({ ready, version: '2.0.0', checks }, ready ? 200 : 503);
 });
 
 app.get('/api/reports', authMiddleware, async (c) => {
@@ -2451,8 +2664,11 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
       }
     } else {
       if (username && password) {
-        const clientKey = c.env.SMARTCREDIT_CLIENT_KEY || '19343205-b3a9-4143-8bef-2cb5da0c731f';
-        const clientSecret = c.env.SMARTCREDIT_CLIENT_SECRET || 'WE_9tIrlwv0yvLW83CNmqlkyCIJVaxV5ouVu2sJ7QYQ';
+        const clientKey = c.env.SMARTCREDIT_CLIENT_KEY;
+        const clientSecret = c.env.SMARTCREDIT_CLIENT_SECRET;
+        if (!clientKey || !clientSecret) {
+          return c.json({ error: 'SmartCredit credentials are not configured. Set SMARTCREDIT_CLIENT_KEY and SMARTCREDIT_CLIENT_SECRET.' }, 503);
+        }
         const authHeader = 'Basic ' + btoa(`${clientKey}:${clientSecret}`);
 
         const authRes = await fetch('https://api.smartcredit.com/v1.1/member/authenticate', {
@@ -2480,8 +2696,11 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
 
       // If trackingToken is provided/resolved and raw smartCreditData is absent, fetch via ConsumerDirect API
       if (resolvedTrackingToken && !payload) {
-        const clientKey = c.env.SMARTCREDIT_CLIENT_KEY || '19343205-b3a9-4143-8bef-2cb5da0c731f';
-        const clientSecret = c.env.SMARTCREDIT_CLIENT_SECRET || 'WE_9tIrlwv0yvLW83CNmqlkyCIJVaxV5ouVu2sJ7QYQ';
+        const clientKey = c.env.SMARTCREDIT_CLIENT_KEY;
+        const clientSecret = c.env.SMARTCREDIT_CLIENT_SECRET;
+        if (!clientKey || !clientSecret) {
+          return c.json({ error: 'SmartCredit credentials are not configured. Set SMARTCREDIT_CLIENT_KEY and SMARTCREDIT_CLIENT_SECRET.' }, 503);
+        }
         const url = `https://api.smartcredit.com/v1.1/report/retrieve?clientKey=${clientKey}&trackingToken=${resolvedTrackingToken}`;
         const authHeader = 'Basic ' + btoa(`${clientKey}:${clientSecret}`);
 
@@ -3100,8 +3319,8 @@ app.get('/api/settings/statutes', (c) => {
 
 const adminGateMiddleware = async (c: any, next: any) => {
   const user = c.get('user');
-  if (!user || (user.role !== 'super_admin' && user.role !== 'admin')) {
-    return c.json({ error: 'Forbidden: Admin access only' }, 403);
+  if (!user || user.role !== 'super_admin') {
+    return c.json({ error: 'Forbidden: Platform super_admin access only' }, 403);
   }
   return next();
 };

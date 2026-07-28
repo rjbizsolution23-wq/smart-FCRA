@@ -1,16 +1,34 @@
--- Seed data for FCRA Supreme Violation Detector
--- Demo organization + admin user (password: demo123)
+-- Seed data for Smart FCRA Supreme v2
+-- Demo password: demo123456 (PBKDF2-SHA-256)
 
-INSERT OR IGNORE INTO organizations (id, name, slug, plan, max_users, max_clients, max_reports_per_month)
-VALUES ('org_demo_001', 'Demo Legal Firm', 'demo-legal-firm', 'pro', 10, 500, 200);
-
--- Password hash for "demo123" using custom salted SHA-256 (aligns with src/lib/auth.ts)
-INSERT OR IGNORE INTO users (id, org_id, email, name, password_hash, role)
-VALUES ('usr_demo_001', 'org_demo_001', 'demo@example.com', 'Demo Admin', 'f6226b26a16262900b20a0cdb4a0148268e70d08dc998301ddb36af13418c8d1', 'super_admin');
-
--- Pre-seed default client Salisha McDowell (matches mock credit report profiles for reliable demos)
-INSERT OR IGNORE INTO clients (id, org_id, created_by, first_name, last_name, email, phone, address_line1, city, state, zip, dob, ssn_last4, status, notes, tags)
+INSERT OR IGNORE INTO organizations (id, name, slug, plan, max_users, max_clients, max_reports_per_month, settings)
 VALUES (
+  'org_demo_001',
+  'Demo Legal Firm',
+  'demo-legal-firm',
+  'professional',
+  10,
+  500,
+  200,
+  '{"letterhead":{"firmName":"Demo Legal Firm","attorneyName":"Demo Counsel, Esq.","address":"100 Justice Ave","city":"Dallas","state":"TX","zip":"75201","phone":"(214) 555-0100","email":"counsel@demolegalfirm.example","barNumber":"TX-000000"}}'
+);
+
+INSERT OR IGNORE INTO users (id, org_id, email, name, password_hash, role, is_active)
+VALUES (
+  'usr_demo_001',
+  'org_demo_001',
+  'demo@example.com',
+  'Demo Admin',
+  'pbkdf2$210000$9ded5ff8b462ab876495377355efad38$bfad99d70e6c3447eba59f9802ad9bf04be184ce3864fd640e0d347091be4bff',
+  'super_admin',
+  1
+);
+
+INSERT OR IGNORE INTO clients (
+  id, org_id, created_by, first_name, last_name, email, phone,
+  address_line1, city, state, zip, dob, ssn_last4, status, notes, tags,
+  permissible_purpose_consent, croa_contract_agreed, tsr_advance_fee_waived, consent_timestamp
+) VALUES (
   'cli_demo_001',
   'org_demo_001',
   'usr_demo_001',
@@ -25,7 +43,36 @@ VALUES (
   '03/22/1982',
   '1642',
   'active',
-  'Demo client pre-seeded for high-fidelity evaluation of corporate & credit-repair pipelines.',
-  '["Premium", "Lead"]'
+  'Demo client pre-seeded for evaluation pipelines.',
+  '["Premium", "Lead"]',
+  1, 1, 1, datetime('now')
 );
 
+-- Isolation test users (Playwright)
+INSERT OR IGNORE INTO organizations (id, name, slug, plan, max_users, max_clients, max_reports_per_month, settings)
+VALUES ('org_iso_a', 'Isolation Firm A', 'isolation-a', 'professional', 5, 50, 50, '{}');
+
+INSERT OR IGNORE INTO organizations (id, name, slug, plan, max_users, max_clients, max_reports_per_month, settings)
+VALUES ('org_iso_b', 'Isolation Firm B', 'isolation-b', 'professional', 5, 50, 50, '{"suspended":true}');
+
+INSERT OR IGNORE INTO users (id, org_id, email, name, password_hash, role, is_active)
+VALUES (
+  'usr_iso_member',
+  'org_iso_a',
+  'member@iso-a.example',
+  'Iso Member',
+  'pbkdf2$210000$9ded5ff8b462ab876495377355efad38$bfad99d70e6c3447eba59f9802ad9bf04be184ce3864fd640e0d347091be4bff',
+  'member',
+  1
+);
+
+INSERT OR IGNORE INTO users (id, org_id, email, name, password_hash, role, is_active)
+VALUES (
+  'usr_iso_suspended',
+  'org_iso_b',
+  'suspended@iso-b.example',
+  'Suspended User',
+  'pbkdf2$210000$9ded5ff8b462ab876495377355efad38$bfad99d70e6c3447eba59f9802ad9bf04be184ce3864fd640e0d347091be4bff',
+  'admin',
+  1
+);

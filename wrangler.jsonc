@@ -4,7 +4,6 @@
   "compatibility_date": "2026-04-13",
   "pages_build_output_dir": "./dist",
   "compatibility_flags": ["nodejs_compat"],
-  // SEPARATE PROJECT — create with: npx wrangler d1 create fcra-detector-v2
   "d1_databases": [
     {
       "binding": "DB",
@@ -14,5 +13,11 @@
   ],
   "ai": {
     "binding": "AI"
+  },
+  "vars": {
+    "ENVIRONMENT": "development",
+    "FRONTEND_URL": "http://localhost:3000",
+    "PII_ENCRYPTION_KEY": "local-dev-only-pii-key-change-in-production-32+",
+    "MAILING_WEBHOOK_SECRET": "local-dev-mailing-webhook-secret-change-me"
   }
 }

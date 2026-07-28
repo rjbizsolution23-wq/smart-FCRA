@@ -495,14 +495,48 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   // AUTH
   // ═══════════════════════════════════════════════════════════════
   function renderAuth() {
+    const params = new URLSearchParams(location.search);
+    const resetToken = params.get('resetToken');
+    const verifyEmail = params.get('verifyEmail');
+    if (resetToken) {
+      return `<div class="min-h-screen flex items-center justify-center p-4"><div class="w-full max-w-md glass rounded-2xl p-6">
+        <h1 class="text-xl font-bold text-white mb-2">Reset Password</h1>
+        <p class="text-sm text-gray-400 mb-4">Choose a new password (minimum 8 characters).</p>
+        <form id="reset-form" class="space-y-4">
+          <input type="hidden" name="token" value="${escapeHtml(resetToken)}">
+          <div><label class="block text-xs text-gray-400 mb-1.5">New Password</label><input type="password" name="password" required minlength="8" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none"></div>
+          <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg text-sm">Update Password</button>
+        </form>
+        <p class="text-center text-xs text-gray-500 mt-4"><a href="/" class="text-blue-400">Back to sign in</a></p>
+      </div></div>`;
+    }
     return `<div class="min-h-screen flex items-center justify-center p-4">
       <div class="w-full max-w-md">
         <div class="text-center mb-8">
-          <div class="inline-flex items-center justify-center mb-4"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-16 w-auto rounded-2xl border border-blue-500/30 object-cover shadow-[0_0_20px_rgba(10,102,255,0.2)]"></div>
-          <h1 class="text-2xl font-bold text-white">FCRA Supreme Detector</h1>
-          <p class="text-gray-400 mt-1 text-sm">Multi-tenant credit report violation analysis SaaS</p>
+          <div class="inline-flex items-center justify-center mb-4"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-16 w-auto rounded-2xl border border-blue-500/30 object-cover shadow-[0_0_20px_rgba(10,102,255,0.2)]" alt="RJ Business Solutions"></div>
+          <h1 class="text-2xl font-bold text-white">Smart FCRA Supreme</h1>
+          <p class="text-gray-400 mt-1 text-sm">Enterprise credit violation & dispute CRM</p>
         </div>
         <div class="glass rounded-2xl p-6">
+          <div id="auth-mfa" class="hidden space-y-4">
+            <h2 class="text-lg font-semibold text-white">Multi-Factor Authentication</h2>
+            <p class="text-sm text-gray-400">Enter the 6-digit code from your authenticator app.</p>
+            <form id="mfa-form" class="space-y-4">
+              <input type="hidden" name="userId" id="mfa-user-id">
+              <input type="hidden" name="tempToken" id="mfa-temp-token">
+              <input type="text" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-center text-2xl tracking-[0.4em] outline-none" placeholder="000000">
+              <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg text-sm">Verify & Sign In</button>
+            </form>
+          </div>
+          <div id="auth-forgot" class="hidden space-y-4">
+            <h2 class="text-lg font-semibold text-white">Forgot Password</h2>
+            <form id="forgot-form" class="space-y-4">
+              <div><label class="block text-xs text-gray-400 mb-1.5">Email</label><input type="email" name="email" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none"></div>
+              <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg text-sm">Send Reset Link</button>
+            </form>
+            <button type="button" class="text-xs text-blue-400" onclick="window._switchAuthPanel('login')">Back to sign in</button>
+          </div>
+          <div id="auth-main">
           <div class="flex border-b border-gray-700 mb-5">
             <button id="tab-login" class="flex-1 pb-3 text-sm font-semibold text-blue-400 border-b-2 border-blue-400" onclick="window._switchTab('login')">Sign In</button>
             <button id="tab-register" class="flex-1 pb-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent" onclick="window._switchTab('register')">Create Account</button>
@@ -512,56 +546,122 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
             <div>
               <label class="block text-xs font-medium text-gray-400 mb-1.5">Password</label>
               <div class="relative">
-                <input type="password" id="login-password" name="password" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-3.5 pr-10 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="••••••••">
-                <button type="button" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-white" onclick="const input = document.getElementById('login-password'); const icon = this.querySelector('i'); if (input.type === 'password') { input.type = 'text'; icon.className = 'fas fa-eye-slash'; } else { input.type = 'password'; icon.className = 'fas fa-eye'; }">
-                  <i class="fas fa-eye"></i>
-                </button>
+                <input type="password" id="login-password" name="password" required minlength="8" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-3.5 pr-10 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="••••••••">
+                <button type="button" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-white" onclick="const input = document.getElementById('login-password'); const icon = this.querySelector('i'); if (input.type === 'password') { input.type = 'text'; icon.className = 'fas fa-eye-slash'; } else { input.type = 'password'; icon.className = 'fas fa-eye'; }"><i class="fas fa-eye"></i></button>
               </div>
             </div>
+            <div class="flex justify-between items-center"><button type="button" class="text-xs text-blue-400" onclick="window._switchAuthPanel('forgot')">Forgot password?</button></div>
             <div class="p-3 bg-amber-900/20 border border-amber-600/30 rounded-lg mt-2">
-              <p class="text-[10px] text-amber-300 leading-relaxed">
-                <strong>⚠️ FCRA NOTICE:</strong> We prepare dispute documents only. NOT legal advice. See <a href="/compliance/disclaimers" class="underline hover:text-amber-200">disclaimers</a>.
-              </p>
+              <p class="text-[10px] text-amber-300 leading-relaxed"><strong>FCRA NOTICE:</strong> We prepare dispute documents only. NOT legal advice. See <a href="/compliance/disclaimers" class="underline hover:text-amber-200">disclaimers</a>.</p>
             </div>
             <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition text-sm">Sign In</button>
           </form></div>
           <div id="auth-register" class="hidden"><form id="register-form" class="space-y-4">
-            <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Organization Name</label><input type="text" name="orgName" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="Your Firm Name"></div>
-            <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Full Name</label><input type="text" name="name" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="John Doe"></div>
-            <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Email</label><input type="email" name="email" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="you@company.com"></div>
+            <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Organization Name</label><input type="text" name="orgName" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none" placeholder="Your Firm Name"></div>
+            <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Full Name</label><input type="text" name="name" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none" placeholder="John Doe"></div>
+            <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Email</label><input type="email" name="email" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none" placeholder="you@company.com"></div>
             <div>
               <label class="block text-xs font-medium text-gray-400 mb-1.5">Password</label>
               <div class="relative">
-                <input type="password" id="register-password" name="password" required minlength="6" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-3.5 pr-10 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="Minimum 6 characters">
-                <button type="button" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-white" onclick="const input = document.getElementById('register-password'); const icon = this.querySelector('i'); if (input.type === 'password') { input.type = 'text'; icon.className = 'fas fa-eye-slash'; } else { input.type = 'password'; icon.className = 'fas fa-eye'; }">
-                  <i class="fas fa-eye"></i>
-                </button>
+                <input type="password" id="register-password" name="password" required minlength="8" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-3.5 pr-10 py-2.5 text-white text-sm outline-none" placeholder="Minimum 8 characters">
+                <button type="button" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-white" onclick="const input = document.getElementById('register-password'); const icon = this.querySelector('i'); if (input.type === 'password') { input.type = 'text'; icon.className = 'fas fa-eye-slash'; } else { input.type = 'password'; icon.className = 'fas fa-eye'; }"><i class="fas fa-eye"></i></button>
               </div>
             </div>
             <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition text-sm">Create Account</button>
           </form></div>
+          </div>
           <div class="mt-4 p-3 bg-amber-900/20 border border-amber-600/30 rounded-lg">
-            <p class="text-[10px] text-amber-300 leading-relaxed">
-              <strong>⚠️ NOTICE:</strong> This service prepares dispute documents. We are NOT a law firm and do NOT provide legal advice.
-              FCRA rights are governed by 15 U.S.C. § 1681 et seq. For legal advice, consult an attorney.
-              <a href="/compliance/disclaimers" class="underline hover:text-amber-200">View Full Disclaimers →</a>
-            </p>
+            <p class="text-[10px] text-amber-300 leading-relaxed"><strong>NOTICE:</strong> This service prepares dispute documents. We are NOT a law firm and do NOT provide legal advice. <a href="/compliance/disclaimers" class="underline hover:text-amber-200">View Full Disclaimers →</a></p>
           </div>
         </div>
-        <p class="text-center text-gray-600 text-xs mt-4">FCRA Supreme Detection Engine v3.0 | RJ Business Solutions</p>
+        <p class="text-center text-gray-600 text-xs mt-4">Smart FCRA Supreme v2.0 | RJ Business Solutions</p>
       </div></div>`;
   }
 
   window._switchTab = function(tab) {
     const ll = $('#auth-login'), rr = $('#auth-register'), tl = $('#tab-login'), tr = $('#tab-register');
+    if (!ll || !rr) return;
     if (tab === 'login') { ll.classList.remove('hidden'); rr.classList.add('hidden'); tl.className = 'flex-1 pb-3 text-sm font-semibold text-blue-400 border-b-2 border-blue-400'; tr.className = 'flex-1 pb-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent'; }
     else { ll.classList.add('hidden'); rr.classList.remove('hidden'); tr.className = 'flex-1 pb-3 text-sm font-semibold text-blue-400 border-b-2 border-blue-400'; tl.className = 'flex-1 pb-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent'; }
   };
 
+  window._switchAuthPanel = function(panel) {
+    const main = $('#auth-main'), forgot = $('#auth-forgot'), mfa = $('#auth-mfa');
+    if (main) main.classList.toggle('hidden', panel !== 'login' && panel !== 'register');
+    if (forgot) forgot.classList.toggle('hidden', panel !== 'forgot');
+    if (mfa) mfa.classList.toggle('hidden', panel !== 'mfa');
+  };
+
   function bindAuth() {
-    const lf = $('#login-form'), rf = $('#register-form');
-    if (lf) lf.onsubmit = async (e) => { e.preventDefault(); const fd = new FormData(e.target); try { const d = await api('/auth/login', { method:'POST', body:JSON.stringify({email:fd.get('email'),password:fd.get('password')})}); setState({token:d.token,user:d.user,org:d.org}); toast('Welcome back!','success'); render(); } catch(err) { toast(err.message,'error'); } };
-    if (rf) rf.onsubmit = async (e) => { e.preventDefault(); const fd = new FormData(e.target); try { const d = await api('/auth/register', { method:'POST', body:JSON.stringify({orgName:fd.get('orgName'),name:fd.get('name'),email:fd.get('email'),password:fd.get('password')})}); setState({token:d.token,user:d.user,org:d.org}); toast('Account created!','success'); render(); } catch(err) { toast(err.message,'error'); } };
+    const params = new URLSearchParams(location.search);
+    const verifyEmail = params.get('verifyEmail');
+    if (verifyEmail) {
+      api('/auth/verify-email', { method:'POST', body: JSON.stringify({ token: verifyEmail }) })
+        .then(() => { toast('Email verified — you can sign in now', 'success'); history.replaceState({}, '', '/'); })
+        .catch(err => toast(err.message, 'error'));
+    }
+
+    const lf = $('#login-form'), rf = $('#register-form'), mf = $('#mfa-form'), ff = $('#forgot-form'), rsf = $('#reset-form');
+    if (lf) lf.onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        const d = await api('/auth/login', { method:'POST', body:JSON.stringify({email:fd.get('email'),password:fd.get('password')})});
+        if (d.mfaRequired) {
+          $('#mfa-user-id').value = d.userId;
+          $('#mfa-temp-token').value = d.tempToken;
+          window._switchAuthPanel('mfa');
+          return;
+        }
+        setState({token:d.token,user:d.user,org:d.org});
+        toast('Welcome back!','success');
+        render();
+      } catch(err) { toast(err.message,'error'); }
+    };
+    if (mf) mf.onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        const d = await api('/auth/mfa/challenge', { method:'POST', body:JSON.stringify({ userId: fd.get('userId'), tempToken: fd.get('tempToken'), code: fd.get('code') })});
+        setState({token:d.token,user:d.user,org:d.org});
+        toast('MFA verified','success');
+        render();
+      } catch(err) { toast(err.message,'error'); }
+    };
+    if (ff) ff.onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        const d = await api('/auth/forgot-password', { method:'POST', body:JSON.stringify({ email: fd.get('email') })});
+        toast(d.message || 'If the email exists, a reset link was sent', 'success');
+        if (d.debugToken) toast('Dev reset token ready — check network response', 'info');
+      } catch(err) { toast(err.message,'error'); }
+    };
+    if (rsf) rsf.onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        await api('/auth/reset-password', { method:'POST', body:JSON.stringify({ token: fd.get('token'), password: fd.get('password') })});
+        toast('Password updated — sign in with your new password', 'success');
+        history.replaceState({}, '', '/');
+        render();
+      } catch(err) { toast(err.message,'error'); }
+    };
+    if (rf) rf.onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      try {
+        const d = await api('/auth/register', { method:'POST', body:JSON.stringify({orgName:fd.get('orgName'),name:fd.get('name'),email:fd.get('email'),password:fd.get('password')})});
+        if (d.requiresVerification) {
+          toast(d.message || 'Check your email to verify your account', 'success');
+          window._switchTab('login');
+          return;
+        }
+        setState({token:d.token,user:d.user,org:d.org});
+        toast('Account created!','success');
+        render();
+      } catch(err) { toast(err.message,'error'); }
+    };
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -594,6 +694,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'sales-tools', icon: 'fa-chart-pie', label: 'Sales Tools' },
         { id: 'roi-calculator', icon: 'fa-calculator', label: 'ROI Calculator' },
         { id: 'team', icon: 'fa-user-friends', label: 'Team' },
+        { id: 'settings', icon: 'fa-cog', label: 'Settings' },
         { id: 'billing', icon: 'fa-credit-card', label: 'Billing' },
         { id: 'legal', icon: 'fa-gavel', label: 'Legal' },
       ];
@@ -669,6 +770,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'sales-tools': await pgSalesTools(el); break;
         case 'roi-calculator': await pgROICalculator(el); break;
         case 'team': await pgTeam(el); break;
+        case 'settings': await pgSettings(el); break;
         case 'billing': await pgBilling(el); break;
         case 'legal': await pgLegal(el); break;
         case 'admin-console': await pgAdminConsole(el); break;
@@ -4518,6 +4620,123 @@ Status: Discharged`;
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // SETTINGS — letterhead, MFA, org branding
+  // ═══════════════════════════════════════════════════════════════
+  async function pgSettings(el) {
+    try {
+      const [orgRes, mfaRes] = await Promise.all([
+        api('/settings/org'),
+        api('/auth/mfa/status'),
+      ]);
+      const org = orgRes.org || {};
+      const settings = org.settings || {};
+      const lh = settings.letterhead || {};
+      const mfaEnabled = !!mfaRes.enabled;
+
+      el.innerHTML = `<div class="fade-in space-y-6">
+        <div><h1 class="text-xl font-bold text-white">Organization Settings</h1><p class="text-sm text-gray-400">Letterhead, security, and firm branding used on dispute PDFs</p></div>
+
+        <div class="glass rounded-xl p-6 border border-gray-700">
+          <h2 class="text-sm font-semibold text-white mb-4 flex items-center gap-2"><i class="fas fa-building text-blue-400"></i> Firm Letterhead</h2>
+          <form id="letterhead-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="md:col-span-2"><label class="block text-xs text-gray-400 mb-1">Organization Display Name</label><input name="orgName" value="${escapeHtml(org.name || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div><label class="block text-xs text-gray-400 mb-1">Firm Name</label><input name="firmName" value="${escapeHtml(lh.firmName || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div><label class="block text-xs text-gray-400 mb-1">Attorney / Authorized Name</label><input name="attorneyName" value="${escapeHtml(lh.attorneyName || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div class="md:col-span-2"><label class="block text-xs text-gray-400 mb-1">Address</label><input name="address" value="${escapeHtml(lh.address || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div><label class="block text-xs text-gray-400 mb-1">City</label><input name="city" value="${escapeHtml(lh.city || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div class="grid grid-cols-2 gap-3"><div><label class="block text-xs text-gray-400 mb-1">State</label><input name="state" maxlength="2" value="${escapeHtml(lh.state || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div><div><label class="block text-xs text-gray-400 mb-1">ZIP</label><input name="zip" value="${escapeHtml(lh.zip || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div></div>
+            <div><label class="block text-xs text-gray-400 mb-1">Phone</label><input name="phone" value="${escapeHtml(lh.phone || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div><label class="block text-xs text-gray-400 mb-1">Email</label><input name="email" value="${escapeHtml(lh.email || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div><label class="block text-xs text-gray-400 mb-1">Bar Number</label><input name="barNumber" value="${escapeHtml(lh.barNumber || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div class="md:col-span-2"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">Save Letterhead</button></div>
+          </form>
+        </div>
+
+        <div class="glass rounded-xl p-6 border border-gray-700">
+          <h2 class="text-sm font-semibold text-white mb-2 flex items-center gap-2"><i class="fas fa-shield-alt text-emerald-400"></i> Multi-Factor Authentication</h2>
+          <p class="text-xs text-gray-400 mb-4">Status: <span class="${mfaEnabled ? 'text-emerald-400' : 'text-amber-400'} font-semibold">${mfaEnabled ? 'Enabled' : 'Disabled'}</span></p>
+          <div id="mfa-setup-box" class="space-y-3">
+            ${mfaEnabled ? `
+              <form id="mfa-disable-form" class="flex flex-wrap gap-3 items-end">
+                <div><label class="block text-xs text-gray-400 mb-1">Authenticator code</label><input name="code" maxlength="6" required class="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white w-40" placeholder="000000"></div>
+                <button type="submit" class="bg-red-600/80 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm">Disable MFA</button>
+              </form>
+            ` : `
+              <button id="btn-mfa-setup" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">Set Up MFA</button>
+              <div id="mfa-enroll" class="hidden mt-4 p-4 bg-gray-950/60 border border-gray-800 rounded-xl space-y-3">
+                <p class="text-xs text-gray-400">Add this secret to Google Authenticator / Authy, then enter a code to enable:</p>
+                <code id="mfa-secret" class="block text-sm text-blue-300 break-all"></code>
+                <form id="mfa-enable-form" class="flex flex-wrap gap-3 items-end">
+                  <div><label class="block text-xs text-gray-400 mb-1">6-digit code</label><input name="code" maxlength="6" required class="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white w-40"></div>
+                  <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Enable MFA</button>
+                </form>
+              </div>
+            `}
+          </div>
+        </div>
+      </div>`;
+
+      const lhForm = $('#letterhead-form');
+      if (lhForm) lhForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          await api('/settings/org', {
+            method: 'PUT',
+            body: JSON.stringify({
+              name: fd.get('orgName'),
+              letterhead: {
+                firmName: fd.get('firmName'),
+                attorneyName: fd.get('attorneyName'),
+                address: fd.get('address'),
+                city: fd.get('city'),
+                state: fd.get('state'),
+                zip: fd.get('zip'),
+                phone: fd.get('phone'),
+                email: fd.get('email'),
+                barNumber: fd.get('barNumber'),
+              }
+            })
+          });
+          toast('Letterhead saved', 'success');
+          if (state.org) setState({ org: { ...state.org, name: fd.get('orgName') } });
+        } catch (err) { toast(err.message, 'error'); }
+      };
+
+      const setupBtn = $('#btn-mfa-setup');
+      if (setupBtn) setupBtn.onclick = async () => {
+        try {
+          const d = await api('/auth/mfa/setup', { method: 'POST', body: '{}' });
+          $('#mfa-secret').textContent = d.secret;
+          $('#mfa-enroll').classList.remove('hidden');
+        } catch (err) { toast(err.message, 'error'); }
+      };
+      const enableForm = $('#mfa-enable-form');
+      if (enableForm) enableForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          await api('/auth/mfa/verify', { method: 'POST', body: JSON.stringify({ code: fd.get('code') }) });
+          toast('MFA enabled', 'success');
+          await pgSettings(el);
+        } catch (err) { toast(err.message, 'error'); }
+      };
+      const disableForm = $('#mfa-disable-form');
+      if (disableForm) disableForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          await api('/auth/mfa/disable', { method: 'POST', body: JSON.stringify({ code: fd.get('code') }) });
+          toast('MFA disabled', 'success');
+          await pgSettings(el);
+        } catch (err) { toast(err.message, 'error'); }
+      };
+    } catch (err) {
+      el.innerHTML = `<div class="glass rounded-xl p-8 border border-red-500/30 text-center"><h3 class="text-white font-bold mb-2">Failed to load settings</h3><p class="text-sm text-gray-400">${escapeHtml(err.message)}</p></div>`;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // LEGAL PAGES
   // ═══════════════════════════════════════════════════════════════
   async function pgLegal(el) {
@@ -6238,41 +6457,7 @@ async function pgAdminConsole(el) {
       const actualViolations = d.violations || [];
       const documents = d.documents || [];
 
-      // Pre-populate mock violations for high-fidelity client engagement if empty
-      const defaultViolations = [
-        {
-          id: 'v-mock-1',
-          account_name: 'Jefferson Capital Systems',
-          bureau: 'Equifax',
-          severity: 'critical',
-          statute: '15 U.S.C. § 1681e(b)',
-          error_type: 'Inaccurate Account Status',
-          finding_reason: 'Collection account reported as active/open after full settlement.',
-          fico_points: 35
-        },
-        {
-          id: 'v-mock-2',
-          account_name: 'First National Bank',
-          bureau: 'Experian',
-          severity: 'high',
-          statute: '15 U.S.C. § 1681i',
-          error_type: 'Incorrect Date of Last Activity',
-          finding_reason: 'Delinquency date artificially re-aged to extend 7-year statutory reporting limit.',
-          fico_points: 20
-        },
-        {
-          id: 'v-mock-3',
-          account_name: 'LVNV Funding LLC',
-          bureau: 'TransUnion',
-          severity: 'critical',
-          statute: '15 U.S.C. § 1681b',
-          error_type: 'No Permissible Purpose',
-          finding_reason: 'Inquiry posted without consumer-authorized credit transaction or court order.',
-          fico_points: 40
-        }
-      ];
-
-      const violations = actualViolations.length > 0 ? actualViolations.map((v, i) => ({
+      const violations = actualViolations.map((v, i) => ({
         id: v.id || `v-act-${i}`,
         account_name: v.account_name || 'Inaccurate Record',
         bureau: v.bureau || 'Experian',
@@ -6281,7 +6466,7 @@ async function pgAdminConsole(el) {
         error_type: v.error_type || v.subcategory || 'FCRA Inaccuracy',
         finding_reason: v.finding_reason || v.description || 'Record reporting incorrect credit coordinates.',
         fico_points: v.severity === 'critical' ? 40 : (v.severity === 'high' ? 25 : 15)
-      })) : defaultViolations;
+      }));
 
       // Local State for interactive features
       if (!window._cockpitState) {
@@ -7816,28 +8001,7 @@ async function pgAdminConsole(el) {
             bureau: 'Experian'
           }));
       } else {
-        pendingViolations = [
-          {
-            id: 'mock_v_1',
-            account_name: 'CHASE CARD SERVICES',
-            bureau: 'Equifax',
-            error_type: 'Late Payment After Discharge',
-            statute: '15 U.S.C. § 1681c',
-            finding_reason: 'Account was charged off on 2026-01-10 but continues to list monthly 30-day late records in April 2026.',
-            severity: 'high',
-            date: new Date().toISOString()
-          },
-          {
-            id: 'mock_v_2',
-            account_name: 'CREDIT ONE BANK',
-            bureau: 'Experian',
-            error_type: 'Discrepant Disputed Account Status',
-            statute: '15 U.S.C. § 1681i',
-            finding_reason: 'Consumer previously disputed this record under FCRA Section 611 guidelines, but the bureau verified without notation of dispute.',
-            severity: 'critical',
-            date: new Date().toISOString()
-          }
-        ];
+        pendingViolations = [];
       }
 
       if (initialPageData && initialPageData.searchViolationId) {
