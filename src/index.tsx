@@ -371,7 +371,7 @@ app.get('/api/health', async (c) => {
   return c.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    version: '1.0.0',
+    version: '2.0.0',
     region: c.req.header('CF-Region') || 'unknown',
   });
 });

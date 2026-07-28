@@ -2,10 +2,12 @@
   <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="RJ Business Solutions Logo" width="220" style="border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);" />
 </p>
 
-# 🧠 Smart FCRA Supreme — Enterprise Ingestion & Violation Engine
+# 🧠 Smart FCRA Supreme v2 — Enterprise Ingestion & Violation Engine
 ### Engineered by **Rick Jefferson** | **RJ Business Solutions**
 
-[![Deploy Status](https://img.shields.io/badge/Deployment-Cloudflare%20Pages-0A66FF?style=for-the-badge&logo=cloudflare)](https://smart-fcra.pages.dev)
+> **New version branch** — cloned from production `main` so you can iterate without touching the live `smart-fcra` deploy. Cloudflare Pages project target: `smart-fcra-v2`.
+
+[![Deploy Status](https://img.shields.io/badge/Deployment-Cloudflare%20Pages%20v2-0A66FF?style=for-the-badge&logo=cloudflare)](https://smart-fcra.pages.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-007ACC?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
 [![License: Proprietary](https://img.shields.io/badge/License-Proprietary%20Commercial-0A66FF?style=for-the-badge)](LICENSE)
 [![Security](https://img.shields.io/badge/Compliance-FCRA%20%2F%20FDCPA-blueviolet?style=for-the-badge)](#compliance--legal-auto-wiring)
