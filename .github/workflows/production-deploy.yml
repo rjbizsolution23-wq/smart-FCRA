@@ -55,4 +55,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=smart-fcra
+          # v2 SEPARATE PROJECT — never deploy this branch/copy to original smart-fcra
+          command: pages deploy dist --project-name=smart-fcra-v2

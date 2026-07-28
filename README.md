@@ -5,7 +5,7 @@
 # 🧠 Smart FCRA Supreme v2 — Enterprise Ingestion & Violation Engine
 ### Engineered by **Rick Jefferson** | **RJ Business Solutions**
 
-> **New version branch** — cloned from production `main` so you can iterate without touching the live `smart-fcra` deploy. Cloudflare Pages project target: `smart-fcra-v2`.
+> **Separate project (v2)** — workbench branch cloned from production. Deploy target is `smart-fcra-v2` / DB `fcra-detector-v2`. **Do not merge into original `main`.** When finished, push to a new repo (`smart-FCRA-v2`). See [docs/NEW_VERSION.md](docs/NEW_VERSION.md).
 
 [![Deploy Status](https://img.shields.io/badge/Deployment-Cloudflare%20Pages%20v2-0A66FF?style=for-the-badge&logo=cloudflare)](https://smart-fcra.pages.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-007ACC?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
