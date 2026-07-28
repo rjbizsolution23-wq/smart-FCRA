@@ -281,19 +281,15 @@ async function authMiddleware(c: any, next: any) {
     } catch (e) {}
   }
 
-  // Session Request Fingerprinting (Zero-Trust Session Hijacking Protection)
+  // Session fingerprinting — log anomalies; do not hard-kill (mobile/CGNAT IPs rotate)
   const currentIp = c.req.header('CF-Connecting-IP') || 'unknown';
   const currentUa = c.req.header('User-Agent') || 'unknown';
 
   if (session.ip_address && session.ip_address !== 'unknown' && session.ip_address !== currentIp) {
-    console.warn(`[SECURITY] Session Hijacking Attempt detected! Session: ${session.id}. Saved IP: ${session.ip_address}, Request IP: ${currentIp}`);
-    await c.env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(sessionId).run();
-    return c.json({ error: 'Session hijacked / IP mismatch' }, 401);
+    console.warn(`[SECURITY] Session IP change. Session: ${session.id}. Saved: ${session.ip_address}, Request: ${currentIp}`);
   }
   if (session.user_agent && session.user_agent !== 'unknown' && session.user_agent !== currentUa) {
-    console.warn(`[SECURITY] Session Hijacking Attempt detected! Session: ${session.id}. Saved UA: ${session.user_agent}, Request UA: ${currentUa}`);
-    await c.env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(sessionId).run();
-    return c.json({ error: 'Session hijacked / User-Agent mismatch' }, 401);
+    console.warn(`[SECURITY] Session UA change. Session: ${session.id}. Saved: ${session.user_agent?.slice(0, 80)}, Request: ${currentUa?.slice(0, 80)}`);
   }
 
   c.set('user', { id: session.user_id, name: session.user_name, email: session.user_email, role: session.user_role, org_id: session.org_id });
