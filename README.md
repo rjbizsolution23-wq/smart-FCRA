@@ -138,7 +138,7 @@ Our repository layout is engineered for immediate technical onboarding and insti
 ### Deploying to Production (Cloudflare Pages)
 Compile assets and promote live to Cloudflare Pages edge hosting with a single command:
 ```bash
-npx wrangler pages deploy dist --project-name smart-fcra
+npx wrangler pages deploy dist --project-name smart-fcra-v2
 ```
 
 ---
