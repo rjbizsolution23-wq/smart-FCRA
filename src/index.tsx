@@ -2,9 +2,11 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serveStatic } from 'hono/cloudflare-pages';
 import Stripe from 'stripe';
-import { generateId, hashPassword, verifyPassword, needsPasswordRehash, createSessionToken, generateEmailToken, generateMFASecret, verifyTOTP, sendTransactionalEmail } from './lib/auth';
+import { generateId, hashPassword, verifyPassword, needsPasswordRehash, createSessionToken, generateEmailToken, generateMFASecret, verifyTOTP } from './lib/auth';
 import { encryptText, decryptText, requireEncryptionKey } from './lib/crypto';
 import { generateAiText, listConfiguredProviders, generateFreeImage } from './lib/ai-providers';
+import { sendAppEmail } from './lib/email';
+import { MENTORS, buildMentorContext, KNOWLEDGE_CORPUS_META, retrieveCaseLawKnowledge, type MentorId } from './lib/mentors';
 import { parseCreditReportText } from './engine/parser';
 import { detectViolations, calculateLitigationScore, type CreditReportData } from './engine/violations';
 import { mapMfsnToInternal } from './engine/mfsn-mapper';
@@ -148,6 +150,12 @@ type Bindings = {
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
   SENDGRID_API_KEY?: string;
+  CLOUDFLARE_ACCOUNT_ID?: string;
+  CLOUDFLARE_EMAIL_API_TOKEN?: string;
+  CLOUDFLARE_EMAIL_FROM_NOREPLY?: string;
+  CLOUDFLARE_EMAIL_FROM_ONBOARDING?: string;
+  FREE_AI_ONLY?: string;
+  AI_DEFAULT_PROVIDER?: string;
   MAILING_WEBHOOK_SECRET?: string;
   PLATFORM_BOOTSTRAP_EMAIL?: string;
   PLATFORM_BOOTSTRAP_PASSWORD?: string;
@@ -437,7 +445,7 @@ app.post('/api/auth/register', async (c) => {
 
   try {
     // New orgs start inactive until email verified when Resend is configured
-    const requireVerify = !!c.env.RESEND_API_KEY;
+    const requireVerify = !!(c.env.CLOUDFLARE_EMAIL_API_TOKEN || c.env.RESEND_API_KEY);
     await c.env.DB.batch([
       c.env.DB.prepare('INSERT INTO organizations (id, name, slug, plan) VALUES (?, ?, ?, ?)').bind(orgId, orgName, slug, 'free'),
       c.env.DB.prepare('INSERT INTO users (id, org_id, email, name, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(
@@ -450,7 +458,7 @@ app.post('/api/auth/register', async (c) => {
     return c.json({ error: `Internal error (db insert): ${e.message}` }, 500);
   }
 
-  if (c.env.RESEND_API_KEY) {
+  if (c.env.CLOUDFLARE_EMAIL_API_TOKEN || c.env.RESEND_API_KEY) {
     const verifyToken = generateEmailToken();
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     await c.env.DB.prepare(
@@ -459,12 +467,11 @@ app.post('/api/auth/register', async (c) => {
     const base = c.env.FRONTEND_URL || 'https://smart-fcra.pages.dev';
     const verifyUrl = `${base}/?verifyEmail=${verifyToken}`;
     try {
-      await sendTransactionalEmail(c.env.RESEND_API_KEY, {
+      await sendAppEmail(c.env, {
         to: email,
         subject: 'Verify your Smart FCRA account',
         html: `<p>Welcome to Smart FCRA Supreme.</p><p><a href="${verifyUrl}">Verify your email</a> to activate your account.</p>`,
-        from: c.env.RESEND_FROM_EMAIL,
-        sendgridKey: c.env.SENDGRID_API_KEY,
+        purpose: 'onboarding',
       });
     } catch (e) {
       console.error('[REGISTER] verification email failed', e);
@@ -703,12 +710,11 @@ app.post('/api/auth/forgot-password', async (c) => {
   const base = c.env.FRONTEND_URL || 'https://smart-fcra.pages.dev';
   const resetUrl = `${base}/?resetToken=${token}`;
   try {
-    await sendTransactionalEmail(c.env.RESEND_API_KEY, {
+    await sendAppEmail(c.env, {
       to: user.email,
       subject: 'Reset your Smart FCRA password',
       html: `<p>Hello ${user.name || ''},</p><p><a href="${resetUrl}">Reset your password</a>. This link expires in 1 hour.</p>`,
-      from: c.env.RESEND_FROM_EMAIL,
-      sendgridKey: c.env.SENDGRID_API_KEY,
+      purpose: 'noreply',
     });
   } catch (e) {
     console.error('[PASSWORD RESET] email failed', e);
@@ -1591,27 +1597,18 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
     </div>
   `;
 
-  if (c.env.RESEND_API_KEY) {
-    try {
-      const resendResponse = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${c.env.RESEND_API_KEY}`,
-          'Content-Type': 'application/json'
-         },
-         body: JSON.stringify({
-           from: 'SmartFCRA™ Supreme <notifications@rjbusinesssolutions.org>',
-           to: extractedEmail,
-           subject: mailSubject,
-           html: mailHtml
-         })
-      });
-      if (resendResponse.ok) {
-        emailStatus = 'sent';
-      }
-    } catch (e: any) {
-      console.error('[ONBOARD_EMAIL] Resend error:', e.message);
-    }
+  try {
+    const mail = await sendAppEmail(c.env, {
+      to: extractedEmail,
+      subject: mailSubject,
+      html: mailHtml,
+      purpose: 'onboarding',
+    });
+    if (mail.sent) emailStatus = `sent:${mail.provider}`;
+    else if (mail.simulated) emailStatus = 'simulated';
+  } catch (e: any) {
+    console.error('[ONBOARD_EMAIL] error:', e.message);
+    emailStatus = 'failed';
   }
 
   // Log dispatch action to activity table
@@ -2039,11 +2036,14 @@ app.get('/api/health/ready', async (c) => {
     encryptionKey: !!(c.env.PII_ENCRYPTION_KEY && c.env.PII_ENCRYPTION_KEY.length >= 32),
     stripe: !!c.env.STRIPE_API_KEY,
     stripePublishable: !!c.env.STRIPE_PUBLISHABLE_KEY,
+    cloudflareEmail: !!(c.env.CLOUDFLARE_EMAIL_API_TOKEN && c.env.CLOUDFLARE_ACCOUNT_ID),
     resend: !!c.env.RESEND_API_KEY,
     sendgrid: !!c.env.SENDGRID_API_KEY,
+    nvidia: !!c.env.NVIDIA_API_KEY,
+    freeAiOnly: String(c.env.FREE_AI_ONLY || 'true').toLowerCase() !== 'false',
     smartcredit: !!(c.env.SMARTCREDIT_CLIENT_KEY && c.env.SMARTCREDIT_CLIENT_SECRET),
     click2mail: !!(c.env.CLICK2MAIL_USERNAME && c.env.CLICK2MAIL_AUTH_BASIC),
-    aiProvidersConfigured: providers.filter(p => p.configured).length,
+    aiProvidersConfigured: providers.filter(p => p.configured && p.free).length,
     environment: c.env.ENVIRONMENT || 'development',
   };
   try {
@@ -3074,7 +3074,56 @@ CRITICAL:
 // MULTI-PROVIDER AI — chat, providers list, free media
 // ═══════════════════════════════════════════════════════════════
 app.get('/api/ai/providers', authMiddleware, async (c) => {
-  return c.json({ providers: listConfiguredProviders(c.env) });
+  const providers = listConfiguredProviders(c.env);
+  return c.json({
+    freeOnly: String(c.env.FREE_AI_ONLY || 'true').toLowerCase() !== 'false',
+    defaultProvider: c.env.AI_DEFAULT_PROVIDER || 'nvidia',
+    providers: providers.filter(p => p.free || String(c.env.FREE_AI_ONLY || 'true').toLowerCase() === 'false'),
+    allProviders: providers,
+  });
+});
+
+app.get('/api/ai/mentors', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const audience = user.role === 'client' ? 'client' : 'staff';
+  const mentors = MENTORS.filter(m => m.audience === audience || m.audience === 'both');
+  return c.json({ mentors, knowledge: KNOWLEDGE_CORPUS_META });
+});
+
+app.post('/api/ai/mentors/:id/chat', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const mentorId = c.req.param('id') as MentorId;
+  const body = await c.req.json();
+  const message = String(body.message || '').trim();
+  if (!message) return c.json({ error: 'message required' }, 400);
+
+  const { mentor, knowledgeBlock } = buildMentorContext(mentorId, message);
+  if (user.role === 'client' && mentor.audience === 'staff') {
+    return c.json({ error: 'This mentor is staff-only' }, 403);
+  }
+
+  try {
+    const result = await generateAiText(c.env, [
+      { role: 'system', content: `${mentor.systemPrompt}\n\n${knowledgeBlock}` },
+      { role: 'user', content: message },
+    ]);
+    await c.env.DB.prepare(
+      'INSERT INTO activity_log (id, org_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(
+      generateId(), user.org_id, user.id, 'ai_mentor_chat',
+      `Mentor ${mentor.id} via ${result.provider}`,
+      JSON.stringify({ mentorId: mentor.id, provider: result.provider, model: result.model })
+    ).run();
+    return c.json({
+      reply: result.text,
+      mentor: { id: mentor.id, name: mentor.name },
+      provider: result.provider,
+      model: result.model,
+      knowledgeUsed: true,
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 502);
+  }
 });
 
 app.post('/api/ai/chat', authMiddleware, async (c) => {
@@ -3083,26 +3132,33 @@ app.post('/api/ai/chat', authMiddleware, async (c) => {
   const message = String(body.message || '').trim();
   if (!message) return c.json({ error: 'message required' }, 400);
 
-  const system = body.mode === 'legal-education'
-    ? `You are a FCRA/FDCPA consumer-rights education assistant for ${c.env.COMPANY_NAME || 'RJ Business Solutions'}. Explain rights clearly. You are NOT a lawyer and do not provide legal advice. Keep answers practical and cite statutes when helpful (15 U.S.C. § 1681, § 1692).`
-    : `You are Smart FCRA Supreme CRM copilot for credit repair / consumer law staff. Help with dispute strategy, Metro 2 concepts, and workflow. Not legal advice.`;
+  // Route education / ops into mentor agents by default
+  const mentorId: MentorId =
+    body.mentorId ||
+    (body.mode === 'legal-education' || user.role === 'client' ? 'fcra-mentor' : 'dispute-strategist');
+  const { mentor, knowledgeBlock } = buildMentorContext(mentorId, message);
 
   try {
     const result = await generateAiText(c.env, [
-      { role: 'system', content: system },
+      { role: 'system', content: `${mentor.systemPrompt}\nCompany: ${c.env.COMPANY_NAME || 'RJ Business Solutions'}.\n\n${knowledgeBlock}` },
       { role: 'user', content: message },
     ]);
     await c.env.DB.prepare(
       'INSERT INTO activity_log (id, org_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?)'
     ).bind(
       generateId(), user.org_id, user.id, 'ai_chat',
-      `AI chat via ${result.provider}`,
-      JSON.stringify({ provider: result.provider, model: result.model, mode: body.mode || 'ops' })
+      `AI chat via ${result.provider}/${mentor.id}`,
+      JSON.stringify({ provider: result.provider, model: result.model, mentorId: mentor.id, mode: body.mode || 'ops' })
     ).run();
-    return c.json({ reply: result.text, provider: result.provider, model: result.model });
+    return c.json({ reply: result.text, provider: result.provider, model: result.model, mentor: mentor.id });
   } catch (err: any) {
     return c.json({ error: err.message }, 502);
   }
+});
+
+app.get('/api/ai/knowledge/search', authMiddleware, async (c) => {
+  const q = c.req.query('q') || '';
+  return c.json({ query: q, results: retrieveCaseLawKnowledge(q, 8), meta: KNOWLEDGE_CORPUS_META });
 });
 
 app.post('/api/ai/media/generate', authMiddleware, async (c) => {
@@ -3678,34 +3734,17 @@ app.post('/api/send-email', authMiddleware, async (c) => {
   let sent = false;
   let details = 'Simulated Delivery';
 
-  if (c.env.RESEND_API_KEY) {
-    try {
-      const resendResponse = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${c.env.RESEND_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          from: 'SmartFCRA™ Supreme <notifications@rjbusinesssolutions.org>',
-          to,
-          subject,
-          html
-        })
-      });
-
-      if (resendResponse.ok) {
-        sent = true;
-        details = 'Delivered via Resend';
-      } else {
-        const errText = await resendResponse.text();
-        console.warn('[EMAIL] Resend delivery failed, falling back to simulation:', errText);
-        details = `Fallback Simulation: Resend returned status ${resendResponse.status}`;
-      }
-    } catch (err: any) {
-      console.warn('[EMAIL] Resend network error, falling back to simulation:', err.message);
-      details = `Fallback Simulation: Network error - ${err.message}`;
+  try {
+    const mail = await sendAppEmail(c.env, { to, subject, html, purpose: 'noreply' });
+    if (mail.sent) {
+      sent = true;
+      details = `Delivered via ${mail.provider}${mail.messageId ? ` (${mail.messageId})` : ''}`;
+    } else {
+      details = `Fallback Simulation (${mail.provider})`;
     }
+  } catch (err: any) {
+    console.warn('[EMAIL] delivery error, falling back to simulation:', err.message);
+    details = `Fallback Simulation: ${err.message}`;
   }
 
   // Always log email dispatch inside activity_log
@@ -3804,19 +3843,12 @@ app.post('/api/marketing/campaign/trigger', authMiddleware, async (c) => {
     let sent = false;
     let details = 'Simulated Outreach Delivery';
 
-    if (c.env.RESEND_API_KEY && client.email) {
+    if (client.email) {
       try {
-        const resendResponse = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${c.env.RESEND_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            from: 'SmartFCRA™ Campaign <notifications@rjbusinesssolutions.org>',
-            to: client.email,
-            subject: template.subject,
-            html: `
+        const mail = await sendAppEmail(c.env, {
+          to: client.email,
+          subject: template.subject,
+          html: `
               <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff;">
                 <div style="text-align: center; margin-bottom: 20px;">
                   <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="RJ Business Solutions" style="max-height: 50px; border-radius: 8px;">
@@ -3828,16 +3860,15 @@ app.post('/api/marketing/campaign/trigger', authMiddleware, async (c) => {
                   RJ Business Solutions | 1342 NM 333, Tijeras, New Mexico 87059
                 </div>
               </div>
-            `
-          })
+            `,
+          purpose: 'onboarding',
         });
-
-        if (resendResponse.ok) {
+        if (mail.sent) {
           sent = true;
-          details = 'Delivered via Resend';
+          details = `Delivered via ${mail.provider}`;
         }
       } catch (err: any) {
-        console.warn('[CAMPAIGN] Resend failed, fell back to simulation:', err.message);
+        console.warn('[CAMPAIGN] email failed, fell back to simulation:', err.message);
       }
     }
 

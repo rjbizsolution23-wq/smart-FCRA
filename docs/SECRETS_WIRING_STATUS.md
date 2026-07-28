@@ -1,38 +1,40 @@
 # Secrets Wiring Status — Smart FCRA v2
 
-Operator secrets were loaded into **gitignored** `.dev.vars` / `secrets.env` (never committed).
+Operator secrets live in **gitignored** `.dev.vars` / `secrets.env` only (never committed).
 
-## Wired & verified
+## Verified live
 
 | Integration | Status |
 |-------------|--------|
-| Groq free LLM | **Live** — AI rewrite/chat cascade (`llama-3.3-70b-versatile` smoke OK) |
-| OpenRouter free models | Wired in cascade |
-| Gemini / Together / DeepSeek / OpenAI | Wired as fallbacks |
-| Hugging Face + Replicate | Wired for free media (`/api/ai/media/generate`) |
-| Resend + SendGrid fallback | Wired for transactional email |
-| Click2Mail | Wired (stage API URL from intake) |
-| Stripe publishable + secret (restricted live) | Wired in env |
-| Company branding | Wired (`/api/company`) |
-| PII encryption + mailing webhook secrets | Generated & stored locally |
+| **Cloudflare Email Sending** | **LIVE** — `welcome@noreply.smartfcra.com` / `onboarding.smartfcra.com` (test send OK) |
+| **NVIDIA NIM free models** | **LIVE** — cascade starts with `meta/llama-3.1-70b-instruct` (smoke OK) |
+| Groq / OpenRouter `:free` / Gemini / Together / HF / Workers AI | Free cascade fallbacks |
+| Hugging Face + Replicate | Free media generation |
+| Click2Mail / Stripe env / company branding | Wired |
+| AI Mentors + case-law retrieval | Wired in CRM + client portal |
 
-## New API endpoints
+## Free-only policy
 
-- `GET /api/ai/providers` — configured free/paid providers
-- `POST /api/ai/chat` — CRM copilot / consumer education
-- `POST /api/ai/media/generate` — free HF/Replicate image models
-- `GET /api/billing/publishable-key`
-- `GET /api/company`
-- `POST /api/documents/:id/ai-rewrite` — now multi-provider (not Workers-AI-only)
-- UI: **AI Studio** page in staff nav
+`FREE_AI_ONLY=true` — paid OpenAI/DeepSeek are **not** used in the cascade.
 
-## Blockers for remote Cloudflare deploy
+## Email priority
 
-1. **`CLOUDFLARE_API_TOKEN` returned Invalid API Token** against Cloudflare verify API — create a fresh token with D1 + Pages + Account read permissions, then re-wire.
-2. **`STRIPE_WEBHOOK_SECRET`** still placeholder in intake — add real `whsec_…` from Stripe Dashboard → Webhooks.
-3. **SmartCredit client key/secret** were not in the intake file — add `SMARTCREDIT_CLIENT_KEY` / `SMARTCREDIT_CLIENT_SECRET` if using live SmartCredit import.
-4. Stripe key provided is **`rk_live_` (restricted)** — confirm it has Checkout + Customers + Subscriptions permissions (or supply `sk_live_` / `sk_test_`).
+1. Cloudflare Email Sending (`noreply` / `onboarding`)
+2. Resend fallback
+3. SendGrid fallback
 
-## Security note
+## Mentors / agents
 
-Live secrets were pasted in chat. **Rotate Cloudflare, Stripe, GitHub PATs, Twilio, and bootstrap passwords** after this session. Keep the vault copy in 1Password/Bitwarden only.
+- FCRA Rights Mentor
+- Dispute Strategist Agent
+- Client Success Coach
+- Metro 2 Auditor Agent
+- Litigation Scout Agent (case-law RAG)
+
+Knowledge corpus: `src/data/case-law-database.ts` + statutes/damages docs (retrieval-augmented; offline Kaggle/HF fine-tunes can swap generators later).
+
+## Still needed for full Cloudflare Pages deploy
+
+1. Fresh **Cloudflare Workers/Pages/D1 API token** (previous general `cfat_` failed verify; email `cfut_` works for mail only)
+2. Stripe `whsec_…` webhook secret
+3. SmartCredit client key/secret (if using live import)

@@ -673,7 +673,8 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       navItems = [
         { id: 'client-cockpit', icon: 'fa-rocket', label: 'My Cockpit' },
         { id: 'client-documents', icon: 'fa-file-signature', label: 'My Documents' },
-        { id: 'client-knowledge', icon: 'fa-graduation-cap', label: 'Education Hub' }
+        { id: 'client-knowledge', icon: 'fa-graduation-cap', label: 'Education Hub' },
+        { id: 'ai-studio', icon: 'fa-robot', label: 'AI Mentors' },
       ];
       if (state.impersonateClientId) {
         navItems.push({ id: 'exit-impersonation', icon: 'fa-user-shield text-amber-400', label: 'Exit Preview' });
@@ -4623,50 +4624,70 @@ Status: Discharged`;
 
   async function pgAiStudio(el) {
     try {
-      const providers = await api('/ai/providers');
+      const [providers, mentorsRes] = await Promise.all([
+        api('/ai/providers'),
+        api('/ai/mentors'),
+      ]);
       const list = (providers.providers || []).filter(p => p.configured);
+      const mentors = mentorsRes.mentors || [];
       el.innerHTML = `<div class="fade-in space-y-6">
         <div>
-          <h1 class="text-xl font-bold text-white">AI Studio</h1>
-          <p class="text-sm text-gray-400">Free/multi-provider models for dispute rewrite assist, education chat, and media</p>
+          <h1 class="text-xl font-bold text-white">AI Studio · Agents & Mentors</h1>
+          <p class="text-sm text-gray-400">Free-only models (NVIDIA NIM first) + case-law knowledge mentors for staff CRM</p>
         </div>
         <div class="glass rounded-xl p-4 border border-gray-700">
-          <div class="text-xs text-gray-400 mb-2">Configured providers</div>
-          <div class="flex flex-wrap gap-2">${list.map(p => `<span class="px-2 py-1 rounded bg-emerald-900/30 text-emerald-300 text-[11px] font-semibold">${p.id} · ${p.tier}</span>`).join('') || '<span class="text-amber-400 text-xs">No providers detected</span>'}</div>
+          <div class="text-xs text-gray-400 mb-2">Free providers · default ${escapeHtml(providers.defaultProvider || 'nvidia')} · freeOnly=${providers.freeOnly}</div>
+          <div class="flex flex-wrap gap-2">${list.map(p => `<span class="px-2 py-1 rounded bg-emerald-900/30 text-emerald-300 text-[11px] font-semibold">${p.id} · ${p.tier}</span>`).join('') || '<span class="text-amber-400 text-xs">No providers</span>'}</div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          ${mentors.map(m => `
+            <button class="mentor-card text-left glass rounded-xl p-4 border border-gray-700 hover:border-blue-500/40 transition" data-mentor="${m.id}">
+              <div class="text-sm font-semibold text-white mb-1">${escapeHtml(m.name)}</div>
+              <div class="text-[11px] text-gray-400">${escapeHtml(m.blurb)}</div>
+            </button>
+          `).join('')}
         </div>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div class="glass rounded-xl p-5 border border-gray-700 space-y-3">
-            <h2 class="text-sm font-semibold text-white">Staff / Legal Education Chat</h2>
-            <textarea id="ai-chat-input" class="w-full h-28 bg-gray-950 border border-gray-800 rounded-lg p-3 text-sm text-white" placeholder="Ask about FCRA §1681i timelines, Metro 2, dispute strategy..."></textarea>
-            <div class="flex gap-2">
-              <button id="ai-chat-ops" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-2 rounded-lg">CRM Copilot</button>
-              <button id="ai-chat-edu" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold px-3 py-2 rounded-lg">Consumer Education</button>
+            <div class="flex items-center justify-between gap-2">
+              <h2 class="text-sm font-semibold text-white">Mentor Chat</h2>
+              <select id="ai-mentor-select" class="bg-gray-950 border border-gray-800 rounded-lg text-xs text-white px-2 py-1">
+                ${mentors.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('')}
+              </select>
             </div>
+            <textarea id="ai-chat-input" class="w-full h-28 bg-gray-950 border border-gray-800 rounded-lg p-3 text-sm text-white" placeholder="Ask about §1681i timelines, Metro 2, dispute sequencing..."></textarea>
+            <button id="ai-chat-go" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-2 rounded-lg">Ask Mentor (NVIDIA free cascade)</button>
             <pre id="ai-chat-out" class="text-xs text-gray-300 whitespace-pre-wrap bg-gray-950/60 border border-gray-800 rounded-lg p-3 min-h-[120px]"></pre>
           </div>
           <div class="glass rounded-xl p-5 border border-gray-700 space-y-3">
             <h2 class="text-sm font-semibold text-white">Free Media Generate</h2>
             <textarea id="ai-media-input" class="w-full h-28 bg-gray-950 border border-gray-800 rounded-lg p-3 text-sm text-white" placeholder="Professional letterhead watermark, navy and gold, RJ Business Solutions..."></textarea>
-            <button id="ai-media-go" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-2 rounded-lg">Generate (HF / Replicate free models)</button>
+            <button id="ai-media-go" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-2 rounded-lg">Generate (HF / Replicate free)</button>
             <div id="ai-media-out" class="min-h-[120px] flex items-center justify-center bg-gray-950/60 border border-gray-800 rounded-lg p-3 text-xs text-gray-500">Preview appears here</div>
           </div>
         </div>
       </div>`;
 
-      const runChat = async (mode) => {
+      document.querySelectorAll('.mentor-card').forEach(btn => {
+        btn.addEventListener('click', () => {
+          $('#ai-mentor-select').value = btn.getAttribute('data-mentor');
+          toast('Mentor selected', 'success');
+        });
+      });
+
+      $('#ai-chat-go').onclick = async () => {
         const message = $('#ai-chat-input').value.trim();
+        const mentorId = $('#ai-mentor-select').value;
         if (!message) return toast('Enter a message', 'error');
-        $('#ai-chat-out').textContent = 'Thinking…';
+        $('#ai-chat-out').textContent = 'Thinking with free models…';
         try {
-          const d = await api('/ai/chat', { method: 'POST', body: JSON.stringify({ message, mode }) });
-          $('#ai-chat-out').textContent = `${d.reply}\n\n— ${d.provider}/${d.model}`;
+          const d = await api(`/ai/mentors/${mentorId}/chat`, { method: 'POST', body: JSON.stringify({ message }) });
+          $('#ai-chat-out').textContent = `${d.reply}\n\n— ${d.mentor?.name || mentorId} · ${d.provider}/${d.model}`;
         } catch (err) {
           $('#ai-chat-out').textContent = err.message;
           toast(err.message, 'error');
         }
       };
-      $('#ai-chat-ops').onclick = () => runChat('ops');
-      $('#ai-chat-edu').onclick = () => runChat('legal-education');
       $('#ai-media-go').onclick = async () => {
         const prompt = $('#ai-media-input').value.trim();
         if (!prompt) return toast('Enter a prompt', 'error');

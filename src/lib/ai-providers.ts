@@ -1,6 +1,7 @@
 /**
- * Multi-provider AI router — prefers free/fast tiers, cascades on failure.
- * Used for dispute letter rewrite, education chat, and light media generation.
+ * Multi-provider AI — FREE MODELS ONLY.
+ * Cascade: NVIDIA NIM → Groq → OpenRouter :free → Gemini free → Together free-tier →
+ * Cloudflare Workers AI → Hugging Face. Paid OpenAI is never used when FREE_AI_ONLY=true.
  */
 
 export type AiEnv = {
@@ -16,6 +17,8 @@ export type AiEnv = {
   REPLICATE_API_TOKEN?: string;
   MOONSHOT_KIMI_API_KEY?: string;
   NVIDIA_API_KEY?: string;
+  FREE_AI_ONLY?: string;
+  AI_DEFAULT_PROVIDER?: string;
 };
 
 export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
@@ -26,18 +29,34 @@ export type AiResult = {
   model: string;
 };
 
-const FREE_OPENROUTER_MODELS = [
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'google/gemma-2-9b-it:free',
-  'mistralai/mistral-7b-instruct:free',
-  'qwen/qwen-2.5-7b-instruct:free',
+/** NVIDIA NIM / integrate.api.nvidia.com — free/community instruct models */
+const NVIDIA_FREE_MODELS = [
+  'meta/llama-3.3-70b-instruct',
+  'meta/llama-3.1-70b-instruct',
+  'meta/llama-3.1-8b-instruct',
+  'google/gemma-2-9b-it',
+  'mistralai/mistral-nemo-12b-instruct',
+  'microsoft/phi-3-mini-4k-instruct',
+  'nvidia/llama-3.1-nemotron-70b-instruct',
 ];
 
-const GROQ_MODELS = [
+const GROQ_FREE_MODELS = [
   'llama-3.3-70b-versatile',
   'llama-3.1-8b-instant',
   'gemma2-9b-it',
 ];
+
+const OPENROUTER_FREE_MODELS = [
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'google/gemma-2-9b-it:free',
+  'mistralai/mistral-7b-instruct:free',
+  'qwen/qwen-2.5-7b-instruct:free',
+  'nvidia/llama-3.1-nemotron-70b-instruct:free',
+];
+
+function freeOnly(env: AiEnv): boolean {
+  return String(env.FREE_AI_ONLY || 'true').toLowerCase() !== 'false';
+}
 
 async function chatOpenAICompat(
   url: string,
@@ -106,12 +125,62 @@ async function chatWorkersAi(ai: any, messages: ChatMessage[]): Promise<string> 
   throw lastErr || new Error('Workers AI failed');
 }
 
-/** Cascade: Groq → OpenRouter free → Gemini → Together → DeepSeek → Workers AI → OpenAI */
+async function chatHuggingFace(token: string, messages: ChatMessage[]): Promise<string> {
+  const models = [
+    'meta-llama/Meta-Llama-3.1-8B-Instruct',
+    'google/gemma-2-2b-it',
+    'mistralai/Mistral-7B-Instruct-v0.3',
+  ];
+  const prompt = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n') + '\nASSISTANT:';
+  let lastErr: any;
+  for (const model of models) {
+    try {
+      const res = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          inputs: prompt,
+          parameters: { max_new_tokens: 1024, return_full_text: false },
+          options: { wait_for_model: true },
+        }),
+      });
+      if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 160)}`);
+      const data = await res.json() as any;
+      const text = Array.isArray(data) ? (data[0]?.generated_text || '') : (data.generated_text || data[0]?.generated_text || '');
+      if (text) return String(text).replace(prompt, '').trim() || String(text);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('Hugging Face inference failed');
+}
+
+/** Free-only cascade with NVIDIA first. */
 export async function generateAiText(env: AiEnv, messages: ChatMessage[]): Promise<AiResult> {
   const errors: string[] = [];
+  const onlyFree = freeOnly(env);
+
+  if (env.NVIDIA_API_KEY) {
+    for (const model of NVIDIA_FREE_MODELS) {
+      try {
+        const text = await chatOpenAICompat(
+          'https://integrate.api.nvidia.com/v1/chat/completions',
+          env.NVIDIA_API_KEY,
+          model,
+          messages
+        );
+        return { text, provider: 'nvidia', model };
+      } catch (e: any) {
+        errors.push(`nvidia/${model}: ${e.message}`);
+      }
+    }
+  }
 
   if (env.GROQ_API_KEY) {
-    for (const model of GROQ_MODELS) {
+    for (const model of GROQ_FREE_MODELS) {
       try {
         const text = await chatOpenAICompat('https://api.groq.com/openai/v1/chat/completions', env.GROQ_API_KEY, model, messages);
         return { text, provider: 'groq', model };
@@ -122,7 +191,7 @@ export async function generateAiText(env: AiEnv, messages: ChatMessage[]): Promi
   }
 
   if (env.OPENROUTER_API_KEY) {
-    for (const model of FREE_OPENROUTER_MODELS) {
+    for (const model of OPENROUTER_FREE_MODELS) {
       try {
         const text = await chatOpenAICompat(
           'https://openrouter.ai/api/v1/chat/completions',
@@ -131,7 +200,7 @@ export async function generateAiText(env: AiEnv, messages: ChatMessage[]): Promi
           messages,
           { 'HTTP-Referer': 'https://rjbusinesssolutions.org', 'X-Title': 'Smart FCRA Supreme' }
         );
-        return { text, provider: 'openrouter', model };
+        return { text, provider: 'openrouter-free', model };
       } catch (e: any) {
         errors.push(`openrouter/${model}: ${e.message}`);
       }
@@ -142,7 +211,7 @@ export async function generateAiText(env: AiEnv, messages: ChatMessage[]): Promi
   if (geminiKey) {
     try {
       const text = await chatGemini(geminiKey, messages);
-      return { text, provider: 'gemini', model: 'gemini-2.0-flash' };
+      return { text, provider: 'gemini-free', model: 'gemini-2.0-flash' };
     } catch (e: any) {
       errors.push(`gemini: ${e.message}`);
     }
@@ -158,16 +227,6 @@ export async function generateAiText(env: AiEnv, messages: ChatMessage[]): Promi
     }
   }
 
-  if (env.DEEPSEEK_API_KEY) {
-    try {
-      const model = 'deepseek-chat';
-      const text = await chatOpenAICompat('https://api.deepseek.com/chat/completions', env.DEEPSEEK_API_KEY, model, messages);
-      return { text, provider: 'deepseek', model };
-    } catch (e: any) {
-      errors.push(`deepseek: ${e.message}`);
-    }
-  }
-
   if (env.AI) {
     try {
       const text = await chatWorkersAi(env.AI, messages);
@@ -177,34 +236,52 @@ export async function generateAiText(env: AiEnv, messages: ChatMessage[]): Promi
     }
   }
 
-  if (env.OPENAI_API_KEY) {
+  if (env.HUGGINGFACE_TOKEN) {
     try {
-      const model = 'gpt-4o-mini';
-      const text = await chatOpenAICompat('https://api.openai.com/v1/chat/completions', env.OPENAI_API_KEY, model, messages);
-      return { text, provider: 'openai', model };
+      const text = await chatHuggingFace(env.HUGGINGFACE_TOKEN, messages);
+      return { text, provider: 'huggingface', model: 'llama-3.1-8b-instruct' };
+    } catch (e: any) {
+      errors.push(`huggingface: ${e.message}`);
+    }
+  }
+
+  // DeepSeek / OpenAI only if free-only disabled
+  if (!onlyFree && env.DEEPSEEK_API_KEY) {
+    try {
+      const text = await chatOpenAICompat('https://api.deepseek.com/chat/completions', env.DEEPSEEK_API_KEY, 'deepseek-chat', messages);
+      return { text, provider: 'deepseek', model: 'deepseek-chat' };
+    } catch (e: any) {
+      errors.push(`deepseek: ${e.message}`);
+    }
+  }
+
+  if (!onlyFree && env.OPENAI_API_KEY) {
+    try {
+      const text = await chatOpenAICompat('https://api.openai.com/v1/chat/completions', env.OPENAI_API_KEY, 'gpt-4o-mini', messages);
+      return { text, provider: 'openai', model: 'gpt-4o-mini' };
     } catch (e: any) {
       errors.push(`openai: ${e.message}`);
     }
   }
 
-  throw new Error(`All AI providers failed. ${errors.slice(0, 4).join(' | ')}`);
+  throw new Error(`All free AI providers failed. ${errors.slice(0, 5).join(' | ')}`);
 }
 
-export function listConfiguredProviders(env: AiEnv): Array<{ id: string; configured: boolean; tier: string }> {
+export function listConfiguredProviders(env: AiEnv): Array<{ id: string; configured: boolean; tier: string; free: boolean }> {
   return [
-    { id: 'groq', configured: !!env.GROQ_API_KEY, tier: 'free/fast' },
-    { id: 'openrouter-free', configured: !!env.OPENROUTER_API_KEY, tier: 'free' },
-    { id: 'gemini', configured: !!(env.GEMINI_API_KEY || env.GOOGLE_API_KEY), tier: 'free tier' },
-    { id: 'together', configured: !!env.TOGETHER_AI_API_KEY, tier: 'credits' },
-    { id: 'deepseek', configured: !!env.DEEPSEEK_API_KEY, tier: 'low-cost' },
-    { id: 'cloudflare-workers-ai', configured: !!env.AI, tier: 'included' },
-    { id: 'openai', configured: !!env.OPENAI_API_KEY, tier: 'paid fallback' },
-    { id: 'huggingface', configured: !!env.HUGGINGFACE_TOKEN, tier: 'free inference' },
-    { id: 'replicate', configured: !!env.REPLICATE_API_TOKEN, tier: 'media' },
+    { id: 'nvidia-nim', configured: !!env.NVIDIA_API_KEY, tier: 'free NIM instruct', free: true },
+    { id: 'groq', configured: !!env.GROQ_API_KEY, tier: 'free/fast', free: true },
+    { id: 'openrouter-free', configured: !!env.OPENROUTER_API_KEY, tier: 'free :free models', free: true },
+    { id: 'gemini-free', configured: !!(env.GEMINI_API_KEY || env.GOOGLE_API_KEY), tier: 'free tier', free: true },
+    { id: 'together', configured: !!env.TOGETHER_AI_API_KEY, tier: 'free/credits', free: true },
+    { id: 'cloudflare-workers-ai', configured: !!env.AI, tier: 'included', free: true },
+    { id: 'huggingface', configured: !!env.HUGGINGFACE_TOKEN, tier: 'free inference', free: true },
+    { id: 'replicate-media', configured: !!env.REPLICATE_API_TOKEN, tier: 'media', free: true },
+    { id: 'deepseek', configured: !!env.DEEPSEEK_API_KEY, tier: 'low-cost (disabled in free-only)', free: false },
+    { id: 'openai', configured: !!env.OPENAI_API_KEY, tier: 'paid (disabled in free-only)', free: false },
   ];
 }
 
-/** Free/open image generation via Hugging Face Inference (SDXL Lightning / Flux-lite class). */
 export async function generateFreeImage(env: AiEnv, prompt: string): Promise<{ url?: string; b64?: string; provider: string; model: string }> {
   if (env.HUGGINGFACE_TOKEN) {
     const models = [
@@ -236,7 +313,7 @@ export async function generateFreeImage(env: AiEnv, prompt: string): Promise<{ u
         const b64 = btoa(binary);
         return { b64: `data:image/png;base64,${b64}`, provider: 'huggingface', model };
       } catch {
-        /* try next */
+        /* next */
       }
     }
   }
