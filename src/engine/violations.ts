@@ -50,6 +50,18 @@ export interface ParsedPublicRecord {
   chapter?: string;
 }
 
+export interface CreditScoreBlock {
+  fico?: number | null;
+  vantage?: number | null;
+  equifax?: number | null;
+  experian?: number | null;
+  transunion?: number | null;
+  provider?: string;
+  model?: string;
+  pulledAt?: string;
+  factors?: string[];
+}
+
 export interface CreditReportData {
   bureau: string;
   reportDate: string;
@@ -60,10 +72,13 @@ export interface CreditReportData {
     ssns: string[];
     dobs: string[];
   };
+  scores?: CreditScoreBlock;
   accounts: ParsedAccount[];
   inquiries: ParsedInquiry[];
   publicRecords: ParsedPublicRecord[];
   collections: ParsedAccount[];
+  /** Optional pass-through of unrecognized source fields for attorney inspection */
+  sourceExtras?: Record<string, unknown>;
 }
 
 export interface Violation {

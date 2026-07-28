@@ -1,0 +1,243 @@
+{
+  "success": true,
+  "message": "Demo MyFreeScoreNow 3B payload for Smart FCRA v2",
+  "data": {
+    "providerViews": [
+      {
+        "provider": "Equifax",
+        "summary": {
+          "reportGenerated": "2026-07-01T12:00:00.000Z",
+          "subject": {
+            "currentName": { "firstName": "Demo", "lastName": "Admin" },
+            "currentAddress": {
+              "line1": "1342 NM 333",
+              "line3": "Tijeras",
+              "line4": "NM",
+              "line5": "87059"
+            },
+            "nationalIdentifier": "XXX-XX-1234",
+            "dateOfBirth": "1985-04-12",
+            "employmentHistory": [{ "employerName": "RJ Business Solutions" }]
+          },
+          "creditScore": {
+            "score": 642,
+            "model": "FICO Score 8",
+            "factors": [
+              "Serious delinquency",
+              "Proportion of balances to credit limits is too high",
+              "Too many accounts with balances",
+              "Length of time accounts have been established"
+            ]
+          }
+        },
+        "creditScore": { "score": 642, "model": "FICO Score 8", "factors": ["Serious delinquency", "High utilization"] },
+        "revolvingAccounts": [
+          {
+            "accountName": "CAPITAL ONE",
+            "accountNumber": "****4412",
+            "accountType": "Revolving",
+            "accountStatus": "Open",
+            "dateOpened": "2019-03-15",
+            "balanceAmount": { "amount": 1850 },
+            "highCreditAmount": { "amount": 2200 },
+            "creditLimitAmount": { "amount": 2500 },
+            "monthlyPayment": { "amount": 75 },
+            "reportedDate": "2026-06-15",
+            "lastPaymentDate": "2026-05-28",
+            "paymentResponsibility": "Individual",
+            "comments": [{ "description": "Account transferred" }],
+            "paymentHistory": [
+              {
+                "year": 2026,
+                "january": { "value": "PAYS_AS_AGREED C" },
+                "february": { "value": "PAYS_AS_AGREED C" },
+                "march": { "value": "30_DAYS_PAST_DUE 1" },
+                "april": { "value": "PAYS_AS_AGREED C" },
+                "may": { "value": "PAYS_AS_AGREED C" },
+                "june": { "value": "PAYS_AS_AGREED C" }
+              }
+            ]
+          },
+          {
+            "accountName": "JEFFERSON CAPITAL SYSTEMS",
+            "accountNumber": "****9981",
+            "accountType": "Open",
+            "accountStatus": "COLLECTION_OR_CHARGEOFF",
+            "dateOpened": "2018-11-02",
+            "firstDelinquencyDate": "2020-01-10",
+            "balanceAmount": { "amount": 1247 },
+            "highCreditAmount": { "amount": 1247 },
+            "creditLimitAmount": { "amount": 0 },
+            "monthlyPayment": { "amount": 0 },
+            "reportedDate": "2026-06-01",
+            "paymentResponsibility": "Individual",
+            "comments": [{ "description": "Placed for collection" }],
+            "paymentHistory": [
+              {
+                "year": 2025,
+                "december": { "value": "COLLECTION 9" },
+                "november": { "value": "COLLECTION 9" },
+                "october": { "value": "COLLECTION 9" }
+              }
+            ]
+          }
+        ],
+        "mortgageAccounts": [],
+        "installmentAccounts": [
+          {
+            "accountName": "TOYOTA MOTOR CREDIT",
+            "accountNumber": "****2201",
+            "accountType": "Installment",
+            "accountStatus": "Open",
+            "dateOpened": "2022-08-01",
+            "balanceAmount": { "amount": 14820 },
+            "highCreditAmount": { "amount": 22000 },
+            "creditLimitAmount": { "amount": 0 },
+            "monthlyPayment": { "amount": 410 },
+            "reportedDate": "2026-06-20",
+            "lastPaymentDate": "2026-06-05",
+            "paymentResponsibility": "Individual",
+            "paymentHistory": [
+              {
+                "year": 2026,
+                "january": { "value": "PAYS_AS_AGREED C" },
+                "february": { "value": "PAYS_AS_AGREED C" },
+                "march": { "value": "PAYS_AS_AGREED C" },
+                "april": { "value": "PAYS_AS_AGREED C" },
+                "may": { "value": "PAYS_AS_AGREED C" },
+                "june": { "value": "PAYS_AS_AGREED C" }
+              }
+            ]
+          }
+        ],
+        "otherAccounts": [],
+        "collections": [
+          {
+            "agencyClient": "PORTFOLIO RECOVERY",
+            "accountNumber": "****5510",
+            "status": "COLLECTION",
+            "assignedDate": "2024-02-14",
+            "amount": { "amount": 890 },
+            "orginalAmountOwed": { "amount": 890 },
+            "reportedDate": "2026-05-01"
+          }
+        ],
+        "inquiries": [
+          {
+            "contactInformation": { "contactName": "SYNCHRONY BANK" },
+            "reportedDate": "2026-04-02",
+            "type": "Hard"
+          },
+          {
+            "contactInformation": { "contactName": "CREDIT ONE BANK" },
+            "reportedDate": "2026-03-11",
+            "type": "Hard"
+          }
+        ],
+        "publicRecords": {
+          "bankruptcies": [],
+          "judgments": [],
+          "liens": []
+        }
+      },
+      {
+        "provider": "Experian",
+        "summary": {
+          "reportGenerated": "2026-07-01T12:00:00.000Z",
+          "subject": {
+            "currentName": { "firstName": "Demo", "lastName": "Admin" },
+            "currentAddress": {
+              "line1": "1342 NM 333",
+              "line3": "Tijeras",
+              "line4": "NM",
+              "line5": "87059"
+            },
+            "nationalIdentifier": "XXX-XX-1234",
+            "dateOfBirth": "1985-04-12",
+            "employmentHistory": [{ "employerName": "RJ Business Solutions" }]
+          }
+        },
+        "creditScore": { "score": 635, "model": "FICO Score 8", "factors": ["Collection accounts", "Too many inquiries"] },
+        "revolvingAccounts": [
+          {
+            "accountName": "CAPITAL ONE",
+            "accountNumber": "****4412",
+            "accountType": "Revolving",
+            "accountStatus": "Open",
+            "dateOpened": "2019-03-15",
+            "balanceAmount": { "amount": 1850 },
+            "highCreditAmount": { "amount": 2200 },
+            "creditLimitAmount": { "amount": 2500 },
+            "monthlyPayment": { "amount": 75 },
+            "reportedDate": "2026-06-15",
+            "paymentResponsibility": "Individual",
+            "paymentHistory": [{ "year": 2026, "may": { "value": "PAYS_AS_AGREED C" }, "june": { "value": "PAYS_AS_AGREED C" } }]
+          }
+        ],
+        "mortgageAccounts": [],
+        "installmentAccounts": [],
+        "otherAccounts": [],
+        "collections": [
+          {
+            "agencyClient": "JEFFERSON CAPITAL SYSTEMS",
+            "accountNumber": "****9981",
+            "status": "COLLECTION",
+            "assignedDate": "2021-06-01",
+            "amount": { "amount": 1247 },
+            "orginalAmountOwed": { "amount": 1247 },
+            "reportedDate": "2026-06-01"
+          }
+        ],
+        "inquiries": [
+          {
+            "contactInformation": { "contactName": "SYNCHRONY BANK" },
+            "reportedDate": "2026-04-02",
+            "type": "Hard"
+          }
+        ],
+        "publicRecords": { "bankruptcies": [], "judgments": [], "liens": [] }
+      },
+      {
+        "provider": "TransUnion",
+        "summary": {
+          "reportGenerated": "2026-07-01T12:00:00.000Z",
+          "subject": {
+            "currentName": { "firstName": "Demo", "lastName": "Admin" },
+            "currentAddress": {
+              "line1": "1342 NM 333",
+              "line3": "Tijeras",
+              "line4": "NM",
+              "line5": "87059"
+            },
+            "nationalIdentifier": "XXX-XX-1234",
+            "dateOfBirth": "1985-04-12",
+            "employmentHistory": [{ "employerName": "RJ Business Solutions" }]
+          }
+        },
+        "creditScore": { "score": 648, "model": "VantageScore 3.0", "vantageScore": 648, "factors": ["Derogatory public record or collection filed"] },
+        "revolvingAccounts": [
+          {
+            "accountName": "CAPITAL ONE",
+            "accountNumber": "****4412",
+            "accountType": "Revolving",
+            "accountStatus": "Open",
+            "dateOpened": "2019-03-15",
+            "balanceAmount": { "amount": 1850 },
+            "highCreditAmount": { "amount": 2200 },
+            "creditLimitAmount": { "amount": 2500 },
+            "monthlyPayment": { "amount": 75 },
+            "reportedDate": "2026-06-15",
+            "paymentResponsibility": "Individual",
+            "paymentHistory": [{ "year": 2026, "june": { "value": "PAYS_AS_AGREED C" } }]
+          }
+        ],
+        "mortgageAccounts": [],
+        "installmentAccounts": [],
+        "otherAccounts": [],
+        "collections": [],
+        "inquiries": [],
+        "publicRecords": { "bankruptcies": [], "judgments": [], "liens": [] }
+      }
+    ]
+  }
+}

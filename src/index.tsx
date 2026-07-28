@@ -1754,6 +1754,33 @@ app.post('/api/reports/mfsn-import', authMiddleware, async (c) => {
       'INSERT INTO credit_reports (id, org_id, client_id, uploaded_by, bureau, report_date, file_name, raw_text, parsed_data, status, total_accounts, total_inquiries, total_public_records, total_collections, analysis_started_at, analysis_completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime("now"), datetime("now"))'
     ).bind(reportId, user.org_id, clientId, user.id, report.bureau, report.reportDate, `mfsn-import-${report.bureau}.json`, encryptedRawText, encryptedParsedData, 'analyzed', report.accounts.length, report.inquiries.length, report.publicRecords.length, report.collections.length).run();
 
+    try {
+      const sc = report.scores || {};
+      const bureauKey = String(report.bureau || '').toLowerCase();
+      await c.env.DB.prepare(
+        `UPDATE credit_reports SET fico_score = ?, vantage_score = ?, eq_score = ?, ex_score = ?, tu_score = ?, source_provider = ?, source_payload_type = ? WHERE id = ? AND org_id = ?`
+      ).bind(
+        sc.fico ?? null,
+        sc.vantage ?? null,
+        bureauKey.includes('equifax') ? (sc.fico ?? null) : null,
+        bureauKey.includes('experian') ? (sc.fico ?? null) : null,
+        bureauKey.includes('transunion') || bureauKey.includes('trans union') ? (sc.fico ?? sc.vantage ?? null) : null,
+        'MyFreeScoreNow',
+        'json',
+        reportId,
+        user.org_id
+      ).run();
+      if (bureauKey.includes('equifax') && sc.fico) {
+        await c.env.DB.prepare('UPDATE clients SET eq_score = ? WHERE id = ? AND org_id = ?').bind(sc.fico, clientId, user.org_id).run();
+      } else if (bureauKey.includes('experian') && sc.fico) {
+        await c.env.DB.prepare('UPDATE clients SET ex_score = ? WHERE id = ? AND org_id = ?').bind(sc.fico, clientId, user.org_id).run();
+      } else if ((bureauKey.includes('transunion') || bureauKey.includes('trans union')) && (sc.fico || sc.vantage)) {
+        await c.env.DB.prepare('UPDATE clients SET tu_score = ? WHERE id = ? AND org_id = ?').bind(sc.fico ?? sc.vantage, clientId, user.org_id).run();
+      }
+    } catch (e) {
+      console.warn('[MFSN] score column update skipped', e);
+    }
+
     // Save violations
     for (const v of violations) {
       await c.env.DB.prepare(
@@ -2102,11 +2129,158 @@ app.get('/api/reports/:id', authMiddleware, async (c) => {
   if (report.raw_text) report.raw_text = await decryptPII(c, report.raw_text);
   if (report.parsed_data) report.parsed_data = await decryptPII(c, report.parsed_data);
 
+  let parsed: any = null;
+  try {
+    parsed = report.parsed_data ? JSON.parse(report.parsed_data) : null;
+  } catch {
+    parsed = null;
+  }
+
+  let rawPayload: any = null;
+  let rawPayloadType: 'json' | 'text' | 'empty' = 'empty';
+  if (report.raw_text) {
+    try {
+      rawPayload = JSON.parse(report.raw_text);
+      rawPayloadType = 'json';
+    } catch {
+      rawPayload = null;
+      rawPayloadType = 'text';
+    }
+  }
+
   const violations = await c.env.DB.prepare('SELECT * FROM violations WHERE report_id = ? AND org_id = ? ORDER BY severity ASC').bind(id, user.org_id).all();
   const litScore = calculateLitigationScore((violations?.results || []) as any);
   const documents = await c.env.DB.prepare('SELECT * FROM documents WHERE report_id = ? AND org_id = ? ORDER BY created_at DESC').bind(id, user.org_id).all();
 
-  return c.json({ report, violations: violations?.results || [], litigationScore: litScore, documents: documents?.results || [] });
+  // Prefer structured scores from parsed payload; fall back to report columns
+  const scores = parsed?.scores || {
+    fico: report.fico_score ?? null,
+    vantage: report.vantage_score ?? null,
+    equifax: report.eq_score ?? null,
+    experian: report.ex_score ?? null,
+    transunion: report.tu_score ?? null,
+  };
+
+  return c.json({
+    report,
+    parsed,
+    scores,
+    rawPayload,
+    rawPayloadType,
+    sourceProvider: report.source_provider || (rawPayloadType === 'json' ? inferSourceProvider(rawPayload, report.file_name) : 'manual'),
+    violations: violations?.results || [],
+    litigationScore: litScore,
+    documents: documents?.results || [],
+  });
+});
+
+function inferSourceProvider(payload: any, fileName?: string): string {
+  const name = String(fileName || '').toLowerCase();
+  if (name.includes('mfsn') || name.includes('myfreescore')) return 'MyFreeScoreNow';
+  if (name.includes('smartcredit')) return 'SmartCredit';
+  if (payload?.data?.providerViews) return 'MyFreeScoreNow';
+  if (payload?.bureauReports || payload?.reports) return 'SmartCredit';
+  return 'imported-json';
+}
+
+/** Fire the full attorney workflow pack from a single report analysis. */
+app.post('/api/reports/:id/launch-workflow', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const report = await c.env.DB.prepare('SELECT * FROM credit_reports WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
+  if (!report) return c.json({ error: 'Not found' }, 404);
+
+  const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(report.client_id, user.org_id).first() as any;
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+
+  const violationsResult = await c.env.DB.prepare(
+    'SELECT * FROM violations WHERE report_id = ? AND org_id = ? ORDER BY severity ASC'
+  ).bind(id, user.org_id).all();
+  const violations = (violationsResult?.results || []) as any[];
+  if (!violations.length) return c.json({ error: 'No violations to package yet' }, 400);
+
+  const packTypes = [
+    'bureau-dispute',
+    '1681i-letter',
+    'intent-to-sue-fcra',
+    'pre-litigation-settlement',
+    'cfpb-complaint',
+    'fed-complaint',
+  ];
+
+  const generated: any[] = [];
+  const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const docData: DocumentData = {
+    clientName: `${client.first_name} ${client.last_name}`,
+    clientAddress: client.address_line1 || '',
+    clientCity: client.city || '',
+    clientState: client.state || '',
+    clientZip: client.zip || '',
+    clientSSNLast4: client.ssn_last4 || '',
+    clientDOB: client.dob || '',
+    today,
+    violations,
+    bureau: report.bureau || 'Equifax',
+    reportId: id,
+    clientPhone: client.phone || '',
+    clientEmail: client.email || '',
+  };
+
+  for (const docType of packTypes) {
+    const docDef = (DOCUMENT_TYPES as any)[docType];
+    if (!docDef) continue;
+    const content = docDef.fn(docData);
+    const docId = generateId();
+    const title = `${docDef.name} - ${client.first_name} ${client.last_name}`;
+    await c.env.DB.prepare(
+      'INSERT INTO documents (id, org_id, client_id, report_id, violation_ids, doc_type, doc_subtype, title, recipient_name, recipient_address, content, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      docId,
+      user.org_id,
+      client.id,
+      id,
+      JSON.stringify(violations.map((v) => v.id)),
+      docType,
+      docDef.category,
+      title,
+      report.bureau || null,
+      null,
+      content,
+      'draft',
+      user.id
+    ).run();
+    generated.push({ id: docId, docType, title });
+  }
+
+  await c.env.DB.prepare(
+    'UPDATE clients SET case_status = ?, lvs_score = ?, estimated_recovery = ? WHERE id = ? AND org_id = ?'
+  ).bind(
+    'DISPUTE',
+    calculateLitigationScore(violations).score,
+    calculateLitigationScore(violations).totalDamagesMax,
+    client.id,
+    user.org_id
+  ).run();
+
+  await c.env.DB.prepare(
+    'INSERT INTO activity_log (id, org_id, client_id, report_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    generateId(),
+    user.org_id,
+    client.id,
+    id,
+    user.id,
+    'workflow_launched',
+    `Launched attorney workflow pack (${generated.length} documents)`,
+    JSON.stringify({ docs: generated.map((g) => g.docType) })
+  ).run();
+
+  return c.json({
+    success: true,
+    documents: generated,
+    caseStatus: 'DISPUTE',
+    litigationScore: calculateLitigationScore(violations),
+  });
 });
 
 app.get('/api/reports/:id/comparison', authMiddleware, async (c) => {

@@ -25,6 +25,7 @@ export function mapMfsnToInternal(mfsnData: any): CreditReportData[] {
         ssns: subject.nationalIdentifier ? [subject.nationalIdentifier] : [],
         dobs: subject.dateOfBirth ? [new Date(subject.dateOfBirth).toLocaleDateString()] : []
       },
+      scores: extractMfsnScores(view, summary, bureau),
       accounts: [],
       inquiries: [],
       publicRecords: [],
@@ -161,4 +162,26 @@ function transformPaymentHistory(history: any[]): string {
   }
 
   return historyStr;
+}
+
+function extractMfsnScores(view: any, summary: any, bureau: string) {
+  const scoreBlock = view.creditScore || view.score || summary.creditScore || summary.score || {};
+  const factors = Array.isArray(scoreBlock.factors)
+    ? scoreBlock.factors.map((f: any) => (typeof f === 'string' ? f : f.description || f.factor || '')).filter(Boolean)
+    : [];
+  const numeric =
+    Number(scoreBlock.score ?? scoreBlock.value ?? scoreBlock.ficoScore ?? scoreBlock.vantageScore ?? NaN);
+  const fico = Number.isFinite(numeric) ? numeric : null;
+  const bureauKey = String(bureau || '').toLowerCase();
+  return {
+    fico,
+    vantage: Number.isFinite(Number(scoreBlock.vantageScore)) ? Number(scoreBlock.vantageScore) : null,
+    equifax: bureauKey.includes('equifax') ? fico : null,
+    experian: bureauKey.includes('experian') ? fico : null,
+    transunion: bureauKey.includes('transunion') || bureauKey.includes('trans union') ? fico : null,
+    provider: 'MyFreeScoreNow',
+    model: scoreBlock.model || scoreBlock.scoreModel || scoreBlock.name || 'FICO',
+    pulledAt: summary.reportGenerated || undefined,
+    factors,
+  };
 }

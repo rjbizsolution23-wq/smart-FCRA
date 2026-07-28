@@ -105,6 +105,7 @@ export function mapSmartCreditToInternal(smartCreditData: any): CreditReportData
         ssns: ssns.filter(Boolean),
         dobs: dobs.filter(Boolean)
       },
+      scores: extractSmartCreditScores(rawReport, bureau),
       accounts: [],
       inquiries: [],
       publicRecords: [],
@@ -340,4 +341,29 @@ function transformPaymentHistory(history: any): string {
   }
 
   return '';
+}
+
+function extractSmartCreditScores(rawReport: any, bureau: string) {
+  const scoreBlock = rawReport.creditScore || rawReport.score || rawReport.scores || {};
+  const numeric = Number(
+    scoreBlock.score ?? scoreBlock.value ?? scoreBlock.fico ?? scoreBlock.ficoScore ?? rawReport.ficoScore ?? NaN
+  );
+  const fico = Number.isFinite(numeric) ? numeric : null;
+  const bureauKey = String(bureau || '').toLowerCase();
+  const factors = Array.isArray(scoreBlock.factors)
+    ? scoreBlock.factors.map((f: any) => (typeof f === 'string' ? f : f.description || f.factor || '')).filter(Boolean)
+    : [];
+  return {
+    fico,
+    vantage: Number.isFinite(Number(scoreBlock.vantage || scoreBlock.vantageScore))
+      ? Number(scoreBlock.vantage || scoreBlock.vantageScore)
+      : null,
+    equifax: bureauKey.includes('equifax') ? fico : null,
+    experian: bureauKey.includes('experian') ? fico : null,
+    transunion: bureauKey.includes('transunion') || bureauKey.includes('trans union') ? fico : null,
+    provider: 'SmartCredit',
+    model: scoreBlock.model || scoreBlock.scoreModel || 'FICO',
+    pulledAt: rawReport.reportDate || rawReport.generatedDate || undefined,
+    factors,
+  };
 }

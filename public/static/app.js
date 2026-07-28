@@ -1260,6 +1260,17 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         <div class="flex gap-3">
           <button type="submit" id="mfsn-btn" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition shadow-lg"><i class="fas fa-cloud-download-alt mr-2"></i>Authenticate & Import Report</button>
         </div>
+
+        <div class="relative flex py-3 items-center">
+          <div class="flex-grow border-t border-gray-700/60"></div>
+          <span class="flex-shrink mx-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">OR paste MFSN raw JSON</span>
+          <div class="flex-grow border-t border-gray-700/60"></div>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1.5">MyFreeScoreNow fetch-3B / providerViews JSON</label>
+          <textarea id="mfsn-json-paste" rows="8" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2.5 text-green-300/90 text-[11px] font-mono focus:border-blue-500 outline-none" placeholder='{"success":true,"data":{"providerViews":[…]}}'></textarea>
+          <button type="button" id="mfsn-json-btn" class="mt-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white px-4 py-2 rounded-lg text-xs font-semibold"><i class="fas fa-file-code mr-1.5"></i>Import Pasted JSON</button>
+        </div>
       </form>
 
       <!-- SMARTCREDIT IMPORT TAB -->
@@ -1366,6 +1377,35 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     const formSmartcredit = $('#smartcredit-form');
     const formAcr = $('#acr-form');
     const formMan = $('#upload-form');
+
+    // Deep-link from onboarding cards / modals
+    if (data?.tab === 'smartcredit') {
+      setTimeout(() => tabSmartcredit?.click(), 0);
+    } else if (data?.tab === 'mfsn') {
+      setTimeout(() => tabMfsn?.click(), 0);
+    } else if (data?.tab === 'acr') {
+      setTimeout(() => tabAcr?.click(), 0);
+    } else if (data?.tab === 'manual') {
+      setTimeout(() => tabMan?.click(), 0);
+    }
+
+    const mfsnJsonBtn = $('#mfsn-json-btn');
+    if (mfsnJsonBtn) {
+      mfsnJsonBtn.onclick = async () => {
+        const raw = ($('#mfsn-json-paste')?.value || '').trim();
+        if (!raw) return toast('Paste MFSN JSON first', 'error');
+        let mfsnData;
+        try { mfsnData = JSON.parse(raw); } catch { return toast('Invalid JSON', 'error'); }
+        let clientId = data.clientId;
+        if (!clientId || clientId === 'autopilot') {
+          // Prefer first client or require selection
+          const clients = await api('/clients').catch(() => ({ clients: [] }));
+          clientId = clients.clients?.[0]?.id;
+          if (!clientId) return toast('Create a client first, then import', 'error');
+        }
+        await runAnalysisPipeline('/reports/mfsn-import', { clientId, mfsnData }, true, 'MyFreeScoreNow JSON');
+      };
+    }
 
     const dropzone = $('#smartcredit-dropzone');
     const fileInput = $('#smartcredit-file-input');
@@ -3086,6 +3126,34 @@ Status: Discharged`;
   // ═══════════════════════════════════════════════════════════════
   // REPORT DETAIL
   // ═══════════════════════════════════════════════════════════════
+
+  // ═══════════════════════════════════════════════════════════════
+  // FULL ANALYSIS COCKPIT (lawyer-facing summary of a report)
+  // ═══════════════════════════════════════════════════════════════
+  async function pgFullAnalysis(el, data) {
+    const reportId = data?.reportId;
+    if (!reportId) {
+      el.innerHTML = `<div class="fade-in glass rounded-xl p-8 border border-gray-800 text-center">
+        <i class="fas fa-file-medical-alt text-4xl text-blue-400 mb-3"></i>
+        <h2 class="text-xl font-bold text-white mb-2">Full Analysis Cockpit</h2>
+        <p class="text-sm text-gray-400 mb-4">Open a credit report first, then launch Full Analysis from the report workspace.</p>
+        <button onclick="window._nav('reports')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">Browse Reports</button>
+      </div>`;
+      return;
+    }
+    // Reuse the interactive report workspace (same data surface)
+    await pgReportDetail(el, { reportId, focusTab: 'violations', fullAnalysis: true });
+  }
+
+  window._showMfsnModal = function() {
+    toast('Opening MyFreeScoreNow import…', 'info');
+    window._nav('upload-report', { tab: 'mfsn' });
+  };
+  window._showSmartCreditModal = function() {
+    toast('Opening SmartCredit import…', 'info');
+    window._nav('upload-report', { tab: 'smartcredit' });
+  };
+
   async function pgReportDetail(el, data) {
     el.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-center"><i class="fas fa-spinner fa-spin text-3xl text-blue-400 mb-3"></i><div class="text-sm text-gray-400">Loading report detail workspace...</div></div></div>`;
     try {
@@ -3097,13 +3165,20 @@ Status: Discharged`;
       const clientRes = await api(`/clients/${r.client_id}`).catch(() => null);
       const client = clientRes?.client || {};
       
-      const parsed = r.parsed_data ? JSON.parse(r.parsed_data) : {};
+      const parsed = res.parsed || (r.parsed_data ? JSON.parse(r.parsed_data) : {});
+      const scores = res.scores || parsed.scores || {};
+      const rawPayload = res.rawPayload;
+      const rawPayloadType = res.rawPayloadType || 'text';
+      const sourceProvider = res.sourceProvider || r.source_provider || 'manual';
       
       // Expose Active Globals for HUD, compiler, and bidirectional navigation
       window._activeWorkspaceReport = r;
       window._activeWorkspaceClient = client;
       window._activeWorkspaceViolations = res.violations;
       window._activeWorkspaceParsed = parsed;
+      window._activeWorkspaceScores = scores;
+      window._activeWorkspaceRawPayload = rawPayload;
+      window._activeWorkspaceSource = sourceProvider;
 
       const personalInfo = parsed.personalInfo || { names: [], addresses: [], employers: [], ssns: [], dobs: [] };
       
@@ -3169,6 +3244,12 @@ Status: Discharged`;
             <button onclick="window._exportViolations('','${r.id}')" class="bg-green-600/20 border border-green-500/30 text-green-300 px-3.5 py-2 rounded-lg text-xs font-semibold hover:bg-green-600/30 transition flex items-center gap-1.5">
               <i class="fas fa-download"></i>Export Claims
             </button>
+            <button onclick="window._launchAttorneyWorkflow('${r.id}')" class="bg-amber-600/20 border border-amber-500/30 text-amber-300 px-3.5 py-2 rounded-lg text-xs font-semibold hover:bg-amber-600/30 transition flex items-center gap-1.5">
+              <i class="fas fa-gavel"></i>Launch Suit Pack
+            </button>
+            <button onclick="window._nav('full-analysis', { reportId: '${r.id}' })" class="bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 px-3.5 py-2 rounded-lg text-xs font-semibold hover:bg-indigo-600/30 transition flex items-center gap-1.5">
+              <i class="fas fa-microscope"></i>Full Analysis
+            </button>
             <span class="px-3 py-1 bg-green-950/40 border border-green-500/20 text-green-400 text-xs font-semibold rounded-lg">
               ${r.status}
             </span>
@@ -3176,27 +3257,46 @@ Status: Discharged`;
         </div>
 
         <!-- Metric Cards Grid -->
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 mb-6">
+          <div class="glass rounded-xl p-3 text-center border border-blue-900/40 bg-blue-950/10">
+            <div class="text-xs text-blue-400/80 font-semibold uppercase tracking-wider">FICO / Score</div>
+            <div class="text-xl font-extrabold text-white mt-1">${scores.fico || scores.equifax || scores.experian || scores.transunion || '—'}</div>
+            <div class="text-[10px] text-gray-500 mt-0.5">${scores.model || sourceProvider}</div>
+          </div>
           <div class="glass rounded-xl p-3 text-center border border-gray-800">
-            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Regular Accounts</div>
-            <div class="text-xl font-extrabold text-white mt-1">${r.total_accounts || 0}</div>
+            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">EQ / EX / TU</div>
+            <div class="text-sm font-extrabold text-white mt-1 font-mono">${scores.equifax || '—'} / ${scores.experian || '—'} / ${scores.transunion || '—'}</div>
+          </div>
+          <div class="glass rounded-xl p-3 text-center border border-gray-800">
+            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Accounts</div>
+            <div class="text-xl font-extrabold text-white mt-1">${r.total_accounts || (parsed.accounts||[]).length || 0}</div>
           </div>
           <div class="glass rounded-xl p-3 text-center border border-gray-800">
             <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Collections</div>
-            <div class="text-xl font-extrabold text-white mt-1">${r.total_collections || 0}</div>
+            <div class="text-xl font-extrabold text-white mt-1">${r.total_collections || (parsed.collections||[]).length || 0}</div>
           </div>
           <div class="glass rounded-xl p-3 text-center border border-gray-800">
-            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Hard Inquiries</div>
-            <div class="text-xl font-extrabold text-white mt-1">${r.total_inquiries || 0}</div>
+            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Inquiries</div>
+            <div class="text-xl font-extrabold text-white mt-1">${r.total_inquiries || (parsed.inquiries||[]).length || 0}</div>
+          </div>
+          <div class="glass rounded-xl p-3 text-center border border-gray-800">
+            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Public Records</div>
+            <div class="text-xl font-extrabold text-white mt-1">${r.total_public_records || (parsed.publicRecords||[]).length || 0}</div>
           </div>
           <div class="glass rounded-xl p-3 text-center border border-red-950 bg-red-950/5">
             <div class="text-xs text-red-400/80 font-semibold uppercase tracking-wider">Violations</div>
             <div class="text-xl font-extrabold text-red-400 mt-1">${(res.violations || []).length}</div>
           </div>
-          <div class="glass rounded-xl p-3 text-center border border-gray-800">
-            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Litigation Score</div>
+          <div class="glass rounded-xl p-3 text-center border border-amber-900/40 bg-amber-950/10">
+            <div class="text-xs text-amber-400/80 font-semibold uppercase tracking-wider">Litigation</div>
             <div class="text-xl font-extrabold text-white mt-1">${ls.score}/100</div>
+            <div class="text-[10px] text-green-400 mt-0.5">${money(ls.totalDamagesMin)}–${money(ls.totalDamagesMax)}</div>
           </div>
+        </div>
+        <div class="mb-4 text-[11px] text-gray-400 flex flex-wrap gap-3">
+          <span class="px-2 py-1 rounded bg-gray-900 border border-gray-800"><i class="fas fa-database text-blue-400 mr-1"></i>Source: <strong class="text-white">${sourceProvider}</strong></span>
+          <span class="px-2 py-1 rounded bg-gray-900 border border-gray-800"><i class="fas fa-code text-purple-400 mr-1"></i>Raw payload: <strong class="text-white">${rawPayloadType.toUpperCase()}</strong></span>
+          <span class="px-2 py-1 rounded bg-gray-900 border border-gray-800"><i class="fas fa-file text-gray-400 mr-1"></i>${escapeHtml(r.file_name || '')}</span>
         </div>
 
         <!-- RJ Dispute Campaign HUD Container -->
@@ -3215,8 +3315,11 @@ Status: Discharged`;
                 { id: 'accounts', label: 'Accounts', count: (parsed.accounts || []).length, icon: 'fa-credit-card' },
                 { id: 'collections', label: 'Collections', count: (parsed.collections || []).length, icon: 'fa-hand-holding-usd' },
                 { id: 'inquiries', label: 'Inquiries & Records', count: ((parsed.inquiries || []).length + (parsed.publicRecords || []).length), icon: 'fa-history' },
+                { id: 'scores', label: 'Scores & Factors', icon: 'fa-chart-line' },
                 { id: 'violations', label: 'Violations', count: (res.violations || []).length, icon: 'fa-exclamation-triangle', color: 'red' },
-                { id: 'dispute-builder', label: 'Dispute Builder', count: (state.selectedDisputeItems[r.id] || []).length, icon: 'fa-file-signature', badgeId: 'dispute-builder-badge-count' }
+                { id: 'raw-json', label: 'Raw JSON', icon: 'fa-brackets-curly' },
+                { id: 'dispute-builder', label: 'Dispute Builder', count: (state.selectedDisputeItems[r.id] || []).length, icon: 'fa-file-signature', badgeId: 'dispute-builder-badge-count' },
+                { id: 'legal-pack', label: 'Legal Pack', icon: 'fa-balance-scale' }
               ].map((tab, idx) => `
                 <button class="report-workspace-tab flex-1 min-w-[120px] flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-semibold rounded-lg transition-all ${idx === 0 ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/10' : 'text-gray-400 hover:text-white hover:bg-gray-800/40'}" data-tab="${tab.id}">
                   <i class="fas ${tab.icon} text-[10px] ${tab.id === 'violations' ? 'text-red-400' : 'text-blue-400'}"></i>
@@ -3237,14 +3340,19 @@ Status: Discharged`;
             <div class="flex items-center justify-between mb-3 pb-2 border-b border-gray-800">
               <div class="flex items-center gap-2">
                 <i class="fas fa-terminal text-blue-400 text-xs"></i>
-                <span class="text-sm font-bold text-white">Raw Monospace Text Inspector</span>
+                <span class="text-sm font-bold text-white">Evidence Inspector</span>
               </div>
               <div class="flex items-center gap-2">
+                <div class="flex bg-gray-900 border border-gray-800 rounded-lg overflow-hidden text-[10px] font-bold">
+                  <button type="button" class="raw-mode-btn px-2 py-1 text-white bg-blue-600" data-mode="text">Text</button>
+                  <button type="button" class="raw-mode-btn px-2 py-1 text-gray-400 hover:text-white" data-mode="json">Raw JSON</button>
+                  <button type="button" class="raw-mode-btn px-2 py-1 text-gray-400 hover:text-white" data-mode="parsed">Parsed</button>
+                </div>
                 <button onclick="window._toggleRawFullscreen()" class="bg-gray-850 hover:bg-gray-800 border border-gray-800 text-gray-400 hover:text-white px-2 py-1 rounded text-[10px] font-bold transition flex items-center gap-1" title="Toggle Fullscreen">
                   <i class="fas fa-expand-alt text-[9px]" id="raw-fullscreen-icon"></i>
                   <span id="raw-fullscreen-text">Maximize</span>
                 </button>
-                <span class="px-2 py-0.5 bg-gray-800 text-[10px] text-gray-400 font-mono font-bold rounded uppercase tracking-wider">${r.bureau} Report</span>
+                <span class="px-2 py-0.5 bg-gray-800 text-[10px] text-gray-400 font-mono font-bold rounded uppercase tracking-wider">${r.bureau}</span>
               </div>
             </div>
             
@@ -3443,18 +3551,27 @@ Status: Discharged`;
       };
 
       const renderAccountsTab = () => {
+        const payHistHtml = (hist) => {
+          if (!hist) return '<span class="text-gray-600 italic">No payment history string</span>';
+          return `<div class="flex flex-wrap gap-0.5 mt-1">${[...String(hist)].slice(0, 48).map(ch => {
+            const color = ch === 'C' || ch === '0' ? 'bg-green-500/80' : ch === '1' ? 'bg-yellow-500/80' : ch === '2' || ch === '3' ? 'bg-orange-500/80' : ch === '9' || ch === 'B' ? 'bg-red-500/80' : 'bg-gray-600';
+            return `<span class="w-3 h-3 rounded-sm ${color}" title="${ch}"></span>`;
+          }).join('')}</div><div class="text-[9px] text-gray-500 font-mono mt-1 break-all">${escapeHtml(String(hist).slice(0, 120))}</div>`;
+        };
         return `<div class="space-y-3 fade-in">
-          <div class="text-xs text-gray-400 mb-2 italic">Click any card below to automatically scroll and glow-highlight its occurrence in the Raw Text Inspector.</div>
+          <div class="text-xs text-gray-400 mb-2 italic">Full tradeline detail — click any card to glow-highlight evidence in the inspector. Expand Metro 2 fields for attorney review.</div>
           ${(parsed.accounts || []).map((acc) => {
             const accNo = acc.accountNumber || '';
-            const isDelinquent = acc.paymentStatus.toLowerCase().includes('past due') || acc.accountStatus.toLowerCase().includes('closed');
+            const isDelinquent = String(acc.paymentStatus || '').toLowerCase().includes('past due') || String(acc.accountStatus || '').toLowerCase().includes('charge') || String(acc.accountStatus || '').toLowerCase().includes('collection');
+            const util = acc.creditLimit > 0 ? Math.round((acc.currentBalance / acc.creditLimit) * 100) : null;
+            const linkedV = (res.violations || []).filter(v => (v.account_number && accNo && String(v.account_number).includes(String(accNo).replace(/\*/g,'').slice(-4))) || (v.account_name && acc.creditorName && String(v.account_name).toLowerCase().includes(String(acc.creditorName).toLowerCase().slice(0, 8))));
             return `
-              <div onclick="window._syncAccountHighlight('${acc.creditorName.replace(/'/g, "\\'")}', '${accNo.replace(/'/g, "\\'")}')" class="glass rounded-xl p-4 border border-gray-800 hover:border-blue-500/40 transition-all cursor-pointer group relative">
+              <div onclick="window._syncAccountHighlight('${String(acc.creditorName||'').replace(/'/g, "\\'")}', '${String(accNo).replace(/'/g, "\\'")}')" class="glass rounded-xl p-4 border border-gray-800 hover:border-blue-500/40 transition-all cursor-pointer group relative">
                 <div class="flex items-start justify-between mb-2">
                   <div class="flex items-start gap-3">
                     <input type="checkbox" onclick="window._toggleDisputeItem(event, '${r.id}', 'acc-${accNo || acc.creditorName}')" ${window._isItemPinned(r.id, `acc-${accNo || acc.creditorName}`) ? 'checked' : ''} class="w-4 h-4 rounded border-gray-800 text-blue-600 bg-gray-900 focus:ring-blue-500 mt-1">
                     <div>
-                      <div class="text-[10px] text-blue-400 font-bold tracking-wider uppercase">${acc.accountType || 'Revolving'}</div>
+                      <div class="text-[10px] text-blue-400 font-bold tracking-wider uppercase">${acc.accountType || 'Revolving'} ${acc.responsibility ? '· ' + acc.responsibility : ''}</div>
                       <h4 class="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">${acc.creditorName}</h4>
                       <div class="text-xs text-gray-500 font-mono">Account No: ${acc.accountNumber || 'N/A'}</div>
                     </div>
@@ -3462,62 +3579,41 @@ Status: Discharged`;
                   <div class="text-right">
                     <div class="text-[10px] text-gray-500 font-semibold uppercase">Current Balance</div>
                     <div class="text-sm font-extrabold ${acc.currentBalance > 0 ? 'text-red-400' : 'text-green-400'}">${money(acc.currentBalance)}</div>
+                    ${linkedV.length ? `<div class="text-[10px] text-red-400 font-bold mt-1">${linkedV.length} claim(s)</div>` : ''}
                   </div>
                 </div>
-                <div class="grid grid-cols-3 gap-2 py-2 border-t border-b border-gray-800/60 my-2 text-[11px]">
-                  <div>
-                    <div class="text-gray-500">Status</div>
-                    <div class="text-gray-300 font-medium">${acc.accountStatus || 'Open'}</div>
-                  </div>
-                  <div>
-                    <div class="text-gray-500">Opened</div>
-                    <div class="text-gray-300 font-medium font-mono">${acc.dateOpened || 'N/A'}</div>
-                  </div>
-                  <div>
-                    <div class="text-gray-500">Payment Status</div>
-                    <div class="text-gray-300 font-semibold ${isDelinquent ? 'text-yellow-400' : 'text-green-400'}">${acc.paymentStatus || 'Current'}</div>
-                  </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 py-2 border-t border-b border-gray-800/60 my-2 text-[11px]">
+                  <div><div class="text-gray-500">Status</div><div class="text-gray-300 font-medium ${isDelinquent ? 'text-yellow-400' : ''}">${acc.accountStatus || 'Open'}</div></div>
+                  <div><div class="text-gray-500">Opened</div><div class="text-gray-300 font-mono">${acc.dateOpened || 'N/A'}</div></div>
+                  <div><div class="text-gray-500">High Credit</div><div class="text-gray-300 font-mono">${money(acc.highBalance || acc.originalAmount || 0)}</div></div>
+                  <div><div class="text-gray-500">Credit Limit</div><div class="text-gray-300 font-mono">${money(acc.creditLimit || 0)}${util !== null ? ` <span class="text-gray-500">(${util}% util)</span>` : ''}</div></div>
+                  <div><div class="text-gray-500">Monthly Pmt</div><div class="text-gray-300 font-mono">${money(acc.monthlyPayment || 0)}</div></div>
+                  <div><div class="text-gray-500">Last Payment</div><div class="text-gray-300 font-mono">${acc.lastPaymentDate || 'N/A'}</div></div>
+                  <div><div class="text-gray-500">DOFD</div><div class="text-gray-300 font-mono">${acc.dofd || acc.dateOfFirstDelinquency || 'N/A'}</div></div>
+                  <div><div class="text-gray-500">Reported</div><div class="text-gray-300 font-mono">${acc.dateReported || 'N/A'}</div></div>
                 </div>
-
-                <!-- Metro 2 Field Compliance Accordion Drawer -->
-                <details class="group/metro mt-3 border border-gray-800 bg-gray-950/20 rounded-lg overflow-hidden transition" onclick="event.stopPropagation()">
+                <div class="mb-2">
+                  <div class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Payment History (Metro 2)</div>
+                  ${payHistHtml(acc.paymentHistory)}
+                </div>
+                ${acc.comments ? `<div class="text-[11px] text-gray-400 mb-2"><span class="text-gray-500 font-bold">Comments:</span> ${escapeHtml(acc.comments)}</div>` : ''}
+                <details class="group/metro mt-2 border border-gray-800 bg-gray-950/20 rounded-lg overflow-hidden" onclick="event.stopPropagation()">
                   <summary class="flex items-center justify-between p-2.5 text-xs text-gray-400 hover:text-white cursor-pointer select-none font-semibold">
-                    <span class="flex items-center gap-1.5"><i class="fas fa-microchip text-blue-500"></i> Metro 2® Field Compliance Accordion</span>
+                    <span class="flex items-center gap-1.5"><i class="fas fa-microchip text-blue-500"></i> Metro 2® Field Evidence</span>
                     <i class="fas fa-chevron-down text-[10px] group-open/metro:rotate-180 transition-transform"></i>
                   </summary>
-                  <div class="p-3 border-t border-gray-800/80 bg-gray-950/45 text-[11px] space-y-2.5 leading-normal">
+                  <div class="p-3 border-t border-gray-800/80 bg-gray-950/45 text-[11px] space-y-2">
                     <div class="grid grid-cols-2 gap-2">
-                      <div class="p-2 bg-gray-900/40 rounded border border-gray-800">
-                        <div class="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Field 17: Date of First Delinquency</div>
-                        <div class="text-white font-mono mt-0.5">${acc.dateOfFirstDelinquency || 'N/A'}</div>
-                        <div class="text-red-400 text-[9px] mt-1 flex items-center gap-1 font-semibold"><i class="fas fa-exclamation-triangle"></i> Inconsistency risk detected</div>
-                      </div>
-                      <div class="p-2 bg-gray-900/40 rounded border border-gray-800">
-                        <div class="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Field 18: Date Opened</div>
-                        <div class="text-white font-mono mt-0.5">${acc.dateOpened || 'N/A'}</div>
-                        <div class="text-green-400 text-[9px] mt-1 flex items-center gap-1 font-semibold"><i class="fas fa-check-circle"></i> Matches header opened date</div>
-                      </div>
-                      <div class="p-2 bg-gray-900/40 rounded border border-gray-800">
-                        <div class="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Field 21: Current Balance</div>
-                        <div class="text-white font-mono mt-0.5">${money(acc.currentBalance)}</div>
-                        <div class="text-yellow-400 text-[9px] mt-1 flex items-center gap-1 font-semibold"><i class="fas fa-info-circle"></i> Requires furnisher confirmation</div>
-                      </div>
-                      <div class="p-2 bg-gray-900/40 rounded border border-gray-800">
-                        <div class="text-gray-500 uppercase tracking-wider text-[9px] font-bold">Field 25: Account Status / History</div>
-                        <div class="text-white font-mono mt-0.5">${acc.accountStatus || 'Open'}</div>
-                        <div class="text-red-400 text-[9px] mt-1 flex items-center gap-1 font-semibold"><i class="fas fa-exclamation-triangle"></i> Status mismatch check required</div>
-                      </div>
+                      <div class="p-2 bg-gray-900/40 rounded border border-gray-800"><div class="text-gray-500 uppercase text-[9px] font-bold">Field 17 DOFD</div><div class="text-white font-mono mt-0.5">${acc.dofd || 'N/A'}</div></div>
+                      <div class="p-2 bg-gray-900/40 rounded border border-gray-800"><div class="text-gray-500 uppercase text-[9px] font-bold">Field 18 Date Opened</div><div class="text-white font-mono mt-0.5">${acc.dateOpened || 'N/A'}</div></div>
+                      <div class="p-2 bg-gray-900/40 rounded border border-gray-800"><div class="text-gray-500 uppercase text-[9px] font-bold">Field 21 Balance</div><div class="text-white font-mono mt-0.5">${money(acc.currentBalance)}</div></div>
+                      <div class="p-2 bg-gray-900/40 rounded border border-gray-800"><div class="text-gray-500 uppercase text-[9px] font-bold">Field 25 Status</div><div class="text-white font-mono mt-0.5">${acc.accountStatus || 'Open'}</div></div>
+                      <div class="p-2 bg-gray-900/40 rounded border border-gray-800"><div class="text-gray-500 uppercase text-[9px] font-bold">Closed</div><div class="text-white font-mono mt-0.5">${acc.dateClosed || '—'}</div></div>
+                      <div class="p-2 bg-gray-900/40 rounded border border-gray-800"><div class="text-gray-500 uppercase text-[9px] font-bold">Terms</div><div class="text-white font-mono mt-0.5">${acc.terms || '—'}</div></div>
                     </div>
-                    <div class="p-2 bg-blue-950/15 border border-blue-500/20 text-blue-300 rounded text-[10px]">
-                      <strong>System Directive:</strong> Standard Metro 2 layout constraints demand strict verification. Mismatch in Field 17 and Field 25 violates FCRA compliance guidelines.
-                    </div>
+                    ${linkedV.length ? `<div class="p-2 bg-red-950/20 border border-red-500/20 rounded text-red-300 text-[10px]"><strong>Linked violations:</strong> ${linkedV.map(v => v.subcategory || v.category).join('; ')}</div>` : '<div class="p-2 bg-blue-950/15 border border-blue-500/20 text-blue-300 rounded text-[10px]">No detector hits linked to this tradeline yet — still review for §1681e(b) accuracy.</div>'}
                   </div>
                 </details>
-
-                <div class="flex items-center justify-between text-[10px] text-gray-500 pt-3 mt-1 border-t border-gray-800/40">
-                  <span class="italic">Linked highlights synced</span>
-                  <span class="text-blue-500 group-hover:translate-x-1 transition font-bold flex items-center gap-1">Jump to Raw <i class="fas fa-chevron-right text-[8px]"></i></span>
-                </div>
               </div>`;
           }).join('') || '<div class="text-center py-8 text-gray-500"><i class="fas fa-credit-card text-3xl mb-3"></i><p>No trade lines detected</p></div>'}
         </div>`;
@@ -3642,6 +3738,80 @@ Status: Discharged`;
           <div>
             <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2"><i class="fas fa-search text-blue-400"></i> Hard Inquiries (${(parsed.inquiries || []).length})</h3>
             <div class="space-y-2">${inqList || '<div class="text-center py-4 text-xs text-gray-600">No recent hard inquiries found</div>'}</div>
+          </div>
+        </div>`;
+      };
+
+
+      const renderScoresTab = () => {
+        const factors = scores.factors || [];
+        return `<div class="space-y-4 fade-in">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            ${[
+              ['FICO', scores.fico],
+              ['Vantage', scores.vantage],
+              ['Equifax', scores.equifax],
+              ['Experian', scores.experian],
+              ['TransUnion', scores.transunion],
+            ].map(([label, val]) => `
+              <div class="glass rounded-xl p-4 border border-gray-800 text-center">
+                <div class="text-[10px] text-gray-500 font-bold uppercase">${label}</div>
+                <div class="text-2xl font-extrabold text-white mt-1">${val ?? '—'}</div>
+              </div>`).join('')}
+          </div>
+          <div class="glass rounded-xl p-4 border border-gray-800">
+            <div class="text-xs font-bold text-white mb-2"><i class="fas fa-list text-blue-400 mr-1.5"></i>Score Factors / Reason Codes</div>
+            ${factors.length ? `<ul class="space-y-1.5 text-xs text-gray-300">${factors.map(f => `<li class="p-2 bg-gray-950/50 border border-gray-800 rounded">• ${escapeHtml(String(f))}</li>`).join('')}</ul>` : '<p class="text-xs text-gray-500 italic">No score factors present in this payload. Factors appear when MFSN/SmartCredit include them in the raw JSON.</p>'}
+            <div class="mt-3 text-[11px] text-gray-500">Model: <span class="text-gray-300">${escapeHtml(scores.model || '—')}</span> · Provider: <span class="text-gray-300">${escapeHtml(scores.provider || sourceProvider)}</span></div>
+          </div>
+        </div>`;
+      };
+
+      const renderRawJsonTab = () => {
+        window._rawJsonPretty = rawPayload ? JSON.stringify(rawPayload, null, 2) : (r.raw_text || '');
+        window._parsedPretty = JSON.stringify(parsed || {}, null, 2);
+        setTimeout(() => {
+          const el = document.getElementById('raw-json-view');
+          if (el) el.textContent = window._rawJsonPretty || window._parsedPretty || '';
+        }, 0);
+        return `<div class="space-y-3 fade-in">
+          <div class="p-3 bg-purple-950/20 border border-purple-500/20 rounded-xl text-xs text-purple-200">
+            <strong>Attorney evidence locker:</strong> Full MyFreeScoreNow / SmartCredit / parser payloads. Copy into discovery exhibits or expert affidavits.
+          </div>
+          <div class="flex gap-2 text-[10px] font-bold">
+            <button type="button" class="px-3 py-1.5 rounded bg-blue-600 text-white" onclick="document.getElementById('raw-json-view').textContent=window._rawJsonPretty||''">Source Payload</button>
+            <button type="button" class="px-3 py-1.5 rounded bg-gray-800 text-gray-300" onclick="document.getElementById('raw-json-view').textContent=window._parsedPretty||''">Parsed Structure</button>
+            <button type="button" class="px-3 py-1.5 rounded bg-gray-800 text-gray-300" onclick="navigator.clipboard.writeText(document.getElementById('raw-json-view').textContent); toast('Copied to clipboard','success')">Copy</button>
+          </div>
+          <pre id="raw-json-view" class="text-[10px] font-mono text-green-300/90 bg-gray-950 border border-gray-800 rounded-xl p-4 max-h-[520px] overflow-auto whitespace-pre-wrap">Loading…</pre>
+        </div>`;
+      };
+
+      const renderLegalPackTab = () => {
+        const docs = res.documents || [];
+        return `<div class="space-y-4 fade-in">
+          <div class="glass rounded-xl p-4 border border-amber-500/20 bg-amber-950/10">
+            <h4 class="text-sm font-bold text-white mb-1"><i class="fas fa-gavel text-amber-400 mr-1.5"></i>One-click attorney workflow</h4>
+            <p class="text-xs text-gray-400 mb-3">Generates bureau dispute, §1681i letter, intent-to-sue, pre-litigation settlement, CFPB complaint, and federal complaint drafts — then moves the case to DISPUTE.</p>
+            <button onclick="window._launchAttorneyWorkflow('${r.id}')" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-xs font-bold"><i class="fas fa-rocket mr-1.5"></i>Launch Suit Pack Now</button>
+          </div>
+          <div class="space-y-2">
+            <div class="text-xs font-bold text-gray-400 uppercase tracking-wider">Generated Documents (${docs.length})</div>
+            ${docs.length ? docs.map(d => `
+              <div class="glass rounded-xl p-3 border border-gray-800 flex items-center justify-between text-xs">
+                <div>
+                  <div class="font-bold text-white">${escapeHtml(d.title || d.doc_type)}</div>
+                  <div class="text-gray-500 font-mono">${escapeHtml(d.doc_type)} · ${escapeHtml(d.status || 'draft')}</div>
+                </div>
+                <button onclick="window._nav('documents')" class="text-blue-400 font-bold">Open</button>
+              </div>`).join('') : '<div class="text-xs text-gray-500 italic p-4 text-center">No documents yet — launch the suit pack to generate the full litigation set.</div>'}
+          </div>
+          <div class="glass rounded-xl p-4 border border-gray-800 text-xs text-gray-300 space-y-1">
+            <div><span class="text-gray-500">Damages floor:</span> <strong class="text-green-400">${money(ls.totalDamagesMin)}</strong></div>
+            <div><span class="text-gray-500">Damages ceiling:</span> <strong class="text-green-400">${money(ls.totalDamagesMax)}</strong></div>
+            <div><span class="text-gray-500">Litigation grade:</span> <strong class="text-white">${ls.grade || '—'}</strong> (${ls.score}/100)</div>
+            <div class="text-gray-500 pt-2">Mentors available in AI Studio: FCRA Mentor, Dispute Strategist, Metro 2 Auditor, Litigation Scout.</div>
+            <button onclick="window._nav('ai-studio')" class="mt-2 text-blue-400 font-bold">Open AI Mentors →</button>
           </div>
         </div>`;
       };
@@ -3826,11 +3996,46 @@ Status: Discharged`;
                 document.querySelectorAll('.est-damages-max-display').forEach(el => el.textContent = money(adjMax));
               };
             }
+          } else if (tabId === 'scores') {
+            tabContentContainer.innerHTML = renderScoresTab();
+          } else if (tabId === 'raw-json') {
+            tabContentContainer.innerHTML = renderRawJsonTab();
+          } else if (tabId === 'legal-pack') {
+            tabContentContainer.innerHTML = renderLegalPackTab();
           } else if (tabId === 'dispute-builder') {
             tabContentContainer.innerHTML = renderDisputeBuilderTab();
             window._initDisputeBuilderTab(r.id);
           }
+          if (data?.focusTab && tabId === data.focusTab) {
+            /* already selected via focus */
+          }
         };
+      });
+
+      // Auto-focus tab when opened from Full Analysis
+      if (data?.focusTab) {
+        const focusBtn = [...tabButtons].find(b => b.dataset.tab === data.focusTab);
+        if (focusBtn) focusBtn.click();
+      }
+
+      // Inspector mode switching (Text / Raw JSON / Parsed)
+      const textModeContent = r.raw_text || '';
+      const jsonModeContent = rawPayload ? JSON.stringify(rawPayload, null, 2) : (rawPayloadType === 'text' ? textModeContent : '{}');
+      const parsedModeContent = JSON.stringify(parsed || {}, null, 2);
+      window._setInspectorMode = function(mode) {
+        const container = document.getElementById('raw-text-container');
+        if (!container) return;
+        const map = { text: textModeContent, json: jsonModeContent, parsed: parsedModeContent };
+        const content = map[mode] || textModeContent;
+        container.dataset.originalText = content;
+        container.textContent = content;
+        document.querySelectorAll('.raw-mode-btn').forEach(btn => {
+          const active = btn.dataset.mode === mode;
+          btn.className = `raw-mode-btn px-2 py-1 ${active ? 'text-white bg-blue-600' : 'text-gray-400 hover:text-white'}`;
+        });
+      };
+      document.querySelectorAll('.raw-mode-btn').forEach(btn => {
+        btn.onclick = () => window._setInspectorMode(btn.dataset.mode);
       });
 
       // Bind Highlighting, Scrolling & Searching Engine on Right Monospace Panel
@@ -6989,19 +7194,16 @@ async function pgAdminConsole(el) {
         }
       };
 
-      // Process user questions and render realistic responses
-      window._submitClientChat = function() {
+      // Live mentor chat (Client Coach) — falls back to local guidance if AI unavailable
+      window._submitClientChat = async function() {
         const input = document.getElementById('ai-chat-input');
         if (!input || !input.value.trim()) return;
 
         const val = input.value.trim();
         localState.chatHistory.push({ sender: 'user', text: val });
         input.value = '';
-
-        // Render input immediately
         renderChatArea();
 
-        // Simulate Typing Indicator
         const chatBox = document.getElementById('ai-chat-messages');
         const typingEl = document.createElement('div');
         typingEl.className = 'flex gap-2.5 items-center text-xs text-gray-500 italic typing-indicator';
@@ -7016,32 +7218,30 @@ async function pgAdminConsole(el) {
         chatBox.appendChild(typingEl);
         chatBox.scrollTop = chatBox.scrollHeight;
 
-        setTimeout(() => {
-          // Remove typing element
-          const currentTyping = chatBox.querySelector('.typing-indicator');
-          if (currentTyping) currentTyping.remove();
+        let answer = '';
+        try {
+          const ctx = `Client portal assist. Violations on file: ${(violations || []).length}. Keep answers practical, cite FCRA sections when useful, and never invent account facts.`;
+          const res = await api('/ai/mentors/client-coach/chat', {
+            method: 'POST',
+            body: JSON.stringify({ message: val, context: ctx })
+          });
+          answer = res.reply || res.message || res.content || '';
+        } catch (err) {
+          answer = '';
+        }
 
-          // Standard knowledge-base autoresponses with Rick's signature direct voice
-          let answer = "I've analyzed your query regarding credit repair compliance. The Fair Credit Reporting Act (15 U.S.C. § 1681) grants you absolute authority to demand verified accuracy. If a bureau fails to prove verification inside 30 days, they are legally required to remove the entry.";
-          
-          const text = val.toLowerCase();
-          if (text.includes('609') || text.includes('section 609')) {
-            answer = "Section 609 of the FCRA (15 U.S.C. § 1681g) mandates credit bureaus to fully disclose all information in your file, including the original source documentation. Our generated letters use this exact statutory foundation to demand they produce original contracts instead of automated computer printouts.";
-          } else if (text.includes('how long') || text.includes('30 days') || text.includes('time') || text.includes('respond')) {
-            answer = "Under FCRA § 1681i, credit bureaus have precisely 30 days (extended to 45 if you supply documentation during an active investigation) to complete their investigation. If they breach this statutory timeline, they must instantly delete the challenged account. We track these milestones carefully.";
-          } else if (text.includes('damage') || text.includes('sue') || text.includes('liabilit') || text.includes('court') || text.includes('money')) {
-            answer = "In cases of willful noncompliance (FCRA § 1681n) or negligent noncompliance (FCRA § 1681o), credit bureaus face strict statutory damages of $100 to $1,000 per violation, plus unlimited punitive damages and full coverage of attorney's fees. This is why we log all infractions—it builds massive litigation leverage!";
-          } else if (text.includes('hi') || text.includes('hello') || text.includes('welcome') || text.includes('help')) {
-            answer = `Hello! I am your interactive FCRA Legal Autopilot. I track your ${violations.length} logged violations and guide you through the process. Ask me about timelines, specific statutes, or letter signatures!`;
-          } else if (text.includes('dispute') || text.includes('letter') || text.includes('signature') || text.includes('sign')) {
-            answer = "Your formal dispute letters must be signed to establish legal validity. Once you sign under the 'My Documents' section, we route your packet via Click2Mail API which prints and sends them to Equifax, Experian, and TransUnion via USPS Certified Mail.";
-          } else if (text.includes('score') || text.includes('fico') || text.includes('boost') || text.includes('increase')) {
-            answer = "Removing a single critical collection (like Jefferson Capital Systems) typically lifts a FICO score by 25 to 45 points, depending on your overall history depth. Use the 'What-If Deletion Simulator' on your left to see the potential outcome!";
-          }
+        if (!answer) {
+          const lower = val.toLowerCase();
+          if (lower.includes('609')) answer = 'FCRA § 609 (15 U.S.C. § 1681g) requires full file disclosure, including sources of information.';
+          else if (lower.includes('30 days') || lower.includes('how long')) answer = 'Under FCRA § 1681i, CRAs generally have 30 days to complete a reasonable reinvestigation.';
+          else if (lower.includes('damage') || lower.includes('sue')) answer = 'Willful noncompliance under § 1681n can mean $100–$1,000 statutory damages per violation plus actual damages, punitive damages, and attorney fees.';
+          else answer = `You currently have ${(violations || []).length} logged violation(s). Ask about dispute timelines, §609/§611 rights, or signing letters under My Documents.`;
+        }
 
-          localState.chatHistory.push({ sender: 'ai', text: answer });
-          renderChatArea();
-        }, 1200);
+        const currentTyping = chatBox.querySelector('.typing-indicator');
+        if (currentTyping) currentTyping.remove();
+        localState.chatHistory.push({ sender: 'ai', text: answer });
+        renderChatArea();
       };
 
       // Separate fast renderer for chat section
