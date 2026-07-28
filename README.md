@@ -124,11 +124,11 @@ Our repository layout is engineered for immediate technical onboarding and insti
    ```
 3. **Apply Database Migrations (Local D1 Dev Sandbox)**:
    ```bash
-   npx wrangler d1 migrations apply fcra-detector-production --local
+   npx wrangler d1 migrations apply fcra-detector-v2 --local
    ```
 4. **Seed Sandbox Data**:
    ```bash
-   npx wrangler d1 execute fcra-detector-production --local --file=./seed.sql
+   npx wrangler d1 execute fcra-detector-v2 --local --file=./seed.sql
    ```
 5. **Run Local Dev Server**:
    ```bash
@@ -136,7 +136,7 @@ Our repository layout is engineered for immediate technical onboarding and insti
    ```
 
 ### Deploying to Production (Cloudflare Pages)
-Compile assets and promote live to Cloudflare Pages edge hosting with a single command:
+Compile assets and promote to the **separate** Cloudflare Pages project (`smart-fcra-v2` — does not overwrite original `smart-fcra`):
 ```bash
 npx wrangler pages deploy dist --project-name smart-fcra-v2
 ```
