@@ -8,16 +8,12 @@
     {
       "binding": "DB",
       "database_name": "fcra-detector-v2",
-      "database_id": "00000000-0000-0000-0000-000000000002"
+      "database_id": "ae28993e-1c98-4f4e-a73d-42ae4337424d"
     }
   ],
   "ai": {
     "binding": "AI"
   },
-  "vars": {
-    "ENVIRONMENT": "development",
-    "FRONTEND_URL": "http://localhost:3000",
-    "PII_ENCRYPTION_KEY": "local-dev-only-pii-key-change-in-production-32+",
-    "MAILING_WEBHOOK_SECRET": "local-dev-mailing-webhook-secret-change-me"
-  }
+  // No vars here — Pages production env is managed via API / dashboard / secrets.
+  // Local defaults: `.dev.vars`
 }

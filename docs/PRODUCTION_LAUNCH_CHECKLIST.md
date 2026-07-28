@@ -5,7 +5,7 @@ This branch is the **separate-project** workbench. Do **not** merge into origina
 ## Security hardening completed in code
 
 - [x] Removed hardcoded master password (env `PLATFORM_BOOTSTRAP_EMAIL` / `PLATFORM_BOOTSTRAP_PASSWORD` only)
-- [x] PBKDF2-SHA-256 password hashing (210k iterations) + legacy hash upgrade on login
+- [x] PBKDF2-SHA-256 password hashing (100k iterations — Workers Web Crypto cap) + legacy hash upgrade on login
 - [x] PII encryption fail-closed (`PII_ENCRYPTION_KEY` required, min 32 chars)
 - [x] Platform admin APIs gated to `super_admin` only
 - [x] Server-stored single-use MFA challenges
@@ -57,6 +57,13 @@ npx wrangler d1 migrations apply fcra-detector-v2 --remote
 ```
 
 6. Deploy: `npm run deploy` → Pages project `smart-fcra-v2` only
+
+## Live now (v2)
+
+- URL: **https://smart-fcra-v2.pages.dev**
+- D1: `fcra-detector-v2` / `ae28993e-1c98-4f4e-a73d-42ae4337424d`
+- `/api/health/ready` reports `ready: true`, `environment: production`
+- Original `smart-fcra` Pages + `fcra-detector-production` D1 are untouched
 
 ## Local QA
 

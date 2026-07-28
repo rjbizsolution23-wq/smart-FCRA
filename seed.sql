@@ -19,7 +19,7 @@ VALUES (
   'org_demo_001',
   'demo@example.com',
   'Demo Admin',
-  'pbkdf2$210000$9ded5ff8b462ab876495377355efad38$bfad99d70e6c3447eba59f9802ad9bf04be184ce3864fd640e0d347091be4bff',
+  'pbkdf2$100000$9ded5ff8b462ab876495377355efad38$d0020e4d180c4e23935d80cf2c2a61375fb8c18de2f788dca43bb8408f269810',
   'super_admin',
   1
 );
@@ -61,7 +61,7 @@ VALUES (
   'org_iso_a',
   'member@iso-a.example',
   'Iso Member',
-  'pbkdf2$210000$9ded5ff8b462ab876495377355efad38$bfad99d70e6c3447eba59f9802ad9bf04be184ce3864fd640e0d347091be4bff',
+  'pbkdf2$100000$9ded5ff8b462ab876495377355efad38$d0020e4d180c4e23935d80cf2c2a61375fb8c18de2f788dca43bb8408f269810',
   'member',
   1
 );
@@ -72,7 +72,7 @@ VALUES (
   'org_iso_b',
   'suspended@iso-b.example',
   'Suspended User',
-  'pbkdf2$210000$9ded5ff8b462ab876495377355efad38$bfad99d70e6c3447eba59f9802ad9bf04be184ce3864fd640e0d347091be4bff',
+  'pbkdf2$100000$9ded5ff8b462ab876495377355efad38$d0020e4d180c4e23935d80cf2c2a61375fb8c18de2f788dca43bb8408f269810',
   'admin',
   1
 );

@@ -8,8 +8,8 @@ The open PR on `smart-FCRA` is only a workbench while we edit. When v2 is done:
 
 1. Create a **new private GitHub repo** (recommended name: `smart-FCRA-v2`) under `rjbizsolution23-wq`
 2. Push this branch’s code there as that repo’s `main`
-3. Deploy Cloudflare Pages project **`smart-fcra-v2`** (already configured)
-4. Create a **new D1 database** `fcra-detector-v2` and paste its `database_id` into `wrangler.toml` / `wrangler.jsonc`
+3. Cloudflare Pages **`smart-fcra-v2`** is live: **https://smart-fcra-v2.pages.dev**
+4. D1 **`fcra-detector-v2`** is live (`database_id` already in wrangler configs)
 5. Leave the original `smart-FCRA` repo and `smart-fcra` Pages project untouched
 
 See **[PRODUCTION_LAUNCH_CHECKLIST.md](./PRODUCTION_LAUNCH_CHECKLIST.md)** for secrets, migrations, and go-live steps.

@@ -2,39 +2,42 @@
 
 Operator secrets live in **gitignored** `.dev.vars` / `secrets.env` only (never committed).
 
+## Live production
+
+| Resource | Value |
+|----------|--------|
+| Pages | **https://smart-fcra-v2.pages.dev** |
+| D1 | `fcra-detector-v2` (`ae28993e-1c98-4f4e-a73d-42ae4337424d`) |
+| Original app | Untouched — `https://smart-fcra.pages.dev` |
+
 ## Verified live
 
 | Integration | Status |
 |-------------|--------|
-| **Cloudflare Email Sending** | **LIVE** — `welcome@noreply.smartfcra.com` / `onboarding.smartfcra.com` (test send OK) |
-| **NVIDIA NIM free models** | **LIVE** — cascade starts with `meta/llama-3.1-70b-instruct` (smoke OK) |
-| Groq / OpenRouter `:free` / Gemini / Together / HF / Workers AI | Free cascade fallbacks |
-| Hugging Face + Replicate | Free media generation |
-| Click2Mail / Stripe env / company branding | Wired |
-| AI Mentors + case-law retrieval | Wired in CRM + client portal |
+| **Cloudflare Pages deploy** | **LIVE** — production ready probe OK |
+| **D1 + migrations 0001–0004 + seed** | **LIVE** |
+| **Cloudflare Email Sending** | **LIVE** — `noreply` / `onboarding.smartfcra.com` |
+| **NVIDIA NIM free models** | **LIVE** — free-only cascade |
+| Groq / OpenRouter `:free` / Gemini / Together / HF / Workers AI | Wired |
+| Stripe / Click2Mail / company branding | Wired |
+| Demo login | `demo@example.com` / `demo123456` |
+| Platform bootstrap | env-based `PLATFORM_BOOTSTRAP_*` (super_admin) |
+| AI Mentors + case-law retrieval | Wired |
 
 ## Free-only policy
 
 `FREE_AI_ONLY=true` — paid OpenAI/DeepSeek are **not** used in the cascade.
 
-## Email priority
+## Auth note
 
-1. Cloudflare Email Sending (`noreply` / `onboarding`)
-2. Resend fallback
-3. SendGrid fallback
+PBKDF2 iterations are **100,000** (Cloudflare Workers Web Crypto hard cap).
 
-## Mentors / agents
+## Still optional
 
-- FCRA Rights Mentor
-- Dispute Strategist Agent
-- Client Success Coach
-- Metro 2 Auditor Agent
-- Litigation Scout Agent (case-law RAG)
+1. Stripe `whsec_…` webhook secret
+2. SmartCredit client key/secret (live import)
+3. New GitHub repo `smart-FCRA-v2` (do **not** merge this branch into original `main`)
 
-Knowledge corpus: `src/data/case-law-database.ts` + statutes/damages docs (retrieval-augmented; offline Kaggle/HF fine-tunes can swap generators later).
+## Security
 
-## Still needed for full Cloudflare Pages deploy
-
-1. Fresh **Cloudflare Workers/Pages/D1 API token** (previous general `cfat_` failed verify; email `cfut_` works for mail only)
-2. Stripe `whsec_…` webhook secret
-3. SmartCredit client key/secret (if using live import)
+Rotate any tokens pasted in chat. Prefer `CLOUDFLARE_API_TOKEN_MASTER` for Wrangler. Never commit `.dev.vars` / `secrets.env`.

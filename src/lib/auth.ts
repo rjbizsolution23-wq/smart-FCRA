@@ -1,7 +1,8 @@
 // Enterprise auth helpers — PBKDF2-SHA-256 (Web Crypto) for Cloudflare Workers edge.
 // Legacy SHA-256+static-salt hashes remain verifiable and upgrade on successful login.
 
-const PBKDF2_ITERATIONS = 210_000;
+// Cloudflare Workers Web Crypto caps PBKDF2 iterations at 100_000.
+const PBKDF2_ITERATIONS = 100_000;
 const PBKDF2_PREFIX = 'pbkdf2';
 
 export function generateId(): string {

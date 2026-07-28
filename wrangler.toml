@@ -7,15 +7,12 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "fcra-detector-v2"
-database_id = "00000000-0000-0000-0000-000000000002"
+database_id = "ae28993e-1c98-4f4e-a73d-42ae4337424d"
 
 [ai]
 binding = "AI"
 
 # Local/dev defaults — OVERRIDE via `wrangler secret put` in production.
 # Never ship real Stripe/Resend/Click2Mail secrets in git.
-[vars]
-ENVIRONMENT = "development"
-FRONTEND_URL = "http://localhost:3000"
-PII_ENCRYPTION_KEY = "local-dev-only-pii-key-change-in-production-32+"
-MAILING_WEBHOOK_SECRET = "local-dev-mailing-webhook-secret-change-me"
+# Do NOT put [vars] here — `wrangler pages deploy` overwrites Pages production env_vars.
+# Local defaults live in gitignored `.dev.vars` only.
