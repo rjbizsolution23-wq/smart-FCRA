@@ -2,9 +2,6 @@
 /**
  * Wire a secrets intake file into local .dev.vars (gitignored).
  * Usage: node scripts/wire-secrets.mjs /path/to/your-secrets.env
- *
- * Never commits secrets. Production: also run wrangler secret put for each key
- * when CLOUDFLARE_API_TOKEN is available.
  */
 import fs from 'fs';
 import path from 'path';
@@ -26,6 +23,10 @@ const lines = raw.split(/\r?\n/);
 const out = [];
 const loaded = [];
 
+function needsQuotes(val) {
+  return /[\s#"'$`\\]/.test(val) || val.includes('<') || val.includes('>');
+}
+
 for (const line of lines) {
   const trimmed = line.trim();
   if (!trimmed || trimmed.startsWith('#')) continue;
@@ -36,11 +37,12 @@ for (const line of lines) {
   if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
     val = val.slice(1, -1);
   }
-  if (!val || val.includes('REPLACE_') || val.includes('YOUR-') || val.endsWith('...')) {
+  if (!val || val.includes('REPLACE_') || val.includes('YOUR-') || /x{6,}/i.test(val) || /^sk-ant-api03-x+$/i.test(val)) {
     console.warn(`skip empty/placeholder: ${key}`);
     continue;
   }
-  out.push(`${key}=${val}`);
+  const encoded = needsQuotes(val) ? JSON.stringify(val) : val;
+  out.push(`${key}=${encoded}`);
   loaded.push(key);
 }
 
@@ -48,12 +50,3 @@ const dest = path.resolve(process.cwd(), '.dev.vars');
 fs.writeFileSync(dest, out.join('\n') + '\n', { mode: 0o600 });
 console.log(`Wrote ${loaded.length} secrets to .dev.vars`);
 console.log(loaded.join(', '));
-
-// If Cloudflare token present, print wrangler secret commands (non-interactive hint)
-if (loaded.includes('CLOUDFLARE_API_TOKEN')) {
-  console.log('\nNext (production Pages secrets):');
-  for (const key of loaded) {
-    if (key.startsWith('CLOUDFLARE_') || key === 'D1_DATABASE_ID') continue;
-    console.log(`  printf %s "…" | npx wrangler pages secret put ${key} --project-name smart-fcra-v2`);
-  }
-}

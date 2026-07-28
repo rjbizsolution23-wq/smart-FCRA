@@ -4,6 +4,7 @@ import { serveStatic } from 'hono/cloudflare-pages';
 import Stripe from 'stripe';
 import { generateId, hashPassword, verifyPassword, needsPasswordRehash, createSessionToken, generateEmailToken, generateMFASecret, verifyTOTP, sendTransactionalEmail } from './lib/auth';
 import { encryptText, decryptText, requireEncryptionKey } from './lib/crypto';
+import { generateAiText, listConfiguredProviders, generateFreeImage } from './lib/ai-providers';
 import { parseCreditReportText } from './engine/parser';
 import { detectViolations, calculateLitigationScore, type CreditReportData } from './engine/violations';
 import { mapMfsnToInternal } from './engine/mfsn-mapper';
@@ -129,6 +130,7 @@ async function backpopulateClientInfo(c: any, clientId: string, personalInfo: an
 type Bindings = {
   DB: any;
   STRIPE_API_KEY?: string;
+  STRIPE_PUBLISHABLE_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PROFESSIONAL_PRICE_ID?: string;
   STRIPE_UNLIMITED_PRICE_ID?: string;
@@ -144,10 +146,29 @@ type Bindings = {
   SENTRY_DSN?: string;
   PII_ENCRYPTION_KEY?: string;
   RESEND_API_KEY?: string;
+  RESEND_FROM_EMAIL?: string;
+  SENDGRID_API_KEY?: string;
   MAILING_WEBHOOK_SECRET?: string;
   PLATFORM_BOOTSTRAP_EMAIL?: string;
   PLATFORM_BOOTSTRAP_PASSWORD?: string;
   ENVIRONMENT?: string;
+  COMPANY_NAME?: string;
+  COMPANY_OWNER?: string;
+  COMPANY_ADDRESS?: string;
+  COMPANY_WEBSITE?: string;
+  COMPANY_EMAIL?: string;
+  COMPANY_LOGO?: string;
+  GROQ_API_KEY?: string;
+  OPENROUTER_API_KEY?: string;
+  TOGETHER_AI_API_KEY?: string;
+  GEMINI_API_KEY?: string;
+  GOOGLE_API_KEY?: string;
+  OPENAI_API_KEY?: string;
+  DEEPSEEK_API_KEY?: string;
+  HUGGINGFACE_TOKEN?: string;
+  REPLICATE_API_TOKEN?: string;
+  MOONSHOT_KIMI_API_KEY?: string;
+  NVIDIA_API_KEY?: string;
 };
 type Variables = { user?: any; org?: any; session?: any };
 
@@ -168,7 +189,7 @@ app.use('/api/*', cors());
 // ═══════════════════════════════════════════════════════════════
 app.use('*', async (c, next) => {
   await next();
-  c.res.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: https://storage.googleapis.com https://images.unsplash.com; connect-src 'self' https://api.stripe.com https://fonts.googleapis.com;");
+  c.res.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://storage.googleapis.com https://images.unsplash.com https://imagedelivery.net; connect-src 'self' https://api.stripe.com https://fonts.googleapis.com https://api.groq.com https://openrouter.ai https://api-inference.huggingface.co https://generativelanguage.googleapis.com;");
   c.res.headers.set('X-Frame-Options', 'DENY');
   c.res.headers.set('X-Content-Type-Options', 'nosniff');
   c.res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -442,6 +463,8 @@ app.post('/api/auth/register', async (c) => {
         to: email,
         subject: 'Verify your Smart FCRA account',
         html: `<p>Welcome to Smart FCRA Supreme.</p><p><a href="${verifyUrl}">Verify your email</a> to activate your account.</p>`,
+        from: c.env.RESEND_FROM_EMAIL,
+        sendgridKey: c.env.SENDGRID_API_KEY,
       });
     } catch (e) {
       console.error('[REGISTER] verification email failed', e);
@@ -684,6 +707,8 @@ app.post('/api/auth/forgot-password', async (c) => {
       to: user.email,
       subject: 'Reset your Smart FCRA password',
       html: `<p>Hello ${user.name || ''},</p><p><a href="${resetUrl}">Reset your password</a>. This link expires in 1 hour.</p>`,
+      from: c.env.RESEND_FROM_EMAIL,
+      sendgridKey: c.env.SENDGRID_API_KEY,
     });
   } catch (e) {
     console.error('[PASSWORD RESET] email failed', e);
@@ -2008,13 +2033,17 @@ app.put('/api/settings/org', authMiddleware, async (c) => {
 });
 
 app.get('/api/health/ready', async (c) => {
-  const checks: Record<string, boolean | string> = {
+  const providers = listConfiguredProviders(c.env);
+  const checks: Record<string, boolean | string | number> = {
     db: false,
     encryptionKey: !!(c.env.PII_ENCRYPTION_KEY && c.env.PII_ENCRYPTION_KEY.length >= 32),
     stripe: !!c.env.STRIPE_API_KEY,
+    stripePublishable: !!c.env.STRIPE_PUBLISHABLE_KEY,
     resend: !!c.env.RESEND_API_KEY,
+    sendgrid: !!c.env.SENDGRID_API_KEY,
     smartcredit: !!(c.env.SMARTCREDIT_CLIENT_KEY && c.env.SMARTCREDIT_CLIENT_SECRET),
     click2mail: !!(c.env.CLICK2MAIL_USERNAME && c.env.CLICK2MAIL_AUTH_BASIC),
+    aiProvidersConfigured: providers.filter(p => p.configured).length,
     environment: c.env.ENVIRONMENT || 'development',
   };
   try {
@@ -2024,7 +2053,7 @@ app.get('/api/health/ready', async (c) => {
     checks.db = false;
   }
   const ready = checks.db === true && checks.encryptionKey === true;
-  return c.json({ ready, version: '2.0.0', checks }, ready ? 200 : 503);
+  return c.json({ ready, version: '2.0.0', checks, providers }, ready ? 200 : 503);
 });
 
 app.get('/api/reports', authMiddleware, async (c) => {
@@ -3005,73 +3034,111 @@ app.post('/api/documents/:id/ai-rewrite', authMiddleware, async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
 
-  // 1. Fetch document and verify authorization
   const doc = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
   if (!doc) return c.json({ error: 'Document not found' }, 404);
   if (!doc.content) return c.json({ error: 'Document has no text content to rewrite' }, 400);
 
   try {
-    // 2. Build system instructions for OCR bypass
     const systemPrompt = `You are an expert consumer advocate and legal drafting specialist.
-Your task is to rewrite the provided credit bureau dispute letter to completely bypass automatic Optical Character Recognition (OCR) template-matching scanners.
-To do this, you must dynamically and semantically restructure the sentences, headers, list styles, and overall format so that the letter appears completely custom, natural, and unique, as if written by a consumer themselves.
+Rewrite the provided credit bureau dispute letter to bypass OCR template-matching scanners by semantically restructuring sentences and format while remaining authentic.
 
-CRITICAL INSTRUCTIONS:
-1. You MUST preserve all vital factual information exactly as-is. DO NOT change, omit, or modify any of the following:
-   - Full Name, Mailing Address, SSN Last 4, Date of Birth (DOB).
-   - Creditor/Furnisher Names, Account Names, and Account Numbers.
-   - Specific inaccuracies, dates, disputed amounts, or dollar figures.
-   - Statutory citations (e.g., Fair Credit Reporting Act, 15 U.S.C. § 1681i, 15 U.S.C. § 1681s-2(b), etc.).
-2. You MUST totally rewrite all other prose, transition sentences, and introductory/concluding paragraphs. Use alternative phrasing, vary sentence lengths, and restructure bullet points or tables.
-3. The tone must remain professional, firm, assertive, yet authentic.
-4. Return ONLY the rewritten plain text document, with no introductory text, no conversational remarks, and no markdown formatting (like asterisks for bolding). Preserve a clean, professional letter layout.`;
+CRITICAL:
+1. Preserve exactly: names, addresses, SSN last4, DOB, creditor names, account numbers, amounts, dates, and statutory citations (FCRA 15 U.S.C. § 1681 et seq.).
+2. Rewrite all other prose. Professional, firm, assertive tone.
+3. Return ONLY the rewritten plain-text letter — no markdown, no preamble.`;
 
-    // 3. Call Cloudflare Workers AI with a Resilient Model Multi-Tier Fallback Pool
-    const modelPool = [
-      '@cf/meta/llama-3.1-70b-instruct', // Ultra-premium 70B legal reasoning model
-      '@cf/meta/llama-3.1-8b-instruct',  // High-performance 8B model
-      '@cf/meta/llama-3.2-3b-instruct'   // Standard lightweight fallback
-    ];
+    const result = await generateAiText(c.env, [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `Here is the dispute letter to rewrite:\n\n${doc.content}` },
+    ]);
 
-    let aiResult: any = null;
-    let errorDetails = '';
+    await c.env.DB.prepare('UPDATE documents SET content = ?, updated_at = datetime("now") WHERE id = ? AND org_id = ?')
+      .bind(result.text, id, user.org_id).run();
 
-    for (const model of modelPool) {
-      try {
-        console.log(`[INFO] Attempting dynamic AI rewrite with model: ${model}`);
-        aiResult = await c.env.AI.run(model, {
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Here is the dispute letter to rewrite:\n\n${doc.content}` }
-          ]
-        }) as any;
-        if (aiResult?.response) {
-          console.log(`[SUCCESS] AI rewrite completed using model: ${model}`);
-          break;
-        }
-      } catch (err: any) {
-        console.warn(`[WARN] Model ${model} execution failed or timed out:`, err);
-        errorDetails += `${model}: ${err.message || err}; `;
-      }
-    }
+    await c.env.DB.prepare(
+      'INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      generateId(), user.org_id, doc.client_id, id, user.id, 'document_ai_rewritten',
+      `AI rewrote document "${doc.title}" via ${result.provider}/${result.model}`,
+      JSON.stringify({ provider: result.provider, model: result.model })
+    ).run();
 
-    const rewrittenText = aiResult?.response;
-    if (!rewrittenText) {
-      return c.json({ error: 'Failed to rewrite document using Cloudflare Workers AI. No response returned. Details: ' + errorDetails }, 500);
-    }
-
-    // 4. Update the document in D1
-    await c.env.DB.prepare('UPDATE documents SET content = ?, updated_at = datetime("now") WHERE id = ? AND org_id = ?').bind(rewrittenText, id, user.org_id).run();
-
-    // 5. Append to Activity Log
-    const activityId = generateId();
-    await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(activityId, user.org_id, doc.client_id, id, user.id, 'document_ai_rewritten', `Dynamically rewrote document "${doc.title}" via AI`).run();
-
-    return c.json({ success: true, content: rewrittenText });
+    return c.json({ success: true, content: result.text, provider: result.provider, model: result.model });
   } catch (err: any) {
     console.error('[AI REWRITE ERROR]', err);
-    return c.json({ error: `Cloudflare Workers AI Error: ${err.message}` }, 500);
+    return c.json({ error: `AI rewrite failed: ${err.message}` }, 500);
   }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// MULTI-PROVIDER AI — chat, providers list, free media
+// ═══════════════════════════════════════════════════════════════
+app.get('/api/ai/providers', authMiddleware, async (c) => {
+  return c.json({ providers: listConfiguredProviders(c.env) });
+});
+
+app.post('/api/ai/chat', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json();
+  const message = String(body.message || '').trim();
+  if (!message) return c.json({ error: 'message required' }, 400);
+
+  const system = body.mode === 'legal-education'
+    ? `You are a FCRA/FDCPA consumer-rights education assistant for ${c.env.COMPANY_NAME || 'RJ Business Solutions'}. Explain rights clearly. You are NOT a lawyer and do not provide legal advice. Keep answers practical and cite statutes when helpful (15 U.S.C. § 1681, § 1692).`
+    : `You are Smart FCRA Supreme CRM copilot for credit repair / consumer law staff. Help with dispute strategy, Metro 2 concepts, and workflow. Not legal advice.`;
+
+  try {
+    const result = await generateAiText(c.env, [
+      { role: 'system', content: system },
+      { role: 'user', content: message },
+    ]);
+    await c.env.DB.prepare(
+      'INSERT INTO activity_log (id, org_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(
+      generateId(), user.org_id, user.id, 'ai_chat',
+      `AI chat via ${result.provider}`,
+      JSON.stringify({ provider: result.provider, model: result.model, mode: body.mode || 'ops' })
+    ).run();
+    return c.json({ reply: result.text, provider: result.provider, model: result.model });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 502);
+  }
+});
+
+app.post('/api/ai/media/generate', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Forbidden' }, 403);
+  const { prompt } = await c.req.json();
+  if (!prompt || String(prompt).trim().length < 8) return c.json({ error: 'prompt required (min 8 chars)' }, 400);
+
+  try {
+    const img = await generateFreeImage(c.env, String(prompt));
+    await c.env.DB.prepare(
+      'INSERT INTO activity_log (id, org_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(
+      generateId(), user.org_id, user.id, 'ai_media_generate',
+      `Generated media via ${img.provider}`,
+      JSON.stringify({ provider: img.provider, model: img.model })
+    ).run();
+    return c.json(img);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 502);
+  }
+});
+
+app.get('/api/billing/publishable-key', authMiddleware, async (c) => {
+  return c.json({ publishableKey: c.env.STRIPE_PUBLISHABLE_KEY || null });
+});
+
+app.get('/api/company', async (c) => {
+  return c.json({
+    name: c.env.COMPANY_NAME || 'RJ Business Solutions',
+    owner: c.env.COMPANY_OWNER || 'Rick Jefferson',
+    address: c.env.COMPANY_ADDRESS || '',
+    website: c.env.COMPANY_WEBSITE || 'https://rjbusinesssolutions.org',
+    email: c.env.COMPANY_EMAIL || 'support@rjbusinesssolutions.org',
+    logo: c.env.COMPANY_LOGO || '',
+  });
 });
 
 

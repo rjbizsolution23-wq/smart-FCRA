@@ -695,6 +695,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'roi-calculator', icon: 'fa-calculator', label: 'ROI Calculator' },
         { id: 'team', icon: 'fa-user-friends', label: 'Team' },
         { id: 'settings', icon: 'fa-cog', label: 'Settings' },
+        { id: 'ai-studio', icon: 'fa-robot', label: 'AI Studio' },
         { id: 'billing', icon: 'fa-credit-card', label: 'Billing' },
         { id: 'legal', icon: 'fa-gavel', label: 'Legal' },
       ];
@@ -771,6 +772,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'roi-calculator': await pgROICalculator(el); break;
         case 'team': await pgTeam(el); break;
         case 'settings': await pgSettings(el); break;
+        case 'ai-studio': await pgAiStudio(el); break;
         case 'billing': await pgBilling(el); break;
         case 'legal': await pgLegal(el); break;
         case 'admin-console': await pgAdminConsole(el); break;
@@ -4616,6 +4618,71 @@ Status: Discharged`;
       if (f) f.onsubmit = async (e) => { e.preventDefault(); const fd = new FormData(e.target); try { await api('/team/invite',{method:'POST',body:JSON.stringify({name:fd.get('name'),email:fd.get('email'),password:fd.get('password'),role:fd.get('role')})}); toast('Member added!','success'); await pgTeam(el); } catch(err) { toast(err.message,'error'); } };
     } catch(err) {
       el.innerHTML = `<div class="fade-in"><div class="glass rounded-xl p-8 border border-red-500/30 text-center"><i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i><h3 class="text-lg font-bold text-white mb-1">Failed to load team</h3><p class="text-sm text-gray-400">${err.message}</p><button onclick="window._nav('team')" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Retry</button></div></div>`;
+    }
+  }
+
+  async function pgAiStudio(el) {
+    try {
+      const providers = await api('/ai/providers');
+      const list = (providers.providers || []).filter(p => p.configured);
+      el.innerHTML = `<div class="fade-in space-y-6">
+        <div>
+          <h1 class="text-xl font-bold text-white">AI Studio</h1>
+          <p class="text-sm text-gray-400">Free/multi-provider models for dispute rewrite assist, education chat, and media</p>
+        </div>
+        <div class="glass rounded-xl p-4 border border-gray-700">
+          <div class="text-xs text-gray-400 mb-2">Configured providers</div>
+          <div class="flex flex-wrap gap-2">${list.map(p => `<span class="px-2 py-1 rounded bg-emerald-900/30 text-emerald-300 text-[11px] font-semibold">${p.id} · ${p.tier}</span>`).join('') || '<span class="text-amber-400 text-xs">No providers detected</span>'}</div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="glass rounded-xl p-5 border border-gray-700 space-y-3">
+            <h2 class="text-sm font-semibold text-white">Staff / Legal Education Chat</h2>
+            <textarea id="ai-chat-input" class="w-full h-28 bg-gray-950 border border-gray-800 rounded-lg p-3 text-sm text-white" placeholder="Ask about FCRA §1681i timelines, Metro 2, dispute strategy..."></textarea>
+            <div class="flex gap-2">
+              <button id="ai-chat-ops" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-2 rounded-lg">CRM Copilot</button>
+              <button id="ai-chat-edu" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold px-3 py-2 rounded-lg">Consumer Education</button>
+            </div>
+            <pre id="ai-chat-out" class="text-xs text-gray-300 whitespace-pre-wrap bg-gray-950/60 border border-gray-800 rounded-lg p-3 min-h-[120px]"></pre>
+          </div>
+          <div class="glass rounded-xl p-5 border border-gray-700 space-y-3">
+            <h2 class="text-sm font-semibold text-white">Free Media Generate</h2>
+            <textarea id="ai-media-input" class="w-full h-28 bg-gray-950 border border-gray-800 rounded-lg p-3 text-sm text-white" placeholder="Professional letterhead watermark, navy and gold, RJ Business Solutions..."></textarea>
+            <button id="ai-media-go" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-2 rounded-lg">Generate (HF / Replicate free models)</button>
+            <div id="ai-media-out" class="min-h-[120px] flex items-center justify-center bg-gray-950/60 border border-gray-800 rounded-lg p-3 text-xs text-gray-500">Preview appears here</div>
+          </div>
+        </div>
+      </div>`;
+
+      const runChat = async (mode) => {
+        const message = $('#ai-chat-input').value.trim();
+        if (!message) return toast('Enter a message', 'error');
+        $('#ai-chat-out').textContent = 'Thinking…';
+        try {
+          const d = await api('/ai/chat', { method: 'POST', body: JSON.stringify({ message, mode }) });
+          $('#ai-chat-out').textContent = `${d.reply}\n\n— ${d.provider}/${d.model}`;
+        } catch (err) {
+          $('#ai-chat-out').textContent = err.message;
+          toast(err.message, 'error');
+        }
+      };
+      $('#ai-chat-ops').onclick = () => runChat('ops');
+      $('#ai-chat-edu').onclick = () => runChat('legal-education');
+      $('#ai-media-go').onclick = async () => {
+        const prompt = $('#ai-media-input').value.trim();
+        if (!prompt) return toast('Enter a prompt', 'error');
+        $('#ai-media-out').textContent = 'Generating…';
+        try {
+          const d = await api('/ai/media/generate', { method: 'POST', body: JSON.stringify({ prompt }) });
+          if (d.b64) $('#ai-media-out').innerHTML = `<img src="${d.b64}" class="max-h-64 rounded-lg" alt="generated"><div class="text-[10px] text-gray-500 mt-2">${d.provider}/${d.model}</div>`;
+          else if (d.url) $('#ai-media-out').innerHTML = `<img src="${escapeHtml(d.url)}" class="max-h-64 rounded-lg" alt="generated"><div class="text-[10px] text-gray-500 mt-2">${d.provider}/${d.model}</div>`;
+          else $('#ai-media-out').textContent = JSON.stringify(d);
+        } catch (err) {
+          $('#ai-media-out').textContent = err.message;
+          toast(err.message, 'error');
+        }
+      };
+    } catch (err) {
+      el.innerHTML = `<div class="glass p-8 rounded-xl border border-red-500/30 text-center text-sm text-gray-300">${escapeHtml(err.message)}</div>`;
     }
   }
 

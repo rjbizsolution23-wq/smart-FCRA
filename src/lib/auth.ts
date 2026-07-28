@@ -159,32 +159,49 @@ export async function verifyTOTP(secret: string, code: string, window = 1): Prom
   return false;
 }
 
-/** Send transactional email via Resend; returns { sent, simulated }. */
+/** Send transactional email via Resend, with SendGrid fallback. */
 export async function sendTransactionalEmail(
   apiKey: string | undefined,
-  opts: { to: string; subject: string; html: string; from?: string }
-): Promise<{ sent: boolean; simulated: boolean }> {
-  if (!apiKey) {
-    console.log(`[EMAIL:SIMULATED] to=${opts.to} subject=${opts.subject}`);
-    return { sent: false, simulated: true };
+  opts: { to: string; subject: string; html: string; from?: string; sendgridKey?: string }
+): Promise<{ sent: boolean; simulated: boolean; provider?: string }> {
+  const from = opts.from || 'Smart FCRA <support@rjbusinesssolutions.org>';
+
+  if (apiKey) {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: [opts.to],
+        subject: opts.subject,
+        html: opts.html,
+      }),
+    });
+    if (res.ok) return { sent: true, simulated: false, provider: 'resend' };
+    console.error('[EMAIL] Resend failed:', res.status, await res.text());
   }
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: opts.from || 'Smart FCRA <noreply@rickjeffersonsolutions.com>',
-      to: [opts.to],
-      subject: opts.subject,
-      html: opts.html,
-    }),
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    console.error('[EMAIL] Resend failed:', res.status, body);
-    throw new Error('Email delivery failed');
+
+  if (opts.sendgridKey) {
+    const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${opts.sendgridKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        personalizations: [{ to: [{ email: opts.to }] }],
+        from: { email: from.includes('<') ? from.replace(/.*</, '').replace('>', '') : from, name: 'Smart FCRA' },
+        subject: opts.subject,
+        content: [{ type: 'text/html', value: opts.html }],
+      }),
+    });
+    if (res.ok || res.status === 202) return { sent: true, simulated: false, provider: 'sendgrid' };
+    console.error('[EMAIL] SendGrid failed:', res.status, await res.text());
   }
-  return { sent: true, simulated: false };
+
+  console.log(`[EMAIL:SIMULATED] to=${opts.to} subject=${opts.subject}`);
+  return { sent: false, simulated: true };
 }
