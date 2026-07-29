@@ -7,6 +7,8 @@ import { encryptText, decryptText, requireEncryptionKey } from './lib/crypto';
 import { generateAiText, listConfiguredProviders, generateFreeImage } from './lib/ai-providers';
 import { sendAppEmail } from './lib/email';
 import { MENTORS, buildMentorContext, KNOWLEDGE_CORPUS_META, retrieveCaseLawKnowledge, type MentorId } from './lib/mentors';
+import { sendPortalWelcomeEmail, computeAndStoreFundability, portalBaseUrl, isSyntheticPortalEmail, tradelineRecsForClient } from './lib/portal-services';
+import { EDUCATION_LIBRARY, getLessonById, TRADELINE_CATALOG } from './data/portal-education';
 import { parseCreditReportText } from './engine/parser';
 import { detectViolations, calculateLitigationScore, type CreditReportData } from './engine/violations';
 import { mapMfsnToInternal } from './engine/mfsn-mapper';
@@ -265,6 +267,7 @@ type Bindings = {
   STRIPE_UNLIMITED_PRICE_ID?: string;
   STRIPE_ENTERPRISE_PRICE_ID?: string;
   FRONTEND_URL?: string;
+  APP_BASE_URL?: string;
   CLICK2MAIL_USERNAME?: string;
   CLICK2MAIL_AUTH_BASIC?: string;
   CLICK2MAIL_API_URL?: string;
@@ -1113,6 +1116,438 @@ app.get('/api/client-portal/dashboard', authMiddleware, async (c) => {
   });
 });
 
+async function resolvePortalClientSafe(c: any, user: any, bodyClientId?: string): Promise<any | null> {
+  const q = c.req.query('clientId') || bodyClientId;
+  if (user.role === 'client') {
+    return c.env.DB.prepare('SELECT * FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first();
+  }
+  if (q) {
+    return c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(q, user.org_id).first();
+  }
+  return null;
+}
+
+// ── Portal messaging ──────────────────────────────────────────
+app.get('/api/client-portal/messages', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+  if (!client) return c.json({ error: 'Client profile not found' }, 404);
+  const rows = await c.env.DB.prepare(
+    `SELECT * FROM portal_messages WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 200`
+  ).bind(client.id, user.org_id).all();
+  return c.json({ clientId: client.id, messages: rows?.results || [] });
+});
+
+app.post('/api/client-portal/messages', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json();
+  const client = await resolvePortalClientSafe(c, user, body.clientId);
+  if (!client) return c.json({ error: 'Client profile not found' }, 404);
+  const text = String(body.body || body.message || '').trim();
+  if (!text) return c.json({ error: 'Message body required' }, 400);
+  const isStaff = user.role !== 'client';
+  const id = generateId();
+  await c.env.DB.prepare(
+    `INSERT INTO portal_messages (id, org_id, client_id, sender_user_id, sender_role, channel, subject, body, attachment_name, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+  ).bind(
+    id,
+    user.org_id,
+    client.id,
+    user.id,
+    isStaff ? 'staff' : 'client',
+    body.channel === 'email' ? 'email' : 'portal',
+    body.subject || null,
+    text,
+    body.attachmentName || null,
+  ).run();
+
+  let emailStatus: string | null = null;
+  if (body.sendEmail === true || body.channel === 'email') {
+    if (client.email && !isSyntheticPortalEmail(client.email)) {
+      try {
+        const mail = await sendAppEmail(c.env, {
+          to: client.email,
+          subject: body.subject || `Message from your Smart FCRA credit team`,
+          html: `<div style="font-family:system-ui,sans-serif;padding:16px"><p>${String(text).replace(/</g,'&lt;').replace(/\n/g,'<br/>')}</p><p style="color:#64748b;font-size:12px">Reply inside your Smart FCRA portal.</p></div>`,
+          text,
+          purpose: 'noreply',
+        });
+        emailStatus = mail.sent ? `sent:${mail.provider}` : (mail.simulated ? 'simulated' : 'failed');
+      } catch (e: any) {
+        emailStatus = `failed:${e.message}`;
+      }
+    } else {
+      emailStatus = 'skipped_no_email';
+    }
+  }
+
+  await c.env.DB.prepare(
+    'INSERT INTO activity_log (id, org_id, client_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    generateId(), user.org_id, client.id, user.id, 'portal_message',
+    `${isStaff ? 'Staff' : 'Client'} portal message`,
+    JSON.stringify({ messageId: id, emailStatus })
+  ).run();
+
+  return c.json({ ok: true, id, emailStatus });
+});
+
+app.post('/api/client-portal/messages/:id/read', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  await c.env.DB.prepare(
+    `UPDATE portal_messages SET read_at = datetime('now') WHERE id = ? AND client_id = ? AND org_id = ?`
+  ).bind(id, client.id, user.org_id).run();
+  return c.json({ ok: true });
+});
+
+// Staff: email client from CRM (also logs to portal inbox)
+app.post('/api/clients/:id/email', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Unauthorized' }, 403);
+  const clientId = c.req.param('id');
+  const body = await c.req.json();
+  const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first() as any;
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  if (!client.email || isSyntheticPortalEmail(client.email)) {
+    return c.json({ error: 'Client needs a real email address before messaging' }, 400);
+  }
+  const text = String(body.body || body.message || '').trim();
+  if (!text) return c.json({ error: 'Message required' }, 400);
+  const subject = body.subject || 'Message from your Smart FCRA credit team';
+  const msgId = generateId();
+  await c.env.DB.prepare(
+    `INSERT INTO portal_messages (id, org_id, client_id, sender_user_id, sender_role, channel, subject, body, created_at)
+     VALUES (?, ?, ?, ?, 'staff', 'email', ?, ?, datetime('now'))`
+  ).bind(msgId, user.org_id, clientId, user.id, subject, text).run();
+  const mail = await sendAppEmail(c.env, {
+    to: client.email,
+    subject,
+    html: `<div style="font-family:system-ui,sans-serif;padding:16px"><p>${text.replace(/</g,'&lt;').replace(/\n/g,'<br/>')}</p></div>`,
+    text,
+    purpose: 'noreply',
+  });
+  return c.json({ ok: true, messageId: msgId, email: { sent: mail.sent, simulated: mail.simulated, provider: mail.provider } });
+});
+
+// Resend portal welcome / create account
+app.post('/api/clients/:id/portal-invite', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Unauthorized' }, 403);
+  const clientId = c.req.param('id');
+  const body = await c.req.json().catch(() => ({}));
+  const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first() as any;
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const email = (body.email || client.email || '').trim();
+  if (!email || isSyntheticPortalEmail(email)) {
+    return c.json({ error: 'Provide a real client email to invite' }, 400);
+  }
+  if (email !== client.email) {
+    await c.env.DB.prepare(`UPDATE clients SET email = ?, updated_at = datetime('now') WHERE id = ?`).bind(email, clientId).run();
+  }
+  const password = `SmartPass-${Math.random().toString(36).substring(2, 10).toUpperCase()}!`;
+  const passwordHash = await hashPassword(password);
+  const existingUser = await c.env.DB.prepare('SELECT id FROM users WHERE email = ? AND org_id = ?').bind(email, user.org_id).first() as any;
+  if (!existingUser) {
+    await c.env.DB.prepare(
+      'INSERT INTO users (id, org_id, email, name, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, "client", 1)'
+    ).bind(generateId(), user.org_id, email, `${client.first_name} ${client.last_name}`, passwordHash).run();
+  } else {
+    await c.env.DB.prepare('UPDATE users SET password_hash = ?, name = ?, is_active = 1 WHERE id = ?')
+      .bind(passwordHash, `${client.first_name} ${client.last_name}`, existingUser.id).run();
+  }
+  const mail = await sendPortalWelcomeEmail(c.env, {
+    to: email,
+    clientName: `${client.first_name} ${client.last_name}`,
+    email,
+    temporaryPassword: password,
+    requestUrl: c.req.url,
+  });
+  try {
+    await c.env.DB.prepare(`UPDATE clients SET portal_welcome_sent_at = datetime('now') WHERE id = ?`).bind(clientId).run();
+  } catch { /* soft */ }
+  return c.json({
+    ok: mail.ok,
+    loginUrl: mail.loginUrl,
+    emailStatus: mail.ok ? (mail.simulated ? 'simulated' : `sent:${mail.provider}`) : `failed:${mail.error}`,
+    temporaryPassword: password,
+  });
+});
+
+// ── Portal uploads (docs, creditor replies, bank statements) ──
+app.get('/api/client-portal/uploads', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const rows = await c.env.DB.prepare(
+    `SELECT id, category, file_name, mime_type, notes, analysis_json, created_at FROM portal_uploads
+     WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 100`
+  ).bind(client.id, user.org_id).all();
+  return c.json({ uploads: rows?.results || [] });
+});
+
+app.post('/api/client-portal/uploads', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json();
+  const client = await resolvePortalClientSafe(c, user, body.clientId);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const category = body.category || 'other';
+  const contentText = String(body.contentText || body.text || '').slice(0, 200000);
+  if (!contentText && !body.fileName) return c.json({ error: 'Upload content or file name required' }, 400);
+
+  let analysis: any = null;
+  if (category === 'bank_statement' && contentText.length > 40) {
+    try {
+      const { mentor, knowledgeBlock } = buildMentorContext('personal-finance-tutor', contentText.slice(0, 4000));
+      const ai = await generateAiText(c.env, [
+        { role: 'system', content: `${mentor.systemPrompt}\nAnalyze this bank statement excerpt. Summarize income, expenses, cash-flow health, and 3 budget actions. Never invent exact balances not present.\n${knowledgeBlock}` },
+        { role: 'user', content: contentText.slice(0, 12000) },
+      ]);
+      analysis = { summary: ai.text, provider: ai.provider, model: ai.model };
+      // Persist tutor memory hint
+      try {
+        await c.env.DB.prepare(
+          `INSERT INTO tutor_memory (id, org_id, client_id, summary, goals_json, sessions_count, updated_at)
+           VALUES (?, ?, ?, ?, '[]', 1, datetime('now'))
+           ON CONFLICT(client_id) DO UPDATE SET
+             summary = excluded.summary,
+             sessions_count = COALESCE(tutor_memory.sessions_count, 0) + 1,
+             updated_at = datetime('now')`
+        ).bind(generateId(), user.org_id, client.id, `Bank analysis: ${(ai.text || '').slice(0, 1500)}`).run();
+      } catch { /* soft */ }
+    } catch (e: any) {
+      analysis = { error: e.message };
+    }
+  }
+
+  const enc = contentText ? await encryptPII(c, contentText) : null;
+  const id = generateId();
+  await c.env.DB.prepare(
+    `INSERT INTO portal_uploads (id, org_id, client_id, uploaded_by, category, file_name, mime_type, content_text, notes, analysis_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+  ).bind(
+    id, user.org_id, client.id, user.id, category,
+    body.fileName || null, body.mimeType || 'text/plain', enc, body.notes || null,
+    analysis ? JSON.stringify(analysis) : null,
+  ).run();
+
+  await c.env.DB.prepare(
+    'INSERT INTO activity_log (id, org_id, client_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    generateId(), user.org_id, client.id, user.id, 'portal_upload',
+    `Portal upload: ${category} ${body.fileName || ''}`.trim(),
+    JSON.stringify({ uploadId: id, category })
+  ).run();
+
+  return c.json({ ok: true, id, analysis });
+});
+
+// ── Education library + progress ───────────────────────────────
+app.get('/api/client-portal/education', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+  let progress: any[] = [];
+  if (client) {
+    try {
+      const rows = await c.env.DB.prepare(
+        `SELECT * FROM education_progress WHERE client_id = ? AND org_id = ?`
+      ).bind(client.id, user.org_id).all();
+      progress = rows?.results || [];
+    } catch { /* soft */ }
+  }
+  return c.json({
+    lessons: EDUCATION_LIBRARY.map(l => ({
+      id: l.id, track: l.track, level: l.level, title: l.title, summary: l.summary,
+      quizCount: l.quiz.length,
+    })),
+    progress,
+  });
+});
+
+app.get('/api/client-portal/education/:lessonId', authMiddleware, async (c) => {
+  const lesson = getLessonById(c.req.param('lessonId'));
+  if (!lesson) return c.json({ error: 'Lesson not found' }, 404);
+  return c.json({
+    lesson: {
+      ...lesson,
+      quiz: lesson.quiz.map((q, i) => ({ i, q: q.q, choices: q.choices })), // hide answers
+    },
+  });
+});
+
+app.post('/api/client-portal/education/:lessonId/complete', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  const client = await resolvePortalClientSafe(c, user, body.clientId);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const lesson = getLessonById(c.req.param('lessonId'));
+  if (!lesson) return c.json({ error: 'Lesson not found' }, 404);
+
+  const answers: number[] = Array.isArray(body.answers) ? body.answers : [];
+  let score = 0;
+  lesson.quiz.forEach((q, i) => { if (answers[i] === q.answer) score += 1; });
+  const total = lesson.quiz.length;
+  const passed = total === 0 || score === total;
+  const id = generateId();
+  await c.env.DB.prepare(
+    `INSERT INTO education_progress (id, org_id, client_id, lesson_id, track, status, quiz_score, quiz_total, completed_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+     ON CONFLICT(client_id, lesson_id) DO UPDATE SET
+       status = excluded.status,
+       quiz_score = excluded.quiz_score,
+       quiz_total = excluded.quiz_total,
+       completed_at = excluded.completed_at,
+       updated_at = datetime('now')`
+  ).bind(id, user.org_id, client.id, lesson.id, lesson.track, passed ? 'completed' : 'started', score, total).run();
+
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO tutor_memory (id, org_id, client_id, summary, gaps_json, last_quiz_at, sessions_count, updated_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'), 1, datetime('now'))
+       ON CONFLICT(client_id) DO UPDATE SET
+         last_quiz_at = datetime('now'),
+         sessions_count = COALESCE(tutor_memory.sessions_count, 0) + 1,
+         updated_at = datetime('now')`
+    ).bind(
+      generateId(), user.org_id, client.id,
+      `Completed lesson ${lesson.title} (${score}/${total})`,
+      JSON.stringify(passed ? [] : [lesson.id]),
+    ).run();
+  } catch { /* soft */ }
+
+  return c.json({ ok: true, score, total, passed, correctAnswers: lesson.quiz.map(q => q.answer) });
+});
+
+// ── Personal tutor ────────────────────────────────────────────
+app.get('/api/client-portal/tutor', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  let memory: any = null;
+  try {
+    memory = await c.env.DB.prepare('SELECT * FROM tutor_memory WHERE client_id = ? AND org_id = ?').bind(client.id, user.org_id).first();
+  } catch { /* soft */ }
+  let progress: any[] = [];
+  try {
+    const rows = await c.env.DB.prepare('SELECT lesson_id, status, quiz_score, quiz_total FROM education_progress WHERE client_id = ?').bind(client.id).all();
+    progress = rows?.results || [];
+  } catch { /* soft */ }
+  return c.json({
+    mentor: MENTORS.find(m => m.id === 'personal-finance-tutor'),
+    memory,
+    progress,
+    client: { id: client.id, first_name: client.first_name, eq_score: client.eq_score, ex_score: client.ex_score, tu_score: client.tu_score },
+  });
+});
+
+app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json();
+  const client = await resolvePortalClientSafe(c, user, body.clientId);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const message = String(body.message || '').trim();
+  if (!message) return c.json({ error: 'Message required' }, 400);
+
+  let memory: any = null;
+  try {
+    memory = await c.env.DB.prepare('SELECT * FROM tutor_memory WHERE client_id = ?').bind(client.id).first();
+  } catch { /* soft */ }
+
+  const { mentor, knowledgeBlock } = buildMentorContext('personal-finance-tutor', message);
+  const context = [
+    `Client: ${client.first_name} ${client.last_name}`,
+    `Scores EQ/EX/TU: ${client.eq_score || '—'} / ${client.ex_score || '—'} / ${client.tu_score || '—'}`,
+    memory?.summary ? `Tutor memory: ${memory.summary}` : '',
+    memory?.goals_json ? `Goals: ${memory.goals_json}` : '',
+  ].filter(Boolean).join('\n');
+
+  const result = await generateAiText(c.env, [
+    { role: 'system', content: `${mentor.systemPrompt}\n\n${knowledgeBlock}\n\nClient context:\n${context}` },
+    { role: 'user', content: message },
+  ]);
+
+  try {
+    const summary = `${(memory?.summary || '').slice(0, 800)}\nLast Q: ${message.slice(0, 200)}\nLast A: ${(result.text || '').slice(0, 400)}`.trim();
+    await c.env.DB.prepare(
+      `INSERT INTO tutor_memory (id, org_id, client_id, summary, sessions_count, updated_at)
+       VALUES (?, ?, ?, ?, 1, datetime('now'))
+       ON CONFLICT(client_id) DO UPDATE SET summary = excluded.summary, sessions_count = COALESCE(tutor_memory.sessions_count,0)+1, updated_at = datetime('now')`
+    ).bind(generateId(), user.org_id, client.id, summary.slice(0, 4000)).run();
+  } catch { /* soft */ }
+
+  // Also mirror into portal messages as system/tutor thread optional
+  if (body.logToInbox) {
+    await c.env.DB.prepare(
+      `INSERT INTO portal_messages (id, org_id, client_id, sender_user_id, sender_role, channel, subject, body, created_at)
+       VALUES (?, ?, ?, ?, 'system', 'portal', 'Tutor session', ?, datetime('now'))`
+    ).bind(generateId(), user.org_id, client.id, user.id, `You: ${message}\n\nAlex: ${result.text}`).run();
+  }
+
+  return c.json({ reply: result.text, provider: result.provider, model: result.model, mentor: mentor.id });
+});
+
+// ── Fundability + tradelines + roadmaps ───────────────────────
+app.get('/api/client-portal/fundability', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const goal = c.req.query('goal') || undefined;
+  const report = await c.env.DB.prepare(
+    `SELECT total_accounts, total_collections, total_inquiries FROM credit_reports
+     WHERE client_id = ? AND org_id = ? ORDER BY COALESCE(is_current,1) DESC, created_at DESC LIMIT 1`
+  ).bind(client.id, user.org_id).first() as any;
+  const viol = await c.env.DB.prepare(
+    `SELECT COUNT(*) as c FROM violations WHERE client_id = ? AND org_id = ?`
+  ).bind(client.id, user.org_id).first() as any;
+
+  const fundability = await computeAndStoreFundability(c.env, {
+    orgId: user.org_id,
+    clientId: client.id,
+    client,
+    reportMeta: {
+      accounts: report?.total_accounts || 0,
+      collections: report?.total_collections || 0,
+      inquiries: report?.total_inquiries || 0,
+    },
+    violationCount: viol?.c || 0,
+    goal,
+  });
+
+  const scores = [client.eq_score, client.ex_score, client.tu_score].filter((n: any) => typeof n === 'number' && n > 0);
+  const avg = scores.length ? Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length) : (fundability.avgBureauScore || 600);
+  const tradelines = tradelineRecsForClient({
+    avgScore: avg,
+    accountCount: report?.total_accounts || 0,
+    collectionCount: report?.total_collections || 0,
+    goal,
+  });
+
+  return c.json({ fundability, tradelines, catalog: TRADELINE_CATALOG });
+});
+
+app.get('/api/client-portal/tradelines', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const goal = c.req.query('goal') || undefined;
+  const report = await c.env.DB.prepare(
+    `SELECT total_accounts, total_collections FROM credit_reports WHERE client_id = ? ORDER BY created_at DESC LIMIT 1`
+  ).bind(client.id).first() as any;
+  const scores = [client.eq_score, client.ex_score, client.tu_score].filter((n: any) => typeof n === 'number' && n > 0);
+  const avg = scores.length ? Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length) : 600;
+  return c.json({
+    recommendations: tradelineRecsForClient({
+      avgScore: avg,
+      accountCount: report?.total_accounts || 0,
+      collectionCount: report?.total_collections || 0,
+      goal,
+    }),
+  });
+});
+
 app.post('/api/documents/:id/sign', authMiddleware, async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
@@ -1612,19 +2047,23 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
   let extractedEmail: string | null = null;
   let extractedPhone: string | null = null;
 
-  // Regex scan for email addresses in the raw report text
+  // Prefer staff-provided contact email, then report text, then existing client email
+  const staffEmail = typeof body.clientEmail === 'string' ? body.clientEmail.trim() : '';
+  const staffPhone = typeof body.clientPhone === 'string' ? body.clientPhone.trim() : '';
   const emailMatch = rawText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-  if (emailMatch) {
+  if (staffEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(staffEmail)) {
+    extractedEmail = staffEmail;
+  } else if (emailMatch) {
     extractedEmail = emailMatch[0].trim();
-  } else {
-    // Generate a fallback clean email
-    extractedEmail = `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${generateId().slice(0, 5)}@smart-fcra.com`;
   }
+  if (staffPhone) extractedPhone = staffPhone;
 
-  // Regex scan for phone numbers in the raw report text
-  const phoneMatch = rawText.match(/(?:\+?1[-.●\s]?)?\(?([2-9]\d{2})\)?[-.●\s]?(\d{3})[-.●\s]?(\d{4})/);
-  if (phoneMatch) {
-    extractedPhone = phoneMatch[0].trim();
+  // Regex scan for phone numbers in the raw report text (do not override staff-provided phone)
+  if (!extractedPhone) {
+    const phoneMatch = rawText.match(/(?:\+?1[-.●\s]?)?\(?([2-9]\d{2})\)?[-.●\s]?(\d{3})[-.●\s]?(\d{4})/);
+    if (phoneMatch) {
+      extractedPhone = phoneMatch[0].trim();
+    }
   }
 
   // 3. Match / Deduplicate Client in D1
@@ -1852,77 +2291,93 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
     }
   }
 
-  // 5. Generate secure client login credentials autonomously
-  const generatedPassword = `SmartPass-${Math.random().toString(36).substring(2, 10).toUpperCase()}!`;
-  const passwordHash = await hashPassword(generatedPassword);
+  // 5. Portal account + welcome email (real email required for dispatch)
+  // If matched existing client has an email and we only have synthetic/missing, keep theirs
+  const clientRowForEmail = await c.env.DB.prepare('SELECT email, phone FROM clients WHERE id = ? AND org_id = ?')
+    .bind(clientId, user.org_id).first() as any;
+  if ((!extractedEmail || isSyntheticPortalEmail(extractedEmail)) && clientRowForEmail?.email && !isSyntheticPortalEmail(clientRowForEmail.email)) {
+    extractedEmail = clientRowForEmail.email;
+  }
+  if (!extractedPhone && clientRowForEmail?.phone) {
+    extractedPhone = clientRowForEmail.phone;
+  }
+  // Persist contact onto client when we have better data
+  if (extractedEmail || extractedPhone) {
+    await c.env.DB.prepare(
+      `UPDATE clients SET email = COALESCE(?, email), phone = COALESCE(?, phone), updated_at = datetime('now') WHERE id = ? AND org_id = ?`
+    ).bind(extractedEmail, extractedPhone, clientId, user.org_id).run();
+  }
 
-  const existingUser = await c.env.DB.prepare('SELECT id FROM users WHERE email = ? AND org_id = ?').bind(extractedEmail, user.org_id).first() as any;
-  if (!existingUser) {
-    const userId = generateId();
-    await c.env.DB.prepare('INSERT INTO users (id, org_id, email, name, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, "client", 1)')
-      .bind(userId, user.org_id, extractedEmail, `${firstName} ${lastName}`, passwordHash).run();
+  const canEmailPortal = !!extractedEmail && !isSyntheticPortalEmail(extractedEmail);
+  let generatedPassword: string | null = null;
+  let emailStatus = 'skipped_no_real_email';
+  let portalLoginUrl = portalBaseUrl(c.env, c.req.url);
+
+  if (canEmailPortal) {
+    const existingUser = await c.env.DB.prepare('SELECT id FROM users WHERE email = ? AND org_id = ?')
+      .bind(extractedEmail, user.org_id).first() as any;
+    const forceReset = body.resetPortalPassword === true;
+    if (!existingUser) {
+      generatedPassword = `SmartPass-${Math.random().toString(36).substring(2, 10).toUpperCase()}!`;
+      const passwordHash = await hashPassword(generatedPassword);
+      const userId = generateId();
+      await c.env.DB.prepare(
+        'INSERT INTO users (id, org_id, email, name, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, "client", 1)'
+      ).bind(userId, user.org_id, extractedEmail, `${firstName} ${lastName}`, passwordHash).run();
+    } else if (forceReset) {
+      generatedPassword = `SmartPass-${Math.random().toString(36).substring(2, 10).toUpperCase()}!`;
+      const passwordHash = await hashPassword(generatedPassword);
+      await c.env.DB.prepare('UPDATE users SET password_hash = ?, name = ?, is_active = 1 WHERE id = ?')
+        .bind(passwordHash, `${firstName} ${lastName}`, existingUser.id).run();
+    } else {
+      await c.env.DB.prepare('UPDATE users SET name = ?, is_active = 1 WHERE id = ?')
+        .bind(`${firstName} ${lastName}`, existingUser.id).run();
+      emailStatus = 'account_exists_password_preserved';
+    }
+
+    if (generatedPassword) {
+      const mail = await sendPortalWelcomeEmail(c.env, {
+        to: extractedEmail!,
+        clientName: `${firstName} ${lastName}`,
+        email: extractedEmail!,
+        temporaryPassword: generatedPassword,
+        requestUrl: c.req.url,
+      });
+      portalLoginUrl = mail.loginUrl;
+      if (mail.ok && !mail.simulated) emailStatus = `sent:${mail.provider}`;
+      else if (mail.simulated) emailStatus = 'simulated';
+      else emailStatus = `failed:${mail.error || 'unknown'}`;
+
+      try {
+        await c.env.DB.prepare(
+          `UPDATE clients SET portal_welcome_sent_at = datetime('now') WHERE id = ? AND org_id = ?`
+        ).bind(clientId, user.org_id).run();
+      } catch { /* column may be missing on older DBs */ }
+
+      await c.env.DB.prepare(
+        'INSERT INTO activity_log (id, org_id, client_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, "credentials_sent", ?, ?)'
+      ).bind(
+        generateId(),
+        user.org_id,
+        clientId,
+        user.id,
+        `Portal welcome email to ${extractedEmail} (${emailStatus})`,
+        JSON.stringify({ email: extractedEmail, status: emailStatus, loginUrl: portalLoginUrl, credentialsDispatched: true })
+      ).run();
+    }
   } else {
-    await c.env.DB.prepare('UPDATE users SET password_hash = ?, name = ? WHERE id = ?')
-      .bind(passwordHash, `${firstName} ${lastName}`, existingUser.id).run();
+    emailStatus = 'skipped_need_client_email';
+    await c.env.DB.prepare(
+      'INSERT INTO activity_log (id, org_id, client_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, "credentials_pending", ?, ?)'
+    ).bind(
+      generateId(),
+      user.org_id,
+      clientId,
+      user.id,
+      'Portal account email skipped — provide a real client email to send login credentials',
+      JSON.stringify({ extractedEmail, status: emailStatus })
+    ).run();
   }
-
-  // Send the Autopilot Credentials Welcome Email
-  let emailStatus = 'simulated';
-  const mailSubject = "SmartFCRA™ Supreme — Secure Client Portal Credentials";
-  const mailHtml = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e1e8ed; border-radius: 12px; background-color: #ffffff;">
-      <div style="text-align: center; margin-bottom: 24px;">
-        <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="RJ Business Solutions Logo" style="width: 140px; height: auto; border-radius: 8px;">
-      </div>
-      <h2 style="color: #0A66FF; text-align: center; margin-bottom: 8px;">Welcome to Your Credit Litigation Cockpit</h2>
-      <p style="font-size: 14px; color: #4b5563; text-align: center; margin-bottom: 24px;">RJ Business Solutions has automatically established your secure dispute portal.</p>
-      
-      <div style="background-color: #f8fbff; border: 1px solid #eaf3ff; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
-        <h3 style="margin-top: 0; color: #003B8F; font-size: 14px; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px;">Portal Access Coordinates</h3>
-        <p style="font-size: 13px; margin: 8px 0; color: #374151;"><strong>Client Profile:</strong> ${firstName} ${lastName}</p>
-        <p style="font-size: 13px; margin: 8px 0; color: #374151;"><strong>Secure Portal Link:</strong> <a href="https://5f51817c.smart-fcra.pages.dev" style="color: #0A66FF; font-weight: bold; text-decoration: none;">smart-fcra.pages.dev</a></p>
-        <p style="font-size: 13px; margin: 8px 0; color: #374151;"><strong>Username / Email:</strong> <span style="font-family: monospace; background-color: #f3f4f6; padding: 2px 6px; border-radius: 4px;">${extractedEmail}</span></p>
-        <p style="font-size: 13px; margin: 8px 0; color: #374151;"><strong>Generated Password:</strong> <span style="font-family: monospace; background-color: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-weight: bold; color: #0A66FF;">${generatedPassword}</span></p>
-      </div>
-      
-      <p style="font-size: 12px; color: #9ca3af; line-height: 1.5; margin-bottom: 24px;">
-        <strong>Security Notice:</strong> This is an automatically generated temporary password. You can update your password at any time within your portal's security settings. Please secure this email and do not share your credentials.
-      </p>
-      
-      <hr style="border: 0; border-top: 1px solid #f3f4f6; margin-bottom: 16px;">
-      <div style="text-align: center; font-size: 11px; color: #9ca3af;">
-        <p style="margin: 4px 0;"><strong>RJ Business Solutions</strong></p>
-        <p style="margin: 4px 0;">1342 NM 333, Tijeras, New Mexico 87059</p>
-        <p style="margin: 4px 0;">support@rjbusinesssolutions.org | +1 (414) 430-4277</p>
-      </div>
-    </div>
-  `;
-
-  try {
-    const mail = await sendAppEmail(c.env, {
-      to: extractedEmail,
-      subject: mailSubject,
-      html: mailHtml,
-      purpose: 'onboarding',
-    });
-    if (mail.sent) emailStatus = `sent:${mail.provider}`;
-    else if (mail.simulated) emailStatus = 'simulated';
-  } catch (e: any) {
-    console.error('[ONBOARD_EMAIL] error:', e.message);
-    emailStatus = 'failed';
-  }
-
-  // Log dispatch action to activity table
-  await c.env.DB.prepare(
-    'INSERT INTO activity_log (id, org_id, client_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, "credentials_sent", ?, ?)'
-  ).bind(
-    generateId(),
-    user.org_id,
-    clientId,
-    user.id,
-    `Auto-generated credentials welcome email sent to ${extractedEmail} (${emailStatus})`,
-    JSON.stringify({ email: extractedEmail, status: emailStatus, credentialsDispatched: true })
-  ).run();
 
   // 6. Detect violations and calculate score
   const violations = detectViolations(parsed);
@@ -1989,6 +2444,25 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
     JSON.stringify({ score: litScore.score, bureau: onboardBureau, pack: onboardPack.status })
   ).run();
 
+  // 10. Fundability snapshot for portal
+  let fundability = null;
+  try {
+    const cl = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first() as any;
+    fundability = await computeAndStoreFundability(c.env, {
+      orgId: user.org_id,
+      clientId,
+      client: cl,
+      reportMeta: {
+        accounts: parsed.accounts.length,
+        collections: parsed.collections.length,
+        inquiries: parsed.inquiries.length,
+      },
+      violationCount: violations.length,
+    });
+  } catch (e) {
+    console.warn('[onboard] fundability skipped', e);
+  }
+
   return c.json({
     success: true,
     clientId,
@@ -2008,7 +2482,11 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
     bureauPack: onboardPack,
     extractedEmail,
     extractedPhone,
-    generatedPassword
+    emailStatus,
+    portalLoginUrl,
+    portalCredentialsEmailed: emailStatus.startsWith('sent') || emailStatus === 'simulated',
+    generatedPassword: generatedPassword || undefined,
+    fundability,
   });
 });
 

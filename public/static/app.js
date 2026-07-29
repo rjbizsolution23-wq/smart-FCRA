@@ -672,6 +672,11 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     if (state.user?.role === 'client' || state.impersonateClientId) {
       navItems = [
         { id: 'client-cockpit', icon: 'fa-rocket', label: 'My Cockpit' },
+        { id: 'client-messages', icon: 'fa-comments', label: 'Messages' },
+        { id: 'client-uploads', icon: 'fa-cloud-upload-alt', label: 'My Vault' },
+        { id: 'client-fundability', icon: 'fa-chart-line', label: 'Fundability' },
+        { id: 'client-tradelines', icon: 'fa-handshake', label: 'Boost Tools' },
+        { id: 'client-tutor', icon: 'fa-user-graduate', label: 'My Tutor' },
         { id: 'client-documents', icon: 'fa-file-signature', label: 'My Documents' },
         { id: 'client-knowledge', icon: 'fa-graduation-cap', label: 'Education Hub' },
         { id: 'ai-studio', icon: 'fa-robot', label: 'AI Mentors' },
@@ -785,6 +790,11 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         
         // Secure Self-Service Client Portal Pages
         case 'client-cockpit': await pgClientCockpit(el); break;
+        case 'client-messages': await pgClientMessages(el); break;
+        case 'client-uploads': await pgClientUploads(el); break;
+        case 'client-fundability': await pgClientFundability(el); break;
+        case 'client-tradelines': await pgClientTradelines(el); break;
+        case 'client-tutor': await pgClientTutor(el); break;
         case 'client-documents': await pgClientDocuments(el); break;
         case 'client-knowledge': await pgClientKnowledge(el); break;
 
@@ -881,6 +891,8 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         </div>
         <div class="flex gap-2">
           <button onclick="window._startImpersonating('${c.id}', '${escapeHtml(c.first_name + ' ' + c.last_name)}')" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 border border-amber-500/20 shadow-[0_0_15px_rgba(217,119,6,0.15)]"><i class="fas fa-user-shield"></i>Preview Portal</button>
+          <button id="btn-email-client" class="bg-cyan-700 hover:bg-cyan-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-envelope"></i>Message / Email</button>
+          <button id="btn-portal-invite" class="bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-key"></i>Portal Invite</button>
           <button id="btn-edit-client" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 border border-gray-700"><i class="fas fa-edit"></i>Edit Profile</button>
           <button onclick="window._nav('upload-report',{clientId:'${c.id}',clientName:'${c.first_name} ${c.last_name}'})" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-upload"></i>Upload Report</button>
           <button onclick="window._nav('generate-doc',{clientId:'${c.id}',clientName:'${c.first_name} ${c.last_name}'})" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-file-contract"></i>Generate Docs</button>
@@ -1013,7 +1025,29 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     </div>`;
 
     // Wire up events
-    const btnEdit = document.getElementById('btn-edit-client');
+    const btnEdit = 
+    const btnEmail = document.getElementById('btn-email-client');
+    if (btnEmail) btnEmail.onclick = async () => {
+      const subject = prompt('Email subject', 'Update from your Smart FCRA credit team');
+      if (subject === null) return;
+      const body = prompt('Message to client');
+      if (!body) return;
+      try {
+        const r = await api('/clients/' + c.id + '/email', { method: 'POST', body: JSON.stringify({ subject, body }) });
+        toast(r.email?.sent ? 'Emailed + logged to portal' : (r.email?.simulated ? 'Simulated email + portal log' : 'Logged to portal'), 'success');
+      } catch (err) { toast(err.message, 'error'); }
+    };
+    const btnInvite = document.getElementById('btn-portal-invite');
+    if (btnInvite) btnInvite.onclick = async () => {
+      const email = prompt('Client email for portal login', c.email || '');
+      if (!email) return;
+      try {
+        const r = await api('/clients/' + c.id + '/portal-invite', { method: 'POST', body: JSON.stringify({ email }) });
+        toast('Invite ' + (r.emailStatus || 'sent') + (r.temporaryPassword ? ' · temp pass copied to console' : ''), 'success');
+        if (r.temporaryPassword) console.info('[portal-invite]', r.loginUrl, r.temporaryPassword);
+      } catch (err) { toast(err.message, 'error'); }
+    };
+    document.getElementById('btn-edit-client');
     const modal = document.getElementById('edit-client-modal');
     if (btnEdit && modal) {
       btnEdit.onclick = () => modal.classList.remove('hidden');
@@ -6844,6 +6878,261 @@ async function pgAdminConsole(el) {
   // ═══════════════════════════════════════════════════════════════
   // SECURE SELF-SERVICE CLIENT PORTAL VIEWS
   // ═══════════════════════════════════════════════════════════════
+
+  function portalClientQs() {
+    return state.impersonateClientId ? `?clientId=${encodeURIComponent(state.impersonateClientId)}` : '';
+  }
+  function portalClientBody(extra = {}) {
+    return state.impersonateClientId ? { ...extra, clientId: state.impersonateClientId } : extra;
+  }
+
+  async function pgClientMessages(el) {
+    const qs = portalClientQs();
+    async function load() {
+      const d = await api('/client-portal/messages' + qs);
+      const msgs = (d.messages || []).slice().reverse();
+      el.innerHTML = `
+        <div class="fade-in space-y-4 max-w-3xl">
+          <div class="bg-gradient-to-r from-slate-950 via-cyan-950/30 to-slate-950 border border-cyan-500/20 rounded-2xl p-5">
+            <h1 class="text-xl font-bold text-white"><i class="fas fa-comments text-cyan-400 mr-2"></i>Secure Messages</h1>
+            <p class="text-sm text-slate-400 mt-1">Chat with your credit team. Staff can also email you from this thread.</p>
+          </div>
+          <div id="msg-thread" class="glass rounded-2xl border border-gray-800 p-4 h-[420px] overflow-y-auto space-y-3">
+            ${msgs.length ? msgs.map(m => `
+              <div class="flex ${m.sender_role === 'client' ? 'justify-end' : 'justify-start'}">
+                <div class="max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm ${m.sender_role === 'client' ? 'bg-cyan-600/20 border border-cyan-500/30 text-cyan-50' : m.sender_role === 'system' ? 'bg-violet-950/40 border border-violet-500/20 text-violet-100' : 'bg-slate-900 border border-slate-700 text-slate-100'}">
+                  <div class="text-[10px] uppercase tracking-wider opacity-60 mb-1">${escapeHtml(m.sender_role)} · ${escapeHtml((m.created_at||'').slice(0,16))}${m.channel==='email'?' · emailed':''}</div>
+                  ${m.subject ? `<div class="font-semibold text-xs mb-1">${escapeHtml(m.subject)}</div>` : ''}
+                  <div class="whitespace-pre-wrap leading-relaxed">${escapeHtml(m.body)}</div>
+                </div>
+              </div>`).join('') : '<p class="text-sm text-gray-500 text-center py-12">No messages yet — say hello to your team.</p>'}
+          </div>
+          <form id="msg-form" class="glass rounded-2xl border border-gray-800 p-4 space-y-3">
+            <input id="msg-subject" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white" placeholder="Subject (optional)">
+            <textarea id="msg-body" required rows="3" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white" placeholder="Type your message..."></textarea>
+            <div class="flex flex-wrap gap-2 justify-between items-center">
+              <label class="text-xs text-gray-400 flex items-center gap-2"><input type="checkbox" id="msg-email" class="rounded border-gray-700"> Also email me a copy / notify via email</label>
+              <button class="bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-paper-plane mr-1"></i>Send</button>
+            </div>
+          </form>
+        </div>`;
+      const thread = document.getElementById('msg-thread');
+      if (thread) thread.scrollTop = thread.scrollHeight;
+      document.getElementById('msg-form').onsubmit = async (e) => {
+        e.preventDefault();
+        try {
+          await api('/client-portal/messages', {
+            method: 'POST',
+            body: JSON.stringify(portalClientBody({
+              subject: document.getElementById('msg-subject').value,
+              body: document.getElementById('msg-body').value,
+              sendEmail: document.getElementById('msg-email').checked,
+            })),
+          });
+          toast('Message sent', 'success');
+          await load();
+        } catch (err) { toast(err.message, 'error'); }
+      };
+    }
+    try { await load(); } catch (err) {
+      el.innerHTML = `<div class="text-red-400 p-6">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function pgClientUploads(el) {
+    const qs = portalClientQs();
+    async function load() {
+      const d = await api('/client-portal/uploads' + qs);
+      const uploads = d.uploads || [];
+      el.innerHTML = `
+        <div class="fade-in space-y-4 max-w-3xl">
+          <div class="bg-gradient-to-r from-slate-950 via-emerald-950/30 to-slate-950 border border-emerald-500/20 rounded-2xl p-5">
+            <h1 class="text-xl font-bold text-white"><i class="fas fa-cloud-upload-alt text-emerald-400 mr-2"></i>Document Vault</h1>
+            <p class="text-sm text-slate-400 mt-1">Upload ID docs, creditor replies, bank statements — your tutor can analyze cash flow.</p>
+          </div>
+          <form id="vault-form" class="glass rounded-2xl border border-gray-800 p-4 space-y-3">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <select id="vault-cat" class="bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white">
+                <option value="id_doc">Photo ID / Utility</option>
+                <option value="creditor_reply">Creditor / Bureau Reply</option>
+                <option value="bank_statement">Bank Statement (AI analysis)</option>
+                <option value="other">Other Document</option>
+              </select>
+              <input id="vault-name" class="bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white" placeholder="File name (e.g. chase-jan.txt)">
+            </div>
+            <textarea id="vault-text" rows="6" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white font-mono" placeholder="Paste document text or OCR extract here..."></textarea>
+            <input id="vault-notes" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white" placeholder="Notes (optional)">
+            <button class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-upload mr-1"></i>Upload to Vault</button>
+          </form>
+          <div class="space-y-2">
+            ${uploads.length ? uploads.map(u => `
+              <div class="glass rounded-xl border border-gray-800 p-3 flex justify-between gap-3">
+                <div>
+                  <div class="text-sm text-white font-medium">${escapeHtml(u.file_name || u.category)}</div>
+                  <div class="text-[11px] text-gray-500 uppercase tracking-wider mt-0.5">${escapeHtml(u.category)} · ${escapeHtml((u.created_at||'').slice(0,16))}</div>
+                  ${u.analysis_json ? `<p class="text-xs text-emerald-300/90 mt-2 line-clamp-3">${escapeHtml((()=>{try{return JSON.parse(u.analysis_json).summary||''}catch(e){return ''}})())}</p>` : ''}
+                </div>
+                <span class="text-[10px] text-gray-500 font-mono shrink-0">${escapeHtml(u.id.slice(0,8))}</span>
+              </div>`).join('') : '<p class="text-sm text-gray-500">No uploads yet.</p>'}
+          </div>
+        </div>`;
+      document.getElementById('vault-form').onsubmit = async (e) => {
+        e.preventDefault();
+        try {
+          const res = await api('/client-portal/uploads', {
+            method: 'POST',
+            body: JSON.stringify(portalClientBody({
+              category: document.getElementById('vault-cat').value,
+              fileName: document.getElementById('vault-name').value,
+              contentText: document.getElementById('vault-text').value,
+              notes: document.getElementById('vault-notes').value,
+            })),
+          });
+          toast(res.analysis?.summary ? 'Uploaded + AI analysis ready' : 'Uploaded to vault', 'success');
+          await load();
+        } catch (err) { toast(err.message, 'error'); }
+      };
+    }
+    try { await load(); } catch (err) {
+      el.innerHTML = `<div class="text-red-400 p-6">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function pgClientFundability(el) {
+    try {
+      const d = await api('/client-portal/fundability' + portalClientQs());
+      const f = d.fundability || {};
+      const pillars = f.pillars || {};
+      const roadmaps = f.roadmaps || {};
+      el.innerHTML = `
+        <div class="fade-in space-y-5">
+          <div class="bg-gradient-to-r from-slate-950 via-amber-950/25 to-slate-950 border border-amber-500/20 rounded-2xl p-5">
+            <h1 class="text-xl font-bold text-white"><i class="fas fa-chart-line text-amber-400 mr-2"></i>Fundability Command Center</h1>
+            <p class="text-sm text-slate-400 mt-1">${escapeHtml(f.narrative || 'Deep readiness across mortgage, auto, student, and debt escape.')}</p>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+            ${[['Overall', f.overallScore],['Mortgage', pillars.mortgageReady],['Auto', pillars.autoReady],['Student', pillars.studentReady],['Debt Health', pillars.debtHealth]].map(([l,v]) => `
+              <div class="glass rounded-xl border border-gray-800 p-4 text-center">
+                <div class="text-[10px] uppercase tracking-wider text-gray-500">${l}</div>
+                <div class="text-2xl font-bold text-white mt-1 font-mono">${v ?? '—'}</div>
+              </div>`).join('')}
+          </div>
+          ${(f.blockers||[]).length ? `<div class="glass rounded-xl border border-rose-900/40 p-4"><h3 class="text-xs font-bold text-rose-300 uppercase mb-2">Blockers</h3><ul class="space-y-1 text-sm text-slate-300">${f.blockers.map(b=>`<li>• ${escapeHtml(b)}</li>`).join('')}</ul></div>` : ''}
+          <div class="grid md:grid-cols-2 gap-4">
+            ${Object.values(roadmaps).map(r => `
+              <div class="glass rounded-xl border border-gray-800 p-4">
+                <div class="flex justify-between items-start mb-2">
+                  <h3 class="text-sm font-bold text-white">${escapeHtml(r.title)}</h3>
+                  <span class="text-xs font-mono text-amber-300">${r.readiness}/100</span>
+                </div>
+                <p class="text-[11px] text-gray-500 mb-2">Target score ~${r.targetScore} · Current avg ${r.currentAvg}</p>
+                <ol class="text-xs text-slate-300 space-y-1 list-decimal list-inside">${(r.steps||[]).map(s=>`<li>${escapeHtml(s)}</li>`).join('')}</ol>
+                <p class="text-[11px] text-cyan-300/80 mt-3"><strong>Docs:</strong> ${(r.docsNeeded||[]).map(escapeHtml).join(' · ')}</p>
+              </div>`).join('')}
+          </div>
+          <div class="glass rounded-xl border border-gray-800 p-4">
+            <h3 class="text-xs font-bold text-white uppercase mb-3">Priority Actions</h3>
+            <div class="space-y-2">${(f.actions||[]).map(a=>`
+              <div class="flex gap-3 text-sm"><span class="text-amber-400 font-mono text-xs mt-0.5">#${a.priority}</span><div><div class="text-white font-medium">${escapeHtml(a.title)}</div><div class="text-xs text-gray-400">${escapeHtml(a.detail)}</div></div></div>`).join('')}</div>
+          </div>
+          <button onclick="window._nav('client-tradelines')" class="bg-amber-600/90 hover:bg-amber-500 text-white text-sm font-semibold px-4 py-2.5 rounded-lg">See profile-smart boost tools →</button>
+        </div>`;
+    } catch (err) {
+      el.innerHTML = `<div class="text-red-400 p-6">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function pgClientTradelines(el) {
+    try {
+      const goal = 'mortgage';
+      const d = await api('/client-portal/tradelines' + portalClientQs() + (portalClientQs() ? '&' : '?') + 'goal=' + goal);
+      const recs = d.recommendations || [];
+      el.innerHTML = `
+        <div class="fade-in space-y-4">
+          <div class="bg-gradient-to-r from-slate-950 via-teal-950/30 to-slate-950 border border-teal-500/20 rounded-2xl p-5">
+            <h1 class="text-xl font-bold text-white"><i class="fas fa-handshake text-teal-400 mr-2"></i>Intelligent Boost Tools</h1>
+            <p class="text-sm text-slate-400 mt-1">Rent reporters, builders, and alternative data — ranked for <em>your</em> profile, not generic upsells.</p>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4">
+            ${recs.map(t => `
+              <div class="glass rounded-xl border ${t.recommended ? 'border-teal-500/40' : 'border-gray-800'} p-4">
+                <div class="flex justify-between gap-2">
+                  <h3 class="text-sm font-bold text-white">${escapeHtml(t.name)}</h3>
+                  ${t.recommended ? '<span class="text-[10px] uppercase bg-teal-500/15 text-teal-300 border border-teal-500/30 px-2 py-0.5 rounded">Best fit</span>' : ''}
+                </div>
+                <p class="text-xs text-gray-400 mt-2">${escapeHtml(t.impact)}</p>
+                <div class="text-[11px] text-gray-500 mt-2">Reports to: ${(t.reportsTo||[]).join(', ')} · $${t.monthlyFee}/mo · match ${t.matchScore}</div>
+                <a href="${escapeHtml(t.url||'#')}" target="_blank" rel="noopener" class="inline-block mt-3 text-xs font-semibold text-teal-300 hover:text-teal-200">Sign up / learn more →</a>
+              </div>`).join('')}
+          </div>
+        </div>`;
+    } catch (err) {
+      el.innerHTML = `<div class="text-red-400 p-6">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function pgClientTutor(el) {
+    const qs = portalClientQs();
+    let history = [{ role: 'tutor', text: 'Hi — I am Alex Rivera, your personal finance tutor. Ask me about budgeting, quizzes, fundability, or paste bank numbers for a cash-flow check.' }];
+    async function paint() {
+      const meta = await api('/client-portal/tutor' + qs);
+      el.innerHTML = `
+        <div class="fade-in space-y-4 max-w-3xl">
+          <div class="bg-gradient-to-r from-slate-950 via-violet-950/35 to-slate-950 border border-violet-500/25 rounded-2xl p-5">
+            <h1 class="text-xl font-bold text-white"><i class="fas fa-user-graduate text-violet-300 mr-2"></i>${escapeHtml(meta.mentor?.name || 'Personal Tutor')}</h1>
+            <p class="text-sm text-slate-400 mt-1">${escapeHtml(meta.mentor?.blurb || '')}</p>
+            ${meta.memory?.summary ? `<p class="text-xs text-violet-200/70 mt-2 line-clamp-2">Memory: ${escapeHtml(meta.memory.summary.slice(0,240))}</p>` : ''}
+          </div>
+          <div id="tutor-thread" class="glass rounded-2xl border border-gray-800 p-4 h-[380px] overflow-y-auto space-y-3">
+            ${history.map(h => `
+              <div class="flex ${h.role==='you'?'justify-end':'justify-start'}">
+                <div class="max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm ${h.role==='you'?'bg-violet-600/25 border border-violet-500/30':'bg-slate-900 border border-slate-700'} whitespace-pre-wrap">${escapeHtml(h.text)}</div>
+              </div>`).join('')}
+          </div>
+          <form id="tutor-form" class="flex gap-2">
+            <input id="tutor-input" class="flex-1 bg-gray-950 border border-gray-800 rounded-lg px-3 py-2.5 text-sm text-white" placeholder="Ask your tutor..." required>
+            <button class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">Send</button>
+          </form>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <button type="button" class="tutor-quick px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:border-violet-500/40" data-q="Quiz me on FICO basics">Quiz me</button>
+            <button type="button" class="tutor-quick px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:border-violet-500/40" data-q="Build me a weekly budget plan for fundability">Budget plan</button>
+            <button type="button" class="tutor-quick px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:border-violet-500/40" data-q="What should I do next for mortgage readiness?">Mortgage next steps</button>
+            <button type="button" onclick="window._nav('client-knowledge')" class="px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300">Open Education Hub</button>
+          </div>
+        </div>`;
+      const thread = document.getElementById('tutor-thread');
+      if (thread) thread.scrollTop = thread.scrollHeight;
+      const send = async (msg) => {
+        history.push({ role: 'you', text: msg });
+        paint();
+        try {
+          const res = await api('/client-portal/tutor/chat', {
+            method: 'POST',
+            body: JSON.stringify(portalClientBody({ message: msg })),
+          });
+          history.push({ role: 'tutor', text: res.reply || '(no reply)' });
+        } catch (err) {
+          history.push({ role: 'tutor', text: 'Error: ' + err.message });
+        }
+        paint();
+      };
+      document.getElementById('tutor-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const inp = document.getElementById('tutor-input');
+        const msg = inp.value.trim();
+        if (!msg) return;
+        inp.value = '';
+        await send(msg);
+      };
+      document.querySelectorAll('.tutor-quick').forEach(btn => {
+        btn.onclick = () => send(btn.getAttribute('data-q'));
+      });
+    }
+    try { await paint(); } catch (err) {
+      el.innerHTML = `<div class="text-red-400 p-6">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
   async function pgClientCockpit(el) {
     try {
       const d = await api('/client-portal/dashboard' + (state.impersonateClientId ? `?clientId=${state.impersonateClientId}` : ''));
@@ -6942,6 +7231,13 @@ async function pgAdminConsole(el) {
                 <div>
                   <h1 class="text-2xl font-bold text-white mb-1">Welcome back, ${escapeHtml(client.first_name)}!</h1>
                   <p class="text-xs text-gray-400 font-mono">Secure Client Autopilot Dashboard &bull; Case ID: NEL-${client.id || 'Active'}</p>
+                  <div class="flex flex-wrap gap-2 mt-3">
+                    <button onclick="window._nav('client-messages')" class="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">Messages</button>
+                    <button onclick="window._nav('client-fundability')" class="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300">Fundability</button>
+                    <button onclick="window._nav('client-tutor')" class="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-violet-500/10 border border-violet-500/30 text-violet-300">My Tutor</button>
+                    <button onclick="window._nav('client-uploads')" class="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">Vault</button>
+                    <button onclick="window._nav('client-tradelines')" class="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-teal-500/10 border border-teal-500/30 text-teal-300">Boost Tools</button>
+                  </div>
                 </div>
                 <div class="bg-blue-600/10 border border-blue-500/20 rounded-xl px-4 py-2 flex items-center gap-3">
                   <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="RJ Business Solutions Logo" class="w-8 h-8 rounded-lg object-cover border border-blue-500/30">
@@ -7779,6 +8075,46 @@ async function pgAdminConsole(el) {
     let currentCourseId = null;
     let currentLessonIndex = 0;
     let selectedAnswer = null;
+    try {
+      const edu = await api('/client-portal/education' + portalClientQs());
+      window._portalLessons = edu.lessons || [];
+      window._portalProgress = edu.progress || [];
+    } catch (_) {
+      window._portalLessons = [];
+      window._portalProgress = [];
+    }
+    window._openPortalLesson = async (lessonId) => {
+      try {
+        const { lesson } = await api('/client-portal/education/' + lessonId);
+        const answers = [];
+        const paintLesson = () => {
+          el.innerHTML = `<div class="fade-in max-w-2xl space-y-4">
+            <button onclick="window._closeCoursePlayer()" class="text-sm text-gray-400 hover:text-white"><i class="fas fa-arrow-left mr-1"></i>Back</button>
+            <h1 class="text-xl font-bold text-white">${escapeHtml(lesson.title)}</h1>
+            <p class="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">${escapeHtml(lesson.content)}</p>
+            <div class="space-y-4">${(lesson.quiz||[]).map((q,qi)=>`
+              <div class="glass border border-gray-800 rounded-xl p-4">
+                <div class="text-sm text-white font-medium mb-2">${escapeHtml(q.q)}</div>
+                <div class="space-y-2">${q.choices.map((ch,ci)=>`
+                  <button type="button" class="w-full text-left text-xs px-3 py-2 rounded-lg border ${answers[qi]===ci?'border-cyan-500 bg-cyan-500/15':'border-gray-800'} text-gray-200" onclick="window._portalPick(${qi},${ci})">${escapeHtml(ch)}</button>`).join('')}</div>
+              </div>`).join('')}</div>
+            <button id="btn-finish-lesson" class="bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold px-4 py-2 rounded-lg">Submit quiz</button>
+          </div>`;
+          window._portalPick = (qi, ci) => { answers[qi]=ci; paintLesson(); };
+          document.getElementById('btn-finish-lesson').onclick = async () => {
+            try {
+              const res = await api('/client-portal/education/' + lessonId + '/complete', {
+                method: 'POST', body: JSON.stringify(portalClientBody({ answers })),
+              });
+              toast(res.passed ? `Lesson complete ${res.score}/${res.total}` : `Review again ${res.score}/${res.total}`, res.passed?'success':'warning');
+              if (res.passed) window._closeCoursePlayer();
+            } catch (err) { toast(err.message,'error'); }
+          };
+        };
+        paintLesson();
+      } catch (err) { toast(err.message,'error'); }
+    };
+
 
     window._openCoursePlayer = (id) => {
       currentCourseId = id;
@@ -7824,9 +8160,26 @@ async function pgAdminConsole(el) {
         <div class="fade-in space-y-6">
           <div class="relative overflow-hidden bg-gradient-to-r from-gray-900 via-blue-950 to-gray-900 border border-blue-500/20 rounded-2xl p-6 shadow-2xl">
             <h1 class="text-2xl font-bold text-white mb-1"><i class="fas fa-graduation-cap text-blue-400 mr-2"></i>Education Hub</h1>
-            <p class="text-sm text-gray-400">Rick Jefferson's Premium Business, Automation & Credit Repair Systems Courses</p>
+            <p class="text-sm text-gray-400">Financial literacy → credit expertise → fundability · plus Rick Jefferson systems courses</p>
           </div>
 
+          ${(window._portalLessons||[]).length ? `
+          <div>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-cyan-300 mb-3">Fundability Curriculum</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+              ${window._portalLessons.map(l => {
+                const done = (window._portalProgress||[]).find(p => p.lesson_id===l.id && p.status==='completed');
+                return `<div class="glass rounded-xl border ${done?'border-emerald-500/30':'border-gray-800'} p-4">
+                  <div class="text-[10px] uppercase text-gray-500">${escapeHtml(l.track)} · L${l.level}</div>
+                  <h3 class="text-sm font-bold text-white mt-1">${escapeHtml(l.title)}</h3>
+                  <p class="text-xs text-gray-400 mt-1">${escapeHtml(l.summary)}</p>
+                  <button onclick="window._openPortalLesson('${l.id}')" class="mt-3 text-xs font-semibold ${done?'text-emerald-300':'text-cyan-300'}">${done?'Review ✓':'Start lesson'}</button>
+                </div>`;
+              }).join('')}
+            </div>
+          </div>` : ''}
+
+          <h2 class="text-xs font-bold uppercase tracking-wider text-blue-300">Systems & Business Courses</h2>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             ${RICK_COURSES.map(c => `
               <div class="glass rounded-2xl border border-gray-800 p-5 flex flex-col justify-between card-hover relative overflow-hidden group">
