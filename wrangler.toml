@@ -9,6 +9,15 @@ binding = "DB"
 database_name = "fcra-detector-v2"
 database_id = "ae28993e-1c98-4f4e-a73d-42ae4337424d"
 
+[[r2_buckets]]
+binding = "DOCS"
+bucket_name = "smart-fcra-v2-docs"
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "e26124f39fef402aa0f118d5121b7a2e"
+preview_id = "7ac5ef480f90489ea0dbdbffb613a231"
+
 [ai]
 binding = "AI"
 

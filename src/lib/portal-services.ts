@@ -113,9 +113,17 @@ export async function computeAndStoreFundability(
     reportMeta?: { accounts?: number; collections?: number; inquiries?: number } | null;
     violationCount?: number;
     goal?: string;
+    monthlyIncome?: number | null;
+    monthlyDebt?: number | null;
   },
 ): Promise<ReturnType<typeof buildFundabilityReport>> {
   const c = opts.client || {};
+  const income =
+    opts.monthlyIncome ??
+    (c.estimated_monthly_income != null ? Number(c.estimated_monthly_income) : null);
+  const debt =
+    opts.monthlyDebt ??
+    (c.estimated_monthly_debt != null ? Number(c.estimated_monthly_debt) : null);
   const input: FundabilityInput = {
     eqScore: Number(c.eq_score) || null,
     exScore: Number(c.ex_score) || null,
@@ -124,6 +132,8 @@ export async function computeAndStoreFundability(
     collections: opts.reportMeta?.collections || 0,
     inquiries: opts.reportMeta?.inquiries || 0,
     violations: opts.violationCount || 0,
+    estimatedIncomeMonthly: income && income > 0 ? income : undefined,
+    estimatedDebtPayments: debt != null && debt >= 0 ? debt : undefined,
     goal: opts.goal,
   };
 

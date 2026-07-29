@@ -679,6 +679,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'client-tutor', icon: 'fa-user-graduate', label: 'My Tutor' },
         { id: 'client-documents', icon: 'fa-file-signature', label: 'My Documents' },
         { id: 'client-knowledge', icon: 'fa-graduation-cap', label: 'Education Hub' },
+        { id: 'client-settings', icon: 'fa-user-shield', label: 'Security & Privacy' },
         { id: 'ai-studio', icon: 'fa-robot', label: 'AI Mentors' },
       ];
       if (state.impersonateClientId) {
@@ -797,6 +798,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'client-tutor': await pgClientTutor(el); break;
         case 'client-documents': await pgClientDocuments(el); break;
         case 'client-knowledge': await pgClientKnowledge(el); break;
+        case 'client-settings': await pgClientSettings(el); break;
 
         // Admin/Staff CRM & Litigation Dashboard
         case 'admin-overview': await pgAdminOverview(el); break;
@@ -6947,48 +6949,85 @@ async function pgAdminConsole(el) {
       el.innerHTML = `
         <div class="fade-in space-y-4 max-w-3xl">
           <div class="bg-gradient-to-r from-slate-950 via-emerald-950/30 to-slate-950 border border-emerald-500/20 rounded-2xl p-5">
-            <h1 class="text-xl font-bold text-white"><i class="fas fa-cloud-upload-alt text-emerald-400 mr-2"></i>Document Vault</h1>
-            <p class="text-sm text-slate-400 mt-1">Upload ID docs, creditor replies, bank statements — your tutor can analyze cash flow.</p>
+            <h1 class="text-xl font-bold text-white"><i class="fas fa-cloud-upload-alt text-emerald-400 mr-2"></i>Encrypted Document Vault</h1>
+            <p class="text-sm text-slate-400 mt-1">Binary files go to isolated Cloudflare R2. Text extracts are AES-256-GCM encrypted in D1. ${d.vault ? '<span class="text-emerald-300">R2 vault online.</span>' : '<span class="text-amber-300">R2 binding pending — text mode active.</span>'}</p>
           </div>
           <form id="vault-form" class="glass rounded-2xl border border-gray-800 p-4 space-y-3">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
               <select id="vault-cat" class="bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white">
                 <option value="id_doc">Photo ID / Utility</option>
                 <option value="creditor_reply">Creditor / Bureau Reply</option>
-                <option value="bank_statement">Bank Statement (AI analysis)</option>
+                <option value="bank_statement">Bank Statement (DTI + AI)</option>
                 <option value="other">Other Document</option>
               </select>
-              <input id="vault-name" class="bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white" placeholder="File name (e.g. chase-jan.txt)">
+              <input id="vault-name" class="bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white" placeholder="File name">
             </div>
-            <textarea id="vault-text" rows="6" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white font-mono" placeholder="Paste document text or OCR extract here..."></textarea>
+            <input id="vault-file" type="file" class="block w-full text-xs text-gray-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-emerald-600 file:text-white" />
+            <textarea id="vault-text" rows="5" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white font-mono" placeholder="Optional: paste OCR / statement text for underwriting..."></textarea>
             <input id="vault-notes" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white" placeholder="Notes (optional)">
-            <button class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-upload mr-1"></i>Upload to Vault</button>
+            <button class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-lock mr-1"></i>Encrypt & Upload</button>
           </form>
           <div class="space-y-2">
             ${uploads.length ? uploads.map(u => `
               <div class="glass rounded-xl border border-gray-800 p-3 flex justify-between gap-3">
                 <div>
                   <div class="text-sm text-white font-medium">${escapeHtml(u.file_name || u.category)}</div>
-                  <div class="text-[11px] text-gray-500 uppercase tracking-wider mt-0.5">${escapeHtml(u.category)} · ${escapeHtml((u.created_at||'').slice(0,16))}</div>
-                  ${u.analysis_json ? `<p class="text-xs text-emerald-300/90 mt-2 line-clamp-3">${escapeHtml((()=>{try{return JSON.parse(u.analysis_json).summary||''}catch(e){return ''}})())}</p>` : ''}
+                  <div class="text-[11px] text-gray-500 uppercase tracking-wider mt-0.5">${escapeHtml(u.category)} · ${u.byte_size ? (Math.round(u.byte_size/1024)+' KB · ') : ''}${escapeHtml((u.created_at||'').slice(0,16))}${u.r2_key ? ' · R2' : ''}</div>
+                  ${u.analysis_json ? `<p class="text-xs text-emerald-300/90 mt-2 line-clamp-3">${escapeHtml((()=>{try{const a=JSON.parse(u.analysis_json); return a.summary || (a.underwriting ? ('DTI '+a.underwriting.dtiPct+'% · income $'+a.underwriting.monthlyIncomeEstimate) : '')}catch(e){return ''}})())}</p>` : ''}
                 </div>
-                <span class="text-[10px] text-gray-500 font-mono shrink-0">${escapeHtml(u.id.slice(0,8))}</span>
+                <button data-dl="${u.id}" class="vault-dl text-[10px] text-cyan-300 hover:text-cyan-200 shrink-0">Download</button>
               </div>`).join('') : '<p class="text-sm text-gray-500">No uploads yet.</p>'}
           </div>
         </div>`;
+      document.querySelectorAll('.vault-dl').forEach(btn => {
+        btn.onclick = async () => {
+          try {
+            const id = btn.getAttribute('data-dl');
+            const res = await fetch('/api/client-portal/uploads/' + id + '/download' + qs, { headers: { Authorization: 'Bearer ' + state.token } });
+            if (!res.ok) throw new Error('Download failed');
+            const ct = res.headers.get('content-type') || '';
+            if (ct.includes('application/json')) {
+              const j = await res.json();
+              const blob = new Blob([j.text || ''], { type: 'text/plain' });
+              const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = j.fileName || 'document.txt'; a.click();
+            } else {
+              const blob = await res.blob();
+              const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'vault-file'; a.click();
+            }
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      });
       document.getElementById('vault-form').onsubmit = async (e) => {
         e.preventDefault();
         try {
+          const fileInput = document.getElementById('vault-file');
+          const file = fileInput.files && fileInput.files[0];
+          let fileBase64 = null;
+          let fileName = document.getElementById('vault-name').value;
+          let mimeType = 'text/plain';
+          if (file) {
+            fileName = fileName || file.name;
+            mimeType = file.type || 'application/octet-stream';
+            const buf = await file.arrayBuffer();
+            const bytes = new Uint8Array(buf);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+            fileBase64 = btoa(binary);
+          }
           const res = await api('/client-portal/uploads', {
             method: 'POST',
             body: JSON.stringify(portalClientBody({
               category: document.getElementById('vault-cat').value,
-              fileName: document.getElementById('vault-name').value,
+              fileName,
+              mimeType,
+              fileBase64,
               contentText: document.getElementById('vault-text').value,
               notes: document.getElementById('vault-notes').value,
+              runUnderwriting: document.getElementById('vault-cat').value === 'bank_statement',
             })),
           });
-          toast(res.analysis?.summary ? 'Uploaded + AI analysis ready' : 'Uploaded to vault', 'success');
+          const uw = res.underwriting;
+          toast(uw ? `Uploaded · DTI ${uw.dtiPct ?? '—'}% · reserves ${uw.reservesMonths ?? '—'} mo` : (res.r2Stored ? 'Encrypted to R2 vault' : 'Encrypted upload saved'), 'success');
           await load();
         } catch (err) { toast(err.message, 'error'); }
       };
@@ -7010,8 +7049,8 @@ async function pgAdminConsole(el) {
             <h1 class="text-xl font-bold text-white"><i class="fas fa-chart-line text-amber-400 mr-2"></i>Fundability Command Center</h1>
             <p class="text-sm text-slate-400 mt-1">${escapeHtml(f.narrative || 'Deep readiness across mortgage, auto, student, and debt escape.')}</p>
           </div>
-          <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-            ${[['Overall', f.overallScore],['Mortgage', pillars.mortgageReady],['Auto', pillars.autoReady],['Student', pillars.studentReady],['Debt Health', pillars.debtHealth]].map(([l,v]) => `
+          <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
+            ${[['Overall', f.overallScore],['Mortgage', pillars.mortgageReady],['Auto', pillars.autoReady],['Student', pillars.studentReady],['Debt Health', pillars.debtHealth],['DTI %', f.dti]].map(([l,v]) => `
               <div class="glass rounded-xl border border-gray-800 p-4 text-center">
                 <div class="text-[10px] uppercase tracking-wider text-gray-500">${l}</div>
                 <div class="text-2xl font-bold text-white mt-1 font-mono">${v ?? '—'}</div>
@@ -7045,13 +7084,15 @@ async function pgAdminConsole(el) {
   async function pgClientTradelines(el) {
     try {
       const goal = 'mortgage';
-      const d = await api('/client-portal/tradelines' + portalClientQs() + (portalClientQs() ? '&' : '?') + 'goal=' + goal);
+      const sep = portalClientQs() ? '&' : '?';
+      const d = await api('/client-portal/tradelines' + portalClientQs() + sep + 'goal=' + goal);
       const recs = d.recommendations || [];
+      const orders = d.orders || [];
       el.innerHTML = `
         <div class="fade-in space-y-4">
           <div class="bg-gradient-to-r from-slate-950 via-teal-950/30 to-slate-950 border border-teal-500/20 rounded-2xl p-5">
             <h1 class="text-xl font-bold text-white"><i class="fas fa-handshake text-teal-400 mr-2"></i>Intelligent Boost Tools</h1>
-            <p class="text-sm text-slate-400 mt-1">Rent reporters, builders, and alternative data — ranked for <em>your</em> profile, not generic upsells.</p>
+            <p class="text-sm text-slate-400 mt-1">Profile-ranked rent reporters & builders — checkout securely with Stripe on-platform.</p>
           </div>
           <div class="grid md:grid-cols-2 gap-4">
             ${recs.map(t => `
@@ -7062,10 +7103,26 @@ async function pgAdminConsole(el) {
                 </div>
                 <p class="text-xs text-gray-400 mt-2">${escapeHtml(t.impact)}</p>
                 <div class="text-[11px] text-gray-500 mt-2">Reports to: ${(t.reportsTo||[]).join(', ')} · $${t.monthlyFee}/mo · match ${t.matchScore}</div>
-                <a href="${escapeHtml(t.url||'#')}" target="_blank" rel="noopener" class="inline-block mt-3 text-xs font-semibold text-teal-300 hover:text-teal-200">Sign up / learn more →</a>
+                <button data-product="${escapeHtml(t.id)}" class="tl-checkout mt-3 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold px-3 py-2 rounded-lg">Sign up on platform</button>
               </div>`).join('')}
           </div>
+          ${orders.length ? `<div class="glass rounded-xl border border-gray-800 p-4"><h3 class="text-xs font-bold uppercase text-white mb-2">Your enrollments</h3>
+            ${orders.map(o=>`<div class="text-xs text-gray-300 py-1 border-b border-gray-800/60 flex justify-between"><span>${escapeHtml(o.product_name)}</span><span class="font-mono text-teal-300">${escapeHtml(o.status)} · $${((o.amount_cents||0)/100).toFixed(2)}</span></div>`).join('')}
+          </div>` : ''}
         </div>`;
+      document.querySelectorAll('.tl-checkout').forEach(btn => {
+        btn.onclick = async () => {
+          try {
+            const res = await api('/client-portal/tradelines/checkout', {
+              method: 'POST',
+              body: JSON.stringify(portalClientBody({ productId: btn.getAttribute('data-product') })),
+            });
+            if (res.freePath) { toast('No charge for this path — advisor will provision', 'success'); return; }
+            if (res.url) location.href = res.url;
+            else toast('Checkout unavailable', 'error');
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      });
     } catch (err) {
       el.innerHTML = `<div class="text-red-400 p-6">${escapeHtml(err.message)}</div>`;
     }
@@ -7708,6 +7765,139 @@ async function pgAdminConsole(el) {
         </div>
       </div>
     `;
+  }
+
+  async function pgClientSettings(el) {
+    const qs = portalClientQs();
+    let mfa = { enabled: false };
+    let posture = null;
+    let alerts = [];
+    try { mfa = await api('/auth/mfa/status'); } catch (_) {}
+    try { posture = await api('/security/posture'); } catch (_) {}
+    try { const a = await api('/client-portal/alerts' + qs); alerts = a.alerts || []; } catch (_) {}
+
+    el.innerHTML = `
+      <div class="fade-in space-y-5 max-w-3xl">
+        <div class="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-slate-600/40 rounded-2xl p-5">
+          <h1 class="text-xl font-bold text-white"><i class="fas fa-user-shield text-slate-200 mr-2"></i>Security & Privacy</h1>
+          <p class="text-sm text-slate-400 mt-1">Password policy, MFA, alerts, and CCPA/GDPR controls — coded into the platform.</p>
+        </div>
+
+        ${posture ? `<div class="glass rounded-xl border border-emerald-500/20 p-4">
+          <div class="flex justify-between items-center mb-3">
+            <h2 class="text-sm font-bold text-white">Security Posture Score</h2>
+            <span class="text-2xl font-mono text-emerald-300">${posture.score}/100</span>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-2">${(posture.controls||[]).slice(0,8).map(c=>`
+            <div class="text-[11px] border border-gray-800 rounded-lg p-2"><div class="text-white font-medium">${escapeHtml(c.title)}</div>
+            <div class="text-gray-500 mt-0.5">${escapeHtml(c.status)} — ${escapeHtml(c.detail)}</div></div>`).join('')}</div>
+          <ul class="mt-3 text-xs text-slate-400 space-y-1">${(posture.claims||[]).map(x=>`<li>• ${escapeHtml(x)}</li>`).join('')}</ul>
+        </div>` : ''}
+
+        <form id="pwd-form" class="glass rounded-xl border border-gray-800 p-4 space-y-3">
+          <h2 class="text-sm font-bold text-white">Change Password</h2>
+          <p class="text-[11px] text-gray-500">Min 12 chars with upper, lower, number, and symbol. Other sessions will be signed out.</p>
+          <input type="password" id="pwd-cur" required class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white" placeholder="Current password">
+          <input type="password" id="pwd-new" required class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white" placeholder="New password">
+          <button class="bg-slate-100 hover:bg-white text-slate-900 text-sm font-semibold px-4 py-2 rounded-lg">Update password</button>
+        </form>
+
+        <div class="glass rounded-xl border border-gray-800 p-4 space-y-3">
+          <h2 class="text-sm font-bold text-white">Multi-Factor Authentication ${mfa.enabled ? '<span class="text-emerald-400 text-xs ml-2">ENABLED</span>' : '<span class="text-amber-400 text-xs ml-2">OFF</span>'}</h2>
+          <div class="flex flex-wrap gap-2">
+            <button id="mfa-setup" class="bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold px-3 py-2 rounded-lg">Enroll MFA</button>
+            <button id="mfa-disable" class="bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold px-3 py-2 rounded-lg">Disable MFA</button>
+          </div>
+          <div id="mfa-panel" class="hidden space-y-2"></div>
+        </div>
+
+        <form id="notify-form" class="glass rounded-xl border border-gray-800 p-4 space-y-3">
+          <h2 class="text-sm font-bold text-white">Alert Preferences</h2>
+          <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="n-email" checked> Email alerts for staff messages & bureau updates</label>
+          <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="n-sms"> SMS alerts (requires Twilio + phone)</label>
+          <input id="n-phone" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white" placeholder="Mobile for SMS (optional)">
+          <select id="n-lang" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white">
+            <option value="en">English</option><option value="es">Español</option>
+          </select>
+          <button class="bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-bold px-3 py-2 rounded-lg">Save preferences</button>
+        </form>
+
+        <div class="glass rounded-xl border border-rose-900/40 p-4 space-y-3">
+          <h2 class="text-sm font-bold text-white">Privacy Rights (CCPA / GDPR)</h2>
+          <p class="text-xs text-gray-400">Request a data export or deletion. Deletion requires admin fulfillment and respects litigation holds.</p>
+          <div class="flex flex-wrap gap-2">
+            <button id="priv-export" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold px-3 py-2 rounded-lg">Export my data</button>
+            <button id="priv-delete" class="bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold px-3 py-2 rounded-lg">Request deletion</button>
+          </div>
+          <pre id="priv-out" class="hidden text-[10px] text-gray-400 bg-black/40 p-3 rounded-lg overflow-auto max-h-48"></pre>
+        </div>
+
+        ${alerts.length ? `<div class="glass rounded-xl border border-gray-800 p-4"><h2 class="text-xs font-bold uppercase text-white mb-2">Recent alerts</h2>
+          ${alerts.slice(0,12).map(a=>`<div class="text-xs text-gray-300 py-1.5 border-b border-gray-800/50"><span class="text-cyan-300">${escapeHtml(a.channel)}</span> · ${escapeHtml(a.title||a.event_type)} · <span class="text-gray-500">${escapeHtml((a.created_at||'').slice(0,16))}</span></div>`).join('')}
+        </div>` : ''}
+      </div>`;
+
+    document.getElementById('pwd-form').onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await api('/auth/change-password', { method: 'POST', body: JSON.stringify({
+          currentPassword: document.getElementById('pwd-cur').value,
+          newPassword: document.getElementById('pwd-new').value,
+        })});
+        toast('Password updated', 'success');
+        e.target.reset();
+      } catch (err) { toast(err.message + (err.requirements ? ': ' + err.requirements.join(', ') : ''), 'error'); }
+    };
+    document.getElementById('mfa-setup').onclick = async () => {
+      try {
+        const s = await api('/auth/mfa/setup', { method: 'POST', body: '{}' });
+        const panel = document.getElementById('mfa-panel');
+        panel.classList.remove('hidden');
+        panel.innerHTML = `<p class="text-xs text-gray-400">Scan QR or enter secret <code class="text-amber-300">${escapeHtml(s.secret)}</code></p>
+          ${s.qrUrl ? `<img src="${escapeHtml(s.qrUrl)}" alt="MFA QR" class="w-40 h-40 rounded-lg border border-gray-700"/>` : ''}
+          <input id="mfa-code" class="w-40 bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white" placeholder="6-digit code">
+          <button id="mfa-verify" class="bg-violet-600 text-white text-xs font-bold px-3 py-2 rounded-lg">Verify & enable</button>`;
+        document.getElementById('mfa-verify').onclick = async () => {
+          try {
+            await api('/auth/mfa/verify', { method: 'POST', body: JSON.stringify({ code: document.getElementById('mfa-code').value }) });
+            toast('MFA enabled', 'success'); pgClientSettings(el);
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      } catch (err) { toast(err.message, 'error'); }
+    };
+    document.getElementById('mfa-disable').onclick = async () => {
+      const code = prompt('Enter current MFA code to disable');
+      if (!code) return;
+      try { await api('/auth/mfa/disable', { method: 'POST', body: JSON.stringify({ code }) }); toast('MFA disabled', 'success'); pgClientSettings(el); }
+      catch (err) { toast(err.message, 'error'); }
+    };
+    document.getElementById('notify-form').onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await api('/client-portal/profile', { method: 'PUT', body: JSON.stringify(portalClientBody({
+          notifyEmail: document.getElementById('n-email').checked,
+          notifySms: document.getElementById('n-sms').checked,
+          phone: document.getElementById('n-phone').value,
+          preferredLanguage: document.getElementById('n-lang').value,
+        }))});
+        toast('Preferences saved', 'success');
+      } catch (err) { toast(err.message, 'error'); }
+    };
+    document.getElementById('priv-export').onclick = async () => {
+      try {
+        const res = await api('/privacy/export', { method: 'POST', body: JSON.stringify(portalClientBody({ legalBasis: 'ccpa' })) });
+        const out = document.getElementById('priv-out'); out.classList.remove('hidden');
+        out.textContent = JSON.stringify(res.export, null, 2);
+        toast('Export ready', 'success');
+      } catch (err) { toast(err.message, 'error'); }
+    };
+    document.getElementById('priv-delete').onclick = async () => {
+      if (!confirm('Request permanent deletion of your portal data? This is reviewed by an administrator.')) return;
+      try {
+        const res = await api('/privacy/delete-request', { method: 'POST', body: JSON.stringify(portalClientBody({ legalBasis: 'ccpa' })) });
+        toast('Deletion request ' + res.status, 'success');
+      } catch (err) { toast(err.message, 'error'); }
+    };
   }
 
   async function pgClientDocuments(el) {

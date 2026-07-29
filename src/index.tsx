@@ -9,6 +9,9 @@ import { sendAppEmail } from './lib/email';
 import { MENTORS, buildMentorContext, KNOWLEDGE_CORPUS_META, retrieveCaseLawKnowledge, type MentorId } from './lib/mentors';
 import { sendPortalWelcomeEmail, computeAndStoreFundability, portalBaseUrl, isSyntheticPortalEmail, tradelineRecsForClient } from './lib/portal-services';
 import { EDUCATION_LIBRARY, getLessonById, TRADELINE_CATALOG } from './data/portal-education';
+import { parseBankStatementText } from './data/bank-underwriting';
+import { writeSecurityAudit, buildSecurityPosture, passwordMeetsPolicy } from './lib/security-compliance';
+import { dispatchClientAlert } from './lib/alerts';
 import { parseCreditReportText } from './engine/parser';
 import { detectViolations, calculateLitigationScore, type CreditReportData } from './engine/violations';
 import { mapMfsnToInternal } from './engine/mfsn-mapper';
@@ -275,6 +278,10 @@ type Bindings = {
   SMARTCREDIT_CLIENT_KEY?: string;
   SMARTCREDIT_CLIENT_SECRET?: string;
   RATE_LIMIT_KV?: any;
+  DOCS?: R2Bucket;
+  TWILIO_ACCOUNT_SID?: string;
+  TWILIO_AUTH_TOKEN?: string;
+  TWILIO_PHONE_NUMBER?: string;
   SENTRY_DSN?: string;
   PII_ENCRYPTION_KEY?: string;
   RESEND_API_KEY?: string;
@@ -327,11 +334,15 @@ app.use('/api/*', cors());
 // ═══════════════════════════════════════════════════════════════
 app.use('*', async (c, next) => {
   await next();
-  c.res.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://storage.googleapis.com https://images.unsplash.com https://imagedelivery.net; connect-src 'self' https://api.stripe.com https://fonts.googleapis.com https://api.groq.com https://openrouter.ai https://api-inference.huggingface.co https://generativelanguage.googleapis.com;");
+  c.res.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://storage.googleapis.com https://images.unsplash.com https://imagedelivery.net https://api.qrserver.com; connect-src 'self' https://api.stripe.com https://fonts.googleapis.com https://api.groq.com https://openrouter.ai https://api-inference.huggingface.co https://generativelanguage.googleapis.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
   c.res.headers.set('X-Frame-Options', 'DENY');
   c.res.headers.set('X-Content-Type-Options', 'nosniff');
   c.res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   c.res.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
+  c.res.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(self), usb=()');
+  c.res.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+  c.res.headers.set('X-Permitted-Cross-Domain-Policies', 'none');
+  c.res.headers.set('X-Smart-FCRA-Security', 'aes-gcm;consent-gates;audit-trail;r2-vault');
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -347,7 +358,9 @@ async function rateLimiter(c: any, next: any) {
 
   try {
     const currentCount = parseInt(await c.env.RATE_LIMIT_KV.get(key) || '0', 10);
-    if (currentCount >= 100) {
+    const limit = c.req.path.includes('/auth/') ? 20 : 60;
+    if (currentCount >= limit) {
+      await writeSecurityAudit(c.env, { action: 'rate_limited', ip, success: false, detail: { path: c.req.path, count: currentCount } });
       return c.json({ error: 'Too many requests. Please slow down.' }, 429);
     }
     await c.env.RATE_LIMIT_KV.put(key, (currentCount + 1).toString(), { expirationTtl: 60 });
@@ -361,7 +374,13 @@ async function rateLimiter(c: any, next: any) {
 app.use('/api/auth/login', rateLimiter);
 app.use('/api/auth/register', rateLimiter);
 app.use('/api/auth/forgot-password', rateLimiter);
+app.use('/api/auth/change-password', rateLimiter);
+app.use('/api/auth/mfa/setup', rateLimiter);
 app.use('/api/reports/upload', rateLimiter);
+app.use('/api/reports/onboard', rateLimiter);
+app.use('/api/client-portal/uploads', rateLimiter);
+app.use('/api/privacy/export', rateLimiter);
+app.use('/api/privacy/delete-request', rateLimiter);
 
 // ═══════════════════════════════════════════════════════════════
 // GLOBAL ERROR HANDLER & OBSERVABILITY TELEMETRY
@@ -747,12 +766,20 @@ app.post('/api/auth/mfa/challenge', async (c) => {
 app.post('/api/auth/mfa/setup', authMiddleware, async (c) => {
   const user = c.get('user');
   const mfaSecret = generateMFASecret();
-  await c.env.DB.prepare('UPDATE users SET mfa_secret = ? WHERE id = ?').bind(mfaSecret, user.id).run();
+  const encSecret = await encryptPII(c, mfaSecret);
+  try {
+    await c.env.DB.prepare('UPDATE users SET mfa_secret = ?, mfa_secret_enc = ? WHERE id = ?').bind(mfaSecret, encSecret, user.id).run();
+  } catch {
+    await c.env.DB.prepare('UPDATE users SET mfa_secret = ? WHERE id = ?').bind(mfaSecret, user.id).run();
+  }
 
   const issuer = 'SmartFCRA';
   const otpauthUrl = `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(user.email)}?secret=${mfaSecret}&issuer=${encodeURIComponent(issuer)}`;
-
-  return c.json({ secret: mfaSecret, otpauthUrl, issuer });
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'mfa_setup_started',
+    ip: c.req.header('CF-Connecting-IP'), ua: c.req.header('User-Agent'),
+  });
+  return c.json({ secret: mfaSecret, otpauthUrl, issuer, qrUrl: `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(otpauthUrl)}` });
 });
 
 app.post('/api/auth/mfa/verify', authMiddleware, async (c) => {
@@ -791,6 +818,54 @@ app.get('/api/auth/mfa/status', authMiddleware, async (c) => {
   const user = c.get('user');
   const dbUser = await c.env.DB.prepare('SELECT mfa_enabled FROM users WHERE id = ?').bind(user.id).first() as any;
   return c.json({ enabled: dbUser ? dbUser.mfa_enabled === 1 : false });
+});
+
+app.post('/api/auth/change-password', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json();
+  const currentPassword = String(body.currentPassword || '');
+  const newPassword = String(body.newPassword || '');
+  const policy = passwordMeetsPolicy(newPassword);
+  if (!policy.ok) return c.json({ error: 'Password policy failed', requirements: policy.errors }, 400);
+  const dbUser = await c.env.DB.prepare('SELECT password_hash FROM users WHERE id = ?').bind(user.id).first() as any;
+  if (!dbUser) return c.json({ error: 'User not found' }, 404);
+  const ok = await verifyPassword(currentPassword, dbUser.password_hash);
+  if (!ok) {
+    await writeSecurityAudit(c.env, {
+      orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'password_change_failed',
+      ip: c.req.header('CF-Connecting-IP'), ua: c.req.header('User-Agent'), success: false,
+    });
+    return c.json({ error: 'Current password is incorrect' }, 401);
+  }
+  const hash = await hashPassword(newPassword);
+  try {
+    await c.env.DB.prepare(`UPDATE users SET password_hash = ?, password_changed_at = datetime('now'), must_change_password = 0 WHERE id = ?`)
+      .bind(hash, user.id).run();
+  } catch {
+    await c.env.DB.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`).bind(hash, user.id).run();
+  }
+  const session = c.get('session');
+  await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND id != ?').bind(user.id, session.id).run();
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'password_changed',
+    ip: c.req.header('CF-Connecting-IP'), ua: c.req.header('User-Agent'),
+  });
+  return c.json({ ok: true, message: 'Password updated. Other sessions were signed out.' });
+});
+
+app.get('/api/security/posture', authMiddleware, async (c) => {
+  return c.json(buildSecurityPosture(c.env));
+});
+
+app.get('/api/security/trust-center', async (c) => {
+  const full = buildSecurityPosture(c.env);
+  return c.json({
+    product: full.product,
+    score: full.score,
+    scoredAt: full.scoredAt,
+    claims: full.claims,
+    controls: full.controls.map((x) => ({ id: x.id, title: x.title, status: x.status, detail: x.detail })),
+  });
 });
 
 app.post('/api/auth/logout', authMiddleware, async (c) => {
@@ -1190,7 +1265,31 @@ app.post('/api/client-portal/messages', authMiddleware, async (c) => {
     JSON.stringify({ messageId: id, emailStatus })
   ).run();
 
-  return c.json({ ok: true, id, emailStatus });
+  let alertResult: any = null;
+  if (isStaff) {
+    try {
+      alertResult = await dispatchClientAlert(c.env, {
+        orgId: user.org_id,
+        clientId: client.id,
+        eventType: 'staff_message',
+        title: body.subject || 'New message from your credit team',
+        body: text.slice(0, 1500),
+        email: client.email,
+        phone: client.phone_e164 || client.phone,
+        notifyEmail: client.notify_email !== 0,
+        notifySms: client.notify_sms === 1,
+      });
+    } catch (e: any) {
+      alertResult = { error: e.message };
+    }
+  }
+
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'portal_message',
+    resourceType: 'portal_message', resourceId: id, ip: c.req.header('CF-Connecting-IP'),
+  });
+
+  return c.json({ ok: true, id, emailStatus, alerts: alertResult });
 });
 
 app.post('/api/client-portal/messages/:id/read', authMiddleware, async (c) => {
@@ -1283,10 +1382,44 @@ app.get('/api/client-portal/uploads', authMiddleware, async (c) => {
   const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
   if (!client) return c.json({ error: 'Client not found' }, 404);
   const rows = await c.env.DB.prepare(
-    `SELECT id, category, file_name, mime_type, notes, analysis_json, created_at FROM portal_uploads
-     WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 100`
-  ).bind(client.id, user.org_id).all();
-  return c.json({ uploads: rows?.results || [] });
+    `SELECT id, category, file_name, mime_type, notes, analysis_json, r2_key, byte_size, sha256, created_at
+     FROM portal_uploads WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 100`
+  ).bind(client.id, user.org_id).all().catch(async () =>
+    c.env.DB.prepare(
+      `SELECT id, category, file_name, mime_type, notes, analysis_json, created_at FROM portal_uploads
+       WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 100`
+    ).bind(client.id, user.org_id).all()
+  );
+  return c.json({ uploads: rows?.results || [], vault: !!c.env.DOCS });
+});
+
+app.get('/api/client-portal/uploads/:id/download', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const row = await c.env.DB.prepare(
+    `SELECT * FROM portal_uploads WHERE id = ? AND client_id = ? AND org_id = ?`
+  ).bind(c.req.param('id'), client.id, user.org_id).first() as any;
+  if (!row) return c.json({ error: 'Not found' }, 404);
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'vault_download',
+    resourceType: 'portal_upload', resourceId: row.id, ip: c.req.header('CF-Connecting-IP'),
+  });
+  if (row.r2_key && c.env.DOCS) {
+    const obj = await c.env.DOCS.get(row.r2_key);
+    if (!obj) return c.json({ error: 'Object missing from vault' }, 404);
+    const headers = new Headers();
+    headers.set('Content-Type', row.mime_type || obj.httpMetadata?.contentType || 'application/octet-stream');
+    headers.set('Content-Disposition', `attachment; filename="${(row.file_name || 'document').replace(/"/g, '')}"`);
+    headers.set('Cache-Control', 'private, no-store');
+    headers.set('X-Content-Type-Options', 'nosniff');
+    return new Response(obj.body, { headers });
+  }
+  if (row.content_text) {
+    const text = await decryptPII(c, row.content_text);
+    return c.json({ id: row.id, fileName: row.file_name, text });
+  }
+  return c.json({ error: 'No downloadable content' }, 404);
 });
 
 app.post('/api/client-portal/uploads', authMiddleware, async (c) => {
@@ -1296,18 +1429,43 @@ app.post('/api/client-portal/uploads', authMiddleware, async (c) => {
   if (!client) return c.json({ error: 'Client not found' }, 404);
   const category = body.category || 'other';
   const contentText = String(body.contentText || body.text || '').slice(0, 200000);
-  if (!contentText && !body.fileName) return c.json({ error: 'Upload content or file name required' }, 400);
+  const fileName = String(body.fileName || 'upload.bin').slice(0, 180);
+  const mimeType = String(body.mimeType || 'application/octet-stream').slice(0, 120);
+  const fileBase64 = typeof body.fileBase64 === 'string' ? body.fileBase64 : '';
+  if (!contentText && !fileBase64 && !body.fileName) return c.json({ error: 'Upload content or file required' }, 400);
 
   let analysis: any = null;
+  let underwriting: any = null;
+
+  if ((category === 'bank_statement' || body.runUnderwriting) && contentText.length > 40) {
+    underwriting = parseBankStatementText(contentText);
+    try {
+      await c.env.DB.prepare(
+        `UPDATE clients SET estimated_monthly_income = ?, estimated_monthly_debt = ?, updated_at = datetime('now') WHERE id = ? AND org_id = ?`
+      ).bind(underwriting.monthlyIncomeEstimate, underwriting.monthlyDebtEstimate, client.id, user.org_id).run();
+    } catch { /* soft */ }
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO underwriting_snapshots (id, org_id, client_id, monthly_income, monthly_debt, dti_pct, reserves_months, cash_flow_json, report_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+      ).bind(
+        generateId(), user.org_id, client.id,
+        underwriting.monthlyIncomeEstimate, underwriting.monthlyDebtEstimate,
+        underwriting.dtiPct, underwriting.reservesMonths,
+        JSON.stringify({ credits: underwriting.credits, debits: underwriting.debits, net: underwriting.netCashFlow }),
+        JSON.stringify(underwriting),
+      ).run();
+    } catch { /* soft */ }
+  }
+
   if (category === 'bank_statement' && contentText.length > 40) {
     try {
       const { mentor, knowledgeBlock } = buildMentorContext('personal-finance-tutor', contentText.slice(0, 4000));
       const ai = await generateAiText(c.env, [
-        { role: 'system', content: `${mentor.systemPrompt}\nAnalyze this bank statement excerpt. Summarize income, expenses, cash-flow health, and 3 budget actions. Never invent exact balances not present.\n${knowledgeBlock}` },
+        { role: 'system', content: `${mentor.systemPrompt}\nAnalyze this bank statement excerpt. Summarize income, expenses, cash-flow health, and 3 budget actions. Never invent exact balances not present. Deterministic underwriting JSON follows — treat it as ground truth for numbers.\nUnderwriting: ${JSON.stringify(underwriting || {}).slice(0, 2000)}\n${knowledgeBlock}` },
         { role: 'user', content: contentText.slice(0, 12000) },
       ]);
-      analysis = { summary: ai.text, provider: ai.provider, model: ai.model };
-      // Persist tutor memory hint
+      analysis = { summary: ai.text, provider: ai.provider, model: ai.model, underwriting };
       try {
         await c.env.DB.prepare(
           `INSERT INTO tutor_memory (id, org_id, client_id, summary, goals_json, sessions_count, updated_at)
@@ -1319,30 +1477,65 @@ app.post('/api/client-portal/uploads', authMiddleware, async (c) => {
         ).bind(generateId(), user.org_id, client.id, `Bank analysis: ${(ai.text || '').slice(0, 1500)}`).run();
       } catch { /* soft */ }
     } catch (e: any) {
-      analysis = { error: e.message };
+      analysis = { error: e.message, underwriting };
     }
+  } else if (underwriting) {
+    analysis = { underwriting };
+  }
+
+  const id = generateId();
+  let r2Key: string | null = null;
+  let byteSize: number | null = null;
+  let sha256: string | null = null;
+
+  if (fileBase64) {
+    if (!c.env.DOCS) return c.json({ error: 'Document vault (R2) is not bound on this deployment' }, 503);
+    const raw = fileBase64.includes(',') ? fileBase64.split(',').pop()! : fileBase64;
+    const binary = Uint8Array.from(atob(raw), (ch) => ch.charCodeAt(0));
+    if (binary.byteLength > 15 * 1024 * 1024) return c.json({ error: 'File too large (15MB max)' }, 400);
+    byteSize = binary.byteLength;
+    const digest = await crypto.subtle.digest('SHA-256', binary);
+    sha256 = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+    r2Key = `org/${user.org_id}/client/${client.id}/${id}/${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    await c.env.DOCS.put(r2Key, binary, {
+      httpMetadata: { contentType: mimeType },
+      customMetadata: { orgId: user.org_id, clientId: client.id, sha256, uploadedBy: user.id },
+    });
   }
 
   const enc = contentText ? await encryptPII(c, contentText) : null;
-  const id = generateId();
-  await c.env.DB.prepare(
-    `INSERT INTO portal_uploads (id, org_id, client_id, uploaded_by, category, file_name, mime_type, content_text, notes, analysis_json, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-  ).bind(
-    id, user.org_id, client.id, user.id, category,
-    body.fileName || null, body.mimeType || 'text/plain', enc, body.notes || null,
-    analysis ? JSON.stringify(analysis) : null,
-  ).run();
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO portal_uploads (id, org_id, client_id, uploaded_by, category, file_name, mime_type, content_text, notes, analysis_json, r2_key, byte_size, sha256, encrypted, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))`
+    ).bind(
+      id, user.org_id, client.id, user.id, category, fileName, mimeType, enc, body.notes || null,
+      analysis ? JSON.stringify(analysis) : null, r2Key, byteSize, sha256,
+    ).run();
+  } catch {
+    await c.env.DB.prepare(
+      `INSERT INTO portal_uploads (id, org_id, client_id, uploaded_by, category, file_name, mime_type, content_text, notes, analysis_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+    ).bind(
+      id, user.org_id, client.id, user.id, category, fileName, mimeType, enc, body.notes || null,
+      analysis ? JSON.stringify(analysis) : null,
+    ).run();
+  }
 
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'vault_upload',
+    resourceType: 'portal_upload', resourceId: id,
+    ip: c.req.header('CF-Connecting-IP'), detail: { category, fileName, byteSize, hasR2: !!r2Key },
+  });
   await c.env.DB.prepare(
     'INSERT INTO activity_log (id, org_id, client_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     generateId(), user.org_id, client.id, user.id, 'portal_upload',
-    `Portal upload: ${category} ${body.fileName || ''}`.trim(),
-    JSON.stringify({ uploadId: id, category })
+    `Portal upload: ${category} ${fileName}`.trim(),
+    JSON.stringify({ uploadId: id, category, r2Key: !!r2Key })
   ).run();
 
-  return c.json({ ok: true, id, analysis });
+  return c.json({ ok: true, id, analysis, underwriting, r2Stored: !!r2Key, sha256, byteSize });
 });
 
 // ── Education library + progress ───────────────────────────────
@@ -1514,6 +1707,8 @@ app.get('/api/client-portal/fundability', authMiddleware, async (c) => {
     },
     violationCount: viol?.c || 0,
     goal,
+    monthlyIncome: client.estimated_monthly_income,
+    monthlyDebt: client.estimated_monthly_debt,
   });
 
   const scores = [client.eq_score, client.ex_score, client.tu_score].filter((n: any) => typeof n === 'number' && n > 0);
@@ -1538,6 +1733,14 @@ app.get('/api/client-portal/tradelines', authMiddleware, async (c) => {
   ).bind(client.id).first() as any;
   const scores = [client.eq_score, client.ex_score, client.tu_score].filter((n: any) => typeof n === 'number' && n > 0);
   const avg = scores.length ? Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length) : 600;
+  let orders: any[] = [];
+  try {
+    const o = await c.env.DB.prepare(
+      `SELECT id, product_id, product_name, amount_cents, status, created_at, paid_at FROM tradeline_orders
+       WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 50`
+    ).bind(client.id, user.org_id).all();
+    orders = o?.results || [];
+  } catch { /* soft */ }
   return c.json({
     recommendations: tradelineRecsForClient({
       avgScore: avg,
@@ -1545,8 +1748,322 @@ app.get('/api/client-portal/tradelines', authMiddleware, async (c) => {
       collectionCount: report?.total_collections || 0,
       goal,
     }),
+    orders,
   });
 });
+
+app.post('/api/client-portal/tradelines/checkout', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json();
+  const client = await resolvePortalClientSafe(c, user, body.clientId);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const product = TRADELINE_CATALOG.find((p) => p.id === body.productId);
+  if (!product) return c.json({ error: 'Unknown boost product' }, 400);
+  if (!c.env.STRIPE_API_KEY) return c.json({ error: 'Stripe is not configured' }, 503);
+
+  const amountCents = Math.round(Number(product.monthlyFee || 0) * 100);
+  if (amountCents <= 0) {
+    return c.json({ error: 'This path is $0 — complete setup with your advisor (no card charge).', freePath: true, product }, 200);
+  }
+
+  const orderId = generateId();
+  const stripe = getStripe(c.env);
+  const base = portalBaseUrl(c.env, c.req.url);
+  const session = await stripe.checkout.sessions.create({
+    mode: 'subscription',
+    payment_method_types: ['card'],
+    line_items: [{
+      price_data: {
+        currency: 'usd',
+        unit_amount: amountCents,
+        recurring: { interval: 'month' },
+        product_data: {
+          name: product.name,
+          description: product.impact,
+          metadata: { productId: product.id, category: product.category },
+        },
+      },
+      quantity: 1,
+    }],
+    success_url: `${base}/?page=client-tradelines&checkout=success&order=${orderId}`,
+    cancel_url: `${base}/?page=client-tradelines&checkout=cancelled`,
+    customer_email: client.email || user.email,
+    metadata: {
+      type: 'tradeline',
+      orderId,
+      orgId: user.org_id,
+      clientId: client.id,
+      productId: product.id,
+    },
+    subscription_data: {
+      metadata: { type: 'tradeline', orderId, clientId: client.id, productId: product.id, orgId: user.org_id },
+    },
+  });
+
+  await c.env.DB.prepare(
+    `INSERT INTO tradeline_orders (id, org_id, client_id, user_id, product_id, product_name, amount_cents, stripe_session_id, status, metadata_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, datetime('now'))`
+  ).bind(
+    orderId, user.org_id, client.id, user.id, product.id, product.name, amountCents, session.id,
+    JSON.stringify({ reportsTo: product.reportsTo, category: product.category }),
+  ).run();
+
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'tradeline_checkout_started',
+    resourceType: 'tradeline_order', resourceId: orderId, ip: c.req.header('CF-Connecting-IP'),
+  });
+
+  return c.json({ ok: true, url: session.url, orderId });
+});
+
+app.get('/api/client-portal/underwriting', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  let latest: any = null;
+  try {
+    latest = await c.env.DB.prepare(
+      `SELECT * FROM underwriting_snapshots WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 1`
+    ).bind(client.id, user.org_id).first();
+  } catch { /* soft */ }
+  const pack = latest?.report_json ? JSON.parse(latest.report_json) : null;
+  return c.json({
+    clientEstimates: {
+      monthlyIncome: client.estimated_monthly_income,
+      monthlyDebt: client.estimated_monthly_debt,
+    },
+    latest,
+    pack,
+  });
+});
+
+app.post('/api/client-portal/underwriting', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json();
+  const client = await resolvePortalClientSafe(c, user, body.clientId);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const income = Number(body.monthlyIncome);
+  const debt = Number(body.monthlyDebt);
+  if (!(income > 0)) return c.json({ error: 'monthlyIncome required' }, 400);
+  try {
+    await c.env.DB.prepare(
+      `UPDATE clients SET estimated_monthly_income = ?, estimated_monthly_debt = ?, updated_at = datetime('now') WHERE id = ?`
+    ).bind(income, Number.isFinite(debt) ? debt : 0, client.id).run();
+  } catch { /* soft */ }
+  const dti = Math.round((Math.max(0, debt) / income) * 1000) / 10;
+  const report = {
+    monthlyIncomeEstimate: income,
+    monthlyDebtEstimate: Math.max(0, debt),
+    dtiPct: dti,
+    reservesMonths: body.reservesMonths ?? null,
+    source: 'manual',
+    flags: dti > 43 ? ['DTI above common conventional comfort'] : [],
+    recommendations: ['Keep documented income stable for 60 days', 'Pay revolving to drop DTI before apply'],
+  };
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO underwriting_snapshots (id, org_id, client_id, monthly_income, monthly_debt, dti_pct, reserves_months, report_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+    ).bind(generateId(), user.org_id, client.id, income, Math.max(0, debt), dti, body.reservesMonths ?? null, JSON.stringify(report)).run();
+  } catch { /* soft */ }
+  return c.json({ ok: true, report });
+});
+
+app.get('/api/client-portal/alerts', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  let rows: any = { results: [] };
+  try {
+    rows = await c.env.DB.prepare(
+      `SELECT * FROM portal_alerts WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 100`
+    ).bind(client.id, user.org_id).all();
+  } catch { /* soft */ }
+  return c.json({ alerts: rows?.results || [] });
+});
+
+app.put('/api/client-portal/profile', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json();
+  const client = await resolvePortalClientSafe(c, user, body.clientId);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  // Clients may only edit their own notification prefs / language / phone
+  if (user.role === 'client' && client.email !== user.email) return c.json({ error: 'Forbidden' }, 403);
+  const preferredLanguage = body.preferredLanguage || body.preferred_language;
+  const notifyEmail = body.notifyEmail;
+  const notifySms = body.notifySms;
+  const phone = body.phone;
+  try {
+    await c.env.DB.prepare(
+      `UPDATE clients SET
+         preferred_language = COALESCE(?, preferred_language),
+         notify_email = COALESCE(?, notify_email),
+         notify_sms = COALESCE(?, notify_sms),
+         phone = COALESCE(?, phone),
+         phone_e164 = COALESCE(?, phone_e164),
+         updated_at = datetime('now')
+       WHERE id = ? AND org_id = ?`
+    ).bind(
+      preferredLanguage || null,
+      typeof notifyEmail === 'boolean' ? (notifyEmail ? 1 : 0) : null,
+      typeof notifySms === 'boolean' ? (notifySms ? 1 : 0) : null,
+      phone || null,
+      phone || null,
+      client.id, user.org_id,
+    ).run();
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+  return c.json({ ok: true });
+});
+
+// Privacy ops
+app.post('/api/privacy/export', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  const client = await resolvePortalClientSafe(c, user, body.clientId);
+  if (!client) return c.json({ error: 'Client profile required' }, 404);
+  const reqId = generateId();
+  await c.env.DB.prepare(
+    `INSERT INTO privacy_requests (id, org_id, client_id, requester_user_id, request_type, status, legal_basis, notes, created_at)
+     VALUES (?, ?, ?, ?, 'export', 'in_progress', ?, ?, datetime('now'))`
+  ).bind(reqId, user.org_id, client.id, user.id, body.legalBasis || 'ccpa', body.notes || null).run();
+
+  const reports = await c.env.DB.prepare(`SELECT id, bureau, report_date, file_name, status, created_at FROM credit_reports WHERE client_id = ?`).bind(client.id).all();
+  const violations = await c.env.DB.prepare(`SELECT id, statute, severity, status, created_at FROM violations WHERE client_id = ?`).bind(client.id).all();
+  const docs = await c.env.DB.prepare(`SELECT id, doc_type, title, status, created_at FROM documents WHERE client_id = ?`).bind(client.id).all();
+  const messages = await c.env.DB.prepare(`SELECT id, sender_role, subject, created_at FROM portal_messages WHERE client_id = ?`).bind(client.id).all().catch(() => ({ results: [] }));
+  const uploads = await c.env.DB.prepare(`SELECT id, category, file_name, created_at, sha256 FROM portal_uploads WHERE client_id = ?`).bind(client.id).all().catch(() => ({ results: [] }));
+
+  const pack = {
+    exportedAt: new Date().toISOString(),
+    requestId: reqId,
+    legalBasis: body.legalBasis || 'ccpa',
+    client: {
+      id: client.id,
+      first_name: client.first_name,
+      last_name: client.last_name,
+      email: client.email,
+      phone: client.phone,
+      city: client.city,
+      state: client.state,
+      zip: client.zip,
+      // Never export encrypted SSN material in clear form beyond last4 if present
+      ssn_last4: client.ssn_last4 || null,
+    },
+    reports: reports?.results || [],
+    violations: violations?.results || [],
+    documents: docs?.results || [],
+    messages: messages?.results || [],
+    uploads: uploads?.results || [],
+    notice: 'Raw credit report payloads are available to authorized staff via encrypted vault access; consumer export includes metadata inventory.',
+  };
+
+  await c.env.DB.prepare(
+    `UPDATE privacy_requests SET status = 'fulfilled', fulfilled_at = datetime('now'), fulfillment_json = ? WHERE id = ?`
+  ).bind(JSON.stringify({ exportBytes: JSON.stringify(pack).length }), reqId).run();
+
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'privacy_export',
+    resourceType: 'privacy_request', resourceId: reqId, ip: c.req.header('CF-Connecting-IP'),
+  });
+
+  return c.json({ ok: true, requestId: reqId, export: pack });
+});
+
+app.post('/api/privacy/delete-request', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  const client = await resolvePortalClientSafe(c, user, body.clientId);
+  if (!client) return c.json({ error: 'Client profile required' }, 404);
+  if (client.data_retention_holds === 1) {
+    return c.json({ error: 'Deletion is on legal hold (active litigation / retention). Contact your advisor.' }, 409);
+  }
+  const reqId = generateId();
+  await c.env.DB.prepare(
+    `INSERT INTO privacy_requests (id, org_id, client_id, requester_user_id, request_type, status, legal_basis, notes, created_at)
+     VALUES (?, ?, ?, ?, 'delete', 'pending', ?, ?, datetime('now'))`
+  ).bind(reqId, user.org_id, client.id, user.id, body.legalBasis || 'ccpa', body.notes || 'Consumer deletion request').run();
+
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'privacy_delete_requested',
+    resourceType: 'privacy_request', resourceId: reqId, ip: c.req.header('CF-Connecting-IP'),
+  });
+
+  // Notify staff via activity
+  await c.env.DB.prepare(
+    'INSERT INTO activity_log (id, org_id, client_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(generateId(), user.org_id, client.id, user.id, 'privacy_delete_request',
+    'CCPA/GDPR deletion request submitted — pending admin fulfillment',
+    JSON.stringify({ requestId: reqId })).run();
+
+  return c.json({ ok: true, requestId: reqId, status: 'pending', message: 'Deletion queued. An administrator must fulfill after compliance review.' });
+});
+
+app.get('/api/admin/privacy-requests', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Unauthorized' }, 403);
+  const rows = await c.env.DB.prepare(
+    `SELECT * FROM privacy_requests WHERE org_id = ? ORDER BY created_at DESC LIMIT 200`
+  ).bind(user.org_id).all();
+  return c.json({ requests: rows?.results || [] });
+});
+
+app.post('/api/admin/privacy-requests/:id/fulfill', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (!(user.role === 'admin' || user.role === 'super_admin')) return c.json({ error: 'Admin only' }, 403);
+  const req = await c.env.DB.prepare(`SELECT * FROM privacy_requests WHERE id = ? AND org_id = ?`)
+    .bind(c.req.param('id'), user.org_id).first() as any;
+  if (!req) return c.json({ error: 'Not found' }, 404);
+  if (req.request_type !== 'delete') return c.json({ error: 'Only delete requests are fulfilled here' }, 400);
+  const clientId = req.client_id;
+  const priorClient = await c.env.DB.prepare(`SELECT email FROM clients WHERE id = ? AND org_id = ?`).bind(clientId, user.org_id).first() as any;
+  const priorEmail = priorClient?.email || null;
+
+  // Purge client-scoped sensitive data (retain anonymized audit)
+  const tables = [
+    'portal_messages', 'portal_uploads', 'portal_alerts', 'education_progress', 'tutor_memory',
+    'fundability_snapshots', 'underwriting_snapshots', 'tradeline_orders', 'violations', 'documents',
+  ];
+  for (const table of tables) {
+    try { await c.env.DB.prepare(`DELETE FROM ${table} WHERE client_id = ? AND org_id = ?`).bind(clientId, user.org_id).run(); } catch { /* soft */ }
+  }
+  // Scrub credit reports content but keep stub for case history if needed
+  try {
+    await c.env.DB.prepare(
+      `UPDATE credit_reports SET raw_text = NULL, parsed_data = NULL, file_name = 'REDACTED', status = 'purged' WHERE client_id = ? AND org_id = ?`
+    ).bind(clientId, user.org_id).run();
+  } catch { /* soft */ }
+  // Anonymize client
+  await c.env.DB.prepare(
+    `UPDATE clients SET first_name = 'REDACTED', last_name = 'REDACTED', email = ?, phone = NULL, phone_e164 = NULL,
+       address_line1 = NULL, address_line2 = NULL, city = NULL, state = NULL, zip = NULL, dob = NULL, ssn_last4 = NULL,
+       ssn_last4_enc = NULL, dob_enc = NULL, notes = 'Purged per privacy request', status = 'purged', updated_at = datetime('now')
+     WHERE id = ? AND org_id = ?`
+  ).bind(`purged+${clientId.slice(0, 8)}@privacy.local`, clientId, user.org_id).run();
+
+  // Disable matching portal login
+  try {
+    if (priorEmail) {
+      await c.env.DB.prepare(
+        `UPDATE users SET is_active = 0, email = ? WHERE org_id = ? AND role = 'client' AND email = ?`
+      ).bind(`purged+${clientId.slice(0, 8)}@privacy.local`, user.org_id, priorEmail).run();
+    }
+  } catch { /* soft */ }
+
+  await c.env.DB.prepare(
+    `UPDATE privacy_requests SET status = 'fulfilled', fulfilled_at = datetime('now'), fulfillment_json = ? WHERE id = ?`
+  ).bind(JSON.stringify({ purgedBy: user.id, at: new Date().toISOString() }), req.id).run();
+
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'privacy_delete_fulfilled',
+    resourceType: 'privacy_request', resourceId: req.id, ip: c.req.header('CF-Connecting-IP'),
+    detail: { clientId },
+  });
+
+  return c.json({ ok: true, purged: true });
+});
+
 
 app.post('/api/documents/:id/sign', authMiddleware, async (c) => {
   const user = c.get('user');
@@ -2664,6 +3181,23 @@ app.post('/api/billing/webhook', async (c) => {
 
   switch (event.type) {
     case 'checkout.session.completed': {
+      const sessionObj: any = event.data.object;
+      if (sessionObj?.metadata?.type === 'tradeline' && sessionObj?.metadata?.orderId) {
+        try {
+          await c.env.DB.prepare(
+            `UPDATE tradeline_orders SET status = 'paid', paid_at = datetime('now'), stripe_payment_intent = ? WHERE id = ? AND org_id = ?`
+          ).bind(sessionObj.payment_intent || sessionObj.id, sessionObj.metadata.orderId, sessionObj.metadata.orgId).run();
+          await dispatchClientAlert(c.env, {
+            orgId: sessionObj.metadata.orgId,
+            clientId: sessionObj.metadata.clientId,
+            eventType: 'tradeline',
+            title: 'Boost tool subscription confirmed',
+            body: `Your ${sessionObj.metadata.productId || 'boost'} enrollment is paid and being provisioned.`,
+          });
+        } catch (e) { console.warn('[tradeline webhook]', e); }
+        break;
+      }
+
       const orgId = session.client_reference_id;
       const stripeCustomerId = session.customer as string;
       const stripeSubId = session.subscription as string;
