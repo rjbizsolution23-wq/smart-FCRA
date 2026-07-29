@@ -705,6 +705,13 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
             </form>
             <button type="button" class="text-xs text-blue-400" onclick="window._switchAuthPanel('login')">Back to sign in</button>
           </div>
+          <div id="auth-verify-pending" class="hidden space-y-4 text-center">
+            <div class="w-14 h-14 mx-auto rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center"><i class="fas fa-envelope-open-text text-2xl text-emerald-400"></i></div>
+            <h2 class="text-lg font-semibold text-white">Check your inbox</h2>
+            <p class="text-sm text-gray-400" id="verify-pending-msg">We sent a verification link. Activate your account before signing in.</p>
+            <p class="text-xs text-gray-500">Didn't get it? Check spam, or contact support to activate if outbound email is not configured on this deployment.</p>
+            <button type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg text-sm" onclick="window._switchAuthPanel('login')">Back to Sign In</button>
+          </div>
           <div id="auth-main">
           <div class="flex border-b border-gray-700 mb-5">
             <button id="tab-login" class="flex-1 pb-3 text-sm font-semibold text-blue-400 border-b-2 border-blue-400" onclick="window._switchTab('login')">Sign In</button>
@@ -755,10 +762,11 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   };
 
   window._switchAuthPanel = function(panel) {
-    const main = $('#auth-main'), forgot = $('#auth-forgot'), mfa = $('#auth-mfa');
+    const main = $('#auth-main'), forgot = $('#auth-forgot'), mfa = $('#auth-mfa'), verify = $('#auth-verify-pending');
     if (main) main.classList.toggle('hidden', panel !== 'login' && panel !== 'register');
     if (forgot) forgot.classList.toggle('hidden', panel !== 'forgot');
     if (mfa) mfa.classList.toggle('hidden', panel !== 'mfa');
+    if (verify) verify.classList.toggle('hidden', panel !== 'verify');
   };
 
   function bindAuth() {
@@ -785,7 +793,14 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         setState({token:d.token,user:d.user,org:d.org});
         toast('Welcome back!','success');
         render();
-      } catch(err) { toast(err.message,'error'); }
+      } catch(err) {
+        if (err.code === 'EMAIL_NOT_VERIFIED') {
+          const msg = $('#verify-pending-msg');
+          if (msg) msg.textContent = err.message;
+          window._switchAuthPanel('verify');
+        }
+        toast(err.message,'error');
+      }
     };
     if (mf) mf.onsubmit = async (e) => {
       e.preventDefault();
@@ -822,8 +837,10 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       try {
         const d = await api('/auth/register', { method:'POST', body:JSON.stringify({orgName:fd.get('orgName'),name:fd.get('name'),email:fd.get('email'),password:fd.get('password')})});
         if (d.requiresVerification) {
-          toast(d.message || 'Check your email to verify your account', 'success');
-          window._switchTab('login');
+          const msg = $('#verify-pending-msg');
+          if (msg) msg.textContent = d.message || ('We sent a verification link to ' + fd.get('email') + '. Activate your account before signing in.');
+          window._switchAuthPanel('verify');
+          toast('Verification email sent — check your inbox', 'success');
           return;
         }
         setState({token:d.token,user:d.user,org:d.org});
@@ -5966,6 +5983,25 @@ Status: Discharged`;
         `;
       }
 
+      const matrix = comp.accountMatrix || [];
+      const statusBadge = (st) => {
+        const map = {
+          erased: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+          changed: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+          new: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+          unchanged: 'bg-gray-800 text-gray-400 border-gray-700',
+          current_only: 'bg-gray-800 text-gray-400 border-gray-700',
+        };
+        return map[st] || map.unchanged;
+      };
+      const matrixRows = matrix.length ? matrix.slice(0, 80).map(row => `
+        <tr class="border-b border-gray-800/60 hover:bg-gray-900/40">
+          <td class="p-2.5 text-xs text-white font-medium">${escapeHtml(row.creditorName)}<div class="text-[10px] text-gray-500 font-mono">${escapeHtml(row.accountNumber)}</div></td>
+          <td class="p-2.5"><span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase border ${statusBadge(row.status)}">${escapeHtml(row.status)}</span></td>
+          <td class="p-2.5 text-[11px] text-gray-400">${row.prior ? `<div>${escapeHtml(row.prior.accountStatus || '—')}</div><div class="font-mono">${money(row.prior.currentBalance || 0)}</div><div class="text-[10px] text-gray-600">Limit ${money(row.prior.creditLimit || 0)}</div>` : '<span class="text-gray-600">—</span>'}</td>
+          <td class="p-2.5 text-[11px] text-gray-300">${row.current ? `<div class="${row.status==='changed'?'text-amber-200':''}">${escapeHtml(row.current.accountStatus || '—')}</div><div class="font-mono ${row.status==='changed'?'text-amber-300':''}">${money(row.current.currentBalance || 0)}</div><div class="text-[10px] text-gray-600">Limit ${money(row.current.creditLimit || 0)}</div>` : '<span class="text-emerald-400 font-bold">ERASED</span>'}</td>
+        </tr>`).join('') : `<tr><td colspan="4" class="p-6 text-center text-xs text-gray-500">No account matrix rows — upload a prior report for the same bureau to enable side-by-side diffs.</td></tr>`;
+
       el.innerHTML = `
         <div class="fade-in max-w-full">
           <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
@@ -5977,7 +6013,7 @@ Status: Discharged`;
                 <span class="w-2.5 h-2.5 rounded-full bg-purple-500 animate-pulse"></span>
                 Interactive Comparison Dashboard
               </h1>
-              <div class="text-xs text-gray-400 font-mono mt-1">Comparing against prior client report &bull; Generated LIVE</div>
+              <div class="text-xs text-gray-400 font-mono mt-1">${comp.hasPrevious ? 'Comparing against prior bureau report' : 'No prior report — showing current accounts only'} &bull; ${shortDate(comp.currentReportDate)}</div>
             </div>
             
             <div class="text-right flex flex-col md:items-end">
@@ -5987,19 +6023,36 @@ Status: Discharged`;
             </div>
           </div>
 
-          <!-- Compliance Checklist Header -->
           ${complianceHtml}
 
-          <!-- Score Delta curves row -->
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            ${renderScoreGauge('Equifax', scoreTrends.Equifax.current, scoreTrends.Equifax.previous)}
-            ${renderScoreGauge('Experian', scoreTrends.Experian.current, scoreTrends.Experian.previous)}
-            ${renderScoreGauge('TransUnion', scoreTrends.TransUnion.current, scoreTrends.TransUnion.previous)}
+            ${renderScoreGauge('Equifax', scoreTrends.Equifax.current || 0, scoreTrends.Equifax.previous || scoreTrends.Equifax.current || 0)}
+            ${renderScoreGauge('Experian', scoreTrends.Experian.current || 0, scoreTrends.Experian.previous || scoreTrends.Experian.current || 0)}
+            ${renderScoreGauge('TransUnion', scoreTrends.TransUnion.current || 0, scoreTrends.TransUnion.previous || scoreTrends.TransUnion.current || 0)}
           </div>
 
-          <!-- Major Content Grid -->
+          <div class="glass rounded-xl border border-gray-800 overflow-hidden mb-8">
+            <div class="p-4 border-b border-gray-800 flex flex-wrap items-center justify-between gap-2">
+              <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
+                <i class="fas fa-table-columns text-purple-400"></i> Side-by-Side Account Diff Matrix
+              </h3>
+              <div class="flex flex-wrap gap-2 text-[10px] font-bold uppercase">
+                <span class="px-2 py-0.5 rounded border border-emerald-500/30 text-emerald-400">Erased ${matrix.filter(m=>m.status==='erased').length}</span>
+                <span class="px-2 py-0.5 rounded border border-amber-500/30 text-amber-300">Changed ${matrix.filter(m=>m.status==='changed').length}</span>
+                <span class="px-2 py-0.5 rounded border border-blue-500/30 text-blue-300">New ${matrix.filter(m=>m.status==='new').length}</span>
+              </div>
+            </div>
+            <div class="overflow-x-auto max-h-[420px] overflow-y-auto">
+              <table class="w-full text-left">
+                <thead class="sticky top-0 bg-gray-950/95 text-[10px] uppercase tracking-wider text-gray-500">
+                  <tr><th class="p-2.5">Account</th><th class="p-2.5">Delta</th><th class="p-2.5">Prior</th><th class="p-2.5">Current</th></tr>
+                </thead>
+                <tbody>${matrixRows}</tbody>
+              </table>
+            </div>
+          </div>
+
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <!-- Left Side: Erasures (col-span-7) -->
             <div class="lg:col-span-7 space-y-4">
               <div class="flex items-center justify-between mb-2">
                 <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
@@ -6010,9 +6063,7 @@ Status: Discharged`;
               ${erasedContent}
             </div>
 
-            <!-- Right Side: Upgrades and Inquiries (col-span-5) -->
             <div class="lg:col-span-5 space-y-6">
-              <!-- Upgrades -->
               <div class="space-y-4">
                 <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
                   <i class="fas fa-circle-up text-blue-400"></i>
@@ -6021,7 +6072,6 @@ Status: Discharged`;
                 ${updatedContent}
               </div>
 
-              <!-- New Inquiries -->
               <div class="space-y-4">
                 <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
                   <i class="fas fa-circle-exclamation text-yellow-400"></i>
@@ -7544,40 +7594,127 @@ async function pgAdminConsole(el) {
       const f = d.fundability || {};
       const pillars = f.pillars || {};
       const roadmaps = f.roadmaps || {};
-      el.innerHTML = `
-        <div class="fade-in space-y-5">
-          <div class="bg-gradient-to-r from-slate-950 via-amber-950/25 to-slate-950 border border-amber-500/20 rounded-2xl p-5">
-            <h1 class="text-xl font-bold text-white"><i class="fas fa-chart-line text-amber-400 mr-2"></i>Fundability Command Center</h1>
-            <p class="text-sm text-slate-400 mt-1">${escapeHtml(f.narrative || 'Deep readiness across mortgage, auto, student, and debt escape.')}</p>
-          </div>
-          <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
-            ${[['Overall', f.overallScore],['Mortgage', pillars.mortgageReady],['Auto', pillars.autoReady],['Student', pillars.studentReady],['Debt Health', pillars.debtHealth],['DTI %', f.dti]].map(([l,v]) => `
-              <div class="glass rounded-xl border border-gray-800 p-4 text-center">
-                <div class="text-[10px] uppercase tracking-wider text-gray-500">${l}</div>
-                <div class="text-2xl font-bold text-white mt-1 font-mono">${v ?? '—'}</div>
-              </div>`).join('')}
-          </div>
-          ${(f.revolvingUtilPct != null) ? `<div class="glass rounded-xl border border-cyan-900/40 p-4 text-sm text-cyan-100"><strong>Revolving utilization:</strong> ${f.revolvingUtilPct}% (${money(f.revolvingBalance || 0)} / ${money(f.revolvingLimit || 0)} limits)</div>` : ''}
-          ${(f.blockers||[]).length ? `<div class="glass rounded-xl border border-rose-900/40 p-4"><h3 class="text-xs font-bold text-rose-300 uppercase mb-2">Blockers</h3><ul class="space-y-1 text-sm text-slate-300">${f.blockers.map(b=>`<li>• ${escapeHtml(b)}</li>`).join('')}</ul></div>` : ''}
-          <div class="grid md:grid-cols-2 gap-4">
-            ${Object.values(roadmaps).map(r => `
-              <div class="glass rounded-xl border border-gray-800 p-4">
-                <div class="flex justify-between items-start mb-2">
-                  <h3 class="text-sm font-bold text-white">${escapeHtml(r.title)}</h3>
-                  <span class="text-xs font-mono text-amber-300">${r.readiness}/100</span>
+      const progressMap = d.progress || {};
+      const roadmapKeys = Object.keys(roadmaps);
+      let activeKey = roadmapKeys.includes('mortgage') ? 'mortgage' : (roadmapKeys[0] || 'mortgage');
+
+      function localProgress(key) {
+        const p = progressMap[key] || { completedSteps: [], completedDocs: [] };
+        return {
+          completedSteps: new Set(p.completedSteps || []),
+          completedDocs: new Set(p.completedDocs || []),
+        };
+      }
+
+      async function saveProgress(key) {
+        const lp = localProgress(key);
+        try {
+          await api('/client-portal/roadmap-progress', {
+            method: 'PUT',
+            body: JSON.stringify(portalClientBody({
+              roadmapKey: key,
+              completedSteps: [...lp.completedSteps],
+              completedDocs: [...lp.completedDocs],
+            })),
+          });
+          toast('Roadmap progress saved', 'success');
+        } catch (err) { toast(err.message, 'error'); }
+      }
+
+      function renderWizard() {
+        const r = roadmaps[activeKey] || {};
+        const lp = localProgress(activeKey);
+        const steps = r.steps || [];
+        const docs = r.docsNeeded || [];
+        const done = lp.completedSteps.size + lp.completedDocs.size;
+        const total = Math.max(1, steps.length + docs.length);
+        const pct = Math.round((done / total) * 100);
+
+        el.innerHTML = `
+          <div class="fade-in space-y-5">
+            <div class="bg-gradient-to-r from-slate-950 via-amber-950/25 to-slate-950 border border-amber-500/20 rounded-2xl p-5">
+              <h1 class="text-xl font-bold text-white"><i class="fas fa-chart-line text-amber-400 mr-2"></i>Fundability Command Center</h1>
+              <p class="text-sm text-slate-400 mt-1">${escapeHtml(f.narrative || 'Deep readiness across mortgage, auto, student, and debt escape.')}</p>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
+              ${[['Overall', f.overallScore],['Mortgage', pillars.mortgageReady],['Auto', pillars.autoReady],['Student', pillars.studentReady],['Debt Health', pillars.debtHealth],['DTI %', f.dti]].map(([l,v]) => `
+                <div class="glass rounded-xl border border-gray-800 p-4 text-center">
+                  <div class="text-[10px] uppercase tracking-wider text-gray-500">${l}</div>
+                  <div class="text-2xl font-bold text-white mt-1 font-mono">${v ?? '—'}</div>
+                </div>`).join('')}
+            </div>
+            ${(f.revolvingUtilPct != null) ? `<div class="glass rounded-xl border border-cyan-900/40 p-4 text-sm text-cyan-100"><strong>Revolving utilization:</strong> ${f.revolvingUtilPct}% (${money(f.revolvingBalance || 0)} / ${money(f.revolvingLimit || 0)} limits)</div>` : ''}
+            ${(f.blockers||[]).length ? `<div class="glass rounded-xl border border-rose-900/40 p-4"><h3 class="text-xs font-bold text-rose-300 uppercase mb-2">Blockers</h3><ul class="space-y-1 text-sm text-slate-300">${f.blockers.map(b=>`<li>• ${escapeHtml(b)}</li>`).join('')}</ul></div>` : ''}
+
+            <div class="glass rounded-2xl border border-amber-500/20 p-5 space-y-4">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <h2 class="text-sm font-bold text-white uppercase tracking-wider"><i class="fas fa-route text-amber-400 mr-1.5"></i>Interactive Roadmap Wizard</h2>
+                <div class="flex flex-wrap gap-2">
+                  ${roadmapKeys.map(k => `<button type="button" data-rm-key="${k}" class="rm-tab px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider ${k===activeKey ? 'bg-amber-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}">${escapeHtml((roadmaps[k]&&roadmaps[k].title)||k)}</button>`).join('')}
                 </div>
-                <p class="text-[11px] text-gray-500 mb-2">Target score ~${r.targetScore} · Current avg ${r.currentAvg}</p>
-                <ol class="text-xs text-slate-300 space-y-1 list-decimal list-inside">${(r.steps||[]).map(s=>`<li>${escapeHtml(s)}</li>`).join('')}</ol>
-                <p class="text-[11px] text-cyan-300/80 mt-3"><strong>Docs:</strong> ${(r.docsNeeded||[]).map(escapeHtml).join(' · ')}</p>
-              </div>`).join('')}
-          </div>
-          <div class="glass rounded-xl border border-gray-800 p-4">
-            <h3 class="text-xs font-bold text-white uppercase mb-3">Priority Actions</h3>
-            <div class="space-y-2">${(f.actions||[]).map(a=>`
-              <div class="flex gap-3 text-sm"><span class="text-amber-400 font-mono text-xs mt-0.5">#${a.priority}</span><div><div class="text-white font-medium">${escapeHtml(a.title)}</div><div class="text-xs text-gray-400">${escapeHtml(a.detail)}</div></div></div>`).join('')}</div>
-          </div>
-          <button onclick="window._nav('client-tradelines')" class="bg-amber-600/90 hover:bg-amber-500 text-white text-sm font-semibold px-4 py-2.5 rounded-lg">See profile-smart boost tools →</button>
-        </div>`;
+              </div>
+              <div class="flex items-center gap-3">
+                <div class="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden"><div class="h-full bg-amber-500 transition-all" style="width:${pct}%"></div></div>
+                <span class="text-xs font-mono text-amber-300">${pct}% · ${done}/${total}</span>
+              </div>
+              <p class="text-[11px] text-gray-500">Target score ~${r.targetScore ?? '—'} · Current avg ${r.currentAvg ?? '—'} · Readiness ${r.readiness ?? '—'}/100</p>
+              <div class="grid md:grid-cols-2 gap-4">
+                <div>
+                  <h3 class="text-xs font-bold text-white uppercase mb-2">Steps</h3>
+                  <div class="space-y-2">${steps.map((s, i) => {
+                    const id = 'step:' + i;
+                    const checked = lp.completedSteps.has(id) || lp.completedSteps.has(s);
+                    return `<label class="flex gap-2.5 items-start text-xs text-slate-300 cursor-pointer"><input type="checkbox" class="rm-step mt-0.5" data-id="${escapeHtml(id)}" ${checked?'checked':''}/><span>${escapeHtml(s)}</span></label>`;
+                  }).join('')}</div>
+                </div>
+                <div>
+                  <h3 class="text-xs font-bold text-white uppercase mb-2">Document checklist</h3>
+                  <div class="space-y-2">${docs.map((doc, i) => {
+                    const id = 'doc:' + i;
+                    const checked = lp.completedDocs.has(id) || lp.completedDocs.has(doc);
+                    return `<label class="flex gap-2.5 items-start text-xs text-slate-300 cursor-pointer"><input type="checkbox" class="rm-doc mt-0.5" data-id="${escapeHtml(id)}" ${checked?'checked':''}/><span>${escapeHtml(doc)}</span></label>`;
+                  }).join('')}</div>
+                </div>
+              </div>
+              <button type="button" id="rm-save" class="bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold px-4 py-2.5 rounded-lg"><i class="fas fa-save mr-1.5"></i>Save ${escapeHtml(activeKey)} progress</button>
+            </div>
+
+            <div class="glass rounded-xl border border-gray-800 p-4">
+              <h3 class="text-xs font-bold text-white uppercase mb-3">Priority Actions</h3>
+              <div class="space-y-2">${(f.actions||[]).map(a=>`
+                <div class="flex gap-3 text-sm"><span class="text-amber-400 font-mono text-xs mt-0.5">#${a.priority}</span><div><div class="text-white font-medium">${escapeHtml(a.title)}</div><div class="text-xs text-gray-400">${escapeHtml(a.detail)}</div></div></div>`).join('')}</div>
+            </div>
+            <button onclick="window._nav('client-tradelines')" class="bg-amber-600/90 hover:bg-amber-500 text-white text-sm font-semibold px-4 py-2.5 rounded-lg">See profile-smart boost tools →</button>
+          </div>`;
+
+        el.querySelectorAll('.rm-tab').forEach(btn => {
+          btn.onclick = () => { activeKey = btn.getAttribute('data-rm-key'); renderWizard(); };
+        });
+        el.querySelectorAll('.rm-step').forEach(cb => {
+          cb.onchange = () => {
+            const id = cb.getAttribute('data-id');
+            if (!progressMap[activeKey]) progressMap[activeKey] = { completedSteps: [], completedDocs: [] };
+            const set = new Set(progressMap[activeKey].completedSteps || []);
+            if (cb.checked) set.add(id); else set.delete(id);
+            progressMap[activeKey].completedSteps = [...set];
+            renderWizard();
+          };
+        });
+        el.querySelectorAll('.rm-doc').forEach(cb => {
+          cb.onchange = () => {
+            const id = cb.getAttribute('data-id');
+            if (!progressMap[activeKey]) progressMap[activeKey] = { completedSteps: [], completedDocs: [] };
+            const set = new Set(progressMap[activeKey].completedDocs || []);
+            if (cb.checked) set.add(id); else set.delete(id);
+            progressMap[activeKey].completedDocs = [...set];
+            renderWizard();
+          };
+        });
+        const saveBtn = document.getElementById('rm-save');
+        if (saveBtn) saveBtn.onclick = () => saveProgress(activeKey);
+      }
+
+      renderWizard();
     } catch (err) {
       el.innerHTML = `<div class="text-red-400 p-6">${escapeHtml(err.message)}</div>`;
     }

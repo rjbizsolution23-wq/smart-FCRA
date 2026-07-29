@@ -301,6 +301,8 @@ type Bindings = {
   MAILING_WEBHOOK_SECRET?: string;
   PLATFORM_BOOTSTRAP_EMAIL?: string;
   PLATFORM_BOOTSTRAP_PASSWORD?: string;
+  /** When "true"/"1", staff (admin/super_admin) must enable MFA before any protected API (except MFA/auth safe paths). */
+  STAFF_MFA_REQUIRED_ALL?: string;
   ENVIRONMENT?: string;
   COMPANY_NAME?: string;
   COMPANY_OWNER?: string;
@@ -479,14 +481,25 @@ async function authMiddleware(c: any, next: any) {
     }
   }
 
-  // Staff/admin: MFA required for elevated platform routes (backup, privacy purge, billing cancel)
+  // Staff/admin MFA gate — elevated routes always; optional full gate via STAFF_MFA_REQUIRED_ALL
   if (
     (session.user_role === 'admin' || session.user_role === 'super_admin') &&
     session.mfa_enabled !== 1
   ) {
+    const mfaSafePaths = ['/auth/mfa', '/auth/logout', '/auth/me', '/auth/change-password'];
     const mfaElevatedPaths = ['/admin/backup', '/admin/demo', '/admin/privacy-requests', '/billing/cancel'];
-    if (mfaElevatedPaths.some((p) => c.req.path.includes(p))) {
-      return c.json({ error: 'MFA setup required for this action', code: 'MFA_REQUIRED' }, 403);
+    const requireAll = ['true', '1', 'yes'].includes(String(c.env.STAFF_MFA_REQUIRED_ALL || '').toLowerCase());
+    const needsMfa =
+      requireAll
+        ? !mfaSafePaths.some((p) => c.req.path.includes(p))
+        : mfaElevatedPaths.some((p) => c.req.path.includes(p));
+    if (needsMfa) {
+      return c.json({
+        error: requireAll
+          ? 'MFA setup required for staff accounts (STAFF_MFA_REQUIRED_ALL)'
+          : 'MFA setup required for this action',
+        code: 'MFA_REQUIRED',
+      }, 403);
     }
   }
 
@@ -735,12 +748,19 @@ app.post('/api/auth/login', async (c) => {
     }
   } else {
     user = await c.env.DB.prepare(
-      'SELECT u.*, o.name as org_name, o.plan as org_plan, o.settings as org_settings FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ? AND u.is_active = 1'
+      'SELECT u.*, o.name as org_name, o.plan as org_plan, o.settings as org_settings FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ?'
     ).bind(email).first() as any;
     if (!user) return c.json({ error: 'Invalid credentials' }, 401);
 
     const valid = await verifyPassword(password, user.password_hash);
     if (!valid) return c.json({ error: 'Invalid credentials' }, 401);
+
+    if (user.is_active !== 1) {
+      return c.json({
+        error: 'Email not verified. Check your inbox for the activation link, or contact support.',
+        code: 'EMAIL_NOT_VERIFIED',
+      }, 403);
+    }
 
     if (needsPasswordRehash(user.password_hash)) {
       try {
@@ -2059,7 +2079,77 @@ app.get('/api/client-portal/fundability', authMiddleware, async (c) => {
     goal,
   });
 
-  return c.json({ fundability, tradelines, catalog: TRADELINE_CATALOG });
+  const progressRows = await c.env.DB.prepare(
+    `SELECT roadmap_key, completed_steps_json, completed_docs_json, notes, updated_at
+     FROM roadmap_progress WHERE client_id = ? AND org_id = ?`
+  ).bind(client.id, user.org_id).all();
+
+  const progress: Record<string, { completedSteps: string[]; completedDocs: string[]; notes?: string; updatedAt?: string }> = {};
+  for (const row of (progressRows?.results || []) as any[]) {
+    try {
+      progress[row.roadmap_key] = {
+        completedSteps: JSON.parse(row.completed_steps_json || '[]'),
+        completedDocs: JSON.parse(row.completed_docs_json || '[]'),
+        notes: row.notes || '',
+        updatedAt: row.updated_at,
+      };
+    } catch {
+      progress[row.roadmap_key] = { completedSteps: [], completedDocs: [] };
+    }
+  }
+
+  return c.json({ fundability, tradelines, catalog: TRADELINE_CATALOG, progress });
+});
+
+// Persist interactive roadmap wizard progress (steps + docs checklists)
+app.put('/api/client-portal/roadmap-progress', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json();
+  const client = await resolvePortalClientSafe(c, user, body.clientId);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+
+  const roadmapKey = String(body.roadmapKey || '').toLowerCase();
+  if (!['mortgage', 'auto', 'student', 'debt'].includes(roadmapKey)) {
+    return c.json({ error: 'roadmapKey must be mortgage|auto|student|debt' }, 400);
+  }
+
+  const completedSteps = Array.isArray(body.completedSteps)
+    ? body.completedSteps.map((s: any) => String(s)).slice(0, 40)
+    : [];
+  const completedDocs = Array.isArray(body.completedDocs)
+    ? body.completedDocs.map((s: any) => String(s)).slice(0, 40)
+    : [];
+  const notes = body.notes != null ? String(body.notes).slice(0, 2000) : null;
+  const id = generateId();
+
+  await c.env.DB.prepare(
+    `INSERT INTO roadmap_progress (id, org_id, client_id, roadmap_key, completed_steps_json, completed_docs_json, notes, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(client_id, roadmap_key) DO UPDATE SET
+       completed_steps_json = excluded.completed_steps_json,
+       completed_docs_json = excluded.completed_docs_json,
+       notes = COALESCE(excluded.notes, roadmap_progress.notes),
+       updated_at = datetime('now')`
+  ).bind(
+    id,
+    user.org_id,
+    client.id,
+    roadmapKey,
+    JSON.stringify(completedSteps),
+    JSON.stringify(completedDocs),
+    notes,
+  ).run();
+
+  return c.json({
+    ok: true,
+    roadmapKey,
+    completedSteps,
+    completedDocs,
+    progressPct: Math.round(
+      ((completedSteps.length + completedDocs.length) /
+        Math.max(1, completedSteps.length + completedDocs.length + (body.totalItems || 1))) * 100
+    ),
+  });
 });
 
 app.get('/api/client-portal/tradelines', authMiddleware, async (c) => {
@@ -2381,7 +2471,7 @@ app.post('/api/admin/privacy-requests/:id/fulfill', authMiddleware, async (c) =>
 
   // Purge client-scoped sensitive data (retain anonymized audit)
   const tables = [
-    'portal_messages', 'portal_uploads', 'portal_alerts', 'education_progress', 'tutor_memory',
+    'portal_messages', 'portal_uploads', 'portal_alerts', 'education_progress', 'tutor_memory', 'roadmap_progress',
     'fundability_snapshots', 'underwriting_snapshots', 'tradeline_orders', 'violations', 'documents',
   ];
   for (const table of tables) {
@@ -4114,6 +4204,7 @@ app.get('/api/reports/:id/comparison', authMiddleware, async (c) => {
   const erasedAccounts: any[] = [];
   const updatedAccounts: any[] = [];
   const newInquiries: any[] = [];
+  const accountMatrix: any[] = [];
 
   const acctBalance = (a: any) => Number(a?.currentBalance ?? a?.balance ?? 0);
   const inqDate = (i: any) => i?.inquiryDate || i?.date || '';
@@ -4121,9 +4212,56 @@ app.get('/api/reports/:id/comparison', authMiddleware, async (c) => {
   if (previousParsed) {
     const prevAccounts = previousParsed.accounts || [];
     const currAccounts = currentParsed.accounts || [];
+    const matchedCurr = new Set<number>();
 
     for (const prevAct of prevAccounts) {
-      const match = currAccounts.find((currAct: any) => areAccountsMatching(prevAct, currAct));
+      const matchIdx = currAccounts.findIndex((currAct: any) => areAccountsMatching(prevAct, currAct));
+      const match = matchIdx >= 0 ? currAccounts[matchIdx] : null;
+      if (matchIdx >= 0) matchedCurr.add(matchIdx);
+
+      if (!match) {
+        accountMatrix.push({
+          creditorName: prevAct.creditorName || 'Unknown',
+          accountNumber: prevAct.accountNumber || 'N/A',
+          status: 'erased',
+          prior: {
+            accountStatus: prevAct.accountStatus || prevAct.paymentStatus || '',
+            currentBalance: acctBalance(prevAct),
+            creditLimit: Number(prevAct.creditLimit || 0),
+            paymentStatus: prevAct.paymentStatus || '',
+          },
+          current: null,
+        });
+      } else {
+        const prevBal = acctBalance(prevAct);
+        const currBal = acctBalance(match);
+        const prevStatus = prevAct.accountStatus || prevAct.paymentStatus || '';
+        const currStatus = match.accountStatus || match.paymentStatus || '';
+        const prevLimit = Number(prevAct.creditLimit || 0);
+        const currLimit = Number(match.creditLimit || 0);
+        const changed =
+          prevBal !== currBal ||
+          prevStatus !== currStatus ||
+          prevLimit !== currLimit;
+        accountMatrix.push({
+          creditorName: match.creditorName || prevAct.creditorName || 'Unknown',
+          accountNumber: match.accountNumber || prevAct.accountNumber || 'N/A',
+          status: changed ? 'changed' : 'unchanged',
+          prior: {
+            accountStatus: prevStatus,
+            currentBalance: prevBal,
+            creditLimit: prevLimit,
+            paymentStatus: prevAct.paymentStatus || '',
+          },
+          current: {
+            accountStatus: currStatus,
+            currentBalance: currBal,
+            creditLimit: currLimit,
+            paymentStatus: match.paymentStatus || '',
+          },
+        });
+      }
+
       if (!match) {
         const creditor = prevAct.creditorName || 'Unknown Creditor';
         const acctNum = prevAct.accountNumber || 'N/A';
@@ -4178,6 +4316,22 @@ app.get('/api/reports/:id/comparison', authMiddleware, async (c) => {
         }
       }
     }
+
+    currAccounts.forEach((currAct: any, idx: number) => {
+      if (matchedCurr.has(idx)) return;
+      accountMatrix.push({
+        creditorName: currAct.creditorName || 'Unknown',
+        accountNumber: currAct.accountNumber || 'N/A',
+        status: 'new',
+        prior: null,
+        current: {
+          accountStatus: currAct.accountStatus || currAct.paymentStatus || '',
+          currentBalance: acctBalance(currAct),
+          creditLimit: Number(currAct.creditLimit || 0),
+          paymentStatus: currAct.paymentStatus || '',
+        },
+      });
+    });
 
     const prevInquiries = previousParsed.inquiries || [];
     const currInquiries = currentParsed.inquiries || [];
@@ -4234,6 +4388,24 @@ app.get('/api/reports/:id/comparison', authMiddleware, async (c) => {
     },
   };
 
+  // When no prior report, still expose a current-only matrix for the workspace
+  if (!previousParsed && currentParsed?.accounts?.length) {
+    for (const a of currentParsed.accounts.slice(0, 60)) {
+      accountMatrix.push({
+        creditorName: a.creditorName || 'Unknown',
+        accountNumber: a.accountNumber || 'N/A',
+        status: 'current_only',
+        prior: null,
+        current: {
+          accountStatus: a.accountStatus || a.paymentStatus || '',
+          currentBalance: acctBalance(a),
+          creditLimit: Number(a.creditLimit || 0),
+          paymentStatus: a.paymentStatus || '',
+        },
+      });
+    }
+  }
+
   return c.json({
     hasPrevious: !!previousReport,
     previousReportDate: previousReport?.report_date || null,
@@ -4241,6 +4413,7 @@ app.get('/api/reports/:id/comparison', authMiddleware, async (c) => {
     erasedAccounts,
     updatedAccounts,
     newInquiries,
+    accountMatrix,
     scoreTrends,
     complianceStatus: {
       croaAgreed: client?.croa_contract_agreed === 1,
@@ -5405,7 +5578,7 @@ const D1_BACKUP_TABLES = [
   'organizations', 'users', 'clients', 'credit_reports', 'violations', 'documents',
   'sessions', 'activity_log', 'portal_messages', 'portal_uploads', 'portal_alerts',
   'education_progress', 'tutor_memory', 'fundability_snapshots', 'tradeline_orders',
-  'underwriting_snapshots', 'security_audit_log', 'privacy_requests',
+  'underwriting_snapshots', 'security_audit_log', 'privacy_requests', 'roadmap_progress',
 ];
 
 app.post('/api/admin/backup/trigger', authMiddleware, adminGateMiddleware, async (c) => {

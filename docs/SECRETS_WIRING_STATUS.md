@@ -37,6 +37,17 @@ PBKDF2 iterations are **100,000** (Cloudflare Workers Web Crypto hard cap).
 1. Stripe `whsec_…` webhook secret
 2. SmartCredit client key/secret (live import)
 3. New GitHub repo `smart-FCRA-v2` (do **not** merge this branch into original `main`)
+4. `SENTRY_DSN` — edge error reporting (code wired via `src/lib/sentry.ts`)
+5. `STAFF_MFA_REQUIRED_ALL=true` — require MFA for all staff API routes (elevated routes always require MFA)
+
+## Infrastructure bindings (already in wrangler)
+
+| Binding | Status |
+|---------|--------|
+| `RATE_LIMIT_KV` | Wired in `wrangler.toml` / `wrangler.jsonc` |
+| `DOCS` (R2) | Wired for vault + D1 backup snapshots |
+| `DB` (D1 `fcra-detector-v2`) | Live |
+| `AI` | Wired for Workers AI fallback |
 
 ## Security
 

@@ -47,6 +47,8 @@ wrangler secret put CLICK2MAIL_AUTH_BASIC
 wrangler secret put MAILING_WEBHOOK_SECRET
 wrangler secret put PLATFORM_BOOTSTRAP_EMAIL   # optional
 wrangler secret put PLATFORM_BOOTSTRAP_PASSWORD # optional
+wrangler secret put SENTRY_DSN                 # optional
+wrangler pages secret put STAFF_MFA_REQUIRED_ALL  # optional: "true" to require MFA on all staff APIs
 ```
 
 4. Set `ENVIRONMENT=production` and real `FRONTEND_URL`
@@ -54,6 +56,7 @@ wrangler secret put PLATFORM_BOOTSTRAP_PASSWORD # optional
 
 ```bash
 npx wrangler d1 migrations apply fcra-detector-v2 --remote
+# Includes 0009_roadmap_progress.sql for interactive fundability wizards
 ```
 
 6. Deploy: `npm run deploy` → Pages project `smart-fcra-v2` only

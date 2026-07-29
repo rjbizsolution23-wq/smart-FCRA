@@ -134,4 +134,25 @@ test.describe('Smart FCRA v2 — Security & Isolation', () => {
     expect(typeof body.score).toBe('number');
     expect(Array.isArray(body.controls)).toBeTruthy();
   });
+
+  test('fundability endpoint returns progress map for authenticated admin', async ({ request }) => {
+    const login = await request.post(`${BASE}/api/auth/login`, {
+      data: { email: 'demo@example.com', password: 'demo123456' },
+    });
+    expect(login.status()).toBe(200);
+    const { token } = await login.json();
+    const clients = await request.get(`${BASE}/api/clients`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(clients.ok()).toBeTruthy();
+    const { clients: list } = await clients.json();
+    if (!list?.length) return;
+    const fund = await request.get(`${BASE}/api/client-portal/fundability?clientId=${list[0].id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(fund.ok()).toBeTruthy();
+    const body = await fund.json();
+    expect(body.fundability).toBeTruthy();
+    expect(body.progress).toBeTruthy();
+  });
 });

@@ -31,3 +31,5 @@ logs/
 # misc
 .DS_Store
 *.pem
+playwright-report/
+test-results/
