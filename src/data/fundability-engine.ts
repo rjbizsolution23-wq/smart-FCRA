@@ -10,10 +10,28 @@ export type FundabilityInput = {
   inquiries?: number;
   violations?: number;
   openRevolvingBalance?: number;
+  openRevolvingLimit?: number;
+  revolvingUtilPct?: number | null;
   estimatedIncomeMonthly?: number;
   estimatedDebtPayments?: number;
   goal?: string;
 };
+
+/** Estimate FICO lift if a violation is successfully removed (fundability-informed, not a hard guarantee). */
+export function estimateViolationScoreLift(avgScore: number, severity: string): number {
+  const gap = Math.max(0, 720 - avgScore);
+  const factor = severity === 'critical' ? 0.35 : severity === 'high' ? 0.22 : severity === 'medium' ? 0.14 : 0.08;
+  return Math.min(45, Math.max(4, Math.round(gap * factor)));
+}
+
+function utilizationPoints(utilPct: number | null | undefined): number {
+  if (utilPct == null) return 5;
+  if (utilPct <= 10) return 10;
+  if (utilPct <= 29) return 8;
+  if (utilPct <= 49) return 5;
+  if (utilPct <= 74) return 2;
+  return 0;
+}
 
 export function buildFundabilityReport(input: FundabilityInput) {
   const scores = [input.eqScore, input.exScore, input.tuScore].filter((n) => typeof n === 'number') as number[];
@@ -27,7 +45,7 @@ export function buildFundabilityReport(input: FundabilityInput) {
   const depthPts = Math.max(0, Math.min(20, accounts * 3));
   const cleanPts = Math.max(0, 20 - collections * 6 - Math.min(10, inquiries));
   const disputePts = Math.max(0, 10 - Math.min(10, violations));
-  const utilPts = 10; // placeholder until balances known
+  const utilPts = utilizationPoints(input.revolvingUtilPct);
   const overall = Math.max(0, Math.min(100, scorePts + depthPts + cleanPts + disputePts + utilPts));
 
   const mortgageReady = Math.max(0, Math.min(100, overall - (avg < 640 ? 15 : 0) - collections * 5));
@@ -46,6 +64,9 @@ export function buildFundabilityReport(input: FundabilityInput) {
   if (accounts < 3) blockers.push('Thin file — add legitimate positive tradelines (rent reporting / builder loan)');
   if (inquiries > 5) blockers.push('Elevated recent inquiries — freeze unnecessary applications 90 days');
   if (violations > 0) blockers.push(`${violations} FCRA accuracy flags — resolve before major credit applications`);
+  if (input.revolvingUtilPct != null && input.revolvingUtilPct > 30) {
+    blockers.push(`Revolving utilization at ${input.revolvingUtilPct}% — target under 30% before mortgage/auto applications`);
+  }
 
   const actions = [
     { priority: 1, title: 'Complete tri-bureau accuracy review', detail: 'Open each bureau report in your portal and pin dispute items.' },
@@ -121,8 +142,13 @@ export function buildFundabilityReport(input: FundabilityInput) {
     blockers,
     actions,
     roadmaps,
-    narrative: `Your fundability index is ${overall}/100 with an average bureau score near ${avg}. ${
+    narrative: `Your fundability index is ${overall}/100 with an average bureau score near ${avg}.${
+      input.revolvingUtilPct != null ? ` Revolving utilization: ${input.revolvingUtilPct}%.` : ''
+    } ${
       blockers[0] ? `Top blocker: ${blockers[0]}.` : 'No critical blockers detected — stay disciplined and season clean history.'
     } Follow the roadmap for your goal and use your personal tutor to stay accountable.`,
+    revolvingUtilPct: input.revolvingUtilPct ?? null,
+    revolvingBalance: input.openRevolvingBalance ?? null,
+    revolvingLimit: input.openRevolvingLimit ?? null,
   };
 }

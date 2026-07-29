@@ -18,6 +18,8 @@
     impersonateClientName: localStorage.getItem('fcra_impersonate_client_name') || null,
     locale: localStorage.getItem('fcra_locale') || 'en',
     i18nStrings: {},
+    billingMode: null,
+    mfaEnabled: null,
   };
 
   // ── i18n (English + Spanish) ───────────────────────────────────
@@ -623,6 +625,22 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
             else el.classList.add('hidden');
           });
         } catch {}
+        if (state.user?.role !== 'client' && !state.impersonateClientId) {
+          try {
+            const modeRes = await api('/billing/mode');
+            state.billingMode = modeRes.mode || 'unconfigured';
+          } catch { state.billingMode = null; }
+          try {
+            const mfaRes = await api('/auth/mfa/status');
+            state.mfaEnabled = !!mfaRes.enabled;
+          } catch { state.mfaEnabled = null; }
+          const stripeBanner = document.getElementById('stripe-mode-banner');
+          if (stripeBanner && state.billingMode === 'test') stripeBanner.classList.remove('hidden');
+          const mfaBanner = document.getElementById('mfa-required-banner');
+          if (mfaBanner && (state.user?.role === 'admin' || state.user?.role === 'super_admin') && state.mfaEnabled === false) {
+            mfaBanner.classList.remove('hidden');
+          }
+        }
       })();
     }
   }
@@ -875,6 +893,14 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     return `<a href="#page-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[9999] focus:bg-blue-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg">${t('a11y.skipToContent')}</a>
     <div class="flex h-screen overflow-hidden flex-col">
       ${impersonationBanner}
+      <div id="stripe-mode-banner" class="hidden bg-amber-500/90 text-gray-950 text-xs font-semibold px-4 py-2 flex items-center justify-between z-[999] border-b border-amber-400/50">
+        <span><i class="fas fa-flask mr-1.5"></i><strong>Stripe Test Mode</strong> — charges are simulated. Switch to live keys in Cloudflare before production billing.</span>
+        <a href="/api/docs" target="_blank" rel="noopener" class="underline font-bold">API Docs</a>
+      </div>
+      <div id="mfa-required-banner" class="hidden bg-rose-950/90 text-rose-100 text-xs font-semibold px-4 py-2 flex items-center justify-between z-[999] border-b border-rose-500/30">
+        <span><i class="fas fa-shield-alt mr-1.5"></i>Staff MFA is required for backups, privacy fulfillment, and subscription cancellation.</span>
+        <button type="button" onclick="window._nav('settings')" class="bg-rose-600 hover:bg-rose-500 text-white px-3 py-1 rounded-lg text-[10px] uppercase tracking-wider font-bold">Enable MFA</button>
+      </div>
       <!-- Top Branding Header -->
       ${MFSN_BANNER ? `<div class="h-16 bg-gray-900 border-b border-gray-800 flex items-center px-4 shrink-0"><img src="${MFSN_BANNER}" alt="MyFreeScoreNow" class="h-14 object-contain"></div>` : ''}
             <div class="flex flex-1 overflow-hidden">
@@ -1091,7 +1117,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         ${statCard('fa-file-contract','Documents',res.documents.length,'purple')}
       </div>
       ${renderBureauTriad(res)}
-      <div class="flex border-b border-gray-800 mb-4">${['reports','violations','documents','mailing','activity'].map((t,i)=>`<button class="client-tab pb-2.5 px-4 text-sm font-medium ${t==='violations'?'text-blue-400 border-b-2 border-blue-400':'text-gray-500 border-b-2 border-transparent hover:text-gray-300'}" data-tab="${t}">${t==='mailing'?'Mailing Campaigns':(t[0].toUpperCase()+t.slice(1))} (${t==='activity'?res.activity.length:(t==='mailing'?res.documents.filter(d=>d.status==='sent').length:res[t].length)})</button>`).join('')}</div>
+      <div class="flex border-b border-gray-800 mb-4">${['reports','violations','bureaus','documents','mailing','activity'].map((t,i)=>`<button class="client-tab pb-2.5 px-4 text-sm font-medium ${t==='violations'?'text-blue-400 border-b-2 border-blue-400':'text-gray-500 border-b-2 border-transparent hover:text-gray-300'}" data-tab="${t}">${t==='mailing'?'Mailing Campaigns':t==='bureaus'?'Tri-Bureau':(t[0].toUpperCase()+t.slice(1))} (${t==='activity'?res.activity.length:t==='mailing'?res.documents.filter(d=>d.status==='sent').length:t==='bureaus'?'3':res[t==='bureaus'?'reports':t].length)})</button>`).join('')}</div>
       <div id="client-tab-content">${renderViolationsList(res.violations)}</div>
 
       <!-- Edit Client Slide-Over Panel -->
@@ -1211,7 +1237,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     </div>`;
 
     // Wire up events
-    const btnEdit = 
+    const btnEdit = document.getElementById('btn-edit-client');
     const btnEmail = document.getElementById('btn-email-client');
     if (btnEmail) btnEmail.onclick = async () => {
       const subject = prompt('Email subject', 'Update from your Smart FCRA credit team');
@@ -1285,6 +1311,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         switch(tab.dataset.tab) {
           case 'reports': ct.innerHTML = renderReportsList(res.reports); break;
           case 'violations': ct.innerHTML = renderViolationsList(res.violations); break;
+          case 'bureaus': loadBureauComparisonTab(ct, c.id); break;
           case 'documents': ct.innerHTML = renderDocsList(res.documents); break;
           case 'mailing': ct.innerHTML = renderMailingTab(res.documents, c); break;
           case 'activity': ct.innerHTML = renderActivityList(res.activity); break;
@@ -1345,6 +1372,45 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           <button onclick="window._nav('client-documents')" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">E-Sign Queue</button>
         </div>` : ''}
     </div>`;
+  }
+
+  async function loadBureauComparisonTab(el, clientId) {
+    el.innerHTML = '<div class="flex items-center justify-center py-12"><i class="fas fa-spinner fa-spin text-blue-400 text-xl"></i></div>';
+    try {
+      const comp = await api(`/clients/${clientId}/bureau-comparison`);
+      const bureauColors = { Equifax: 'rose', Experian: 'blue', TransUnion: 'emerald' };
+      el.innerHTML = `
+        <div class="space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 class="text-sm font-bold text-white"><i class="fas fa-columns text-purple-400 mr-1.5"></i>Tri-Bureau Comparison Workspace</h3>
+            <span class="text-[10px] uppercase font-bold px-2 py-1 rounded ${comp.triBureauComplete ? 'bg-green-500/15 text-green-400 border border-green-500/30' : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'}">${comp.triBureauComplete ? 'All 3 bureaus loaded' : 'Partial — upload missing bureaus'}</span>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            ${(comp.bureaus || []).map(b => {
+              const c = bureauColors[b.bureau] || 'gray';
+              return `<div class="glass rounded-xl border border-gray-800 p-4">
+                <div class="flex items-center justify-between mb-3">
+                  <span class="text-xs font-bold uppercase tracking-wider text-${c}-400">${b.bureau}</span>
+                  ${b.reportId ? `<button onclick="window._nav('report-detail',{reportId:'${b.reportId}'})" class="text-[10px] text-blue-400 font-bold">Open Report</button>` : '<span class="text-[10px] text-gray-500">No report</span>'}
+                </div>
+                <div class="text-3xl font-black text-white font-mono mb-1">${b.score ?? '—'}</div>
+                <div class="text-[10px] text-gray-500 mb-3">FICO ${b.ficoScore ?? '—'} · Vantage ${b.vantageScore ?? '—'}</div>
+                <div class="grid grid-cols-2 gap-2 text-[11px] text-gray-400 mb-3">
+                  <div>Accounts: <strong class="text-white">${b.accountCount}</strong></div>
+                  <div>Collections: <strong class="text-white">${b.collectionCount}</strong></div>
+                  <div>Inquiries: <strong class="text-white">${b.inquiryCount}</strong></div>
+                  <div>Violations: <strong class="text-red-400">${b.violationCount}</strong></div>
+                </div>
+                ${(b.accounts || []).length ? `<div class="border-t border-gray-800 pt-2 max-h-40 overflow-y-auto space-y-1">
+                  ${b.accounts.slice(0, 8).map(a => `<div class="text-[10px] text-gray-300 flex justify-between gap-2"><span class="truncate">${escapeHtml(a.creditorName || 'Account')}</span><span class="font-mono text-gray-500 shrink-0">${money(a.currentBalance || 0)}</span></div>`).join('')}
+                </div>` : '<p class="text-[10px] text-gray-500">No parsed accounts</p>'}
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+    } catch (err) {
+      el.innerHTML = `<div class="text-red-400 text-sm p-4">${escapeHtml(err.message)}</div>`;
+    }
   }
 
   function renderReportsList(reports) {
@@ -5249,6 +5315,7 @@ Status: Discharged`;
 
       el.innerHTML = `<div class="fade-in space-y-6">
         <div><h1 class="text-xl font-bold text-white">Organization Settings</h1><p class="text-sm text-gray-400">Letterhead, security, and firm branding used on dispute PDFs</p></div>
+        ${(state.user?.role === 'admin' || state.user?.role === 'super_admin') && !mfaEnabled ? `<div class="px-4 py-3 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-100 text-xs"><i class="fas fa-shield-alt mr-1.5"></i><strong>Staff MFA recommended:</strong> Enable MFA below before using backup, privacy fulfillment, or subscription cancellation.</div>` : ''}
 
         <div class="glass rounded-xl p-6 border border-gray-700">
           <h2 class="text-sm font-semibold text-white mb-4 flex items-center gap-2"><i class="fas fa-building text-blue-400"></i> Firm Letterhead</h2>
@@ -5463,10 +5530,51 @@ Status: Discharged`;
       { id: 'enterprise', name: 'Enterprise', price: 9997, color: 'purple', badge: 'TEAM/AGENCY', features: ['Unlimited Clients', 'Unlimited everything', '38 legal document templates', 'Full case law database (300+ cases)', 'Expert consultation add-on', 'White-label reports', 'API access', 'Dedicated account manager'], priceId: 'price_ENT_9997' }
     ];
 
+    let mode = 'unconfigured';
+    let invoices = [];
+    try {
+      const [modeRes, invRes] = await Promise.all([
+        api('/billing/mode').catch(() => ({ mode: 'unconfigured' })),
+        api('/billing/invoices').catch(() => ({ invoices: [] })),
+      ]);
+      mode = modeRes.mode || 'unconfigured';
+      invoices = invRes.invoices || [];
+    } catch (_) {}
+
+    const modeBanner = mode === 'test'
+      ? `<div class="mb-4 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs"><i class="fas fa-flask mr-1.5"></i><strong>Stripe Test Mode</strong> — no real charges. Use test card 4242 4242 4242 4242.</div>`
+      : mode === 'live'
+        ? `<div class="mb-4 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-xs"><i class="fas fa-check-circle mr-1.5"></i>Stripe Live Mode — production billing active.</div>`
+        : `<div class="mb-4 px-4 py-3 rounded-xl bg-gray-800/60 border border-gray-700 text-gray-400 text-xs"><i class="fas fa-plug mr-1.5"></i>Stripe not configured — set STRIPE_API_KEY in Cloudflare.</div>`;
+
     el.innerHTML = `<div class="fade-in">
-      <div class="flex items-center justify-between mb-8"><div><h1 class="text-xl font-bold text-white">Billing & Subscription</h1><p class="text-sm text-gray-400">Manage your organization\'s plan</p></div>
-        <div class="px-3 py-1 bg-blue-600/20 border border-blue-500/30 rounded-full text-[10px] font-bold text-blue-400 uppercase tracking-wider">Current: ${state.org?.plan || 'None'}</div>
+      <div class="flex items-center justify-between mb-6 flex-wrap gap-3"><div><h1 class="text-xl font-bold text-white">Billing & Subscription</h1><p class="text-sm text-gray-400">Manage your organization\'s plan, invoices, and Stripe portal</p></div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <div class="px-3 py-1 bg-blue-600/20 border border-blue-500/30 rounded-full text-[10px] font-bold text-blue-400 uppercase tracking-wider">Current: ${state.org?.plan || 'None'}</div>
+          <button type="button" id="btn-billing-portal" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg"><i class="fas fa-external-link-alt mr-1"></i>Stripe Portal</button>
+          ${(state.user?.role === 'admin' || state.user?.role === 'super_admin') ? '<button type="button" id="btn-billing-cancel" class="bg-red-600/20 hover:bg-red-600/40 text-red-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-red-500/30"><i class="fas fa-ban mr-1"></i>Cancel at Period End</button>' : ''}
+          <a href="/api/docs" target="_blank" rel="noopener" class="text-xs text-blue-400 hover:text-blue-300 font-semibold">API Docs</a>
+        </div>
       </div>
+      ${modeBanner}
+
+      ${invoices.length ? `<div class="glass rounded-xl border border-gray-800 p-4 mb-6">
+        <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-file-invoice-dollar text-green-400 mr-1.5"></i>Recent Invoices</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead><tr class="text-gray-500 border-b border-gray-800"><th class="pb-2 pr-3">Number</th><th class="pb-2 pr-3">Date</th><th class="pb-2 pr-3">Status</th><th class="pb-2 pr-3">Amount</th><th class="pb-2 text-right">PDF</th></tr></thead>
+            <tbody class="divide-y divide-gray-800/60 text-gray-300">
+              ${invoices.map(inv => `<tr>
+                <td class="py-2 pr-3 font-mono">${escapeHtml(inv.number || inv.id)}</td>
+                <td class="py-2 pr-3">${inv.created ? shortDate(new Date(inv.created * 1000).toISOString()) : '—'}</td>
+                <td class="py-2 pr-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${inv.status === 'paid' ? 'bg-green-900/30 text-green-400' : 'bg-amber-900/30 text-amber-300'}">${escapeHtml(inv.status || '')}</span></td>
+                <td class="py-2 pr-3 font-mono">${money((inv.amount || 0) / 100)}</td>
+                <td class="py-2 text-right">${inv.pdf ? `<a href="${escapeHtml(inv.pdf)}" target="_blank" rel="noopener" class="text-blue-400 hover:text-blue-300">Download</a>` : (inv.hosted_url ? `<a href="${escapeHtml(inv.hosted_url)}" target="_blank" rel="noopener" class="text-blue-400">View</a>` : '—')}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>` : ''}
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         ${plans.map(p => `
@@ -5484,6 +5592,23 @@ Status: Discharged`;
         `).join('')}
       </div>
     </div>`;
+
+    const portalBtn = document.getElementById('btn-billing-portal');
+    if (portalBtn) portalBtn.onclick = async () => {
+      try {
+        const { url } = await api('/billing/portal', { method: 'POST', body: '{}' });
+        if (url) window.location.href = url;
+        else toast('Portal unavailable — subscribe first', 'error');
+      } catch (err) { toast(err.message, 'error'); }
+    };
+    const cancelBtn = document.getElementById('btn-billing-cancel');
+    if (cancelBtn) cancelBtn.onclick = async () => {
+      if (!confirm('Cancel subscription at end of current billing period?')) return;
+      try {
+        const r = await api('/billing/cancel', { method: 'POST', body: '{}' });
+        toast(r.message || 'Cancellation scheduled', 'success');
+      } catch (err) { toast(err.message, 'error'); }
+    };
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -6192,11 +6317,12 @@ async function pgAdminConsole(el) {
   el.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-center"><i class="fas fa-spinner fa-spin text-3xl text-blue-400 mb-3"></i><div class="text-sm text-gray-400">Initializing Platform Control Center...</div></div></div>`;
 
   try {
-    const [statsData, orgsData, usersData, logsData] = await Promise.all([
+    const [statsData, orgsData, usersData, logsData, privacyData] = await Promise.all([
       api('/admin/db-stats'),
       api('/admin/organizations'),
       api('/admin/users'),
-      api('/admin/logs')
+      api('/admin/logs'),
+      api('/admin/privacy-requests').catch(() => ({ requests: [] })),
     ]);
 
     let activeTab = 'overview';
@@ -6236,6 +6362,12 @@ async function pgAdminConsole(el) {
             </button>
             <button class="px-4 py-2.5 text-xs font-semibold border-b-2 transition ${activeTab === 'logs' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}" onclick="window._adminTab('logs')">
               <i class="fas fa-list-alt mr-1.5"></i>Security Audit Trails
+            </button>
+            <button class="px-4 py-2.5 text-xs font-semibold border-b-2 transition ${activeTab === 'privacy' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}" onclick="window._adminTab('privacy')">
+              <i class="fas fa-user-secret mr-1.5"></i>Privacy Queue (${(privacyData.requests || []).length})
+            </button>
+            <button class="px-4 py-2.5 text-xs font-semibold border-b-2 transition ${activeTab === 'ops' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}" onclick="window._adminTab('ops')">
+              <i class="fas fa-server mr-1.5"></i>Ops & Sandbox
             </button>
             <button class="px-4 py-2.5 text-xs font-semibold border-b-2 transition ${activeTab === 'sop' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}" onclick="window._adminTab('sop')">
               <i class="fas fa-book mr-1.5"></i>Admin SOP Documentation
@@ -6871,6 +7003,89 @@ async function pgAdminConsole(el) {
         }
       } 
       
+      else if (activeTab === 'privacy') {
+        const reqs = privacyData.requests || [];
+        target.innerHTML = `
+          <div class="glass rounded-xl border border-gray-800 overflow-hidden">
+            <div class="p-4 border-b border-gray-800 bg-gray-900/40 flex justify-between items-center">
+              <h3 class="text-sm font-bold text-white"><i class="fas fa-user-secret text-purple-400 mr-1.5"></i>GDPR / CCPA Privacy Request Queue</h3>
+              <span class="text-xs text-gray-400">${reqs.length} request(s)</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead><tr class="border-b border-gray-800 text-gray-400"><th class="p-3">Type</th><th class="p-3">Status</th><th class="p-3">Client</th><th class="p-3">Created</th><th class="p-3 text-right">Action</th></tr></thead>
+                <tbody class="divide-y divide-gray-800/60 text-gray-300">
+                  ${reqs.length ? reqs.map(r => `<tr>
+                    <td class="p-3 font-mono uppercase text-[10px]">${escapeHtml(r.request_type || '')}</td>
+                    <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${r.status === 'fulfilled' ? 'bg-green-900/30 text-green-400' : 'bg-amber-900/30 text-amber-300'}">${escapeHtml(r.status || 'pending')}</span></td>
+                    <td class="p-3 font-mono text-[10px]">${escapeHtml(r.client_id || '—')}</td>
+                    <td class="p-3">${shortDate(r.created_at)}</td>
+                    <td class="p-3 text-right">${r.status !== 'fulfilled' ? `<button class="admin-privacy-fulfill bg-purple-600 hover:bg-purple-500 text-white px-2.5 py-1 rounded text-[10px] font-bold" data-id="${r.id}">Fulfill</button>` : '—'}</td>
+                  </tr>`).join('') : '<tr><td colspan="5" class="p-6 text-center text-gray-500">No privacy requests in queue</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          </div>`;
+        target.querySelectorAll('.admin-privacy-fulfill').forEach(btn => {
+          btn.onclick = async () => {
+            if (!confirm('Fulfill this privacy request? Delete requests will purge client PII.')) return;
+            try {
+              await api('/admin/privacy-requests/' + btn.getAttribute('data-id') + '/fulfill', { method: 'POST', body: '{}' });
+              toast('Privacy request fulfilled', 'success');
+              await pgAdminConsole(el);
+            } catch (err) { toast(err.message, 'error'); }
+          };
+        });
+      }
+
+      else if (activeTab === 'ops') {
+        target.innerHTML = `
+          <div class="grid md:grid-cols-2 gap-6">
+            <div class="glass rounded-xl border border-gray-800 p-5">
+              <h3 class="text-sm font-bold text-white mb-2"><i class="fas fa-database text-blue-400 mr-1.5"></i>D1 Backup Snapshot</h3>
+              <p class="text-xs text-gray-400 mb-4">Export all core tables to the R2 vault. Weekly GitHub Actions also run automatically.</p>
+              <button id="btn-admin-backup" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-lg"><i class="fas fa-cloud-upload-alt mr-1"></i>Trigger Backup Now</button>
+              <pre id="admin-backup-result" class="mt-3 text-[10px] text-gray-500 font-mono whitespace-pre-wrap hidden"></pre>
+            </div>
+            <div class="glass rounded-xl border border-gray-800 p-5">
+              <h3 class="text-sm font-bold text-white mb-2"><i class="fas fa-flask text-amber-400 mr-1.5"></i>Demo Tri-Bureau Case</h3>
+              <p class="text-xs text-gray-400 mb-4">Load bundled MFSN sample with scores, violations, and fundability for sales demos.</p>
+              <button id="btn-admin-demo-load" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-4 py-2 rounded-lg"><i class="fas fa-magic mr-1"></i>Load Demo Case</button>
+              <div id="admin-demo-result" class="mt-3 text-xs text-gray-400 hidden"></div>
+            </div>
+          </div>
+          <div class="glass rounded-xl border border-gray-800 p-5 mt-4">
+            <h3 class="text-sm font-bold text-white mb-2"><i class="fas fa-code text-indigo-400 mr-1.5"></i>Partner API</h3>
+            <p class="text-xs text-gray-400 mb-3">OpenAPI 3.0 documentation for integrations.</p>
+            <a href="/api/docs" target="_blank" rel="noopener" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2 rounded-lg"><i class="fas fa-external-link-alt"></i>Open API Docs</a>
+          </div>`;
+        const backupBtn = document.getElementById('btn-admin-backup');
+        if (backupBtn) backupBtn.onclick = async () => {
+          backupBtn.disabled = true;
+          try {
+            const r = await api('/admin/backup/trigger', { method: 'POST', body: '{}' });
+            const pre = document.getElementById('admin-backup-result');
+            if (pre) { pre.classList.remove('hidden'); pre.textContent = JSON.stringify(r, null, 2); }
+            toast('Backup snapshot saved to R2', 'success');
+          } catch (err) { toast(err.message, 'error'); }
+          backupBtn.disabled = false;
+        };
+        const demoBtn = document.getElementById('btn-admin-demo-load');
+        if (demoBtn) demoBtn.onclick = async () => {
+          demoBtn.disabled = true;
+          try {
+            const r = await api('/admin/demo/load-case', { method: 'POST', body: '{}' });
+            const box = document.getElementById('admin-demo-result');
+            if (box) {
+              box.classList.remove('hidden');
+              box.innerHTML = `Client <strong class="text-white">${escapeHtml(r.clientId)}</strong> · ${r.violationsFound || 0} violations · <button class="text-blue-400 font-bold ml-1" onclick="window._nav('client-detail',{clientId:'${r.clientId}'})">Open Workspace</button>`;
+            }
+            toast(r.message || 'Demo case loaded', 'success');
+          } catch (err) { toast(err.message, 'error'); }
+          demoBtn.disabled = false;
+        };
+      }
+
       else if (activeTab === 'sop') {
         target.innerHTML = `
           <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -7250,6 +7465,7 @@ async function pgAdminConsole(el) {
                 <div class="text-2xl font-bold text-white mt-1 font-mono">${v ?? '—'}</div>
               </div>`).join('')}
           </div>
+          ${(f.revolvingUtilPct != null) ? `<div class="glass rounded-xl border border-cyan-900/40 p-4 text-sm text-cyan-100"><strong>Revolving utilization:</strong> ${f.revolvingUtilPct}% (${money(f.revolvingBalance || 0)} / ${money(f.revolvingLimit || 0)} limits)</div>` : ''}
           ${(f.blockers||[]).length ? `<div class="glass rounded-xl border border-rose-900/40 p-4"><h3 class="text-xs font-bold text-rose-300 uppercase mb-2">Blockers</h3><ul class="space-y-1 text-sm text-slate-300">${f.blockers.map(b=>`<li>• ${escapeHtml(b)}</li>`).join('')}</ul></div>` : ''}
           <div class="grid md:grid-cols-2 gap-4">
             ${Object.values(roadmaps).map(r => `
@@ -7510,7 +7726,10 @@ async function pgAdminConsole(el) {
             <p class="text-sm text-gray-400 mt-2">Litigation score: <strong class="text-amber-300">${score}/100</strong> · Bureau: ${escapeHtml(result?.bureau || form.bureau)}</p>
             <button type="button" id="so-finish" class="mt-6 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-2.5 rounded-lg">${t('onboard.viewCockpit')}</button>
           </div>`;
-        document.getElementById('so-finish').onclick = () => navigate('client-cockpit');
+        document.getElementById('so-finish').onclick = () => {
+          if (result?.reportId) navigate('report-detail', { reportId: result.reportId, focusTab: 'violations' });
+          else navigate('client-cockpit');
+        };
       }
     }
 
@@ -7536,16 +7755,20 @@ async function pgAdminConsole(el) {
         return;
       }
 
-      const violations = actualViolations.map((v, i) => ({
-        id: v.id || `v-act-${i}`,
-        account_name: v.account_name || 'Inaccurate Record',
-        bureau: v.bureau || 'Experian',
-        severity: v.severity || 'high',
-        statute: v.statute || '15 U.S.C. § 1681e(b)',
-        error_type: v.error_type || v.subcategory || 'FCRA Inaccuracy',
-        finding_reason: v.finding_reason || v.description || 'Record reporting incorrect credit coordinates.',
-        fico_points: v.severity === 'critical' ? 40 : (v.severity === 'high' ? 25 : 15)
-      }));
+      const violations = actualViolations.map((v, i) => {
+        const liftEntry = (d.scoreProjection?.lifts || []).find((l) => l.id === v.id);
+        const lift = liftEntry?.lift ?? (v.severity === 'critical' ? 40 : (v.severity === 'high' ? 25 : 15));
+        return {
+          id: v.id || `v-act-${i}`,
+          account_name: v.account_name || 'Inaccurate Record',
+          bureau: v.bureau || 'Experian',
+          severity: v.severity || 'high',
+          statute: v.statute || '15 U.S.C. § 1681e(b)',
+          error_type: v.error_type || v.subcategory || 'FCRA Inaccuracy',
+          finding_reason: v.finding_reason || v.description || 'Record reporting incorrect credit coordinates.',
+          fico_points: lift,
+        };
+      });
 
       // Local State for interactive features
       if (!window._cockpitState) {

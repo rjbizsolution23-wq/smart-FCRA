@@ -38,6 +38,7 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
   { method: 'get', path: '/api/clients', summary: 'List clients for org', tags: ['Clients'], security: true },
   { method: 'post', path: '/api/clients', summary: 'Create client', tags: ['Clients'], security: true },
   { method: 'get', path: '/api/clients/{id}', summary: 'Client detail + reports/violations', tags: ['Clients'], security: true },
+  { method: 'get', path: '/api/clients/{id}/bureau-comparison', summary: 'Tri-bureau side-by-side comparison workspace', tags: ['Clients'], security: true },
   { method: 'put', path: '/api/clients/{id}', summary: 'Update client profile + consents', tags: ['Clients'], security: true },
   { method: 'post', path: '/api/clients/{id}/portal-invite', summary: 'Send portal welcome email', tags: ['Clients'], security: true },
   // Reports
@@ -47,7 +48,7 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
     requestBody: { clientId: 'string', bureau: 'string', rawText: 'string', fileName: 'string' } },
   { method: 'post', path: '/api/reports/onboard', summary: 'Staff autopilot onboarding (parse + client match)', tags: ['Reports'], security: true },
   { method: 'post', path: '/api/reports/mfsn-import', summary: 'Import MyFreeScoreNow JSON payload', tags: ['Reports'], security: true },
-  { method: 'post', path: '/api/reports/import-smartcredit', summary: 'Import SmartCredit payload', tags: ['Reports'], security: true },
+  { method: 'get', path: '/api/reports/{id}/comparison', summary: 'Report delta comparison vs prior pull', tags: ['Reports'], security: true },
   // Violations
   { method: 'get', path: '/api/violations', summary: 'List violations (filters)', tags: ['Violations'], security: true },
   { method: 'put', path: '/api/violations/{id}', summary: 'Update violation review status', tags: ['Violations'], security: true },
@@ -72,6 +73,9 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
   // Billing
   { method: 'post', path: '/api/billing/checkout', summary: 'Stripe checkout session', tags: ['Billing'], security: true },
   { method: 'post', path: '/api/billing/portal', summary: 'Stripe customer portal', tags: ['Billing'], security: true },
+  { method: 'get', path: '/api/billing/invoices', summary: 'List Stripe invoices for org', tags: ['Billing'], security: true },
+  { method: 'get', path: '/api/billing/mode', summary: 'Stripe mode (test/live/unconfigured)', tags: ['Billing'], security: true },
+  { method: 'post', path: '/api/billing/cancel', summary: 'Cancel subscription at period end', tags: ['Billing'], security: true },
   { method: 'post', path: '/api/billing/webhook', summary: 'Stripe webhook (signed)', tags: ['Billing'] },
   // AI
   { method: 'get', path: '/api/ai/mentors', summary: 'List AI mentors', tags: ['AI'], security: true },
@@ -80,6 +84,9 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
   { method: 'get', path: '/api/search', summary: 'Global search', tags: ['Search'], security: true },
   { method: 'get', path: '/api/admin/db-stats', summary: 'Platform DB statistics', tags: ['Admin'], security: true },
   { method: 'post', path: '/api/admin/backup/trigger', summary: 'Trigger D1 snapshot to R2 vault', tags: ['Admin'], security: true },
+  { method: 'post', path: '/api/admin/demo/load-case', summary: 'Load tri-bureau demo MFSN case', tags: ['Admin'], security: true },
+  { method: 'get', path: '/api/admin/privacy-requests', summary: 'Privacy request queue', tags: ['Admin'], security: true },
+  { method: 'post', path: '/api/admin/privacy-requests/{id}/fulfill', summary: 'Fulfill privacy delete/export request', tags: ['Admin'], security: true },
   { method: 'get', path: '/api/admin/organizations', summary: 'List all organizations', tags: ['Admin'], security: true },
   // Privacy
   { method: 'post', path: '/api/privacy/export', summary: 'GDPR/CCPA data export', tags: ['Privacy'], security: true },

@@ -2,7 +2,7 @@
 // Extracts structured data from raw credit report text with high precision
 // Branded for Rick Jefferson | RJ Business Solutions
 
-import type { CreditReportData, ParsedAccount, ParsedInquiry, ParsedPublicRecord } from './violations';
+import type { CreditReportData, ParsedAccount, ParsedInquiry, ParsedPublicRecord, CreditScoreBlock } from './violations';
 import { resolveBureau, type BureauName } from './bureau-utils';
 
 export function parseCreditReportText(
@@ -66,16 +66,109 @@ export function parseCreditReportText(
   // Separate collections and regular accounts
   const collections = accounts.filter(a => a.isCollection);
   const regularAccounts = accounts.filter(a => !a.isCollection);
+  const scores = extractCreditScores(text, bureau);
 
   return {
     bureau,
     reportDate,
     personalInfo,
+    scores,
     accounts: regularAccounts,
     inquiries,
     publicRecords,
     collections,
   };
+}
+
+/** Extract FICO / Vantage score blocks from raw report text (ACR PDF copy-paste, bureau HTML). */
+export function extractCreditScores(text: string, bureau: BureauName): CreditScoreBlock {
+  const scores: CreditScoreBlock = {};
+  const candidates: number[] = [];
+
+  const patterns: RegExp[] = [
+    /FICO\s*(?:Score)?\s*(?:8|9|10)?[:\s#]*(\d{3})/gi,
+    /(?:BEACON|EMPIRICA|FICO)[:\s#]*(\d{3})/gi,
+    /Credit\s*Score[:\s]*(\d{3})/gi,
+    /Score[:\s]*(\d{3})\s*(?:FICO|BEACON|EMPIRICA)/gi,
+    /Your\s+(?:credit\s+)?score[:\s]*(\d{3})/gi,
+    /(?:Risk\s+)?Score[:\s]*(\d{3})/gi,
+  ];
+
+  for (const re of patterns) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      const n = parseInt(m[1], 10);
+      if (n >= 300 && n <= 850) candidates.push(n);
+    }
+  }
+
+  const vantageMatch = text.match(/Vantage(?:Score)?\s*(?:3\.0)?[:\s]*(\d{3})/i);
+  if (vantageMatch) {
+    const v = parseInt(vantageMatch[1], 10);
+    if (v >= 300 && v <= 850) scores.vantage = v;
+  }
+
+  if (bureau === 'Equifax') {
+    const eq = text.match(/Equifax[\s\S]{0,120}?(\d{3})/i);
+    if (eq) {
+      const n = parseInt(eq[1], 10);
+      if (n >= 300 && n <= 850) scores.equifax = n;
+    }
+  } else if (bureau === 'Experian') {
+    const ex = text.match(/Experian[\s\S]{0,120}?(\d{3})/i);
+    if (ex) {
+      const n = parseInt(ex[1], 10);
+      if (n >= 300 && n <= 850) scores.experian = n;
+    }
+  } else if (bureau === 'TransUnion') {
+    const tu = text.match(/TransUnion[\s\S]{0,120}?(\d{3})/i);
+    if (tu) {
+      const n = parseInt(tu[1], 10);
+      if (n >= 300 && n <= 850) scores.transunion = n;
+    }
+  }
+
+  if (candidates.length) {
+    // Prefer the most common score value when multiple matches exist
+    const freq = new Map<number, number>();
+    for (const n of candidates) freq.set(n, (freq.get(n) || 0) + 1);
+    const best = [...freq.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    scores.fico = best;
+    if (bureau === 'Equifax') scores.equifax = scores.equifax ?? best;
+    if (bureau === 'Experian') scores.experian = scores.experian ?? best;
+    if (bureau === 'TransUnion') scores.transunion = scores.transunion ?? best;
+  }
+
+  return scores;
+}
+
+/** Aggregate revolving utilization from parsed tradelines. */
+export function computeRevolvingUtilization(accounts: ParsedAccount[]): {
+  utilPct: number | null;
+  totalBalance: number;
+  totalLimit: number;
+} {
+  let totalBalance = 0;
+  let totalLimit = 0;
+  for (const a of accounts) {
+    const type = (a.accountType || '').toLowerCase();
+    const isRevolving =
+      type.includes('revolv') ||
+      type.includes('credit card') ||
+      type.includes('charge card') ||
+      (a.creditLimit > 0 && !a.isCollection);
+    if (!isRevolving) continue;
+    const status = (a.accountStatus || '').toLowerCase();
+    if (status.includes('closed') && (a.currentBalance || 0) === 0) continue;
+    const lim = Number(a.creditLimit) || 0;
+    const bal = Number(a.currentBalance) || 0;
+    if (lim > 0) {
+      totalLimit += lim;
+      totalBalance += bal;
+    }
+  }
+  const utilPct = totalLimit > 0 ? Math.round((totalBalance / totalLimit) * 100) : null;
+  return { utilPct, totalBalance, totalLimit };
 }
 
 // ═══════════════════════════════════════════════════════════════

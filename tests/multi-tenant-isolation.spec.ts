@@ -50,15 +50,9 @@ test.describe('Smart FCRA v2 — Security & Isolation', () => {
     const login = await request.post(`${BASE}/api/auth/login`, {
       data: { email: 'suspended@iso-b.example', password: 'demo123456' },
     });
-    // Suspended org should fail at login (403) or later at API
-    if (login.status() === 403) {
-      expect(true).toBeTruthy();
-      return;
-    }
-    if (login.status() !== 200) {
-      test.skip();
-      return;
-    }
+    expect([401, 403]).toContain(login.status());
+    if (login.status() !== 200) return;
+
     const { token } = await login.json();
     const clients = await request.get(`${BASE}/api/clients`, {
       headers: { Authorization: `Bearer ${token}` },

@@ -135,7 +135,7 @@ export const TRADELINE_CATALOG = [
     reportsTo: ['Equifax', 'TransUnion'],
     bestFor: ['thin_file', 'rebuild'],
     impact: 'Adds alternative payment history when revolving history is thin.',
-    url: '#',
+    url: 'https://www.experian.com/consumer-products/credit-boost.html',
   },
   {
     id: 'secured-card-path',
@@ -145,7 +145,7 @@ export const TRADELINE_CATALOG = [
     reportsTo: ['Equifax', 'Experian', 'TransUnion'],
     bestFor: ['rebuild', 'utilization'],
     impact: 'Legitimate revolving tradeline you control — keep utilization under 10%.',
-    url: '#',
+    url: 'https://www.discover.com/credit-cards/secured/',
   },
   {
     id: 'credit-builder-loan',
@@ -155,7 +155,7 @@ export const TRADELINE_CATALOG = [
     reportsTo: ['Equifax', 'Experian', 'TransUnion'],
     bestFor: ['thin_file', 'mix', 'auto', 'mortgage'],
     impact: 'Adds installment mix lenders like to see alongside revolving.',
-    url: '#',
+    url: 'https://www.self.inc/',
   },
 ];
 

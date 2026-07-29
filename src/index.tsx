@@ -7,6 +7,7 @@ import { encryptText, decryptText, requireEncryptionKey } from './lib/crypto';
 import { generateAiText, listConfiguredProviders, generateFreeImage } from './lib/ai-providers';
 import { sendAppEmail } from './lib/email';
 import { MENTORS, buildMentorContext, KNOWLEDGE_CORPUS_META, retrieveCaseLawKnowledge, type MentorId } from './lib/mentors';
+import { estimateViolationScoreLift } from './data/fundability-engine';
 import { sendPortalWelcomeEmail, computeAndStoreFundability, portalBaseUrl, isSyntheticPortalEmail, tradelineRecsForClient } from './lib/portal-services';
 import { EDUCATION_LIBRARY, getLessonById, TRADELINE_CATALOG } from './data/portal-education';
 import { parseBankStatementText } from './data/bank-underwriting';
@@ -22,6 +23,8 @@ import { FOUNDER_TEMPLATES } from './engine/founder-templates';
 import { normalizeBureau, resolveBureau, bureauScoreColumn, type BureauName } from './engine/bureau-utils';
 import { buildOpenApiSpec, buildSwaggerUiHtml } from './lib/openapi-spec';
 import { captureSentryException } from './lib/sentry';
+import { importBureauReportsBatch } from './lib/bureau-import';
+import sampleMfsnReport from './data/sample-mfsn-report.json';
 
 // Secure field-level cryptographic helpers mapped to Worker bindings
 async function encryptPII(c: any, text: string): Promise<string> {
@@ -459,7 +462,7 @@ async function authMiddleware(c: any, next: any) {
   if (!sessionId) return c.json({ error: 'Unauthorized' }, 401);
 
   const session = await c.env.DB.prepare(
-    'SELECT s.*, u.id as user_id, u.name as user_name, u.email as user_email, u.role as user_role, u.is_active, u.org_id, COALESCE(u.must_change_password, 0) as must_change_password FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND s.expires_at > datetime("now")'
+    'SELECT s.*, u.id as user_id, u.name as user_name, u.email as user_email, u.role as user_role, u.is_active, u.org_id, COALESCE(u.must_change_password, 0) as must_change_password, COALESCE(u.mfa_enabled, 0) as mfa_enabled FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND s.expires_at > datetime("now")'
   ).bind(sessionId).first();
 
   if (!session) return c.json({ error: 'Session expired' }, 401);
@@ -473,6 +476,17 @@ async function authMiddleware(c: any, next: any) {
     const safePaths = ['/auth/change-password', '/auth/logout', '/auth/me', '/auth/mfa'];
     if (!safePaths.some((p) => c.req.path.includes(p))) {
       return c.json({ error: 'Password change required before continuing', code: 'MUST_CHANGE_PASSWORD' }, 403);
+    }
+  }
+
+  // Staff/admin: MFA required for elevated platform routes (backup, privacy purge, billing cancel)
+  if (
+    (session.user_role === 'admin' || session.user_role === 'super_admin') &&
+    session.mfa_enabled !== 1
+  ) {
+    const mfaElevatedPaths = ['/admin/backup', '/admin/demo', '/admin/privacy-requests', '/billing/cancel'];
+    if (mfaElevatedPaths.some((p) => c.req.path.includes(p))) {
+      return c.json({ error: 'MFA setup required for this action', code: 'MFA_REQUIRED' }, 403);
     }
   }
 
@@ -632,12 +646,11 @@ app.post('/api/auth/register', async (c) => {
   }
 
   try {
-    // New orgs start inactive until email verified when Resend is configured
-    const requireVerify = !!(c.env.CLOUDFLARE_EMAIL_API_TOKEN || c.env.RESEND_API_KEY);
+    const requireVerify = true;
     await c.env.DB.batch([
       c.env.DB.prepare('INSERT INTO organizations (id, name, slug, plan) VALUES (?, ?, ?, ?)').bind(orgId, orgName, slug, 'free'),
       c.env.DB.prepare('INSERT INTO users (id, org_id, email, name, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(
-        userId, orgId, email, name, passwordHash, 'admin', requireVerify ? 0 : 1
+        userId, orgId, email, name, passwordHash, 'admin', 0
       ),
     ]);
   } catch (e: any) {
@@ -646,13 +659,13 @@ app.post('/api/auth/register', async (c) => {
     return c.json({ error: `Internal error (db insert): ${e.message}` }, 500);
   }
 
-  if (c.env.CLOUDFLARE_EMAIL_API_TOKEN || c.env.RESEND_API_KEY) {
+  if (c.env.CLOUDFLARE_EMAIL_API_TOKEN || c.env.RESEND_API_KEY || c.env.SENDGRID_API_KEY) {
     const verifyToken = generateEmailToken();
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     await c.env.DB.prepare(
       'INSERT INTO email_verification_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
     ).bind(generateId(), userId, verifyToken, expires).run();
-    const base = c.env.FRONTEND_URL || 'https://smart-fcra.pages.dev';
+    const base = c.env.FRONTEND_URL || c.env.APP_BASE_URL || 'https://smart-fcra-v2.pages.dev';
     const verifyUrl = `${base}/?verifyEmail=${verifyToken}`;
     try {
       await sendAppEmail(c.env, {
@@ -672,13 +685,12 @@ app.post('/api/auth/register', async (c) => {
     });
   }
 
-  const sessionToken = createSessionToken();
-  const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-  const ip = c.req.header('CF-Connecting-IP') || 'unknown';
-  const ua = c.req.header('User-Agent') || 'unknown';
-  await c.env.DB.prepare('INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)').bind(sessionToken, userId, orgId, expires, ip, ua).run();
-
-  return c.json({ token: sessionToken, user: { id: userId, name, email, role: 'admin', org_id: orgId }, org: { id: orgId, name: orgName, plan: 'free' } });
+  return c.json({
+    requiresVerification: true,
+    message: 'Account created but email verification is required. Contact support to activate — outbound email is not configured on this deployment.',
+    user: { id: userId, name, email, role: 'admin', org_id: orgId },
+    org: { id: orgId, name: orgName, plan: 'free' },
+  }, 201);
 });
 
 app.post('/api/auth/login', async (c) => {
@@ -1224,6 +1236,77 @@ app.put('/api/clients/:id', authMiddleware, async (c) => {
   return c.json({ ok: true });
 });
 
+// Tri-bureau side-by-side comparison for interactive workspace
+app.get('/api/clients/:id/bureau-comparison', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const clientId = c.req.param('id');
+  const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first() as any;
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+
+  const bureauNames = ['Equifax', 'Experian', 'TransUnion'] as const;
+  const bureaus: any[] = [];
+
+  for (const bureau of bureauNames) {
+    const row = await c.env.DB.prepare(
+      `SELECT * FROM credit_reports WHERE client_id = ? AND org_id = ? AND bureau = ?
+       ORDER BY COALESCE(is_current,1) DESC, created_at DESC LIMIT 1`
+    ).bind(clientId, user.org_id, bureau).first() as any;
+
+    let parsed: any = null;
+    if (row?.parsed_data) {
+      try {
+        parsed = JSON.parse(await decryptPII(c, row.parsed_data));
+      } catch { /* soft */ }
+    }
+
+    const violCount = row
+      ? await c.env.DB.prepare('SELECT COUNT(*) as c FROM violations WHERE report_id = ? AND org_id = ?').bind(row.id, user.org_id).first() as any
+      : { c: 0 };
+
+    const scoreCol = bureau === 'Equifax' ? client.eq_score : bureau === 'Experian' ? client.ex_score : client.tu_score;
+    const parsedScore = parsed?.scores?.fico ?? parsed?.scores?.vantage ?? null;
+
+    bureaus.push({
+      bureau,
+      reportId: row?.id || null,
+      reportDate: row?.report_date || null,
+      score: scoreCol ?? parsedScore,
+      ficoScore: row?.fico_score ?? parsed?.scores?.fico ?? null,
+      vantageScore: row?.vantage_score ?? parsed?.scores?.vantage ?? null,
+      accountCount: parsed?.accounts?.length ?? row?.total_accounts ?? 0,
+      collectionCount: parsed?.collections?.length ?? row?.total_collections ?? 0,
+      inquiryCount: parsed?.inquiries?.length ?? row?.total_inquiries ?? 0,
+      violationCount: violCount?.c || 0,
+      accounts: (parsed?.accounts || []).slice(0, 40).map((a: any) => ({
+        creditorName: a.creditorName,
+        accountNumber: a.accountNumber,
+        accountStatus: a.accountStatus,
+        currentBalance: a.currentBalance,
+        creditLimit: a.creditLimit,
+        paymentStatus: a.paymentStatus,
+      })),
+      collections: (parsed?.collections || []).slice(0, 20).map((a: any) => ({
+        creditorName: a.creditorName,
+        currentBalance: a.currentBalance,
+        accountStatus: a.accountStatus,
+      })),
+    });
+  }
+
+  return c.json({
+    client: {
+      id: client.id,
+      first_name: client.first_name,
+      last_name: client.last_name,
+      eq_score: client.eq_score,
+      ex_score: client.ex_score,
+      tu_score: client.tu_score,
+    },
+    bureaus,
+    triBureauComplete: bureaus.filter((b) => b.reportId).length >= 3,
+  });
+});
+
 // ═══════════════════════════════════════════════════════════════
 // CLIENT PORTAL & SELF-SERVICE ENDPOINTS
 // ═══════════════════════════════════════════════════════════════
@@ -1248,13 +1331,24 @@ app.get('/api/client-portal/dashboard', authMiddleware, async (c) => {
   const documents = await c.env.DB.prepare('SELECT id, doc_type, title, status, created_at, signature_timestamp FROM documents WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC').bind(client.id, user.org_id).all();
   const activity = await c.env.DB.prepare('SELECT * FROM activity_log WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 30').bind(client.id, user.org_id).all();
 
+  const scores = [client.eq_score, client.ex_score, client.tu_score].filter((n: any) => typeof n === 'number') as number[];
+  const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 600;
+  const violationList = (violations?.results || []) as any[];
+  const scoreLifts = violationList.map((v) => ({
+    id: v.id,
+    severity: v.severity,
+    bureau: v.bureau,
+    lift: estimateViolationScoreLift(avgScore, v.severity || 'medium'),
+  }));
+
   return c.json({
     client,
     reports: reports?.results || [],
-    violations: violations?.results || [],
+    violations: violationList,
     documents: documents?.results || [],
     activity: activity?.results || [],
     needsOnboarding: !(reports?.results?.length),
+    scoreProjection: { avgScore, lifts: scoreLifts },
   });
 });
 
@@ -1386,6 +1480,7 @@ app.post('/api/client-portal/onboard', authMiddleware, async (c) => {
         accounts: parsed.accounts.length,
         collections: parsed.collections.length,
         inquiries: parsed.inquiries.length,
+        parsedAccounts: [...parsed.accounts, ...parsed.collections],
       },
       violationCount: violations.length,
     });
@@ -1924,12 +2019,20 @@ app.get('/api/client-portal/fundability', authMiddleware, async (c) => {
   if (!client) return c.json({ error: 'Client not found' }, 404);
   const goal = c.req.query('goal') || undefined;
   const report = await c.env.DB.prepare(
-    `SELECT total_accounts, total_collections, total_inquiries FROM credit_reports
+    `SELECT id, total_accounts, total_collections, total_inquiries, parsed_data FROM credit_reports
      WHERE client_id = ? AND org_id = ? ORDER BY COALESCE(is_current,1) DESC, created_at DESC LIMIT 1`
   ).bind(client.id, user.org_id).first() as any;
   const viol = await c.env.DB.prepare(
     `SELECT COUNT(*) as c FROM violations WHERE client_id = ? AND org_id = ?`
   ).bind(client.id, user.org_id).first() as any;
+
+  let parsedAccounts: any[] = [];
+  if (report?.parsed_data) {
+    try {
+      const parsed = JSON.parse(await decryptPII(c, report.parsed_data));
+      parsedAccounts = [...(parsed.accounts || []), ...(parsed.collections || [])];
+    } catch { /* soft */ }
+  }
 
   const fundability = await computeAndStoreFundability(c.env, {
     orgId: user.org_id,
@@ -1939,6 +2042,7 @@ app.get('/api/client-portal/fundability', authMiddleware, async (c) => {
       accounts: report?.total_accounts || 0,
       collections: report?.total_collections || 0,
       inquiries: report?.total_inquiries || 0,
+      parsedAccounts,
     },
     violationCount: viol?.c || 0,
     goal,
@@ -3298,6 +3402,7 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
         accounts: parsed.accounts.length,
         collections: parsed.collections.length,
         inquiries: parsed.inquiries.length,
+        parsedAccounts: [...parsed.accounts, ...parsed.collections],
       },
       violationCount: violations.length,
     });
@@ -4010,6 +4115,9 @@ app.get('/api/reports/:id/comparison', authMiddleware, async (c) => {
   const updatedAccounts: any[] = [];
   const newInquiries: any[] = [];
 
+  const acctBalance = (a: any) => Number(a?.currentBalance ?? a?.balance ?? 0);
+  const inqDate = (i: any) => i?.inquiryDate || i?.date || '';
+
   if (previousParsed) {
     const prevAccounts = previousParsed.accounts || [];
     const currAccounts = currentParsed.accounts || [];
@@ -4043,13 +4151,13 @@ app.get('/api/reports/:id/comparison', authMiddleware, async (c) => {
           accountNumber: acctNum,
           bureau: prevAct.bureau || currentReport.bureau,
           previousStatus: status,
-          previousBalance: prevAct.balance || 0,
+          previousBalance: acctBalance(prevAct),
           stattext: statutoryLeverage,
           statutoryReason: explanation
         });
       } else {
-        const prevBal = Number(prevAct.balance) || 0;
-        const currBal = Number(match.balance) || 0;
+        const prevBal = acctBalance(prevAct);
+        const currBal = acctBalance(match);
         const prevStatus = prevAct.accountStatus || prevAct.paymentStatus || '';
         const currStatus = match.accountStatus || match.paymentStatus || '';
 
@@ -4076,12 +4184,12 @@ app.get('/api/reports/:id/comparison', authMiddleware, async (c) => {
     for (const currInq of currInquiries) {
       const match = prevInquiries.find((prevInq: any) => {
         return cleanStr(currInq.creditorName) === cleanStr(prevInq.creditorName) &&
-               currInq.date === prevInq.date;
+               inqDate(currInq) === inqDate(prevInq);
       });
       if (!match) {
         newInquiries.push({
           creditorName: currInq.creditorName,
-          date: currInq.date,
+          date: inqDate(currInq),
           bureau: currInq.bureau || currentReport.bureau
         });
       }
@@ -4089,16 +4197,41 @@ app.get('/api/reports/:id/comparison', authMiddleware, async (c) => {
   }
 
   const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ?').bind(currentReport.client_id).first() as any;
-  const currentScores = {
-    Equifax: client?.eq_score || 720,
-    Experian: client?.ex_score || 710,
-    TransUnion: client?.tu_score || 715
+
+  const reportScore = (r: any, bureau: string) => {
+    if (!r) return null;
+    const b = String(bureau || r.bureau || '').toLowerCase();
+    if (b.includes('equifax')) return r.eq_score ?? r.fico_score ?? null;
+    if (b.includes('experian')) return r.ex_score ?? r.fico_score ?? null;
+    if (b.includes('transunion') || b.includes('trans union')) return r.tu_score ?? r.fico_score ?? r.vantage_score ?? null;
+    return r.fico_score ?? null;
   };
 
+  const currentScores = {
+    Equifax: client?.eq_score ?? reportScore(currentReport, 'Equifax'),
+    Experian: client?.ex_score ?? reportScore(currentReport, 'Experian'),
+    TransUnion: client?.tu_score ?? reportScore(currentReport, 'TransUnion'),
+  };
+
+  const previousScores = previousReport ? {
+    Equifax: reportScore(previousReport, 'Equifax'),
+    Experian: reportScore(previousReport, 'Experian'),
+    TransUnion: reportScore(previousReport, 'TransUnion'),
+  } : null;
+
   const scoreTrends = {
-    Equifax: { current: currentScores.Equifax, previous: currentScores.Equifax - (erasedAccounts.length * 8) },
-    Experian: { current: currentScores.Experian, previous: currentScores.Experian - (erasedAccounts.length * 11) },
-    TransUnion: { current: currentScores.TransUnion, previous: currentScores.TransUnion - (erasedAccounts.length * 7) }
+    Equifax: {
+      current: currentScores.Equifax,
+      previous: previousScores?.Equifax ?? (currentParsed?.scores?.equifax ?? currentParsed?.scores?.fico ?? null),
+    },
+    Experian: {
+      current: currentScores.Experian,
+      previous: previousScores?.Experian ?? (currentParsed?.scores?.experian ?? currentParsed?.scores?.fico ?? null),
+    },
+    TransUnion: {
+      current: currentScores.TransUnion,
+      previous: previousScores?.TransUnion ?? (currentParsed?.scores?.transunion ?? currentParsed?.scores?.vantage ?? currentParsed?.scores?.fico ?? null),
+    },
   };
 
   return c.json({
@@ -4598,76 +4731,50 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
       return c.json({ error: 'No bureau data found in SmartCredit report response' }, 404);
     }
 
+    const actionText = isSandbox
+      ? `Sandbox simulation import from SmartCredit: violations across ${bureauReports.length} bureaus`
+      : fileText
+        ? `Manual report upload/import from SmartCredit`
+        : `Live import from SmartCredit across ${bureauReports.length} bureau(s)`;
+
+    const batch = await importBureauReportsBatch(c, {
+      generateId,
+      encryptPII,
+      backpopulateClientInfo,
+      saveViolationsForReport,
+      persistBureauScores,
+      markPriorBureauReportsStale,
+      refreshBureauPackStatus,
+      computeAndStoreFundability,
+    }, {
+      clientId,
+      bureauReports,
+      rawPayload: payload,
+      sourceProvider: isSandbox ? 'SmartCreditSandbox' : 'SmartCredit',
+      sourcePayloadType: fileText ? 'file' : 'json',
+      fileNamePrefix: isSandbox ? 'smartcredit-sandbox' : `smartcredit_${String(resolvedTrackingToken || 'manual').slice(0, 24)}`,
+      activityAction: 'report_imported',
+      activityDescription: actionText,
+    });
+
+    const primary = batch.results[0];
     const primaryReport = bureauReports[0];
-    await backpopulateClientInfo(c, clientId, primaryReport.personalInfo, user.org_id);
-    const reportId = generateId();
-
-    let totalAccounts = 0;
-    let totalInquiries = 0;
-    let totalPublicRecords = 0;
-    let totalCollections = 0;
-    let allViolations: any[] = [];
-
-    for (const report of bureauReports) {
-      totalAccounts += report.accounts.length;
-      totalInquiries += report.inquiries.length;
-      totalPublicRecords += report.publicRecords.length;
-      totalCollections += report.collections.length;
-      
-      const bureauViolations = detectViolations(report);
-      allViolations = [...allViolations, ...bureauViolations];
-    }
-
-    const litScore = calculateLitigationScore(allViolations);
-
-    const encryptedRawText = await encryptPII(c, JSON.stringify(payload));
-    const encryptedParsedData = await encryptPII(c, JSON.stringify(primaryReport));
-
-    await c.env.DB.prepare(
-      'INSERT INTO credit_reports (id, org_id, client_id, uploaded_by, bureau, report_date, file_name, raw_text, parsed_data, status, total_accounts, total_inquiries, total_public_records, total_collections, analysis_started_at, analysis_completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime("now"), datetime("now"))'
-    ).bind(
-      reportId, 
-      user.org_id, 
-      clientId, 
-      user.id, 
-      bureauReports.map(r => r.bureau).join(', ') || 'SmartCredit', 
-      primaryReport.reportDate, 
-      resolvedTrackingToken ? `smartcredit_${resolvedTrackingToken}.json` : `smartcredit_manual.json`, 
-      encryptedRawText, 
-      encryptedParsedData, 
-      'analyzed', 
-      totalAccounts, 
-      totalInquiries, 
-      totalPublicRecords, 
-      totalCollections
-    ).run();
-
-    for (const v of allViolations) {
-      await c.env.DB.prepare(
-        'INSERT INTO violations (id, org_id, report_id, client_id, category, subcategory, severity, statute, statute_text, legal_standard, evidence, explanation, case_law, account_name, account_number, dofd, falloff_date, days_overdue, statutory_damages_min, statutory_damages_max, actual_damages_est, punitive_damages_est, attorney_fees_est, total_damages_min, total_damages_max, defendant_type, defendant_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).bind(v.id, user.org_id, reportId, clientId, v.category, v.subcategory, v.severity, v.statute, v.statuteText, v.legalStandard, v.evidence, v.explanation, v.caseLaw, v.accountName || null, v.accountNumber || null, v.dofd || null, v.falloffDate || null, v.daysOverdue || null, v.statutoryDamagesMin, v.statutoryDamagesMax, v.actualDamagesEst, v.punitiveDamagesEst, v.attorneyFeesEst, v.totalDamagesMin, v.totalDamagesMax, v.defendantType, v.defendantName).run();
-    }
-
-    const actionText = isSandbox 
-      ? `Sandbox simulation import from SmartCredit: ${allViolations.length} violations found across ${bureauReports.length} bureaus`
-      : fileText 
-        ? `Manual report upload/import from SmartCredit: ${allViolations.length} violations found`
-        : `Real import from SmartCredit: ${allViolations.length} violations found across ${bureauReports.length} bureaus`;
-
-    await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, report_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, clientId, reportId, user.id, 'report_imported', actionText, JSON.stringify({ score: litScore.score })).run();
 
     return c.json({
-      reportId,
-      bureau: bureauReports.map(r => r.bureau).join(', ') || 'SmartCredit',
-      reportDate: primaryReport.reportDate,
-      personalInfo: primaryReport.personalInfo,
-      totalAccounts,
-      totalCollections,
-      totalInquiries,
-      totalPublicRecords,
-      violationsFound: allViolations.length,
-      violations: allViolations,
-      litigationScore: litScore,
+      reportId: primary?.reportId,
+      reportIds: batch.results.map((r) => r.reportId),
+      reports: batch.results,
+      bureau: batch.results.map((r) => r.bureau).join(', '),
+      reportDate: primaryReport?.reportDate,
+      personalInfo: primaryReport?.personalInfo,
+      totalAccounts: bureauReports.reduce((s, r) => s + r.accounts.length, 0),
+      totalCollections: bureauReports.reduce((s, r) => s + r.collections.length, 0),
+      totalInquiries: bureauReports.reduce((s, r) => s + r.inquiries.length, 0),
+      totalPublicRecords: bureauReports.reduce((s, r) => s + r.publicRecords.length, 0),
+      violationsFound: batch.totalViolations,
+      bureauPack: batch.bureauPack,
+      fundability: batch.fundability,
+      isMockSandbox: isSandbox,
     });
   } catch (err: any) {
     console.error('SmartCredit Import Error:', err);
@@ -5027,6 +5134,14 @@ app.get('/api/billing/publishable-key', authMiddleware, async (c) => {
   return c.json({ publishableKey: c.env.STRIPE_PUBLISHABLE_KEY || null });
 });
 
+app.get('/api/billing/mode', authMiddleware, async (c) => {
+  const key = c.env.STRIPE_API_KEY || '';
+  let mode: 'test' | 'live' | 'unconfigured' = 'unconfigured';
+  if (key.startsWith('sk_test_')) mode = 'test';
+  else if (key.startsWith('sk_live_')) mode = 'live';
+  return c.json({ mode, testMode: mode === 'test' });
+});
+
 app.get('/api/company', async (c) => {
   return c.json({
     name: c.env.COMPANY_NAME || 'RJ Business Solutions',
@@ -5339,6 +5454,61 @@ app.post('/api/admin/backup/trigger', authMiddleware, adminGateMiddleware, async
     byteSize: payload.length,
     rowCounts,
     note: 'Full SQL export also runs weekly via GitHub Actions (d1-backup.yml).',
+  });
+});
+
+// Load tri-bureau demo case from bundled MFSN sample (sales / training sandbox)
+app.post('/api/admin/demo/load-case', authMiddleware, adminGateMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  let clientId = body.clientId as string | undefined;
+
+  if (!clientId) {
+    clientId = generateId();
+    await c.env.DB.prepare(
+      `INSERT INTO clients (id, org_id, first_name, last_name, email, phone, status, permissible_purpose_consent, croa_contract_agreed, tsr_advance_fee_waived, consent_timestamp, created_at, updated_at)
+       VALUES (?, ?, 'Demo', 'Admin', 'demo-case@smartfcra.local', '(505) 555-0199', 'active', 1, 1, 1, datetime('now'), datetime('now'), datetime('now'))`
+    ).bind(clientId, user.org_id).run();
+  } else {
+    const existing = await c.env.DB.prepare('SELECT id FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first();
+    if (!existing) return c.json({ error: 'Client not found' }, 404);
+  }
+
+  const bureauReports = mapMfsnToInternal(sampleMfsnReport as any);
+  if (!bureauReports.length) {
+    return c.json({ error: 'Demo sample payload could not be mapped' }, 500);
+  }
+
+  const demoViolationCount = bureauReports.reduce((s, r) => s + detectViolations(r).length, 0);
+
+  const batch = await importBureauReportsBatch(c, {
+    generateId,
+    encryptPII,
+    backpopulateClientInfo,
+    saveViolationsForReport,
+    persistBureauScores,
+    markPriorBureauReportsStale,
+    refreshBureauPackStatus,
+    computeAndStoreFundability,
+  }, {
+    clientId,
+    bureauReports,
+    rawPayload: sampleMfsnReport,
+    sourceProvider: 'DemoSandbox',
+    sourcePayloadType: 'mfsn-sample',
+    fileNamePrefix: 'demo-mfsn',
+    activityAction: 'demo_case_loaded',
+    activityDescription: `Loaded tri-bureau demo case (${bureauReports.length} bureaus, ${demoViolationCount} violations)`,
+  });
+
+  return c.json({
+    ok: true,
+    clientId,
+    isNewClient: !body.clientId,
+    ...batch,
+    violationsFound: demoViolationCount,
+    sandbox: true,
+    message: 'Demo tri-bureau case loaded with parsed scores, violations, and fundability snapshot.',
   });
 });
 

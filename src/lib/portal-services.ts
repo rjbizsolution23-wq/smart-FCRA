@@ -4,6 +4,8 @@
 import type { EmailEnv } from './email';
 import { sendAppEmail } from './email';
 import { buildFundabilityReport, type FundabilityInput } from '../data/fundability-engine';
+import { computeRevolvingUtilization } from '../engine/parser';
+import type { ParsedAccount } from '../engine/violations';
 import { recommendTradelines } from '../data/portal-education';
 
 export type PortalEnv = EmailEnv & {
@@ -110,7 +112,7 @@ export async function computeAndStoreFundability(
     orgId: string;
     clientId: string;
     client?: Record<string, unknown> | null;
-    reportMeta?: { accounts?: number; collections?: number; inquiries?: number } | null;
+    reportMeta?: { accounts?: number; collections?: number; inquiries?: number; parsedAccounts?: ParsedAccount[] } | null;
     violationCount?: number;
     goal?: string;
     monthlyIncome?: number | null;
@@ -124,6 +126,17 @@ export async function computeAndStoreFundability(
   const debt =
     opts.monthlyDebt ??
     (c.estimated_monthly_debt != null ? Number(c.estimated_monthly_debt) : null);
+
+  let revolvingUtilPct: number | null = null;
+  let openRevolvingBalance: number | undefined;
+  let openRevolvingLimit: number | undefined;
+  if (opts.reportMeta?.parsedAccounts?.length) {
+    const util = computeRevolvingUtilization(opts.reportMeta.parsedAccounts);
+    revolvingUtilPct = util.utilPct;
+    openRevolvingBalance = util.totalBalance;
+    openRevolvingLimit = util.totalLimit;
+  }
+
   const input: FundabilityInput = {
     eqScore: Number(c.eq_score) || null,
     exScore: Number(c.ex_score) || null,
@@ -132,6 +145,9 @@ export async function computeAndStoreFundability(
     collections: opts.reportMeta?.collections || 0,
     inquiries: opts.reportMeta?.inquiries || 0,
     violations: opts.violationCount || 0,
+    revolvingUtilPct,
+    openRevolvingBalance,
+    openRevolvingLimit,
     estimatedIncomeMonthly: income && income > 0 ? income : undefined,
     estimatedDebtPayments: debt != null && debt >= 0 ? debt : undefined,
     goal: opts.goal,
