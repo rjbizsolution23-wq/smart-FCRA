@@ -858,8 +858,9 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     if (state.user?.role === 'client' || state.impersonateClientId) {
       navItems = [
         { id: 'client-cockpit', icon: 'fa-rocket', label: t('nav.myCockpit') },
+        { id: 'client-journey', icon: 'fa-route', label: t('nav.myJourney') },
         { id: 'client-self-onboard', icon: 'fa-file-upload', label: t('nav.getStarted') },
-        { id: 'client-messages', icon: 'fa-comments', label: t('nav.messages') },
+        { id: 'client-messages', icon: 'fa-comments', label: t('nav.messages'), badgeId: 'notif-badge-msg' },
         { id: 'client-uploads', icon: 'fa-cloud-upload-alt', label: t('nav.vault') },
         { id: 'client-fundability', icon: 'fa-chart-line', label: t('nav.fundability') },
         { id: 'client-tradelines', icon: 'fa-handshake', label: t('nav.boostTools') },
@@ -949,7 +950,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
             <option value="es" ${state.locale === 'es' ? 'selected' : ''}>Español</option>
           </select>
         </div></div>
-        <nav class="flex-1 p-3 space-y-1 overflow-y-auto" role="navigation">${navItems.map(n=>`<button type="button" onclick="window._nav('${n.id}')" aria-current="${state.currentPage===n.id?'page':'false'}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${state.currentPage===n.id?'bg-blue-600/20 text-blue-400':'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}"><i class="fas ${n.icon} w-5 text-center text-xs" aria-hidden="true"></i><span>${n.label}</span></button>`).join('')}</nav>
+        <nav class="flex-1 p-3 space-y-1 overflow-y-auto" role="navigation">${navItems.map(n=>`<button type="button" onclick="window._nav('${n.id}')" aria-current="${state.currentPage===n.id?'page':'false'}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${state.currentPage===n.id?'bg-blue-600/20 text-blue-400':'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}"><i class="fas ${n.icon} w-5 text-center text-xs" aria-hidden="true"></i><span class="flex-1 text-left">${n.label}</span>${n.badgeId ? `<span id="${n.badgeId}" class="hidden min-w-[1.25rem] h-5 px-1.5 rounded-full bg-cyan-500 text-gray-950 text-[10px] font-bold flex items-center justify-center">${''}</span>` : ''}</button>`).join('')}</nav>
         <div class="p-3 border-t border-gray-800">
           <div class="flex items-center gap-2.5 px-2 mb-3"><div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold" aria-hidden="true">${(state.user?.name||'U')[0].toUpperCase()}</div><div class="min-w-0"><div class="text-xs font-medium text-gray-300 truncate">${state.user?.name||'User'}</div><div class="text-[10px] text-gray-500 truncate">${state.user?.role||'member'}</div></div></div>
           <button type="button" onclick="window._logout()" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-gray-500 hover:bg-red-900/20 hover:text-red-400 transition"><i class="fas fa-sign-out-alt" aria-hidden="true"></i>${t('nav.signOut')}</button>
@@ -1008,6 +1009,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         
         // Secure Self-Service Client Portal Pages
         case 'client-cockpit': await pgClientCockpit(el); break;
+        case 'client-journey': await pgClientJourney(el); break;
         case 'client-self-onboard': await pgClientSelfOnboard(el, state.pageData); break;
         case 'client-messages': await pgClientMessages(el); break;
         case 'client-uploads': await pgClientUploads(el); break;
@@ -7196,11 +7198,17 @@ async function pgAdminConsole(el) {
               <div id="admin-demo-result" class="mt-3 text-xs text-gray-400 hidden"></div>
             </div>
           </div>
-          <div class="glass rounded-xl border border-gray-800 p-5 mt-4">
-            <h3 class="text-sm font-bold text-white mb-2"><i class="fas fa-code text-indigo-400 mr-1.5"></i>Partner API</h3>
-            <p class="text-xs text-gray-400 mb-3">OpenAPI 3.0 documentation for integrations.</p>
-            <a href="/api/docs" target="_blank" rel="noopener" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2 rounded-lg"><i class="fas fa-external-link-alt"></i>Open API Docs</a>
-          </div>`;
+            <div class="glass rounded-xl border border-gray-800 p-5 mt-4">
+              <h3 class="text-sm font-bold text-white mb-2"><i class="fas fa-code text-indigo-400 mr-1.5"></i>Partner API</h3>
+              <p class="text-xs text-gray-400 mb-3">OpenAPI 3.0 documentation for integrations.</p>
+              <a href="/api/docs" target="_blank" rel="noopener" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2 rounded-lg"><i class="fas fa-external-link-alt"></i>Open API Docs</a>
+            </div>
+            <div class="glass rounded-xl border border-emerald-800/40 p-5 mt-4">
+              <h3 class="text-sm font-bold text-white mb-2"><i class="fas fa-sun text-emerald-400 mr-1.5"></i>Daily Client Motivation</h3>
+              <p class="text-xs text-gray-400 mb-4">Send personalized wake-up encouragement to opted-in clients (in-app + email/SMS per prefs). GitHub Actions also runs this daily.</p>
+              <button id="btn-admin-journey-dispatch" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg"><i class="fas fa-paper-plane mr-1"></i>Dispatch Today's Messages</button>
+              <pre id="admin-journey-result" class="mt-3 text-[10px] text-gray-500 font-mono whitespace-pre-wrap hidden"></pre>
+            </div>`;
         const backupBtn = document.getElementById('btn-admin-backup');
         if (backupBtn) backupBtn.onclick = async () => {
           backupBtn.disabled = true;
@@ -7225,6 +7233,17 @@ async function pgAdminConsole(el) {
             toast(r.message || 'Demo case loaded', 'success');
           } catch (err) { toast(err.message, 'error'); }
           demoBtn.disabled = false;
+        };
+        const journeyBtn = document.getElementById('btn-admin-journey-dispatch');
+        if (journeyBtn) journeyBtn.onclick = async () => {
+          journeyBtn.disabled = true;
+          try {
+            const r = await api('/admin/journey/dispatch-daily', { method: 'POST', body: '{}' });
+            const pre = document.getElementById('admin-journey-result');
+            if (pre) { pre.classList.remove('hidden'); pre.textContent = JSON.stringify(r, null, 2); }
+            toast(`Motivation sent to ${r.sent || 0} client(s)`, 'success');
+          } catch (err) { toast(err.message, 'error'); }
+          journeyBtn.disabled = false;
         };
       }
 
@@ -7965,9 +7984,148 @@ async function pgAdminConsole(el) {
     renderWizard();
   }
 
+  function journeyToneClass(tone) {
+    if (tone === 'celebrate') return 'border-emerald-500/30 bg-emerald-950/20 text-emerald-200';
+    if (tone === 'action') return 'border-amber-500/30 bg-amber-950/15 text-amber-100';
+    return 'border-cyan-500/25 bg-cyan-950/15 text-cyan-100';
+  }
+
+  function renderJourneyWakeupHtml(journeyPayload, opts = {}) {
+    if (!journeyPayload?.today && !journeyPayload?.journey) return '';
+    const j = journeyPayload.journey || {};
+    const today = journeyPayload.today || j.today || {};
+    const st = journeyPayload.state || {};
+    const suggestions = (today.suggestions || j.suggestions || []).slice(0, opts.maxSuggestions || 3);
+    const streak = st.streakDays || 0;
+    const compact = !!opts.compact;
+    const bodyLines = String(today.body || '').split('\n').filter(Boolean);
+    return `
+      <div class="relative overflow-hidden rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-slate-950 via-cyan-950/30 to-slate-950 p-5 shadow-xl ${compact ? '' : 'md:p-6'}">
+        <div class="absolute -top-16 -right-10 w-48 h-48 bg-cyan-400/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-20 left-10 w-40 h-40 bg-emerald-400/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="relative flex flex-col ${compact ? 'gap-3' : 'md:flex-row md:items-start md:justify-between gap-4'}">
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+              <span class="text-[10px] uppercase tracking-[0.2em] font-bold text-cyan-300/90">${escapeHtml(t('journey.title'))}</span>
+              <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-gray-300">${escapeHtml(j.phaseLabel || today.phaseLabel || 'Journey')}</span>
+              ${streak ? `<span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-emerald-300">${escapeHtml(t('journey.streak', { count: streak }))}</span>` : ''}
+            </div>
+            <h2 class="text-xl md:text-2xl font-bold text-white tracking-tight">${escapeHtml(today.title || t('journey.todaysFocus'))}</h2>
+            <p class="mt-2 text-sm text-slate-300 leading-relaxed whitespace-pre-line max-w-2xl">${escapeHtml(bodyLines.slice(0, compact ? 2 : 4).join('\n'))}</p>
+            <p class="mt-2 text-xs text-cyan-200/80 italic">${escapeHtml(today.encouragement || '')}</p>
+          </div>
+          <div class="shrink-0 flex flex-col gap-2 ${compact ? 'sm:flex-row' : ''}">
+            <button type="button" id="${opts.checkInId || 'journey-checkin-btn'}" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold px-4 py-2.5 rounded-xl transition shadow-lg shadow-cyan-500/20">
+              <i class="fas fa-heart mr-1.5"></i>${escapeHtml(t('journey.checkIn'))}
+            </button>
+            ${compact ? `<button type="button" onclick="window._nav('client-journey')" class="bg-white/5 hover:bg-white/10 border border-white/15 text-white text-xs font-bold px-4 py-2.5 rounded-xl">${escapeHtml(t('journey.openJourney'))}</button>` : ''}
+          </div>
+        </div>
+        <div class="relative mt-4 grid ${compact ? 'grid-cols-1' : 'md:grid-cols-2'} gap-3">
+          <div class="rounded-xl border border-amber-400/25 bg-amber-500/10 p-3">
+            <div class="text-[10px] uppercase tracking-wider font-bold text-amber-300 mb-1">${escapeHtml(t('journey.todaysFocus'))}</div>
+            <div class="text-sm font-semibold text-white">${escapeHtml(today.focusAction || 'Take one small step today')}</div>
+            <button type="button" onclick="window._nav('${escapeHtml(today.focusCta || 'client-fundability')}')" class="mt-2 text-[11px] font-bold text-amber-200 hover:text-white underline underline-offset-2">Go →</button>
+          </div>
+          ${!compact && typeof j.progressPct === 'number' ? `
+          <div class="rounded-xl border border-white/10 bg-black/20 p-3">
+            <div class="flex items-center justify-between text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-2">
+              <span>Journey progress</span><span class="text-white font-mono">${j.progressPct}%</span>
+            </div>
+            <div class="h-2 rounded-full bg-slate-900 border border-slate-700 overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-700" style="width:${Math.min(100, j.progressPct)}%"></div>
+            </div>
+          </div>` : ''}
+        </div>
+        ${suggestions.length ? `
+        <div class="relative mt-4">
+          <div class="text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-2">${escapeHtml(t('journey.suggestions'))}</div>
+          <div class="grid ${compact ? 'grid-cols-1 sm:grid-cols-3' : 'md:grid-cols-3'} gap-2">
+            ${suggestions.map(s => `
+              <button type="button" onclick="window._nav('${escapeHtml(s.ctaPage || 'client-cockpit')}')" class="text-left rounded-xl border p-3 transition hover:scale-[1.01] ${journeyToneClass(s.tone)}">
+                <div class="text-xs font-bold">${escapeHtml(s.title || '')}</div>
+                <div class="text-[11px] opacity-80 mt-1 leading-snug">${escapeHtml(s.detail || '')}</div>
+              </button>
+            `).join('')}
+          </div>
+        </div>` : ''}
+      </div>`;
+  }
+
+  async function pgClientJourney(el) {
+    const qs = portalClientQs();
+    let data = null;
+    try {
+      data = await api('/client-portal/journey' + qs);
+    } catch (err) {
+      el.innerHTML = `<div class="fade-in glass rounded-2xl border border-amber-500/30 p-8 text-center">
+        <i class="fas fa-route text-3xl text-amber-400 mb-3"></i>
+        <h1 class="text-xl font-bold text-white mb-2">${escapeHtml(t('journey.title'))}</h1>
+        <p class="text-sm text-gray-400">${escapeHtml(err.message || 'Journey is warming up — ask your advisor to apply migration 0010.')}</p>
+      </div>`;
+      return;
+    }
+
+    const j = data.journey || {};
+    const milestones = j.milestones || [];
+
+    function paint(payload) {
+      data = payload;
+      el.innerHTML = `
+        <div class="fade-in space-y-5 max-w-4xl">
+          <div class="space-y-1">
+            <h1 class="text-2xl font-bold text-white tracking-tight">${escapeHtml(t('journey.title'))}</h1>
+            <p class="text-sm text-slate-400">${escapeHtml(t('journey.subtitle'))}</p>
+          </div>
+          ${renderJourneyWakeupHtml(payload, { checkInId: 'journey-page-checkin' })}
+          <div class="glass rounded-2xl border border-gray-800 p-5">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-white mb-3"><i class="fas fa-flag-checkered text-emerald-400 mr-1.5"></i>${escapeHtml(t('journey.milestones'))}</h2>
+            <div class="grid sm:grid-cols-2 gap-2.5">
+              ${milestones.map(m => `
+                <div class="flex items-start gap-3 rounded-xl border ${m.done ? 'border-emerald-500/25 bg-emerald-950/20' : 'border-gray-800 bg-gray-950/40'} p-3">
+                  <i class="fas ${m.done ? 'fa-check-circle text-emerald-400' : 'fa-circle text-gray-600'} mt-0.5"></i>
+                  <div class="text-sm ${m.done ? 'text-emerald-100' : 'text-gray-300'}">${escapeHtml(m.label)}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" id="journey-send-today" class="bg-slate-100 hover:bg-white text-slate-900 text-xs font-bold px-4 py-2 rounded-xl"><i class="fas fa-sun mr-1.5"></i>Send today's wake-up to me</button>
+            <button type="button" onclick="window._nav('client-settings')" class="bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold px-4 py-2 rounded-xl">Journey settings</button>
+          </div>
+        </div>`;
+      const checkBtn = document.getElementById('journey-page-checkin');
+      if (checkBtn) checkBtn.onclick = async () => {
+        checkBtn.disabled = true;
+        try {
+          const r = await api('/client-portal/journey/check-in', { method: 'POST', body: JSON.stringify(portalClientBody()) });
+          toast(r.message || 'Checked in', 'success');
+          const fresh = await api('/client-portal/journey' + qs);
+          paint(fresh);
+        } catch (err) { toast(err.message, 'error'); checkBtn.disabled = false; }
+      };
+      const sendBtn = document.getElementById('journey-send-today');
+      if (sendBtn) sendBtn.onclick = async () => {
+        sendBtn.disabled = true;
+        try {
+          const r = await api('/client-portal/journey/send-today', { method: 'POST', body: JSON.stringify(portalClientBody({ force: false })) });
+          toast(r.sent ? 'Wake-up delivered' : (r.skipped === 'already_sent_today' ? 'Already sent today' : 'Skipped'), r.sent ? 'success' : 'info');
+        } catch (err) { toast(err.message, 'error'); }
+        sendBtn.disabled = false;
+      };
+    }
+
+    paint(data);
+  }
+
   async function pgClientCockpit(el) {
     try {
-      const d = await api('/client-portal/dashboard' + (state.impersonateClientId ? `?clientId=${state.impersonateClientId}` : ''));
+      const dashQs = state.impersonateClientId ? `?clientId=${state.impersonateClientId}` : '';
+      const [d, journeyPayload] = await Promise.all([
+        api('/client-portal/dashboard' + dashQs),
+        api('/client-portal/journey' + dashQs).catch(() => null),
+      ]);
+      let journeyData = journeyPayload;
       const client = d.client || {};
       const actualViolations = d.violations || [];
       const documents = d.documents || [];
@@ -8080,6 +8238,7 @@ async function pgAdminConsole(el) {
                   <h1 class="text-2xl font-bold text-white mb-1">Welcome back, ${escapeHtml(client.first_name)}!</h1>
                   <p class="text-xs text-gray-400 font-mono">Secure Client Autopilot Dashboard &bull; Case ID: NEL-${client.id || 'Active'}</p>
                   <div class="flex flex-wrap gap-2 mt-3">
+                    <button onclick="window._nav('client-journey')" class="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-cyan-500/15 border border-cyan-400/40 text-cyan-200">My Journey</button>
                     <button onclick="window._nav('client-messages')" class="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">Messages</button>
                     <button onclick="window._nav('client-fundability')" class="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300">Fundability</button>
                     <button onclick="window._nav('client-tutor')" class="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-violet-500/10 border border-violet-500/30 text-violet-300">My Tutor</button>
@@ -8096,6 +8255,8 @@ async function pgAdminConsole(el) {
                 </div>
               </div>
             </div>
+
+            ${journeyData ? renderJourneyWakeupHtml(journeyData, { compact: true, checkInId: 'cockpit-journey-checkin', maxSuggestions: 3 }) : ''}
 
             <!-- Dashboard Fast Stats Row: Scores, Damages & Checklist Progress -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -8422,6 +8583,25 @@ async function pgAdminConsole(el) {
             }
           };
         }
+
+        const journeyCheckIn = document.getElementById('cockpit-journey-checkin');
+        if (journeyCheckIn) {
+          journeyCheckIn.onclick = async () => {
+            journeyCheckIn.disabled = true;
+            try {
+              const r = await api('/client-portal/journey/check-in', {
+                method: 'POST',
+                body: JSON.stringify(portalClientBody()),
+              });
+              toast(r.message || 'Checked in — keep going!', 'success');
+              journeyData = await api('/client-portal/journey' + dashQs).catch(() => journeyData);
+              renderState();
+            } catch (err) {
+              toast(err.message, 'error');
+              journeyCheckIn.disabled = false;
+            }
+          };
+        }
       }
 
       // Handle checkbox logic in FICO Simulator
@@ -8563,9 +8743,14 @@ async function pgAdminConsole(el) {
     let mfa = { enabled: false };
     let posture = null;
     let alerts = [];
+    let journeyState = { focusGoal: 'mortgage', motivationOptIn: true };
     try { mfa = await api('/auth/mfa/status'); } catch (_) {}
     try { posture = await api('/security/posture'); } catch (_) {}
     try { const a = await api('/client-portal/alerts' + qs); alerts = a.alerts || []; } catch (_) {}
+    try {
+      const j = await api('/client-portal/journey' + qs);
+      if (j?.state) journeyState = j.state;
+    } catch (_) {}
 
     el.innerHTML = `
       <div class="fade-in space-y-5 max-w-3xl">
@@ -8573,6 +8758,23 @@ async function pgAdminConsole(el) {
           <h1 class="text-xl font-bold text-white"><i class="fas fa-user-shield text-slate-200 mr-2"></i>Security & Privacy</h1>
           <p class="text-sm text-slate-400 mt-1">Password policy, MFA, alerts, and CCPA/GDPR controls — coded into the platform.</p>
         </div>
+
+        <form id="journey-settings-form" class="glass rounded-xl border border-cyan-800/40 p-4 space-y-3">
+          <h2 class="text-sm font-bold text-white"><i class="fas fa-route text-cyan-400 mr-1.5"></i>${escapeHtml(t('journey.title'))}</h2>
+          <p class="text-[11px] text-gray-500">Daily wake-ups and smart suggestions keep your credit journey encouraging and on track.</p>
+          <label class="block text-xs text-gray-400">${escapeHtml(t('journey.focusGoal'))}
+            <select id="j-focus" class="mt-1 w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white">
+              <option value="mortgage" ${journeyState.focusGoal === 'mortgage' ? 'selected' : ''}>Mortgage / home</option>
+              <option value="auto" ${journeyState.focusGoal === 'auto' ? 'selected' : ''}>Auto loan</option>
+              <option value="student" ${journeyState.focusGoal === 'student' ? 'selected' : ''}>Student / education</option>
+              <option value="debt" ${journeyState.focusGoal === 'debt' ? 'selected' : ''}>Debt escape</option>
+              <option value="rebuild" ${journeyState.focusGoal === 'rebuild' ? 'selected' : ''}>General rebuild</option>
+            </select>
+          </label>
+          <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="j-motivation" ${journeyState.motivationOptIn !== false ? 'checked' : ''}> ${escapeHtml(t('journey.motivationOptIn'))}</label>
+          <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="j-optin" checked> Keep me on the personalized journey experience</label>
+          <button class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-2 rounded-lg">Save journey preferences</button>
+        </form>
 
         ${posture ? `<div class="glass rounded-xl border border-emerald-500/20 p-4">
           <div class="flex justify-between items-center mb-3">
@@ -8672,6 +8874,21 @@ async function pgAdminConsole(el) {
           preferredLanguage: document.getElementById('n-lang').value,
         }))});
         toast('Preferences saved', 'success');
+      } catch (err) { toast(err.message, 'error'); }
+    };
+    const journeyForm = document.getElementById('journey-settings-form');
+    if (journeyForm) journeyForm.onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await api('/client-portal/journey/settings', {
+          method: 'PUT',
+          body: JSON.stringify(portalClientBody({
+            focusGoal: document.getElementById('j-focus').value,
+            motivationOptIn: document.getElementById('j-motivation').checked,
+            journeyOptIn: document.getElementById('j-optin').checked,
+          })),
+        });
+        toast('Journey preferences saved', 'success');
       } catch (err) { toast(err.message, 'error'); }
     };
     document.getElementById('priv-export').onclick = async () => {

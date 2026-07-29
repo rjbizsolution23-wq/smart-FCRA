@@ -24,6 +24,7 @@ import { normalizeBureau, resolveBureau, bureauScoreColumn, type BureauName } fr
 import { buildOpenApiSpec, buildSwaggerUiHtml } from './lib/openapi-spec';
 import { captureSentryException } from './lib/sentry';
 import { importBureauReportsBatch } from './lib/bureau-import';
+import { loadClientJourney, checkInJourney, generateAndDispatchDailyMotivation, dispatchDailyMotivationBatch } from './lib/portal-journey';
 import sampleMfsnReport from './data/sample-mfsn-report.json';
 
 // Secure field-level cryptographic helpers mapped to Worker bindings
@@ -303,6 +304,8 @@ type Bindings = {
   PLATFORM_BOOTSTRAP_PASSWORD?: string;
   /** When "true"/"1", staff (admin/super_admin) must enable MFA before any protected API (except MFA/auth safe paths). */
   STAFF_MFA_REQUIRED_ALL?: string;
+  /** Shared secret for scheduled daily journey motivation dispatch (GitHub Actions / cron). */
+  JOURNEY_CRON_SECRET?: string;
   ENVIRONMENT?: string;
   COMPANY_NAME?: string;
   COMPANY_OWNER?: string;
@@ -2150,6 +2153,124 @@ app.put('/api/client-portal/roadmap-progress', authMiddleware, async (c) => {
         Math.max(1, completedSteps.length + completedDocs.length + (body.totalItems || 1))) * 100
     ),
   });
+});
+
+// ── Client journey + daily motivational wake-ups ──────────────
+app.get('/api/client-portal/journey', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  try {
+    const data = await loadClientJourney(c.env, client);
+    return c.json({
+      journey: data.plan,
+      state: {
+        phase: data.state.phase,
+        streakDays: data.state.streak_days || 0,
+        longestStreak: data.state.longest_streak || 0,
+        lastCheckInDate: data.state.last_check_in_date,
+        focusGoal: data.state.focus_goal || 'mortgage',
+        motivationOptIn: data.state.motivation_opt_in !== 0,
+      },
+      today: data.todayMessage,
+      todayLogged: data.todayLogged,
+    });
+  } catch (e: any) {
+    console.error('[journey] load failed', e);
+    return c.json({ error: 'Journey unavailable — run migrations 0010', detail: e.message }, 503);
+  }
+});
+
+app.post('/api/client-portal/journey/check-in', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  const client = await resolvePortalClientSafe(c, user, body.clientId);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  try {
+    const result = await checkInJourney(c.env, client);
+    // Ensure today's motivation exists in-app (idempotent)
+    await generateAndDispatchDailyMotivation(c.env, client).catch(() => null);
+    return c.json({
+      ok: true,
+      streak: result.streak,
+      longest: result.longest,
+      journey: result.plan,
+      message: result.streak > 1
+        ? `Day ${result.streak} — keep showing up. You’re building something real.`
+        : 'Checked in for today. One focused step is enough.',
+    });
+  } catch (e: any) {
+    return c.json({ error: e.message || 'Check-in failed' }, 500);
+  }
+});
+
+app.put('/api/client-portal/journey/settings', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json();
+  const client = await resolvePortalClientSafe(c, user, body.clientId);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+
+  const focusGoal = ['mortgage', 'auto', 'student', 'debt', 'rebuild'].includes(String(body.focusGoal || ''))
+    ? String(body.focusGoal)
+    : null;
+  const motivationOptIn = body.motivationOptIn === false || body.motivationOptIn === 0 ? 0 : 1;
+
+  if (body.journeyOptIn === false || body.journeyOptIn === 0 || body.journeyOptIn === true || body.journeyOptIn === 1) {
+    try {
+      await c.env.DB.prepare(
+        `UPDATE clients SET journey_opt_in = ?, updated_at = datetime('now') WHERE id = ? AND org_id = ?`
+      ).bind(body.journeyOptIn === false || body.journeyOptIn === 0 ? 0 : 1, client.id, user.org_id).run();
+    } catch { /* soft if column missing pre-migration */ }
+  }
+
+  try {
+    const existing = await c.env.DB.prepare(`SELECT id FROM client_journey_state WHERE client_id = ?`).bind(client.id).first() as any;
+    if (existing) {
+      await c.env.DB.prepare(
+        `UPDATE client_journey_state SET motivation_opt_in = ?, focus_goal = COALESCE(?, focus_goal), updated_at = datetime('now') WHERE id = ?`
+      ).bind(motivationOptIn, focusGoal, existing.id).run();
+    } else {
+      await c.env.DB.prepare(
+        `INSERT INTO client_journey_state (id, org_id, client_id, phase, focus_goal, motivation_opt_in, updated_at)
+         VALUES (?, ?, ?, 'get_started', ?, ?, datetime('now'))`
+      ).bind(generateId(), user.org_id, client.id, focusGoal || 'mortgage', motivationOptIn).run();
+    }
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+
+  return c.json({ ok: true, focusGoal: focusGoal || 'mortgage', motivationOptIn: motivationOptIn === 1 });
+});
+
+app.post('/api/client-portal/journey/send-today', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  const client = await resolvePortalClientSafe(c, user, body.clientId);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const result = await generateAndDispatchDailyMotivation(c.env, client, { force: !!body.force });
+  return c.json(result);
+});
+
+/** Cron / GitHub Actions: send daily wake-up motivations to opted-in clients */
+app.post('/api/cron/daily-motivation', async (c) => {
+  const secret = c.env.JOURNEY_CRON_SECRET || c.env.MAILING_WEBHOOK_SECRET;
+  const provided = c.req.header('X-Cron-Secret') || c.req.header('Authorization')?.replace(/^Bearer\s+/i, '');
+  if (!secret || provided !== secret) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const stats = await dispatchDailyMotivationBatch(c.env, {
+    orgId: body.orgId,
+    limit: body.limit || 300,
+  });
+  await writeSecurityAudit(c.env, {
+    orgId: body.orgId || null,
+    actorRole: 'system',
+    action: 'daily_motivation_cron',
+    resourceType: 'journey',
+    detail: stats,
+  }).catch(() => null);
+  return c.json({ ok: true, ...stats, ranAt: new Date().toISOString() });
 });
 
 app.get('/api/client-portal/tradelines', authMiddleware, async (c) => {
@@ -5579,7 +5700,17 @@ const D1_BACKUP_TABLES = [
   'sessions', 'activity_log', 'portal_messages', 'portal_uploads', 'portal_alerts',
   'education_progress', 'tutor_memory', 'fundability_snapshots', 'tradeline_orders',
   'underwriting_snapshots', 'security_audit_log', 'privacy_requests', 'roadmap_progress',
+  'client_journey_state', 'daily_motivation_log',
 ];
+
+app.post('/api/admin/journey/dispatch-daily', authMiddleware, adminGateMiddleware, async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const stats = await dispatchDailyMotivationBatch(c.env, {
+    orgId: body.orgId || c.get('user')?.org_id,
+    limit: body.limit || 200,
+  });
+  return c.json({ ok: true, ...stats });
+});
 
 app.post('/api/admin/backup/trigger', authMiddleware, adminGateMiddleware, async (c) => {
   if (!c.env.DOCS) {

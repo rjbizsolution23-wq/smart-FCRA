@@ -1,0 +1,36 @@
+name: Smart FCRA v2 — Daily Client Motivation
+
+on:
+  schedule:
+    # Every day 13:00 UTC (~8am US Eastern / 7am Central)
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Max clients to process'
+        required: false
+        default: '300'
+
+jobs:
+  dispatch-motivation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send daily motivational wake-ups
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          JOURNEY_CRON_SECRET: ${{ secrets.JOURNEY_CRON_SECRET }}
+          MAILING_WEBHOOK_SECRET: ${{ secrets.MAILING_WEBHOOK_SECRET }}
+          LIMIT: ${{ github.event.inputs.limit || '300' }}
+        run: |
+          BASE="${APP_BASE_URL:-https://smart-fcra-v2.pages.dev}"
+          SECRET="${JOURNEY_CRON_SECRET:-$MAILING_WEBHOOK_SECRET}"
+          if [ -z "$SECRET" ]; then
+            echo "JOURNEY_CRON_SECRET (or MAILING_WEBHOOK_SECRET) is not configured — skipping."
+            exit 0
+          fi
+          curl -fsS -X POST "${BASE%/}/api/cron/daily-motivation" \
+            -H "Content-Type: application/json" \
+            -H "X-Cron-Secret: ${SECRET}" \
+            -d "{\"limit\": ${LIMIT}}"
+          echo ""
+          echo "Daily motivation dispatch complete."

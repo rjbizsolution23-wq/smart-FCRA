@@ -50,6 +50,18 @@ const mockEnv = {
   assert(spec.info?.title?.includes('Smart FCRA'), 'spec title');
   assert(spec.paths['/api/health'], 'health path documented');
   assert(spec.paths['/api/client-portal/onboard'], 'client onboard path documented');
+  assert(spec.paths['/api/client-portal/journey'], 'client journey path documented');
+  assert(spec.paths['/api/cron/daily-motivation'], 'daily motivation cron documented');
+}
+
+// Daily motivation cron rejects missing secret
+{
+  const res = await app.request('/api/cron/daily-motivation', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  }, mockEnv);
+  assert(res.status === 401, 'POST /api/cron/daily-motivation without secret returns 401');
 }
 
 // Swagger UI docs page

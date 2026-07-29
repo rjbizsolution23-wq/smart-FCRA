@@ -72,6 +72,13 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
   { method: 'get', path: '/api/client-portal/education', summary: 'Education library + progress', tags: ['Client Portal'], security: true },
   { method: 'post', path: '/api/client-portal/tutor/chat', summary: 'AI finance tutor chat', tags: ['Client Portal'], security: true },
   { method: 'put', path: '/api/client-portal/profile', summary: 'Update client profile + language', tags: ['Client Portal'], security: true },
+  { method: 'get', path: '/api/client-portal/journey', summary: 'Personalized journey plan + today’s motivation', tags: ['Client Portal'], security: true },
+  { method: 'post', path: '/api/client-portal/journey/check-in', summary: 'Daily journey check-in (streak)', tags: ['Client Portal'], security: true },
+  { method: 'put', path: '/api/client-portal/journey/settings', summary: 'Journey focus goal + motivation opt-in', tags: ['Client Portal'], security: true,
+    requestBody: { focusGoal: 'mortgage|auto|student|debt|rebuild', motivationOptIn: 'boolean', journeyOptIn: 'boolean' } },
+  { method: 'post', path: '/api/client-portal/journey/send-today', summary: 'Generate/send today’s motivational wake-up', tags: ['Client Portal'], security: true },
+  { method: 'post', path: '/api/cron/daily-motivation', summary: 'Cron: batch daily motivational messages (X-Cron-Secret)', tags: ['Cron'] },
+  { method: 'post', path: '/api/admin/journey/dispatch-daily', summary: 'Admin: dispatch daily motivations now', tags: ['Admin'], security: true },
   // Billing
   { method: 'post', path: '/api/billing/checkout', summary: 'Stripe checkout session', tags: ['Billing'], security: true },
   { method: 'post', path: '/api/billing/portal', summary: 'Stripe customer portal', tags: ['Billing'], security: true },
