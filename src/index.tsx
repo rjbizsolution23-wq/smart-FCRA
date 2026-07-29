@@ -20,6 +20,8 @@ import { DOCUMENT_TYPES, type DocumentData } from './engine/documents';
 import { generatePDFReport, type PDFReportData, generatePDFFromText } from './engine/pdf-generator';
 import { FOUNDER_TEMPLATES } from './engine/founder-templates';
 import { normalizeBureau, resolveBureau, bureauScoreColumn, type BureauName } from './engine/bureau-utils';
+import { buildOpenApiSpec, buildSwaggerUiHtml } from './lib/openapi-spec';
+import { captureSentryException } from './lib/sentry';
 
 // Secure field-level cryptographic helpers mapped to Worker bindings
 async function encryptPII(c: any, text: string): Promise<string> {
@@ -334,7 +336,7 @@ app.use('/api/*', cors());
 // ═══════════════════════════════════════════════════════════════
 app.use('*', async (c, next) => {
   await next();
-  c.res.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://storage.googleapis.com https://images.unsplash.com https://imagedelivery.net https://api.qrserver.com; connect-src 'self' https://api.stripe.com https://fonts.googleapis.com https://api.groq.com https://openrouter.ai https://api-inference.huggingface.co https://generativelanguage.googleapis.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+  c.res.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://storage.googleapis.com https://images.unsplash.com https://imagedelivery.net https://api.qrserver.com; connect-src 'self' https://api.stripe.com https://fonts.googleapis.com https://api.groq.com https://openrouter.ai https://api-inference.huggingface.co https://generativelanguage.googleapis.com https://cdn.jsdelivr.net; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
   c.res.headers.set('X-Frame-Options', 'DENY');
   c.res.headers.set('X-Content-Type-Options', 'nosniff');
   c.res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -379,13 +381,15 @@ app.use('/api/auth/mfa/setup', rateLimiter);
 app.use('/api/reports/upload', rateLimiter);
 app.use('/api/reports/onboard', rateLimiter);
 app.use('/api/client-portal/uploads', rateLimiter);
+app.use('/api/client-portal/onboard', rateLimiter);
 app.use('/api/privacy/export', rateLimiter);
 app.use('/api/privacy/delete-request', rateLimiter);
 
 // ═══════════════════════════════════════════════════════════════
 // GLOBAL ERROR HANDLER & OBSERVABILITY TELEMETRY
 // ═══════════════════════════════════════════════════════════════
-app.onError((err, c) => {
+app.onError(async (err, c) => {
+  const session = c.get('session');
   const errorLog = {
     error: err.message,
     stack: err.stack,
@@ -394,9 +398,25 @@ app.onError((err, c) => {
     timestamp: new Date().toISOString(),
     ip: c.req.header('CF-Connecting-IP') || 'unknown',
     user_agent: c.req.header('User-Agent') || 'unknown',
-    user_id: c.get('session')?.user_id || 'anonymous',
+    user_id: session?.user_id || 'anonymous',
   };
   console.error('[CRITICAL UNHANDLED EXCEPTION]', JSON.stringify(errorLog));
+
+  c.executionCtx?.waitUntil?.(
+    captureSentryException(err instanceof Error ? err : new Error(String(err)), {
+      dsn: c.env.SENTRY_DSN,
+      environment: c.env.ENVIRONMENT || 'production',
+      request: {
+        method: c.req.method,
+        path: c.req.path,
+        ip: errorLog.ip,
+        userAgent: errorLog.user_agent,
+      },
+      user: session?.user_id ? { id: session.user_id, email: session.user_email } : undefined,
+      extra: errorLog,
+    })
+  );
+
   return c.json({ error: 'Internal Server Error', message: err.message }, 500);
 });
 
@@ -570,6 +590,18 @@ app.get('/api/health', async (c) => {
     version: '2.0.0',
     region: c.req.header('CF-Region') || 'unknown',
   });
+});
+
+// Partner API documentation (OpenAPI + Swagger UI)
+app.get('/api/openapi.json', (c) => {
+  const base = c.env.FRONTEND_URL || c.env.APP_BASE_URL || new URL(c.req.url).origin;
+  return c.json(buildOpenApiSpec(base.replace(/\/$/, '')));
+});
+
+app.get('/api/docs', (c) => {
+  const origin = new URL(c.req.url).origin;
+  const html = buildSwaggerUiHtml(`${origin}/api/openapi.json`);
+  return c.html(html);
 });
 
 // AUTH ROUTES
@@ -1221,7 +1253,176 @@ app.get('/api/client-portal/dashboard', authMiddleware, async (c) => {
     reports: reports?.results || [],
     violations: violations?.results || [],
     documents: documents?.results || [],
-    activity: activity?.results || []
+    activity: activity?.results || [],
+    needsOnboarding: !(reports?.results?.length),
+  });
+});
+
+// Client self-service onboarding — upload own credit report from portal
+app.post('/api/client-portal/onboard', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role !== 'client') {
+    return c.json({ error: 'This endpoint is for client portal users only' }, 403);
+  }
+
+  const client = await resolvePortalClientSafe(c, user);
+  if (!client) {
+    return c.json({ error: 'Client profile not found. Contact your advisor to complete setup.' }, 404);
+  }
+
+  const body = await c.req.json();
+  const rawText = String(body.rawText || '').trim();
+  const bureau = body.bureau || 'Unknown';
+  const fileName = String(body.fileName || 'client-upload.txt').slice(0, 180);
+
+  if (!rawText || rawText.length < 80) {
+    return c.json({ error: 'Credit report text required (minimum 80 characters)' }, 400);
+  }
+
+  const pp = body.permissiblePurposeConsent === true || client.permissible_purpose_consent === 1;
+  const croa = body.croaContractAgreed === true || client.croa_contract_agreed === 1;
+  const tsr = body.tsrAdvanceFeeWaived === true || client.tsr_advance_fee_waived === 1;
+  if (!pp || !croa || !tsr) {
+    return c.json({
+      error: 'Regulatory Compliance Consent Required',
+      complianceRequired: true,
+      message: 'You must attest to FCRA permissible purpose, CROA disclosure, and TSR advance-fee waiver before uploading.',
+    }, 403);
+  }
+
+  if (!client.permissible_purpose_consent || !client.croa_contract_agreed || !client.tsr_advance_fee_waived) {
+    await c.env.DB.prepare(
+      `UPDATE clients SET permissible_purpose_consent = 1, croa_contract_agreed = 1, tsr_advance_fee_waived = 1,
+       consent_timestamp = COALESCE(consent_timestamp, datetime('now')), updated_at = datetime('now')
+       WHERE id = ? AND org_id = ?`
+    ).bind(client.id, user.org_id).run();
+  }
+
+  const preferredLanguage = body.preferredLanguage || body.preferred_language;
+  if (preferredLanguage === 'en' || preferredLanguage === 'es') {
+    try {
+      await c.env.DB.prepare(
+        `UPDATE clients SET preferred_language = ?, updated_at = datetime('now') WHERE id = ? AND org_id = ?`
+      ).bind(preferredLanguage, client.id, user.org_id).run();
+    } catch { /* soft */ }
+  }
+
+  const parsed = parseCreditReportText(rawText, { bureauHint: bureau, fileName });
+  const resolvedBureau = normalizeBureau(parsed.bureau) !== 'Unknown'
+    ? normalizeBureau(parsed.bureau)
+    : resolveBureau({ hint: bureau, fileName, rawText });
+  parsed.bureau = resolvedBureau;
+
+  await backpopulateClientInfo(c, client.id, parsed.personalInfo, user.org_id);
+
+  const violations = detectViolations(parsed);
+  const litScore = calculateLitigationScore(violations);
+  const encryptedRawText = await encryptPII(c, rawText);
+  const encryptedParsedData = await encryptPII(c, JSON.stringify(parsed));
+
+  let reportId = generateId();
+  let mode: 'created' | 'replaced' = 'created';
+
+  if (resolvedBureau !== 'Unknown') {
+    const existing = await c.env.DB.prepare(
+      `SELECT id FROM credit_reports WHERE client_id = ? AND org_id = ? AND bureau = ? AND COALESCE(is_current, 1) = 1
+       ORDER BY created_at DESC LIMIT 1`
+    ).bind(client.id, user.org_id, resolvedBureau).first() as any;
+
+    if (existing?.id) {
+      reportId = existing.id;
+      mode = 'replaced';
+      await c.env.DB.prepare(
+        `UPDATE credit_reports SET uploaded_by = ?, bureau = ?, report_date = ?, file_name = ?, raw_text = ?, parsed_data = ?,
+         status = 'analyzed', total_accounts = ?, total_inquiries = ?, total_public_records = ?, total_collections = ?,
+         analysis_started_at = datetime('now'), analysis_completed_at = datetime('now')
+         WHERE id = ? AND org_id = ?`
+      ).bind(
+        user.id, resolvedBureau, parsed.reportDate, fileName, encryptedRawText, encryptedParsedData,
+        parsed.accounts.length, parsed.inquiries.length, parsed.publicRecords.length, parsed.collections.length,
+        reportId, user.org_id
+      ).run();
+    }
+  }
+
+  if (mode === 'created') {
+    if (resolvedBureau !== 'Unknown') {
+      await markPriorBureauReportsStale(c, client.id, user.org_id, resolvedBureau, reportId);
+    }
+    await c.env.DB.prepare(
+      `INSERT INTO credit_reports (id, org_id, client_id, uploaded_by, bureau, report_date, file_name, raw_text, parsed_data, status,
+       total_accounts, total_inquiries, total_public_records, total_collections, analysis_started_at, analysis_completed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'analyzed', ?, ?, ?, ?, datetime('now'), datetime('now'))`
+    ).bind(
+      reportId, user.org_id, client.id, user.id, resolvedBureau, parsed.reportDate, fileName,
+      encryptedRawText, encryptedParsedData,
+      parsed.accounts.length, parsed.inquiries.length, parsed.publicRecords.length, parsed.collections.length
+    ).run();
+    try {
+      await c.env.DB.prepare(`UPDATE credit_reports SET is_current = 1 WHERE id = ? AND org_id = ?`)
+        .bind(reportId, user.org_id).run();
+    } catch { /* soft */ }
+  }
+
+  await saveViolationsForReport(c, user.org_id, reportId, client.id, violations);
+  await persistBureauScores(c, {
+    reportId,
+    clientId: client.id,
+    orgId: user.org_id,
+    bureau: resolvedBureau,
+    parsed,
+    sourceProvider: 'ClientPortal',
+    sourcePayloadType: 'text',
+  });
+
+  let fundability = null;
+  try {
+    const cl = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(client.id, user.org_id).first() as any;
+    fundability = await computeAndStoreFundability(c.env, {
+      orgId: user.org_id,
+      clientId: client.id,
+      client: cl,
+      reportMeta: {
+        accounts: parsed.accounts.length,
+        collections: parsed.collections.length,
+        inquiries: parsed.inquiries.length,
+      },
+      violationCount: violations.length,
+    });
+  } catch (e) {
+    console.warn('[client-onboard] fundability skipped', e);
+  }
+
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id,
+    actorUserId: user.id,
+    actorRole: user.role,
+    action: 'client_self_onboard',
+    resourceType: 'credit_report',
+    resourceId: reportId,
+    ip: c.req.header('CF-Connecting-IP'),
+    detail: { bureau: resolvedBureau, violations: violations.length, mode },
+  });
+
+  await c.env.DB.prepare(
+    'INSERT INTO activity_log (id, org_id, client_id, report_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    generateId(), user.org_id, client.id, reportId, user.id, 'client_self_onboard',
+    `Client uploaded ${resolvedBureau} report: ${violations.length} violations found`,
+    JSON.stringify({ score: litScore.score, bureau: resolvedBureau, mode })
+  ).run();
+
+  return c.json({
+    success: true,
+    clientId: client.id,
+    reportId,
+    bureau: resolvedBureau,
+    mode,
+    violationsFound: violations.length,
+    violations: violations.slice(0, 50),
+    litigationScore: litScore,
+    fundability,
+    preferredLanguage: preferredLanguage || client.preferred_language || 'en',
   });
 });
 
@@ -5083,6 +5284,63 @@ const adminGateMiddleware = async (c: any, next: any) => {
   }
   return next();
 };
+
+// 0. POST /api/admin/backup/trigger — snapshot D1 tables to R2 vault
+const D1_BACKUP_TABLES = [
+  'organizations', 'users', 'clients', 'credit_reports', 'violations', 'documents',
+  'sessions', 'activity_log', 'portal_messages', 'portal_uploads', 'portal_alerts',
+  'education_progress', 'tutor_memory', 'fundability_snapshots', 'tradeline_orders',
+  'underwriting_snapshots', 'security_audit_log', 'privacy_requests',
+];
+
+app.post('/api/admin/backup/trigger', authMiddleware, adminGateMiddleware, async (c) => {
+  if (!c.env.DOCS) {
+    return c.json({ error: 'R2 DOCS binding required for backup storage' }, 503);
+  }
+
+  const exportedAt = new Date().toISOString();
+  const snapshot: Record<string, unknown> = { exportedAt, product: 'smart-fcra-v2', tables: {} as Record<string, unknown> };
+  const rowCounts: Record<string, number> = {};
+
+  for (const table of D1_BACKUP_TABLES) {
+    try {
+      const rows = await c.env.DB.prepare(`SELECT * FROM ${table}`).all();
+      const list = rows?.results || [];
+      (snapshot.tables as Record<string, unknown>)[table] = list;
+      rowCounts[table] = list.length;
+    } catch (e: any) {
+      rowCounts[table] = -1;
+      (snapshot.tables as Record<string, unknown>)[table] = { error: e.message };
+    }
+  }
+
+  const key = `backups/d1/snapshot_${exportedAt.replace(/[:.]/g, '-')}.json`;
+  const payload = JSON.stringify(snapshot);
+  await c.env.DOCS.put(key, payload, {
+    httpMetadata: { contentType: 'application/json' },
+    customMetadata: { exportedAt, type: 'd1-snapshot', byteSize: String(payload.length) },
+  });
+
+  await writeSecurityAudit(c.env, {
+    orgId: c.get('user')?.org_id,
+    actorUserId: c.get('user')?.id,
+    actorRole: c.get('user')?.role,
+    action: 'admin_backup_trigger',
+    resourceType: 'backup',
+    resourceId: key,
+    ip: c.req.header('CF-Connecting-IP'),
+    detail: { rowCounts, byteSize: payload.length },
+  });
+
+  return c.json({
+    ok: true,
+    key,
+    exportedAt,
+    byteSize: payload.length,
+    rowCounts,
+    note: 'Full SQL export also runs weekly via GitHub Actions (d1-backup.yml).',
+  });
+});
 
 // 1. GET /api/admin/db-stats
 app.get('/api/admin/db-stats', authMiddleware, adminGateMiddleware, async (c) => {

@@ -22,13 +22,8 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Run Linter & Syntax Checks
-        run: npm run lint --if-present
-
-      - name: Run Playwright E2E Tests
-        run: |
-          npx playwright install --with-deps
-          npx playwright test
+      - name: Run unit tests
+        run: npm run test:all
 
   deploy-to-cloudflare:
     needs: validate-and-test

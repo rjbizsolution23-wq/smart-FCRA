@@ -16,7 +16,130 @@
     disputeStatus: JSON.parse(localStorage.getItem('fcra_dispute_status') || '{}'),
     impersonateClientId: localStorage.getItem('fcra_impersonate_client_id') || null,
     impersonateClientName: localStorage.getItem('fcra_impersonate_client_name') || null,
+    locale: localStorage.getItem('fcra_locale') || 'en',
+    i18nStrings: {},
   };
+
+  // ── i18n (English + Spanish) ───────────────────────────────────
+  async function loadLocale(locale) {
+    const loc = locale === 'es' ? 'es' : 'en';
+    try {
+      const res = await fetch('/static/i18n/' + loc + '.json');
+      if (!res.ok) throw new Error('locale fetch failed');
+      state.i18nStrings = await res.json();
+      state.locale = loc;
+      localStorage.setItem('fcra_locale', loc);
+    } catch {
+      state.i18nStrings = {};
+      state.locale = 'en';
+    }
+  }
+
+  function t(key, vars) {
+    let s = state.i18nStrings[key] || key;
+    if (vars) {
+      Object.keys(vars).forEach((k) => {
+        s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), vars[k]);
+      });
+    }
+    return s;
+  }
+
+  window._setLocale = async function(locale) {
+    await loadLocale(locale);
+    if (state.token && state.user?.role === 'client' && !state.impersonateClientId) {
+      try {
+        await api('/client-portal/profile', {
+          method: 'PUT',
+          body: JSON.stringify({ preferredLanguage: locale }),
+        });
+      } catch (_) {}
+    }
+    render();
+  };
+
+  // ── Accessibility helpers ──────────────────────────────────────
+  let _focusTrapPrev = null;
+  function trapFocus(container) {
+    const focusable = container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    _focusTrapPrev = document.activeElement;
+    first.focus();
+    function onKey(e) {
+      if (e.key !== 'Tab') return;
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+    container.addEventListener('keydown', onKey);
+    container._focusTrapCleanup = () => container.removeEventListener('keydown', onKey);
+  }
+
+  function releaseFocusTrap(container) {
+    if (container?._focusTrapCleanup) container._focusTrapCleanup();
+    if (_focusTrapPrev && _focusTrapPrev.focus) _focusTrapPrev.focus();
+    _focusTrapPrev = null;
+  }
+
+  window._openModal = function(html, id) {
+    const modalId = id || 'app-modal';
+    let wrap = document.getElementById(modalId);
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = modalId;
+      wrap.setAttribute('role', 'dialog');
+      wrap.setAttribute('aria-modal', 'true');
+      wrap.className = 'fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/70';
+      document.body.appendChild(wrap);
+    }
+    wrap.innerHTML = html;
+    trapFocus(wrap);
+    wrap.querySelectorAll('[data-modal-close]').forEach((btn) => {
+      btn.onclick = () => { releaseFocusTrap(wrap); wrap.remove(); };
+    });
+    wrap.addEventListener('click', (e) => { if (e.target === wrap) { releaseFocusTrap(wrap); wrap.remove(); } });
+    document.addEventListener('keydown', function esc(e) {
+      if (e.key === 'Escape') { releaseFocusTrap(wrap); wrap.remove(); document.removeEventListener('keydown', esc); }
+    });
+  };
+
+  async function previewVaultPdf(uploadId, fileName) {
+    const qs = portalClientQs();
+    const res = await fetch('/api/client-portal/uploads/' + uploadId + '/download' + qs, {
+      headers: { Authorization: 'Bearer ' + state.token },
+    });
+    if (!res.ok) throw new Error('Preview failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    if (!window.pdfjsLib) {
+      window.open(url, '_blank');
+      return;
+    }
+    const pdf = await pdfjsLib.getDocument(url).promise;
+    let pagesHtml = '';
+    const maxPages = Math.min(pdf.numPages, 8);
+    for (let p = 1; p <= maxPages; p++) {
+      const page = await pdf.getPage(p);
+      const viewport = page.getViewport({ scale: 1.2 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      pagesHtml += `<div class="mb-4 bg-white rounded shadow"><img alt="Page ${p}" src="${canvas.toDataURL()}" class="w-full"/></div>`;
+    }
+    URL.revokeObjectURL(url);
+    window._openModal(`
+      <div class="bg-gray-900 border border-gray-700 rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-4" role="document">
+        <div class="flex justify-between items-center mb-3 sticky top-0 bg-gray-900 py-2 z-10">
+          <h2 class="text-sm font-bold text-white"><i class="fas fa-file-pdf text-red-400 mr-2"></i>${escapeHtml(fileName || 'PDF Preview')}</h2>
+          <button data-modal-close class="text-gray-400 hover:text-white px-2 py-1 rounded" aria-label="${t('common.close')}"><i class="fas fa-times"></i></button>
+        </div>
+        ${pagesHtml}
+        ${pdf.numPages > maxPages ? '<p class="text-xs text-gray-500 text-center">Showing first ' + maxPages + ' of ' + pdf.numPages + ' pages</p>' : ''}
+      </div>
+    `, 'vault-pdf-modal');
+  }
 
   function setState(u) {
     Object.assign(state, u);
@@ -684,16 +807,17 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     let navItems = [];
     if (state.user?.role === 'client' || state.impersonateClientId) {
       navItems = [
-        { id: 'client-cockpit', icon: 'fa-rocket', label: 'My Cockpit' },
-        { id: 'client-messages', icon: 'fa-comments', label: 'Messages' },
-        { id: 'client-uploads', icon: 'fa-cloud-upload-alt', label: 'My Vault' },
-        { id: 'client-fundability', icon: 'fa-chart-line', label: 'Fundability' },
-        { id: 'client-tradelines', icon: 'fa-handshake', label: 'Boost Tools' },
-        { id: 'client-tutor', icon: 'fa-user-graduate', label: 'My Tutor' },
-        { id: 'client-documents', icon: 'fa-file-signature', label: 'My Documents' },
-        { id: 'client-knowledge', icon: 'fa-graduation-cap', label: 'Education Hub' },
-        { id: 'client-settings', icon: 'fa-user-shield', label: 'Security & Privacy' },
-        { id: 'ai-studio', icon: 'fa-robot', label: 'AI Mentors' },
+        { id: 'client-cockpit', icon: 'fa-rocket', label: t('nav.myCockpit') },
+        { id: 'client-self-onboard', icon: 'fa-file-upload', label: t('nav.getStarted') },
+        { id: 'client-messages', icon: 'fa-comments', label: t('nav.messages') },
+        { id: 'client-uploads', icon: 'fa-cloud-upload-alt', label: t('nav.vault') },
+        { id: 'client-fundability', icon: 'fa-chart-line', label: t('nav.fundability') },
+        { id: 'client-tradelines', icon: 'fa-handshake', label: t('nav.boostTools') },
+        { id: 'client-tutor', icon: 'fa-user-graduate', label: t('nav.tutor') },
+        { id: 'client-documents', icon: 'fa-file-signature', label: t('nav.documents') },
+        { id: 'client-knowledge', icon: 'fa-graduation-cap', label: t('nav.education') },
+        { id: 'client-settings', icon: 'fa-user-shield', label: t('nav.security') },
+        { id: 'ai-studio', icon: 'fa-robot', label: t('nav.aiMentors') },
       ];
       if (state.impersonateClientId) {
         navItems.push({ id: 'exit-impersonation', icon: 'fa-user-shield text-amber-400', label: 'Exit Preview' });
@@ -727,7 +851,13 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     // Mobile nav toggle
     window._toggleMobileNav = () => {
       const nav = document.getElementById('mobile-nav');
-      if (nav) nav.classList.toggle('hidden');
+      const btn = document.querySelector('[aria-controls="mobile-nav"]');
+      if (nav) {
+        const hidden = nav.classList.contains('-translate-x-full');
+        nav.classList.toggle('-translate-x-full', !hidden);
+        nav.classList.toggle('translate-x-0', hidden);
+        if (btn) btn.setAttribute('aria-expanded', hidden ? 'true' : 'false');
+      }
     };
     // Branding URLs
     const RJ_LOGO = 'https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg';
@@ -742,23 +872,32 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           <button onclick="window._stopImpersonating()" class="bg-black/30 hover:bg-black/50 px-3 py-1 rounded-lg transition text-[10px] uppercase tracking-wider font-extrabold flex items-center gap-1 border border-white/20"><i class="fas fa-times-circle"></i>Exit Preview</button>
          </div>`
       : '';
-    return `<div class="flex h-screen overflow-hidden flex-col">
+    return `<a href="#page-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[9999] focus:bg-blue-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg">${t('a11y.skipToContent')}</a>
+    <div class="flex h-screen overflow-hidden flex-col">
       ${impersonationBanner}
       <!-- Top Branding Header -->
       ${MFSN_BANNER ? `<div class="h-16 bg-gray-900 border-b border-gray-800 flex items-center px-4 shrink-0"><img src="${MFSN_BANNER}" alt="MyFreeScoreNow" class="h-14 object-contain"></div>` : ''}
             <div class="flex flex-1 overflow-hidden">
-      <aside class="w-56 bg-gray-900/80 border-r border-gray-800 flex flex-col shrink-0">
+      <button type="button" class="md:hidden fixed top-20 left-3 z-50 bg-gray-800 text-white p-2 rounded-lg border border-gray-700" onclick="window._toggleMobileNav()" aria-label="Toggle navigation" aria-controls="mobile-nav" aria-expanded="false"><i class="fas fa-bars"></i></button>
+      <aside id="mobile-nav" class="w-56 bg-gray-900/80 border-r border-gray-800 flex flex-col shrink-0 fixed md:relative inset-y-0 left-0 z-40 md:translate-x-0 -translate-x-full transition-transform md:flex" aria-label="${t('a11y.mainNavigation')}">
         <div class="p-4 border-b border-gray-800"><div class="flex items-center gap-2.5">
           ${FCRA_LOGO ? `<img src="${FCRA_LOGO}" alt="RJ Business Solutions" class="w-12 h-12 rounded-xl object-cover border border-blue-500/20 shadow-[0_0_15px_rgba(10,102,255,0.15)]">` : `<div class="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center"><i class="fas fa-shield-alt text-blue-400 text-xs"></i></div>`}
           <div class="min-w-0"><div class="text-xs font-bold text-white truncate">FCRA Detector</div><div class="text-[10px] text-gray-500 truncate">${state.org?.name||'Org'}</div></div>
+        </div>
+        <div class="mt-3">
+          <label for="locale-switcher" class="sr-only">${t('a11y.localeSwitcher')}</label>
+          <select id="locale-switcher" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-2 py-1.5 text-xs text-white" onchange="window._setLocale(this.value)" aria-label="${t('a11y.localeSwitcher')}">
+            <option value="en" ${state.locale === 'en' ? 'selected' : ''}>English</option>
+            <option value="es" ${state.locale === 'es' ? 'selected' : ''}>Español</option>
+          </select>
         </div></div>
-        <nav class="flex-1 p-3 space-y-1 overflow-y-auto">${navItems.map(n=>`<button onclick="window._nav('${n.id}')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${state.currentPage===n.id?'bg-blue-600/20 text-blue-400':'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}"><i class="fas ${n.icon} w-5 text-center text-xs"></i><span>${n.label}</span></button>`).join('')}</nav>
+        <nav class="flex-1 p-3 space-y-1 overflow-y-auto" role="navigation">${navItems.map(n=>`<button type="button" onclick="window._nav('${n.id}')" aria-current="${state.currentPage===n.id?'page':'false'}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${state.currentPage===n.id?'bg-blue-600/20 text-blue-400':'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}"><i class="fas ${n.icon} w-5 text-center text-xs" aria-hidden="true"></i><span>${n.label}</span></button>`).join('')}</nav>
         <div class="p-3 border-t border-gray-800">
-          <div class="flex items-center gap-2.5 px-2 mb-3"><div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold">${(state.user?.name||'U')[0].toUpperCase()}</div><div class="min-w-0"><div class="text-xs font-medium text-gray-300 truncate">${state.user?.name||'User'}</div><div class="text-[10px] text-gray-500 truncate">${state.user?.role||'member'}</div></div></div>
-          <button onclick="window._logout()" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-gray-500 hover:bg-red-900/20 hover:text-red-400 transition"><i class="fas fa-sign-out-alt"></i>Sign Out</button>
+          <div class="flex items-center gap-2.5 px-2 mb-3"><div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold" aria-hidden="true">${(state.user?.name||'U')[0].toUpperCase()}</div><div class="min-w-0"><div class="text-xs font-medium text-gray-300 truncate">${state.user?.name||'User'}</div><div class="text-[10px] text-gray-500 truncate">${state.user?.role||'member'}</div></div></div>
+          <button type="button" onclick="window._logout()" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-gray-500 hover:bg-red-900/20 hover:text-red-400 transition"><i class="fas fa-sign-out-alt" aria-hidden="true"></i>${t('nav.signOut')}</button>
         </div>
       </aside>
-      <main class="flex-1 overflow-y-auto"><div class="p-6" id="page-content"><div class="flex items-center justify-center h-40"><i class="fas fa-spinner fa-spin text-blue-400 text-xl"></i></div></div></main>
+      <main class="flex-1 overflow-y-auto md:ml-0 ml-0" id="main-content" role="main"><div class="p-6 pt-16 md:pt-6" id="page-content" tabindex="-1"><div class="flex items-center justify-center h-40" role="status" aria-live="polite"><i class="fas fa-spinner fa-spin text-blue-400 text-xl" aria-hidden="true"></i><span class="sr-only">${t('common.loading')}</span></div></div></main>
       </div>
     </div>`;
   }
@@ -811,6 +950,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         
         // Secure Self-Service Client Portal Pages
         case 'client-cockpit': await pgClientCockpit(el); break;
+        case 'client-self-onboard': await pgClientSelfOnboard(el, state.pageData); break;
         case 'client-messages': await pgClientMessages(el); break;
         case 'client-uploads': await pgClientUploads(el); break;
         case 'client-fundability': await pgClientFundability(el); break;
@@ -6993,8 +7133,8 @@ async function pgAdminConsole(el) {
       el.innerHTML = `
         <div class="fade-in space-y-4 max-w-3xl">
           <div class="bg-gradient-to-r from-slate-950 via-emerald-950/30 to-slate-950 border border-emerald-500/20 rounded-2xl p-5">
-            <h1 class="text-xl font-bold text-white"><i class="fas fa-cloud-upload-alt text-emerald-400 mr-2"></i>Encrypted Document Vault</h1>
-            <p class="text-sm text-slate-400 mt-1">Binary files go to isolated Cloudflare R2. Text extracts are AES-256-GCM encrypted in D1. ${d.vault ? '<span class="text-emerald-300">R2 vault online.</span>' : '<span class="text-amber-300">R2 binding pending — text mode active.</span>'}</p>
+            <h1 class="text-xl font-bold text-white"><i class="fas fa-cloud-upload-alt text-emerald-400 mr-2"></i>${t('vault.title')}</h1>
+            <p class="text-sm text-slate-400 mt-1">Binary files go to isolated Cloudflare R2. Text extracts are AES-256-GCM encrypted in D1. ${d.vault ? '<span class="text-emerald-300">' + t('vault.r2Online') + '</span>' : '<span class="text-amber-300">' + t('vault.r2Pending') + '</span>'}</p>
           </div>
           <form id="vault-form" class="glass rounded-2xl border border-gray-800 p-4 space-y-3">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -7019,10 +7159,20 @@ async function pgAdminConsole(el) {
                   <div class="text-[11px] text-gray-500 uppercase tracking-wider mt-0.5">${escapeHtml(u.category)} · ${u.byte_size ? (Math.round(u.byte_size/1024)+' KB · ') : ''}${escapeHtml((u.created_at||'').slice(0,16))}${u.r2_key ? ' · R2' : ''}</div>
                   ${u.analysis_json ? `<p class="text-xs text-emerald-300/90 mt-2 line-clamp-3">${escapeHtml((()=>{try{const a=JSON.parse(u.analysis_json); return a.summary || (a.underwriting ? ('DTI '+a.underwriting.dtiPct+'% · income $'+a.underwriting.monthlyIncomeEstimate) : '')}catch(e){return ''}})())}</p>` : ''}
                 </div>
-                <button data-dl="${u.id}" class="vault-dl text-[10px] text-cyan-300 hover:text-cyan-200 shrink-0">Download</button>
+                <div class="flex flex-col gap-1 shrink-0">
+                <button type="button" data-dl="${u.id}" data-fn="${escapeHtml(u.file_name || '')}" data-mime="${escapeHtml(u.mime_type || '')}" class="vault-dl text-[10px] text-cyan-300 hover:text-cyan-200">${t('common.download')}</button>
+                ${(u.mime_type || '').includes('pdf') || (u.file_name || '').toLowerCase().endsWith('.pdf') ? `<button type="button" data-pv="${u.id}" data-fn="${escapeHtml(u.file_name || 'document.pdf')}" class="vault-pv text-[10px] text-amber-300 hover:text-amber-200">${t('vault.previewPdf')}</button>` : ''}
+                </div>
               </div>`).join('') : '<p class="text-sm text-gray-500">No uploads yet.</p>'}
           </div>
         </div>`;
+      document.querySelectorAll('.vault-pv').forEach(btn => {
+        btn.onclick = async () => {
+          try {
+            await previewVaultPdf(btn.getAttribute('data-pv'), btn.getAttribute('data-fn'));
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      });
       document.querySelectorAll('.vault-dl').forEach(btn => {
         btn.onclick = async () => {
           try {
@@ -7234,12 +7384,157 @@ async function pgAdminConsole(el) {
     }
   }
 
+  async function pgClientSelfOnboard(el, data) {
+    let step = (data && data.step) || 1;
+    let result = null;
+    const form = {
+      rawText: '',
+      bureau: 'Equifax',
+      fileName: 'my-credit-report.txt',
+      permissiblePurposeConsent: false,
+      croaContractAgreed: false,
+      tsrAdvanceFeeWaived: false,
+    };
+
+    function renderWizard() {
+      el.innerHTML = `
+        <div class="fade-in max-w-3xl mx-auto space-y-6">
+          <div class="glass rounded-2xl border border-blue-500/20 p-6">
+            <h1 class="text-2xl font-bold text-white">${t('onboard.title')}</h1>
+            <p class="text-sm text-gray-400 mt-2">${t('onboard.subtitle')}</p>
+          </div>
+          <div class="flex gap-2 text-xs font-mono uppercase tracking-wider">
+            <span class="px-3 py-1 rounded-full ${step >= 1 ? 'bg-blue-600/30 text-blue-300' : 'bg-gray-800 text-gray-500'}">1 · ${t('onboard.step.upload')}</span>
+            <span class="px-3 py-1 rounded-full ${step >= 2 ? 'bg-blue-600/30 text-blue-300' : 'bg-gray-800 text-gray-500'}">2 · ${t('onboard.step.consents')}</span>
+            <span class="px-3 py-1 rounded-full ${step >= 3 ? 'bg-blue-600/30 text-blue-300' : 'bg-gray-800 text-gray-500'}">3 · ${t('onboard.step.review')}</span>
+          </div>
+          <div id="self-onboard-body" class="glass rounded-2xl border border-gray-800 p-6"></div>
+        </div>`;
+      const body = document.getElementById('self-onboard-body');
+      if (step === 1) {
+        body.innerHTML = `
+          <label class="block text-xs text-gray-400 mb-2" for="so-bureau">${t('onboard.bureau')}</label>
+          <select id="so-bureau" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white mb-4">
+            <option value="Equifax">Equifax</option>
+            <option value="Experian">Experian</option>
+            <option value="TransUnion">TransUnion</option>
+          </select>
+          <div id="so-dropzone" class="border-2 border-dashed border-gray-700 rounded-xl p-8 text-center cursor-pointer hover:border-blue-500/50 transition mb-4" tabindex="0" role="button" aria-label="${t('onboard.dropzone')}">
+            <i class="fas fa-file-upload text-3xl text-blue-400 mb-3" aria-hidden="true"></i>
+            <p class="text-sm text-gray-300">${t('onboard.dropzone')}</p>
+            <input type="file" id="so-file" class="hidden" accept=".txt,.pdf,.html,.htm" />
+          </div>
+          <textarea id="so-raw" rows="10" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-sm text-white font-mono" placeholder="${t('onboard.dropzone')}">${escapeHtml(form.rawText)}</textarea>
+          <button type="button" id="so-next-1" class="mt-4 w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 rounded-lg">${t('common.continue')}</button>`;
+        const dz = document.getElementById('so-dropzone');
+        const fi = document.getElementById('so-file');
+        dz.onclick = () => fi.click();
+        dz.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fi.click(); } };
+        fi.onchange = async () => {
+          const f = fi.files[0];
+          if (!f) return;
+          form.fileName = f.name;
+          if (f.type === 'application/pdf' && window.pdfjsLib) {
+            const buf = await f.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument(buf).promise;
+            let text = '';
+            for (let i = 1; i <= Math.min(pdf.numPages, 20); i++) {
+              const page = await pdf.getPage(i);
+              const content = await page.getTextContent();
+              text += content.items.map((it) => it.str).join(' ') + '\n';
+            }
+            form.rawText = text;
+          } else {
+            form.rawText = await f.text();
+          }
+          document.getElementById('so-raw').value = form.rawText;
+        };
+        document.getElementById('so-next-1').onclick = () => {
+          form.rawText = document.getElementById('so-raw').value.trim();
+          form.bureau = document.getElementById('so-bureau').value;
+          if (form.rawText.length < 80) { toast('Please paste or upload a full credit report', 'error'); return; }
+          step = 2;
+          renderWizard();
+        };
+      } else if (step === 2) {
+        body.innerHTML = `
+          <div class="space-y-4 text-sm text-gray-300">
+            <label class="flex gap-3 items-start"><input type="checkbox" id="so-pp" class="mt-1" ${form.permissiblePurposeConsent ? 'checked' : ''}/><span>${t('onboard.consent.fcra')}</span></label>
+            <label class="flex gap-3 items-start"><input type="checkbox" id="so-croa" class="mt-1" ${form.croaContractAgreed ? 'checked' : ''}/><span>${t('onboard.consent.croa')}</span></label>
+            <label class="flex gap-3 items-start"><input type="checkbox" id="so-tsr" class="mt-1" ${form.tsrAdvanceFeeWaived ? 'checked' : ''}/><span>${t('onboard.consent.tsr')}</span></label>
+          </div>
+          <div class="flex gap-3 mt-6">
+            <button type="button" id="so-back-2" class="flex-1 bg-gray-800 text-gray-200 py-2.5 rounded-lg">${t('common.back')}</button>
+            <button type="button" id="so-analyze" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 rounded-lg"><i class="fas fa-search mr-1"></i>${t('onboard.analyze')}</button>
+          </div>`;
+        document.getElementById('so-back-2').onclick = () => { step = 1; renderWizard(); };
+        document.getElementById('so-analyze').onclick = async () => {
+          form.permissiblePurposeConsent = document.getElementById('so-pp').checked;
+          form.croaContractAgreed = document.getElementById('so-croa').checked;
+          form.tsrAdvanceFeeWaived = document.getElementById('so-tsr').checked;
+          if (!form.permissiblePurposeConsent || !form.croaContractAgreed || !form.tsrAdvanceFeeWaived) {
+            toast('All three consents are required', 'error');
+            return;
+          }
+          const btn = document.getElementById('so-analyze');
+          btn.disabled = true;
+          btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + t('common.loading');
+          try {
+            result = await api('/client-portal/onboard', {
+              method: 'POST',
+              body: JSON.stringify({
+                rawText: form.rawText,
+                bureau: form.bureau,
+                fileName: form.fileName,
+                permissiblePurposeConsent: true,
+                croaContractAgreed: true,
+                tsrAdvanceFeeWaived: true,
+                preferredLanguage: state.locale,
+              }),
+            });
+            step = 3;
+            renderWizard();
+          } catch (err) {
+            toast(err.message, 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-search mr-1"></i>' + t('onboard.analyze');
+          }
+        };
+      } else {
+        const vCount = result?.violationsFound || 0;
+        const score = result?.litigationScore?.score ?? '—';
+        body.innerHTML = `
+          <div class="text-center py-4">
+            <div class="text-4xl font-bold text-emerald-400 mb-2">${vCount}</div>
+            <p class="text-white font-medium">${t('onboard.violationsFound', { count: vCount })}</p>
+            <p class="text-sm text-gray-400 mt-2">Litigation score: <strong class="text-amber-300">${score}/100</strong> · Bureau: ${escapeHtml(result?.bureau || form.bureau)}</p>
+            <button type="button" id="so-finish" class="mt-6 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-2.5 rounded-lg">${t('onboard.viewCockpit')}</button>
+          </div>`;
+        document.getElementById('so-finish').onclick = () => navigate('client-cockpit');
+      }
+    }
+
+    renderWizard();
+  }
+
   async function pgClientCockpit(el) {
     try {
       const d = await api('/client-portal/dashboard' + (state.impersonateClientId ? `?clientId=${state.impersonateClientId}` : ''));
       const client = d.client || {};
       const actualViolations = d.violations || [];
       const documents = d.documents || [];
+      const reports = d.reports || [];
+
+      if (d.needsOnboarding && !state.impersonateClientId) {
+        el.innerHTML = `
+          <div class="fade-in max-w-2xl mx-auto text-center py-16 space-y-4">
+            <i class="fas fa-file-upload text-5xl text-blue-400" aria-hidden="true"></i>
+            <h1 class="text-2xl font-bold text-white">${t('cockpit.welcome', { name: escapeHtml(client.first_name || 'there') })}</h1>
+            <p class="text-gray-400">${t('cockpit.noReports')}</p>
+            <button type="button" onclick="window._nav('client-self-onboard')" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-3 rounded-xl">${t('cockpit.startOnboarding')}</button>
+          </div>`;
+        return;
+      }
 
       const violations = actualViolations.map((v, i) => ({
         id: v.id || `v-act-${i}`,
@@ -10186,5 +10481,8 @@ async function pgAdminConsole(el) {
     }
   }
 
-  render();
+  (async () => {
+    await loadLocale(localStorage.getItem('fcra_locale') || 'en');
+    render();
+  })();
 })();

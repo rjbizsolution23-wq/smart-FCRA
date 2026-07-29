@@ -1,0 +1,59 @@
+name: Smart FCRA v2 — D1 Database Backup
+
+on:
+  schedule:
+    # Weekly Sunday 06:00 UTC
+    - cron: '0 6 * * 0'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Export target'
+        required: true
+        default: 'remote'
+        type: choice
+        options:
+          - remote
+          - local
+
+jobs:
+  backup-d1:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Export D1 (remote)
+        if: github.event_name == 'schedule' || github.event.inputs.target == 'remote'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          chmod +x scripts/backup-database.sh
+          mkdir -p .backups
+          npx wrangler d1 export fcra-detector-v2 --remote --output=".backups/ci_backup_$(date -u +%Y%m%d-%H%M%S).sql"
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-backup-${{ github.run_id }}
+          path: .backups/*.sql
+          retention-days: 30
+
+      - name: Replicate to R2 (optional)
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          LATEST=$(ls -t .backups/*.sql | head -1)
+          KEY="backups/d1/ci_backup_$(date -u +%Y%m%d-%H%M%S).sql"
+          npx wrangler r2 object put "smart-fcra-v2-docs/${KEY}" --file="$LATEST" --remote
