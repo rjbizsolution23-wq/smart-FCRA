@@ -29,20 +29,16 @@ export type AiResult = {
   model: string;
 };
 
-/** NVIDIA NIM / integrate.api.nvidia.com — free/community instruct models */
+/** NVIDIA NIM — prefer three reliable instruct models, then light fallbacks */
 const NVIDIA_FREE_MODELS = [
-  'meta/llama-3.3-70b-instruct',
-  'meta/llama-3.1-70b-instruct',
   'meta/llama-3.1-8b-instruct',
   'google/gemma-2-9b-it',
-  'mistralai/mistral-nemo-12b-instruct',
   'microsoft/phi-3-mini-4k-instruct',
-  'nvidia/llama-3.1-nemotron-70b-instruct',
 ];
 
 const GROQ_FREE_MODELS = [
-  'llama-3.3-70b-versatile',
   'llama-3.1-8b-instant',
+  'llama-3.3-70b-versatile',
   'gemma2-9b-it',
 ];
 
@@ -50,12 +46,20 @@ const OPENROUTER_FREE_MODELS = [
   'meta-llama/llama-3.3-70b-instruct:free',
   'google/gemma-2-9b-it:free',
   'mistralai/mistral-7b-instruct:free',
-  'qwen/qwen-2.5-7b-instruct:free',
-  'nvidia/llama-3.1-nemotron-70b-instruct:free',
 ];
 
 function freeOnly(env: AiEnv): boolean {
   return String(env.FREE_AI_ONLY || 'true').toLowerCase() !== 'false';
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, ms = 12000): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function chatOpenAICompat(
@@ -65,7 +69,7 @@ async function chatOpenAICompat(
   messages: ChatMessage[],
   extraHeaders: Record<string, string> = {}
 ): Promise<string> {
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -78,7 +82,7 @@ async function chatOpenAICompat(
       temperature: 0.35,
       max_tokens: 2048,
     }),
-  });
+  }, 14000);
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`${res.status}: ${body.slice(0, 240)}`);
@@ -94,11 +98,11 @@ async function chatGemini(apiKey: string, messages: ChatMessage[]): Promise<stri
   const userParts = messages.filter(m => m.role !== 'system').map(m => `${m.role}: ${m.content}`).join('\n\n');
   const prompt = system ? `${system}\n\n${userParts}` : userParts;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-  });
+  }, 14000);
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 240)}`);
   const data = await res.json() as any;
   const text = data.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') || '';
