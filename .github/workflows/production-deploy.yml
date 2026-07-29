@@ -25,6 +25,21 @@ jobs:
       - name: Run unit tests
         run: npm run test:all
 
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Reset local D1 + seed
+        run: npm run db:reset
+
+      - name: E2E security tests
+        run: |
+          npm run preview &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3000/api/health && break
+            sleep 2
+          done
+          npx playwright test tests/multi-tenant-isolation.spec.ts
+
   deploy-to-cloudflare:
     needs: validate-and-test
     runs-on: ubuntu-latest

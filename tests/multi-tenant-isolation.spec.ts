@@ -96,4 +96,42 @@ test.describe('Smart FCRA v2 — Security & Isolation', () => {
     });
     expect(putRes.ok()).toBeTruthy();
   });
+
+  test('billing mode endpoint requires auth', async ({ request }) => {
+    const res = await request.get(`${BASE}/api/billing/mode`);
+    expect(res.status()).toBe(401);
+  });
+
+  test('authenticated admin can read billing mode and bureau comparison', async ({ request }) => {
+    const login = await request.post(`${BASE}/api/auth/login`, {
+      data: { email: 'demo@example.com', password: 'demo123456' },
+    });
+    expect(login.status()).toBe(200);
+    const { token } = await login.json();
+    const headers = { Authorization: `Bearer ${token}` };
+
+    const mode = await request.get(`${BASE}/api/billing/mode`, { headers });
+    expect(mode.ok()).toBeTruthy();
+    const modeBody = await mode.json();
+    expect(['test', 'live', 'unconfigured']).toContain(modeBody.mode);
+
+    const clients = await request.get(`${BASE}/api/clients`, { headers });
+    expect(clients.ok()).toBeTruthy();
+    const { clients: list } = await clients.json();
+    if (list?.length) {
+      const comp = await request.get(`${BASE}/api/clients/${list[0].id}/bureau-comparison`, { headers });
+      expect(comp.ok()).toBeTruthy();
+      const compBody = await comp.json();
+      expect(Array.isArray(compBody.bureaus)).toBeTruthy();
+      expect(compBody.bureaus.length).toBe(3);
+    }
+  });
+
+  test('trust center is public', async ({ request }) => {
+    const res = await request.get(`${BASE}/api/security/trust-center`);
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(typeof body.score).toBe('number');
+    expect(Array.isArray(body.controls)).toBeTruthy();
+  });
 });

@@ -169,8 +169,23 @@
     const headers = { 'Content-Type': 'application/json' };
     if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
     const res = await fetch(`/api${path}`, { ...opts, headers });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.error || `Error ${res.status}`);
+      err.code = data.code;
+      err.status = res.status;
+      err.data = data;
+      if (data.code === 'MFA_REQUIRED' && state.token) {
+        toast('MFA required for this action — enable it in Settings', 'warning');
+        if (state.user?.role === 'client') navigate('client-settings');
+        else navigate('settings');
+      } else if (data.code === 'MUST_CHANGE_PASSWORD' && state.token) {
+        toast('Password change required before continuing', 'warning');
+        if (state.user?.role === 'client') navigate('client-settings');
+        else navigate('settings');
+      }
+      throw err;
+    }
     return data;
   }
 
@@ -954,7 +969,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'global-search': await pgGlobalSearch(el); break;
         case 'client-detail': await pgClientDetail(el, state.pageData); break;
         case 'reports': await pgReports(el); break;
-        case 'report-history': await pgReportHistory(el); break;
+        case 'report-history': await pgReportHistory(el, state.pageData); break;
         case 'report-detail': await pgReportDetail(el, state.pageData); break;
         case 'violations': await pgViolations(el); break;
         case 'documents': await pgDocuments(el); break;
@@ -1117,8 +1132,8 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         ${statCard('fa-file-contract','Documents',res.documents.length,'purple')}
       </div>
       ${renderBureauTriad(res)}
-      <div class="flex border-b border-gray-800 mb-4">${['reports','violations','bureaus','documents','mailing','activity'].map((t,i)=>`<button class="client-tab pb-2.5 px-4 text-sm font-medium ${t==='violations'?'text-blue-400 border-b-2 border-blue-400':'text-gray-500 border-b-2 border-transparent hover:text-gray-300'}" data-tab="${t}">${t==='mailing'?'Mailing Campaigns':t==='bureaus'?'Tri-Bureau':(t[0].toUpperCase()+t.slice(1))} (${t==='activity'?res.activity.length:t==='mailing'?res.documents.filter(d=>d.status==='sent').length:t==='bureaus'?'3':res[t==='bureaus'?'reports':t].length)})</button>`).join('')}</div>
-      <div id="client-tab-content">${renderViolationsList(res.violations)}</div>
+      <div class="flex border-b border-gray-800 mb-4">${['reports','violations','bureaus','documents','mailing','activity'].map((t)=>`<button class="client-tab pb-2.5 px-4 text-sm font-medium ${(data.initialTab||'violations')===t?'text-blue-400 border-b-2 border-blue-400':'text-gray-500 border-b-2 border-transparent hover:text-gray-300'}" data-tab="${t}">${t==='mailing'?'Mailing Campaigns':t==='bureaus'?'Tri-Bureau':(t[0].toUpperCase()+t.slice(1))} (${t==='activity'?res.activity.length:t==='mailing'?res.documents.filter(d=>d.status==='sent').length:t==='bureaus'?'3':res[t==='bureaus'?'reports':t].length})</button>`).join('')}</div>
+      <div id="client-tab-content">${(data.initialTab && data.initialTab !== 'violations') ? '' : renderViolationsList(res.violations)}</div>
 
       <!-- Edit Client Slide-Over Panel -->
       <div id="edit-client-modal" class="fixed inset-0 z-[100] hidden">
@@ -1302,7 +1317,18 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       };
     }
 
-    // Show violations first since that's the money view
+    // Show violations first unless initialTab specified
+    const initialTab = data.initialTab || 'violations';
+    if (initialTab !== 'violations') {
+      const ct = $('#client-tab-content');
+      const tabBtn = document.querySelector(`.client-tab[data-tab="${initialTab}"]`);
+      if (tabBtn) {
+        document.querySelectorAll('.client-tab').forEach(t => { t.className = 'client-tab pb-2.5 px-4 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-gray-300'; });
+        tabBtn.className = 'client-tab pb-2.5 px-4 text-sm font-medium text-blue-400 border-b-2 border-blue-400';
+        if (initialTab === 'bureaus' && ct) loadBureauComparisonTab(ct, c.id);
+        else if (ct) tabBtn.click();
+      }
+    }
     document.querySelectorAll('.client-tab').forEach(tab => {
       tab.onclick = () => {
         document.querySelectorAll('.client-tab').forEach(t => { t.className = 'client-tab pb-2.5 px-4 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-gray-300'; });
@@ -3625,6 +3651,9 @@ Status: Discharged`;
             <button onclick="window._nav('report-comparison', { reportId: '${r.id}' })" class="bg-purple-600/20 border border-purple-500/30 text-purple-300 px-3.5 py-2 rounded-lg text-xs font-semibold hover:bg-purple-600/30 transition flex items-center gap-1.5">
               <i class="fas fa-balance-scale"></i>Compare Report
             </button>
+            <button onclick="window._nav('client-detail', { clientId: '${r.client_id}', initialTab: 'bureaus' })" class="bg-teal-600/20 border border-teal-500/30 text-teal-300 px-3.5 py-2 rounded-lg text-xs font-semibold hover:bg-teal-600/30 transition flex items-center gap-1.5">
+              <i class="fas fa-columns"></i>Tri-Bureau
+            </button>
             <button onclick="window._exportPDF('${r.id}')" class="bg-blue-600/20 border border-blue-500/30 text-blue-300 px-3.5 py-2 rounded-lg text-xs font-semibold hover:bg-blue-600/30 transition flex items-center gap-1.5">
               <i class="fas fa-file-pdf"></i>Download PDF
             </button>
@@ -5304,18 +5333,29 @@ Status: Discharged`;
   // ═══════════════════════════════════════════════════════════════
   async function pgSettings(el) {
     try {
-      const [orgRes, mfaRes] = await Promise.all([
+      const [orgRes, mfaRes, postureRes] = await Promise.all([
         api('/settings/org'),
         api('/auth/mfa/status'),
+        api('/security/posture').catch(() => null),
       ]);
       const org = orgRes.org || {};
       const settings = org.settings || {};
       const lh = settings.letterhead || {};
       const mfaEnabled = !!mfaRes.enabled;
+      const posture = postureRes || null;
 
       el.innerHTML = `<div class="fade-in space-y-6">
         <div><h1 class="text-xl font-bold text-white">Organization Settings</h1><p class="text-sm text-gray-400">Letterhead, security, and firm branding used on dispute PDFs</p></div>
         ${(state.user?.role === 'admin' || state.user?.role === 'super_admin') && !mfaEnabled ? `<div class="px-4 py-3 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-100 text-xs"><i class="fas fa-shield-alt mr-1.5"></i><strong>Staff MFA recommended:</strong> Enable MFA below before using backup, privacy fulfillment, or subscription cancellation.</div>` : ''}
+        ${posture ? `<div class="glass rounded-xl p-5 border border-emerald-900/40 bg-emerald-950/10">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-semibold text-white flex items-center gap-2"><i class="fas fa-shield-virus text-emerald-400"></i> Security Posture</h2>
+            <span class="text-2xl font-black text-emerald-400 font-mono">${posture.score}<span class="text-xs text-gray-500">/100</span></span>
+          </div>
+          <div class="grid md:grid-cols-2 gap-2 text-[11px]">
+            ${(posture.controls || []).slice(0, 6).map(c => `<div class="flex justify-between gap-2 py-1 border-b border-gray-800/50"><span class="text-gray-400">${escapeHtml(c.title)}</span><span class="${c.status === 'pass' ? 'text-green-400' : 'text-amber-300'} font-bold uppercase text-[10px]">${escapeHtml(c.status)}</span></div>`).join('')}
+          </div>
+        </div>` : ''}
 
         <div class="glass rounded-xl p-6 border border-gray-700">
           <h2 class="text-sm font-semibold text-white mb-4 flex items-center gap-2"><i class="fas fa-building text-blue-400"></i> Firm Letterhead</h2>
@@ -5330,6 +5370,15 @@ Status: Discharged`;
             <div><label class="block text-xs text-gray-400 mb-1">Email</label><input name="email" value="${escapeHtml(lh.email || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
             <div><label class="block text-xs text-gray-400 mb-1">Bar Number</label><input name="barNumber" value="${escapeHtml(lh.barNumber || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
             <div class="md:col-span-2"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">Save Letterhead</button></div>
+          </form>
+        </div>
+
+        <div class="glass rounded-xl p-6 border border-gray-700">
+          <h2 class="text-sm font-semibold text-white mb-4 flex items-center gap-2"><i class="fas fa-key text-amber-400"></i> Change Password</h2>
+          <form id="staff-pwd-form" class="flex flex-wrap gap-3 items-end">
+            <div><label class="block text-xs text-gray-400 mb-1">Current password</label><input type="password" name="currentPassword" required class="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white w-48"></div>
+            <div><label class="block text-xs text-gray-400 mb-1">New password</label><input type="password" name="newPassword" required minlength="8" class="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white w-48"></div>
+            <button type="submit" class="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">Update Password</button>
           </form>
         </div>
 
@@ -5358,6 +5407,19 @@ Status: Discharged`;
       </div>`;
 
       const lhForm = $('#letterhead-form');
+      const staffPwdForm = $('#staff-pwd-form');
+      if (staffPwdForm) staffPwdForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          await api('/auth/change-password', { method: 'POST', body: JSON.stringify({
+            currentPassword: fd.get('currentPassword'),
+            newPassword: fd.get('newPassword'),
+          })});
+          toast('Password updated', 'success');
+          e.target.reset();
+        } catch (err) { toast(err.message, 'error'); }
+      };
       if (lhForm) lhForm.onsubmit = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
@@ -5421,11 +5483,33 @@ Status: Discharged`;
   // LEGAL PAGES
   // ═══════════════════════════════════════════════════════════════
   async function pgLegal(el) {
+    let trust = null;
+    try { trust = await api('/security/trust-center'); } catch { trust = null; }
+    const trustBlock = trust ? `
+        <div class="glass rounded-xl border border-emerald-500/30 overflow-hidden">
+          <div class="bg-emerald-950/30 border-b border-emerald-500/20 px-6 py-4 flex items-center justify-between flex-wrap gap-3">
+            <div class="flex items-center gap-3"><i class="fas fa-shield-halved text-emerald-400 text-lg"></i><div><div class="text-sm font-semibold text-white">Trust Center</div><div class="text-[10px] text-gray-500">Live security posture · ${escapeHtml(trust.scoredAt || '')}</div></div></div>
+            <div class="text-3xl font-black text-emerald-400 font-mono">${trust.score}<span class="text-sm text-gray-500">/100</span></div>
+          </div>
+          <div class="p-6 grid md:grid-cols-2 gap-3">
+            ${(trust.controls || []).slice(0, 8).map(ctrl => `
+              <div class="bg-gray-900/40 rounded-lg p-3 border border-gray-800/80">
+                <div class="flex items-center justify-between gap-2 mb-1">
+                  <span class="text-xs font-bold text-white">${escapeHtml(ctrl.title)}</span>
+                  <span class="text-[9px] uppercase font-bold px-2 py-0.5 rounded ${ctrl.status === 'pass' ? 'bg-green-900/40 text-green-400' : ctrl.status === 'warn' ? 'bg-amber-900/40 text-amber-300' : 'bg-gray-800 text-gray-400'}">${escapeHtml(ctrl.status)}</span>
+                </div>
+                <p class="text-[10px] text-gray-500 leading-relaxed">${escapeHtml(ctrl.detail || '')}</p>
+              </div>`).join('')}
+          </div>
+        </div>` : '';
+
     el.innerHTML = `<div class="fade-in">
       <div class="flex items-center justify-between mb-8">
-        <div><h1 class="text-xl font-bold text-white">Legal & Compliance</h1><p class="text-sm text-gray-400">Terms of service, privacy policy, and disclaimers</p></div>
+        <div><h1 class="text-xl font-bold text-white">Legal & Compliance</h1><p class="text-sm text-gray-400">Terms of service, privacy policy, trust center, and disclaimers</p></div>
+        <a href="/api/docs" target="_blank" rel="noopener" class="text-xs text-blue-400 hover:text-blue-300 font-semibold"><i class="fas fa-code mr-1"></i>API Docs</a>
       </div>
       <div class="space-y-6">
+        ${trustBlock}
         <div class="glass rounded-xl border border-gray-700 overflow-hidden">
           <div class="bg-gray-800/50 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
             <div class="flex items-center gap-3"><i class="fas fa-gavel text-blue-400"></i><div><div class="text-sm font-semibold text-white">Terms of Service</div><div class="text-[10px] text-gray-500">Last updated April 22, 2026</div></div></div>
@@ -5968,10 +6052,18 @@ Status: Discharged`;
   // ═══════════════════════════════════════════════════════════════
   // REPORT HISTORY
   // ═══════════════════════════════════════════════════════════════
-  async function pgReportHistory(el) {
+  async function pgReportHistory(el, pageData) {
+    const page = (pageData && pageData.page) || 1;
     el.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-center"><i class="fas fa-spinner fa-spin text-3xl text-blue-400 mb-3"></i><div class="text-sm text-gray-400">Loading report history...</div></div></div>`;
     try {
-      const d = await api('/reports');
+      const d = await api(`/reports?page=${page}`);
+      const totalPages = Math.max(1, Math.ceil((d.total || 0) / (d.limit || 20)));
+      const pagination = totalPages > 1 ? `
+        <div class="mt-6 flex items-center justify-center gap-2">
+          <button type="button" ${page <= 1 ? 'disabled' : ''} onclick="window._nav('report-history',{page:${page - 1}})" class="px-3 py-1.5 rounded-lg text-xs font-bold ${page <= 1 ? 'bg-gray-800 text-gray-600' : 'bg-gray-800 hover:bg-gray-700 text-white'}">← Prev</button>
+          <span class="text-xs text-gray-400 font-mono px-2">Page ${page} of ${totalPages} · ${d.total} total</span>
+          <button type="button" ${page >= totalPages ? 'disabled' : ''} onclick="window._nav('report-history',{page:${page + 1}})" class="px-3 py-1.5 rounded-lg text-xs font-bold ${page >= totalPages ? 'bg-gray-800 text-gray-600' : 'bg-gray-800 hover:bg-gray-700 text-white'}">Next →</button>
+        </div>` : '';
       el.innerHTML = `<div class="fade-in">
         <div class="flex items-center justify-between mb-6">
           <div><h1 class="text-xl font-bold text-white">Report History</h1><p class="text-sm text-gray-400">${d.total} total report${d.total!==1?'s':''}</p></div>
@@ -5997,7 +6089,7 @@ Status: Discharged`;
             </div>
           </div>
         </div>`).join('')}</div>
-        ${d.total > d.limit ? `<div class="mt-6 flex justify-center"><div class="text-xs text-gray-500">Showing ${d.limit} of ${d.total} reports — paginated view coming soon</div></div>` : ''}
+        ${pagination}
         `:'<div class="glass rounded-xl p-8 text-center border border-gray-700"><i class="fas fa-file-alt text-3xl text-gray-600 mb-3"></i><h3 class="text-sm font-semibold text-white mb-1">No reports yet</h3><p class="text-xs text-gray-500">Upload a credit report from the Clients page to get started</p><button onclick="window._nav(\'clients\')" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Go to Clients</button></div>'}
       </div>`;
     } catch(err) {
