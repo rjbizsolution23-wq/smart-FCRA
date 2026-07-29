@@ -3,26 +3,20 @@
 // Branded for Rick Jefferson | RJ Business Solutions
 
 import type { CreditReportData, ParsedAccount, ParsedInquiry, ParsedPublicRecord } from './violations';
+import { resolveBureau, type BureauName } from './bureau-utils';
 
-export function parseCreditReportText(rawText: string): CreditReportData {
+export function parseCreditReportText(
+  rawText: string,
+  opts?: { bureauHint?: string | null; fileName?: string | null }
+): CreditReportData {
   const text = rawText.replace(/\r\n/g, '\n');
-  
-  // Detect bureau based on first 1500 chars (eliminates disclosure cross-contamination)
-  let bureau = 'Unknown';
-  const headerCheck = text.substring(0, Math.min(1500, text.length)).toLowerCase();
-  
-  if (headerCheck.includes('experian') || headerCheck.includes('usa.experian.com')) {
-    bureau = 'Experian';
-  } else if (headerCheck.includes('transunion') || headerCheck.includes('transunion.com') || headerCheck.includes('personal credit report for:')) {
-    bureau = 'TransUnion';
-  } else if (headerCheck.includes('equifax') || headerCheck.includes('equifax.com') || headerCheck.includes('confirmation #')) {
-    bureau = 'Equifax';
-  } else {
-    // Global fallback
-    if (/equifax/i.test(text)) bureau = 'Equifax';
-    else if (/experian/i.test(text)) bureau = 'Experian';
-    else if (/transunion|trans\s*union/i.test(text)) bureau = 'TransUnion';
-  }
+
+  // Intelligent bureau resolution: explicit hint > filename > weighted text markers
+  let bureau: BureauName = resolveBureau({
+    hint: opts?.bureauHint,
+    fileName: opts?.fileName,
+    rawText: text,
+  });
 
   // Extract report date
   let reportDate = '';

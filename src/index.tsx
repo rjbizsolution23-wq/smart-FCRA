@@ -14,6 +14,7 @@ import { mapSmartCreditToInternal } from './engine/smartcredit-mapper';
 import { DOCUMENT_TYPES, type DocumentData } from './engine/documents';
 import { generatePDFReport, type PDFReportData, generatePDFFromText } from './engine/pdf-generator';
 import { FOUNDER_TEMPLATES } from './engine/founder-templates';
+import { normalizeBureau, resolveBureau, bureauScoreColumn, type BureauName } from './engine/bureau-utils';
 
 // Secure field-level cryptographic helpers mapped to Worker bindings
 async function encryptPII(c: any, text: string): Promise<string> {
@@ -24,6 +25,132 @@ async function encryptPII(c: any, text: string): Promise<string> {
 async function decryptPII(c: any, text: string): Promise<string> {
   return decryptText(text, c.env.PII_ENCRYPTION_KEY);
 }
+
+/** Persist bureau scores on report + client; keep EQ/EX/TU packs distinct. */
+async function persistBureauScores(
+  c: any,
+  opts: {
+    reportId: string;
+    clientId: string;
+    orgId: string;
+    bureau: BureauName;
+    parsed: CreditReportData;
+    sourceProvider?: string;
+    sourcePayloadType?: string;
+  }
+) {
+  const sc = opts.parsed.scores || {};
+  const fico = sc.fico ?? null;
+  const vantage = sc.vantage ?? null;
+  try {
+    await c.env.DB.prepare(
+      `UPDATE credit_reports SET fico_score = ?, vantage_score = ?, eq_score = ?, ex_score = ?, tu_score = ?,
+       source_provider = COALESCE(?, source_provider), source_payload_type = COALESCE(?, source_payload_type)
+       WHERE id = ? AND org_id = ?`
+    ).bind(
+      fico,
+      vantage,
+      opts.bureau === 'Equifax' ? fico : null,
+      opts.bureau === 'Experian' ? fico : null,
+      opts.bureau === 'TransUnion' ? (fico ?? vantage) : null,
+      opts.sourceProvider || null,
+      opts.sourcePayloadType || null,
+      opts.reportId,
+      opts.orgId
+    ).run();
+  } catch (e) {
+    console.warn('[scores] report update skipped', e);
+  }
+
+  const col = bureauScoreColumn(opts.bureau);
+  const scoreVal = opts.bureau === 'TransUnion' ? (fico ?? vantage) : fico;
+  if (col && scoreVal != null) {
+    try {
+      await c.env.DB.prepare(`UPDATE clients SET ${col} = ? WHERE id = ? AND org_id = ?`)
+        .bind(scoreVal, opts.clientId, opts.orgId).run();
+    } catch (e) {
+      console.warn('[scores] client update skipped', e);
+    }
+  }
+}
+
+/** Mark prior same-bureau reports as not current; return previous current id if any. */
+async function markPriorBureauReportsStale(
+  c: any,
+  clientId: string,
+  orgId: string,
+  bureau: BureauName,
+  exceptReportId?: string
+): Promise<string | null> {
+  if (bureau === 'Unknown') return null;
+  try {
+    const prior = await c.env.DB.prepare(
+      `SELECT id FROM credit_reports WHERE client_id = ? AND org_id = ? AND bureau = ? AND COALESCE(is_current, 1) = 1
+       ${exceptReportId ? 'AND id != ?' : ''} ORDER BY created_at DESC LIMIT 1`
+    ).bind(...(exceptReportId ? [clientId, orgId, bureau, exceptReportId] : [clientId, orgId, bureau])).first() as any;
+
+    await c.env.DB.prepare(
+      `UPDATE credit_reports SET is_current = 0 WHERE client_id = ? AND org_id = ? AND bureau = ?
+       ${exceptReportId ? 'AND id != ?' : ''}`
+    ).bind(...(exceptReportId ? [clientId, orgId, bureau, exceptReportId] : [clientId, orgId, bureau])).run();
+
+    return prior?.id || null;
+  } catch (e) {
+    console.warn('[bureau] is_current update skipped', e);
+    return null;
+  }
+}
+
+/** Compute TRI_BUREAU pack status from current reports. */
+async function refreshBureauPackStatus(c: any, clientId: string, orgId: string): Promise<{
+  status: string;
+  present: BureauName[];
+  missing: BureauName[];
+  currentReports: Record<string, string>;
+}> {
+  const rows = await c.env.DB.prepare(
+    `SELECT id, bureau FROM credit_reports WHERE client_id = ? AND org_id = ? AND COALESCE(is_current, 1) = 1
+     AND bureau IN ('Equifax','Experian','TransUnion') ORDER BY created_at DESC`
+  ).bind(clientId, orgId).all();
+
+  const currentReports: Record<string, string> = {};
+  for (const r of (rows?.results || []) as any[]) {
+    const b = normalizeBureau(r.bureau);
+    if (b !== 'Unknown' && !currentReports[b]) currentReports[b] = r.id;
+  }
+  const present = Object.keys(currentReports) as BureauName[];
+  const all: BureauName[] = ['Equifax', 'Experian', 'TransUnion'];
+  const missing = all.filter((b) => !currentReports[b]);
+  let status = 'NONE';
+  if (present.length === 3) status = 'TRI_BUREAU_READY';
+  else if (present.length > 0) status = 'PARTIAL';
+
+  try {
+    const client = await c.env.DB.prepare('SELECT bureau_pack_status FROM clients WHERE id = ? AND org_id = ?')
+      .bind(clientId, orgId).first() as any;
+    // Don't downgrade WORKFLOW_FIRED unless pack broke
+    if (client?.bureau_pack_status === 'WORKFLOW_FIRED' && present.length === 3) {
+      status = 'WORKFLOW_FIRED';
+    }
+    await c.env.DB.prepare('UPDATE clients SET bureau_pack_status = ? WHERE id = ? AND org_id = ?')
+      .bind(status, clientId, orgId).run();
+  } catch (e) {
+    console.warn('[bureau] pack status skipped', e);
+  }
+
+  return { status, present, missing, currentReports };
+}
+
+async function saveViolationsForReport(c: any, orgId: string, reportId: string, clientId: string, violations: any[]) {
+  // Replace violations for this report on re-ingest
+  await c.env.DB.prepare('DELETE FROM violations WHERE report_id = ? AND org_id = ?').bind(reportId, orgId).run();
+  for (const v of violations) {
+    await c.env.DB.prepare(
+      'INSERT INTO violations (id, org_id, report_id, client_id, category, subcategory, severity, statute, statute_text, legal_standard, evidence, explanation, case_law, account_name, account_number, dofd, falloff_date, days_overdue, statutory_damages_min, statutory_damages_max, actual_damages_est, punitive_damages_est, attorney_fees_est, total_damages_min, total_damages_max, defendant_type, defendant_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(v.id, orgId, reportId, clientId, v.category, v.subcategory, v.severity, v.statute, v.statuteText, v.legalStandard, v.evidence, v.explanation, v.caseLaw, v.accountName || null, v.accountNumber || null, v.dofd || null, v.falloffDate || null, v.daysOverdue || null, v.statutoryDamagesMin, v.statutoryDamagesMax, v.actualDamagesEst, v.punitiveDamagesEst, v.attorneyFeesEst, v.totalDamagesMin, v.totalDamagesMax, v.defendantType, v.defendantName).run();
+  }
+}
+
 
 async function backpopulateClientInfo(c: any, clientId: string, personalInfo: any, orgId: string) {
   if (!personalInfo) return;
@@ -849,10 +976,18 @@ app.get('/api/clients/:id', authMiddleware, async (c) => {
   const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(id, user.org_id).first();
   if (!client) return c.json({ error: 'Not found' }, 404);
 
-  const reports = await c.env.DB.prepare('SELECT * FROM credit_reports WHERE client_id = ? ORDER BY created_at DESC').bind(id).all();
-  const violations = await c.env.DB.prepare('SELECT * FROM violations WHERE client_id = ? ORDER BY severity ASC, created_at DESC').bind(id).all();
-  const documents = await c.env.DB.prepare('SELECT * FROM documents WHERE client_id = ? ORDER BY created_at DESC').bind(id).all();
-  const activity = await c.env.DB.prepare('SELECT a.*, u.name as user_name FROM activity_log a JOIN users u ON a.user_id = u.id WHERE a.client_id = ? ORDER BY a.created_at DESC LIMIT 50').bind(id).all();
+  const reports = await c.env.DB.prepare(
+    'SELECT * FROM credit_reports WHERE client_id = ? AND org_id = ? ORDER BY COALESCE(is_current, 1) DESC, created_at DESC'
+  ).bind(id, user.org_id).all();
+  const violations = await c.env.DB.prepare(
+    'SELECT * FROM violations WHERE client_id = ? AND org_id = ? ORDER BY severity ASC, created_at DESC'
+  ).bind(id, user.org_id).all();
+  const documents = await c.env.DB.prepare(
+    'SELECT * FROM documents WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC'
+  ).bind(id, user.org_id).all();
+  const activity = await c.env.DB.prepare(
+    'SELECT a.*, u.name as user_name FROM activity_log a JOIN users u ON a.user_id = u.id WHERE a.client_id = ? AND a.org_id = ? ORDER BY a.created_at DESC LIMIT 50'
+  ).bind(id, user.org_id).all();
 
   // Transparently decrypt raw text and parsed structures
   const reportsResult = reports?.results || [];
@@ -861,7 +996,21 @@ app.get('/api/clients/:id', authMiddleware, async (c) => {
     if (r.parsed_data) r.parsed_data = await decryptPII(c, r.parsed_data);
   }
 
-  return c.json({ client, reports: reportsResult, violations: violations?.results || [], documents: documents?.results || [], activity: activity?.results || [] });
+  const pack = await refreshBureauPackStatus(c, id, user.org_id);
+
+  return c.json({
+    client,
+    reports: reportsResult,
+    violations: violations?.results || [],
+    documents: documents?.results || [],
+    activity: activity?.results || [],
+    bureauPack: pack,
+    scores: {
+      equifax: (client as any).eq_score ?? null,
+      experian: (client as any).ex_score ?? null,
+      transunion: (client as any).tu_score ?? null,
+    },
+  });
 });
 
 app.put('/api/clients/:id', authMiddleware, async (c) => {
@@ -989,7 +1138,45 @@ app.post('/api/documents/:id/sign', authMiddleware, async (c) => {
     'UPDATE documents SET status = "signed", signature_data = ?, signature_ip = ?, signature_timestamp = ?, updated_at = datetime("now") WHERE id = ? AND org_id = ?'
   ).bind(signatureData, ip, timestamp, id, user.org_id).run();
 
-  return c.json({ ok: true, timestamp, ip });
+  const signedDoc = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
+  let packProgress: any = null;
+  if (signedDoc?.client_id) {
+    const pending = await c.env.DB.prepare(
+      `SELECT COUNT(*) as c FROM documents WHERE client_id = ? AND org_id = ? AND status != 'signed'
+       AND doc_type IN ('bureau-dispute','1681i-letter','intent-to-sue-fcra','pre-litigation-settlement','cfpb-complaint','fed-complaint')`
+    ).bind(signedDoc.client_id, user.org_id).first() as any;
+    const signedCount = await c.env.DB.prepare(
+      `SELECT COUNT(*) as c FROM documents WHERE client_id = ? AND org_id = ? AND status = 'signed'
+       AND doc_type IN ('bureau-dispute','1681i-letter','intent-to-sue-fcra','pre-litigation-settlement','cfpb-complaint','fed-complaint')`
+    ).bind(signedDoc.client_id, user.org_id).first() as any;
+
+    packProgress = {
+      signed: signedCount?.c || 0,
+      remaining: pending?.c || 0,
+      complete: (pending?.c || 0) === 0 && (signedCount?.c || 0) > 0,
+    };
+
+    await c.env.DB.prepare(
+      'INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      generateId(),
+      user.org_id,
+      signedDoc.client_id,
+      id,
+      user.id,
+      'document_signed',
+      `E-signed document ${signedDoc.title || signedDoc.doc_type}`,
+      JSON.stringify({ ip, packProgress })
+    ).run();
+
+    if (packProgress.complete) {
+      await c.env.DB.prepare(
+        `UPDATE clients SET case_status = CASE WHEN case_status IN ('ONBOARDING','DISPUTE','DISPUTING') THEN 'DISPUTING' ELSE case_status END WHERE id = ? AND org_id = ?`
+      ).bind(signedDoc.client_id, user.org_id).run();
+    }
+  }
+
+  return c.json({ ok: true, timestamp, ip, packProgress });
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -1133,7 +1320,7 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
   if (!planCheck.allowed) return c.json({ error: planCheck.message }, 403);
 
   const body = await c.req.json();
-  const { clientId, bureau, rawText, fileName } = body;
+  const { clientId, bureau, rawText, fileName, replaceCurrent, autoWorkflow } = body;
 
   if (!clientId || !rawText) return c.json({ error: 'Client ID and report text required' }, 400);
 
@@ -1141,46 +1328,152 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
   const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first() as any;
   if (!client) return c.json({ error: 'Client not found' }, 404);
   if (!client.permissible_purpose_consent || !client.croa_contract_agreed || !client.tsr_advance_fee_waived) {
-    return c.json({ 
-      error: 'Regulatory Compliance Consent Required', 
+    return c.json({
+      error: 'Regulatory Compliance Consent Required',
       complianceRequired: true,
-      message: 'This client profile is missing signed regulatory compliance consents for permissible purpose (FCRA), CROA contract, and TSR advance fee waiver. Report ingestion is disabled until these consents are logged.' 
+      message: 'This client profile is missing signed regulatory compliance consents for permissible purpose (FCRA), CROA contract, and TSR advance fee waiver. Report ingestion is disabled until these consents are logged.',
     }, 403);
   }
 
-  const reportId = generateId();
+  // Parse with intelligent bureau resolution (hint + filename + text)
+  const parsed = parseCreditReportText(rawText, { bureauHint: bureau, fileName });
+  const resolvedBureau = normalizeBureau(parsed.bureau) !== 'Unknown'
+    ? normalizeBureau(parsed.bureau)
+    : resolveBureau({ hint: bureau, fileName, rawText });
+  parsed.bureau = resolvedBureau;
 
-  // Parse the report
-  const parsed = parseCreditReportText(rawText);
-  
-  // Back-populate parsed client personal information to database if currently empty
   await backpopulateClientInfo(c, clientId, parsed.personalInfo, user.org_id);
-  
-  // Detect violations
+
   const violations = detectViolations(parsed);
   const litScore = calculateLitigationScore(violations);
-
-  // Field-level AES-GCM Encryptions
   const encryptedRawText = await encryptPII(c, rawText);
   const encryptedParsedData = await encryptPII(c, JSON.stringify(parsed));
 
-  // Save report
-  await c.env.DB.prepare(
-    'INSERT INTO credit_reports (id, org_id, client_id, uploaded_by, bureau, report_date, file_name, raw_text, parsed_data, status, total_accounts, total_inquiries, total_public_records, total_collections, analysis_started_at, analysis_completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime("now"), datetime("now"))'
-  ).bind(reportId, user.org_id, clientId, user.id, parsed.bureau || bureau || 'Unknown', parsed.reportDate, fileName || 'upload.txt', encryptedRawText, encryptedParsedData, 'analyzed', parsed.accounts.length, parsed.inquiries.length, parsed.publicRecords.length, parsed.collections.length).run();
+  // Intelligent upsert: if this bureau already has a current report, replace it in-place
+  // so EQ/EX/TU stay distinct slots instead of duplicating the same bureau.
+  let reportId = generateId();
+  let replacedReportId: string | null = null;
+  let mode: 'created' | 'replaced' = 'created';
 
-  // Save violations in batch
-  for (const v of violations) {
-    await c.env.DB.prepare(
-      'INSERT INTO violations (id, org_id, report_id, client_id, category, subcategory, severity, statute, statute_text, legal_standard, evidence, explanation, case_law, account_name, account_number, dofd, falloff_date, days_overdue, statutory_damages_min, statutory_damages_max, actual_damages_est, punitive_damages_est, attorney_fees_est, total_damages_min, total_damages_max, defendant_type, defendant_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).bind(v.id, user.org_id, reportId, clientId, v.category, v.subcategory, v.severity, v.statute, v.statuteText, v.legalStandard, v.evidence, v.explanation, v.caseLaw, v.accountName || null, v.accountNumber || null, v.dofd || null, v.falloffDate || null, v.daysOverdue || null, v.statutoryDamagesMin, v.statutoryDamagesMax, v.actualDamagesEst, v.punitiveDamagesEst, v.attorneyFeesEst, v.totalDamagesMin, v.totalDamagesMax, v.defendantType, v.defendantName).run();
+  if (resolvedBureau !== 'Unknown' && replaceCurrent !== false) {
+    const existing = await c.env.DB.prepare(
+      `SELECT id FROM credit_reports WHERE client_id = ? AND org_id = ? AND bureau = ? AND COALESCE(is_current, 1) = 1
+       ORDER BY created_at DESC LIMIT 1`
+    ).bind(clientId, user.org_id, resolvedBureau).first() as any;
+
+    if (existing?.id) {
+      reportId = existing.id;
+      replacedReportId = existing.id;
+      mode = 'replaced';
+      await c.env.DB.prepare(
+        `UPDATE credit_reports SET uploaded_by = ?, bureau = ?, report_date = ?, file_name = ?, raw_text = ?, parsed_data = ?,
+         status = 'analyzed', total_accounts = ?, total_inquiries = ?, total_public_records = ?, total_collections = ?,
+         analysis_started_at = datetime('now'), analysis_completed_at = datetime('now')
+         WHERE id = ? AND org_id = ?`
+      ).bind(
+        user.id,
+        resolvedBureau,
+        parsed.reportDate,
+        fileName || 'upload.txt',
+        encryptedRawText,
+        encryptedParsedData,
+        parsed.accounts.length,
+        parsed.inquiries.length,
+        parsed.publicRecords.length,
+        parsed.collections.length,
+        reportId,
+        user.org_id
+      ).run();
+      try {
+        await c.env.DB.prepare(
+          `UPDATE credit_reports SET is_current = 1 WHERE id = ? AND org_id = ?`
+        ).bind(reportId, user.org_id).run();
+        await c.env.DB.prepare(
+          `UPDATE credit_reports SET is_current = 0 WHERE client_id = ? AND org_id = ? AND bureau = ? AND id != ?`
+        ).bind(clientId, user.org_id, resolvedBureau, reportId).run();
+      } catch (e) {
+        console.warn('[upload] is_current sync', e);
+      }
+    }
   }
 
-  await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, report_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, clientId, reportId, user.id, 'report_analyzed', `Analyzed credit report: ${violations.length} violations found`, JSON.stringify({ score: litScore.score })).run();
+  if (mode === 'created') {
+    if (resolvedBureau !== 'Unknown') {
+      replacedReportId = await markPriorBureauReportsStale(c, clientId, user.org_id, resolvedBureau);
+    }
+    await c.env.DB.prepare(
+      'INSERT INTO credit_reports (id, org_id, client_id, uploaded_by, bureau, report_date, file_name, raw_text, parsed_data, status, total_accounts, total_inquiries, total_public_records, total_collections, analysis_started_at, analysis_completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime("now"), datetime("now"))'
+    ).bind(
+      reportId,
+      user.org_id,
+      clientId,
+      user.id,
+      resolvedBureau,
+      parsed.reportDate,
+      fileName || 'upload.txt',
+      encryptedRawText,
+      encryptedParsedData,
+      'analyzed',
+      parsed.accounts.length,
+      parsed.inquiries.length,
+      parsed.publicRecords.length,
+      parsed.collections.length
+    ).run();
+
+    try {
+      await c.env.DB.prepare(
+        `UPDATE credit_reports SET is_current = 1, replaces_report_id = ? WHERE id = ? AND org_id = ?`
+      ).bind(replacedReportId, reportId, user.org_id).run();
+      if (resolvedBureau !== 'Unknown') {
+        await c.env.DB.prepare(
+          `UPDATE credit_reports SET is_current = 0 WHERE client_id = ? AND org_id = ? AND bureau = ? AND id != ?`
+        ).bind(clientId, user.org_id, resolvedBureau, reportId).run();
+      }
+    } catch { /* column may not exist yet pre-migration */ }
+  }
+
+  await saveViolationsForReport(c, user.org_id, reportId, clientId, violations);
+  await persistBureauScores(c, {
+    reportId,
+    clientId,
+    orgId: user.org_id,
+    bureau: resolvedBureau,
+    parsed,
+    sourceProvider: 'AnnualCreditReport',
+    sourcePayloadType: 'text',
+  });
+
+  const pack = await refreshBureauPackStatus(c, clientId, user.org_id);
+
+  await c.env.DB.prepare(
+    'INSERT INTO activity_log (id, org_id, client_id, report_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    generateId(),
+    user.org_id,
+    clientId,
+    reportId,
+    user.id,
+    mode === 'replaced' ? 'report_replaced' : 'report_analyzed',
+    `${mode === 'replaced' ? 'Updated' : 'Analyzed'} ${resolvedBureau} credit report: ${violations.length} violations`,
+    JSON.stringify({ score: litScore.score, bureau: resolvedBureau, pack: pack.status, mode })
+  ).run();
+
+  // Auto-fire attorney workflow when tri-bureau pack first becomes complete
+  let workflow: any = null;
+  if ((autoWorkflow !== false) && pack.status === 'TRI_BUREAU_READY') {
+    try {
+      const clientRow = await c.env.DB.prepare('SELECT bureau_pack_status FROM clients WHERE id = ? AND org_id = ?')
+        .bind(clientId, user.org_id).first() as any;
+      // launch-workflow endpoint logic inlined lightly via fetch to self is hard on CF — call pack builder below
+      if (clientRow?.bureau_pack_status !== 'WORKFLOW_FIRED') {
+        workflow = { ready: true, message: 'Tri-bureau pack complete — launch suit pack from client CRM' };
+      }
+    } catch { /* ignore */ }
+  }
 
   return c.json({
     reportId,
-    bureau: parsed.bureau,
+    bureau: resolvedBureau,
     reportDate: parsed.reportDate,
     personalInfo: parsed.personalInfo,
     totalAccounts: parsed.accounts.length,
@@ -1190,6 +1483,11 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
     violationsFound: violations.length,
     violations,
     litigationScore: litScore,
+    mode,
+    replacedReportId,
+    bureauPack: pack,
+    workflow,
+    scores: parsed.scores || null,
   });
 });
 
@@ -1208,8 +1506,11 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
 
   if (!rawText) return c.json({ error: 'Report text required for onboarding' }, 400);
 
-  // 1. Parse credit report text
-  const parsed = parseCreditReportText(rawText);
+  // 1. Parse credit report text with intelligent bureau detection
+  const parsed = parseCreditReportText(rawText, { bureauHint: bureau, fileName });
+  if (normalizeBureau(parsed.bureau) === 'Unknown') {
+    parsed.bureau = resolveBureau({ hint: bureau, fileName, rawText });
+  }
 
   // 2. Extract demographics
   const personal = parsed.personalInfo || { names: [], addresses: [], employers: [], ssns: [], dobs: [] };
@@ -1651,40 +1952,28 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
     parsed.collections.length
   ).run();
 
-  // 8. Save violations in batch
-  for (const v of violations) {
-    await c.env.DB.prepare(
-      'INSERT INTO violations (id, org_id, report_id, client_id, category, subcategory, severity, statute, statute_text, legal_standard, evidence, explanation, case_law, account_name, account_number, dofd, falloff_date, days_overdue, statutory_damages_min, statutory_damages_max, actual_damages_est, punitive_damages_est, attorney_fees_est, total_damages_min, total_damages_max, defendant_type, defendant_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).bind(
-      v.id,
-      user.org_id,
-      reportId,
-      clientId,
-      v.category,
-      v.subcategory,
-      v.severity,
-      v.statute,
-      v.statuteText,
-      v.legalStandard,
-      v.evidence,
-      v.explanation,
-      v.caseLaw,
-      v.accountName || null,
-      v.accountNumber || null,
-      v.dofd || null,
-      v.falloffDate || null,
-      v.daysOverdue || null,
-      v.statutoryDamagesMin,
-      v.statutoryDamagesMax,
-      v.actualDamagesEst,
-      v.punitiveDamagesEst,
-      v.attorneyFeesEst,
-      v.totalDamagesMin,
-      v.totalDamagesMax,
-      v.defendantType,
-      v.defendantName
-    ).run();
-  }
+  const onboardBureau = normalizeBureau(parsed.bureau || bureau) === 'Unknown'
+    ? resolveBureau({ hint: bureau, fileName, rawText })
+    : normalizeBureau(parsed.bureau || bureau);
+  parsed.bureau = onboardBureau;
+  try {
+    await c.env.DB.prepare(`UPDATE credit_reports SET bureau = ?, is_current = 1 WHERE id = ? AND org_id = ?`)
+      .bind(onboardBureau, reportId, user.org_id).run();
+    await markPriorBureauReportsStale(c, clientId, user.org_id, onboardBureau, reportId);
+  } catch { /* optional columns */ }
+
+  // 8. Save violations (replace-safe)
+  await saveViolationsForReport(c, user.org_id, reportId, clientId, violations);
+  await persistBureauScores(c, {
+    reportId,
+    clientId,
+    orgId: user.org_id,
+    bureau: onboardBureau,
+    parsed,
+    sourceProvider: 'AnnualCreditReport',
+    sourcePayloadType: 'text',
+  });
+  const onboardPack = await refreshBureauPackStatus(c, clientId, user.org_id);
 
   // 9. Log activity
   await c.env.DB.prepare(
@@ -1696,8 +1985,8 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
     reportId,
     user.id,
     'report_analyzed',
-    `Autopilot processed report for ${firstName} ${lastName}: ${violations.length} violations found`,
-    JSON.stringify({ score: litScore.score })
+    `Autopilot processed ${onboardBureau} report for ${firstName} ${lastName}: ${violations.length} violations found`,
+    JSON.stringify({ score: litScore.score, bureau: onboardBureau, pack: onboardPack.status })
   ).run();
 
   return c.json({
@@ -1706,7 +1995,7 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
     isNewClient,
     clientName: `${firstName} ${lastName}`,
     reportId,
-    bureau: parsed.bureau || bureau || 'Unknown',
+    bureau: onboardBureau,
     reportDate: parsed.reportDate,
     personalInfo: parsed.personalInfo,
     totalAccounts: parsed.accounts.length,
@@ -1716,6 +2005,7 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
     violationsFound: violations.length,
     violations,
     litigationScore: litScore,
+    bureauPack: onboardPack,
     extractedEmail,
     extractedPhone,
     generatedPassword
@@ -2262,6 +2552,12 @@ app.post('/api/reports/:id/launch-workflow', authMiddleware, async (c) => {
     user.org_id
   ).run();
 
+  try {
+    await c.env.DB.prepare(
+      `UPDATE clients SET bureau_pack_status = 'WORKFLOW_FIRED' WHERE id = ? AND org_id = ?`
+    ).bind(client.id, user.org_id).run();
+  } catch { /* optional column */ }
+
   await c.env.DB.prepare(
     'INSERT INTO activity_log (id, org_id, client_id, report_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
@@ -2271,15 +2567,17 @@ app.post('/api/reports/:id/launch-workflow', authMiddleware, async (c) => {
     id,
     user.id,
     'workflow_launched',
-    `Launched attorney workflow pack (${generated.length} documents)`,
-    JSON.stringify({ docs: generated.map((g) => g.docType) })
+    `Launched attorney workflow pack (${generated.length} documents) for ${report.bureau}`,
+    JSON.stringify({ docs: generated.map((g) => g.docType), bureau: report.bureau })
   ).run();
 
   return c.json({
     success: true,
     documents: generated,
     caseStatus: 'DISPUTE',
+    bureau: report.bureau,
     litigationScore: calculateLitigationScore(violations),
+    nextStep: 'Client portal e-sign queue is ready for the generated pack',
   });
 });
 
@@ -2300,10 +2598,10 @@ app.get('/api/reports/:id/comparison', authMiddleware, async (c) => {
     return c.json({ error: 'Current credit report is missing structured data' }, 400);
   }
 
-  // 3. Fetch prior report for same client
+  // 3. Fetch prior report for SAME bureau (intelligent multi-bureau CRM)
   const previousReport = await c.env.DB.prepare(
-    'SELECT * FROM credit_reports WHERE client_id = ? AND org_id = ? AND id != ? AND created_at < ? ORDER BY created_at DESC LIMIT 1'
-  ).bind(currentReport.client_id, user.org_id, id, currentReport.created_at).first() as any;
+    'SELECT * FROM credit_reports WHERE client_id = ? AND org_id = ? AND id != ? AND bureau = ? AND created_at < ? ORDER BY created_at DESC LIMIT 1'
+  ).bind(currentReport.client_id, user.org_id, id, currentReport.bureau, currentReport.created_at).first() as any;
 
   let previousParsed: any = null;
   if (previousReport && previousReport.parsed_data) {

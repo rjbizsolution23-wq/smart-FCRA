@@ -892,6 +892,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         ${statCard('fa-dollar-sign','Min Recovery',money(totalMin),'green')}
         ${statCard('fa-file-contract','Documents',res.documents.length,'purple')}
       </div>
+      ${renderBureauTriad(res)}
       <div class="flex border-b border-gray-800 mb-4">${['reports','violations','documents','mailing','activity'].map((t,i)=>`<button class="client-tab pb-2.5 px-4 text-sm font-medium ${t==='violations'?'text-blue-400 border-b-2 border-blue-400':'text-gray-500 border-b-2 border-transparent hover:text-gray-300'}" data-tab="${t}">${t==='mailing'?'Mailing Campaigns':(t[0].toUpperCase()+t.slice(1))} (${t==='activity'?res.activity.length:(t==='mailing'?res.documents.filter(d=>d.status==='sent').length:res[t].length)})</button>`).join('')}</div>
       <div id="client-tab-content">${renderViolationsList(res.violations)}</div>
 
@@ -1070,6 +1071,60 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         }
       };
     });
+  }
+
+
+  function renderBureauTriad(res) {
+    const pack = res.bureauPack || {};
+    const scores = res.scores || {};
+    const current = pack.currentReports || {};
+    const reports = res.reports || [];
+    const findCurrent = (bureau) => {
+      if (current[bureau]) return reports.find(r => r.id === current[bureau]) || reports.find(r => r.bureau === bureau && (r.is_current === 1 || r.is_current == null));
+      return reports.find(r => r.bureau === bureau && (r.is_current === 1 || r.is_current == null)) || reports.find(r => r.bureau === bureau);
+    };
+    const slots = [
+      { name: 'Equifax', score: scores.equifax, color: 'red' },
+      { name: 'Experian', score: scores.experian, color: 'blue' },
+      { name: 'TransUnion', score: scores.transunion, color: 'emerald' },
+    ];
+    const status = pack.status || 'NONE';
+    const statusLabel = status === 'TRI_BUREAU_READY' || status === 'WORKFLOW_FIRED'
+      ? '<span class="text-green-400 font-bold">Tri-bureau pack ready</span>'
+      : status === 'PARTIAL' ? '<span class="text-amber-400 font-bold">Partial pack — upload remaining bureaus</span>'
+      : '<span class="text-gray-400">No bureau reports yet</span>';
+    const missing = pack.missing || slots.filter(s => !findCurrent(s.name)).map(s => s.name);
+
+    return `<div class="glass rounded-xl border border-gray-800 p-4 mb-6">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div class="text-sm font-bold text-white"><i class="fas fa-layer-group text-blue-400 mr-1.5"></i>Multi-Bureau CRM Pack</div>
+        <div class="text-xs">${statusLabel}</div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        ${slots.map(s => {
+          const r = findCurrent(s.name);
+          const ready = !!r;
+          return `<div class="rounded-xl border ${ready ? 'border-green-500/30 bg-green-950/10' : 'border-gray-800 bg-gray-950/40'} p-3">
+            <div class="flex items-center justify-between mb-2">
+              <div class="text-xs font-bold uppercase tracking-wider text-white">${s.name}</div>
+              <span class="text-[10px] font-bold ${ready ? 'text-green-400' : 'text-gray-500'}">${ready ? 'CURRENT' : 'MISSING'}</span>
+            </div>
+            <div class="text-2xl font-extrabold text-white font-mono">${s.score ?? (r?.fico_score ?? '—')}</div>
+            <div class="text-[10px] text-gray-500 mt-1">${ready ? `${r.total_accounts||0} accounts · ${shortDate(r.created_at)}` : 'Upload ACR PDF for this bureau'}</div>
+            <div class="mt-2 flex gap-2">
+              ${ready ? `<button onclick="window._nav('report-detail',{reportId:'${r.id}'})" class="text-[10px] font-bold text-blue-400">Open</button>` : ''}
+              <button onclick="window._nav('upload-report',{clientId:'${res.client.id}',clientName:'${(res.client.first_name||'')+' '+(res.client.last_name||'')}',tab:'acr'})" class="text-[10px] font-bold text-gray-400 hover:text-white">${ready ? 'Replace' : 'Upload'}</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+      ${missing.length && missing.length < 3 ? `<div class="mt-3 text-[11px] text-amber-300">Still needed: <strong>${missing.join(', ')}</strong> — upload one-by-one; each populates its own slot.</div>` : ''}
+      ${(status === 'TRI_BUREAU_READY' || status === 'WORKFLOW_FIRED') && current.Equifax ? `
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button onclick="window._launchAttorneyWorkflow('${current.Equifax}')" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold"><i class="fas fa-gavel mr-1"></i>Launch Full Suit Pack</button>
+          <button onclick="window._nav('client-documents')" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">E-Sign Queue</button>
+        </div>` : ''}
+    </div>`;
   }
 
   function renderReportsList(reports) {
@@ -1333,7 +1388,8 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
             <div class="text-sm text-gray-300">
               <span class="font-bold text-red-400 hover:underline">Click to select files</span> or drag & drop Equifax, Experian, or TransUnion PDFs here
             </div>
-            <p class="text-xs text-gray-500 font-medium">Accepts multiple files simultaneously. Drop your multi-bureau reports together!</p>
+            <p class="text-xs text-gray-500 font-medium">Upload Equifax, Experian, and TransUnion one-by-one or together. Each bureau populates its own CRM slot (not the same data).</p>
+            <p class="text-[10px] text-blue-400/80 mt-1">Tip: name files with equifax / experian / transunion for perfect detection.</p>
           </div>
         </div>
 
@@ -1578,7 +1634,25 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 
             const page = await pdf.getPage(p);
             const textContent = await page.getTextContent();
-            const pageText = textContent.items.map(item => item.str).join(' ');
+            // Reconstruct lines using PDF.js transform Y so Equifax/Experian/TU parsers keep structure
+            const items = (textContent.items || []).filter(it => typeof it.str === 'string');
+            items.sort((a, b) => {
+              const ay = a.transform ? a.transform[5] : 0;
+              const by = b.transform ? b.transform[5] : 0;
+              if (Math.abs(by - ay) > 2) return by - ay;
+              const ax = a.transform ? a.transform[4] : 0;
+              const bx = b.transform ? b.transform[4] : 0;
+              return ax - bx;
+            });
+            let pageText = '';
+            let lastY = null;
+            for (const it of items) {
+              const y = it.transform ? it.transform[5] : 0;
+              if (lastY !== null && Math.abs(lastY - y) > 2) pageText += '\n';
+              else if (pageText && !pageText.endsWith(' ') && !pageText.endsWith('\n') && it.str && !it.str.startsWith(' ')) pageText += ' ';
+              pageText += it.str || '';
+              lastY = y;
+            }
             compiledText += pageText + '\n\n';
           }
 
@@ -1625,14 +1699,25 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           activeFileText.textContent = `Uploading ${file.name} to analysis engine...`;
           resEl.innerHTML = renderProcessStepsCustom(`Running statutory FCRA scans on ${file.name}...`, 'fas fa-shield-alt text-red-400 progress-pulse');
 
+          // Filename hint (equifax/experian/transunion) + text detection on server
+          const nameHint = (() => {
+            const n = (file.name || '').toLowerCase();
+            if (/experian|\bex[_-]|\bexp\b|ex-acr/.test(n)) return 'Experian';
+            if (/trans\s*union|\btu[_-]|\btu\b|tu-acr/.test(n)) return 'TransUnion';
+            if (/equifax|\beq[_-]|\befx\b|eq-acr|efx-acr/.test(n)) return 'Equifax';
+            return 'Unknown';
+          })();
+
           // Sequential API call to prevent SQLite D1 concurrent locks
           const response = await api(endpoint, {
             method: 'POST',
             body: JSON.stringify({
               clientId: data.clientId,
-              bureau: 'Unknown', // Backend auto-detects from first 1500 chars
+              bureau: nameHint, // hint; server still weighs text + filename
               rawText: compiledText,
-              fileName: file.name
+              fileName: file.name,
+              replaceCurrent: true,
+              autoWorkflow: true
             })
           });
 
@@ -1915,11 +2000,13 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
             const reportIds = resultsArray.map(item => item.result.reportId);
             toast('Bulk generating dispute letters for all processed bureaus...', 'info');
             let totalCount = 0;
+            const bureauByReport = {};
+            (results || []).forEach(r => { if (r.reportId) bureauByReport[r.reportId] = r.bureau || 'Equifax'; });
             for (const reportId of reportIds) {
               const result = await api('/documents/generate-bulk', { method:'POST', body:JSON.stringify({
                 clientId: data.clientId, reportId,
                 docTypes: ['bureau-dispute','furnisher-dispute','debt-validation','609-disclosure','method-of-verification','cease-desist','intent-to-sue','cfpb-complaint','state-ag-complaint','goodwill-letter'],
-                bureau: 'Equifax',
+                bureau: bureauByReport[reportId] || 'Equifax',
               })});
               totalCount += result.count;
             }
@@ -3153,6 +3240,20 @@ Status: Discharged`;
     toast('Opening SmartCredit import…', 'info');
     window._nav('upload-report', { tab: 'smartcredit' });
   };
+
+  window._launchAttorneyWorkflow = async function(reportId) {
+    if (!reportId) return toast('Pick a bureau report first', 'error');
+    try {
+      toast('Launching attorney suit pack…', 'info');
+      const res = await api(`/reports/${reportId}/launch-workflow`, { method: 'POST', body: '{}' });
+      toast(`Generated ${(res.documents || []).length} legal documents — ready for e-sign`, 'success');
+      if (res.documents?.length) window._nav('documents');
+      else window._nav('report-detail', { reportId, focusTab: 'legal-pack' });
+    } catch (err) {
+      toast(err.message || 'Workflow failed', 'error');
+    }
+  };
+
 
   async function pgReportDetail(el, data) {
     el.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-center"><i class="fas fa-spinner fa-spin text-3xl text-blue-400 mb-3"></i><div class="text-sm text-gray-400">Loading report detail workspace...</div></div></div>`;
