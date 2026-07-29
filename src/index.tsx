@@ -439,7 +439,7 @@ async function authMiddleware(c: any, next: any) {
   if (!sessionId) return c.json({ error: 'Unauthorized' }, 401);
 
   const session = await c.env.DB.prepare(
-    'SELECT s.*, u.id as user_id, u.name as user_name, u.email as user_email, u.role as user_role, u.is_active, u.org_id FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND s.expires_at > datetime("now")'
+    'SELECT s.*, u.id as user_id, u.name as user_name, u.email as user_email, u.role as user_role, u.is_active, u.org_id, COALESCE(u.must_change_password, 0) as must_change_password FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND s.expires_at > datetime("now")'
   ).bind(sessionId).first();
 
   if (!session) return c.json({ error: 'Session expired' }, 401);
@@ -447,6 +447,13 @@ async function authMiddleware(c: any, next: any) {
   // Active Suspension Enforcement
   if (session.is_active === 0) {
     return c.json({ error: 'User account suspended' }, 403);
+  }
+  // Enterprise: forced password rotation gate
+  if (session.must_change_password === 1) {
+    const safePaths = ['/auth/change-password', '/auth/logout', '/auth/me', '/auth/mfa'];
+    if (!safePaths.some((p) => c.req.path.includes(p))) {
+      return c.json({ error: 'Password change required before continuing', code: 'MUST_CHANGE_PASSWORD' }, 403);
+    }
   }
 
   const org = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(session.org_id).first();
@@ -878,6 +885,33 @@ app.get('/api/auth/me', authMiddleware, async (c) => {
   const user = c.get('user');
   const org = await c.env.DB.prepare('SELECT * FROM organizations WHERE id = ?').bind(user.org_id).first();
   return c.json({ user, org });
+});
+
+
+app.get('/api/auth/sessions', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const rows = await c.env.DB.prepare(
+    `SELECT id, ip_address, user_agent, created_at, expires_at FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`
+  ).bind(user.id).all();
+  const current = c.get('session').id;
+  return c.json({ sessions: (rows?.results || []).map((s: any) => ({ ...s, current: s.id === current })) });
+});
+
+app.post('/api/auth/sessions/:id/revoke', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const sessionId = c.req.param('id');
+  if (sessionId === c.get('session').id) return c.json({ error: 'Cannot revoke current session' }, 400);
+  await c.env.DB.prepare('DELETE FROM sessions WHERE id = ? AND user_id = ?').bind(sessionId, user.id).run();
+  await writeSecurityAudit(c.env, { orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'session_revoked', resourceId: sessionId, ip: c.req.header('CF-Connecting-IP') });
+  return c.json({ ok: true });
+});
+
+app.post('/api/auth/sessions/revoke-all', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const current = c.get('session').id;
+  await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND id != ?').bind(user.id, current).run();
+  await writeSecurityAudit(c.env, { orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'sessions_revoked_all', ip: c.req.header('CF-Connecting-IP') });
+  return c.json({ ok: true });
 });
 
 app.post('/api/auth/verify-email', async (c) => {
@@ -1882,6 +1916,26 @@ app.get('/api/client-portal/alerts', authMiddleware, async (c) => {
   return c.json({ alerts: rows?.results || [] });
 });
 
+app.post('/api/client-portal/alerts/mark-read', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  const client = await resolvePortalClientSafe(c, user, body.clientId);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const ids = Array.isArray(body.ids) ? body.ids : [];
+  if (ids.length) { for (const id of ids.slice(0, 50)) { try { await c.env.DB.prepare(`UPDATE portal_alerts SET status = 'read' WHERE id = ? AND client_id = ?`).bind(id, client.id).run(); } catch {} } }
+  else { try { await c.env.DB.prepare(`UPDATE portal_alerts SET status = 'read' WHERE client_id = ? AND org_id = ? AND status = 'sent'`).bind(client.id, user.org_id).run(); } catch {} }
+  return c.json({ ok: true });
+});
+
+app.get('/api/client-portal/alerts/unread-count', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+  if (!client) return c.json({ count: 0 });
+  const row = await c.env.DB.prepare(`SELECT COUNT(*) as c FROM portal_alerts WHERE client_id = ? AND org_id = ? AND status IN ('sent','queued')`).bind(client.id, user.org_id).first() as any;
+  return c.json({ count: row?.c || 0 });
+});
+
+
 app.put('/api/client-portal/profile', authMiddleware, async (c) => {
   const user = c.get('user');
   const body = await c.req.json();
@@ -2134,6 +2188,71 @@ app.post('/api/documents/:id/sign', authMiddleware, async (c) => {
 // ═══════════════════════════════════════════════════════════════
 // ADMINISTRATIVE CRM & LITIGATION PIPELINE ENDPOINTS
 // ═══════════════════════════════════════════════════════════════
+
+
+app.get('/api/clients/:clientId/disputes/rounds', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  const clientId = c.req.param('clientId');
+  const docs = await c.env.DB.prepare(
+    `SELECT id, doc_type, title, status, created_at, response_due_date, usps_tracking_number FROM documents WHERE client_id = ? AND org_id = ? AND doc_type IN ('bureau-dispute','1681i-letter','furnisher-623') ORDER BY created_at ASC`
+  ).bind(clientId, user.org_id).all();
+  const items: any[] = docs?.results || [];
+  const rounds: any[] = [];
+  let cur: any[] = [];
+  let roundNum = 1;
+  let start: number | null = null;
+  for (const d of items) {
+    const ts = new Date(d.created_at).getTime();
+    if (start === null || ts - start > 35 * 86400000) { if (cur.length) rounds.push({ round: roundNum++, letters: cur }); cur = []; start = ts; }
+    cur.push(d);
+  }
+  if (cur.length) rounds.push({ round: roundNum, letters: cur });
+  const now = Date.now();
+  for (const r of rounds) {
+    r.overdue = r.letters.filter((l: any) => l.response_due_date && new Date(l.response_due_date).getTime() < now && l.status !== 'response_received' && l.status !== 'deleted').length;
+    r.total = r.letters.length;
+    r.responded = r.letters.filter((l: any) => l.status === 'response_received' || l.status === 'deleted').length;
+  }
+  return c.json({ clientId, rounds });
+});
+
+app.post('/api/documents/:id/record-response', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  const id = c.req.param('id');
+  const body = await c.req.json();
+  const result = body.result || 'verified';
+  await c.env.DB.prepare(
+    `UPDATE documents SET status = 'response_received', dispute_result = ?, updated_at = datetime('now') WHERE id = ? AND org_id = ?`
+  ).bind(result, id, user.org_id).run();
+  const doc = await c.env.DB.prepare('SELECT client_id FROM documents WHERE id = ?').bind(id).first() as any;
+  if (doc?.client_id && result === 'deleted') {
+    await c.env.DB.prepare(`UPDATE violations SET status = 'resolved', updated_at = datetime('now') WHERE client_id = ? AND org_id = ? AND status != 'resolved'`).bind(doc.client_id, user.org_id).run().catch(() => {});
+  }
+  await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(generateId(), user.org_id, doc?.client_id, id, user.id, 'bureau_response_recorded', `Bureau response: ${result}`, JSON.stringify({ result })).run();
+  return c.json({ ok: true, result });
+});
+
+app.get('/api/search', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Unauthorized' }, 403);
+  const q = String(c.req.query('q') || '').trim();
+  if (q.length < 2) return c.json({ clients: [], violations: [], documents: [] });
+  const like = `%${q}%`;
+  const clients = await c.env.DB.prepare(
+    `SELECT id, first_name, last_name, email, phone, case_status FROM clients WHERE org_id = ? AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR phone LIKE ?) ORDER BY created_at DESC LIMIT 20`
+  ).bind(user.org_id, like, like, like, like).all();
+  const violations = await c.env.DB.prepare(
+    `SELECT v.id, v.account_name, v.bureau, v.statute, v.severity, v.client_id FROM violations v WHERE v.org_id = ? AND (v.account_name LIKE ? OR v.statute LIKE ?) ORDER BY v.created_at DESC LIMIT 20`
+  ).bind(user.org_id, like, like).all();
+  const documents = await c.env.DB.prepare(
+    `SELECT d.id, d.title, d.doc_type, d.status, d.client_id FROM documents d WHERE d.org_id = ? AND (d.title LIKE ? OR d.doc_type LIKE ?) ORDER BY d.created_at DESC LIMIT 20`
+  ).bind(user.org_id, like, like).all();
+  return c.json({ clients: clients?.results || [], violations: violations?.results || [], documents: documents?.results || [] });
+});
+
 app.get('/api/admin/overview-stats', authMiddleware, async (c) => {
   const user = c.get('user');
   if (user.role === 'client') return c.json({ error: 'Unauthorized administrative action' }, 403);
@@ -2149,15 +2268,20 @@ app.get('/api/admin/overview-stats', authMiddleware, async (c) => {
   const disputingCount = await c.env.DB.prepare('SELECT COUNT(*) as val FROM clients WHERE org_id = ? AND case_status = "DISPUTING"').bind(user.org_id).first() as any;
   const settledCount = await c.env.DB.prepare('SELECT COUNT(*) as val FROM clients WHERE org_id = ? AND case_status = "SETTLED"').bind(user.org_id).first() as any;
 
-  // Monthly revenue analytics series (6-month period)
-  const monthlyRevenues = [
-    { label: 'Jan', value: 14200 },
-    { label: 'Feb', value: 18500 },
-    { label: 'Mar', value: 21400 },
-    { label: 'Apr', value: 25900 },
-    { label: 'May', value: 29800 },
-    { label: 'Jun', value: 36500 }
-  ];
+  // Monthly revenue from actual tradeline orders (last 6 months)
+  const revenueQuery = await c.env.DB.prepare(
+    `SELECT strftime('%Y-%m', paid_at) as month, SUM(amount_cents) as total
+     FROM tradeline_orders WHERE org_id = ? AND status = 'paid' AND paid_at > datetime('now', '-6 months')
+     GROUP BY month ORDER BY month ASC`
+  ).bind(user.org_id).all().catch(() => ({ results: [] }));
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const monthlyRevenues = ((revenueQuery as any)?.results || []).map((r: any) => {
+    const [_y, m] = (r.month || '').split('-');
+    return { label: months[parseInt(m, 10) - 1] || r.month, value: Math.round((r.total || 0) / 100) };
+  });
+  if (!monthlyRevenues.length) {
+    monthlyRevenues.push({ label: 'No data', value: 0 });
+  }
 
   // Litigation outcomes ratios
   const outcomes = [
@@ -3147,6 +3271,38 @@ app.post('/api/billing/checkout', authMiddleware, async (c) => {
   }
 
   return c.json({ url: session.url });
+});
+
+
+app.post('/api/billing/portal', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const stripe = getStripe(c.env);
+  const org = await c.env.DB.prepare('SELECT stripe_customer_id FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+  if (!org?.stripe_customer_id) return c.json({ error: 'Subscribe first' }, 400);
+  const session = await stripe.billingPortal.sessions.create({
+    customer: org.stripe_customer_id,
+    return_url: `${c.env.FRONTEND_URL || c.req.url.split('/api')[0]}/?page=billing`,
+  });
+  return c.json({ url: session.url });
+});
+
+app.get('/api/billing/invoices', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const stripe = getStripe(c.env);
+  const org = await c.env.DB.prepare('SELECT stripe_customer_id FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+  if (!org?.stripe_customer_id) return c.json({ invoices: [] });
+  const invoices = await stripe.invoices.list({ customer: org.stripe_customer_id, limit: 20 });
+  return c.json({ invoices: invoices.data.map((i: any) => ({ id: i.id, number: i.number, status: i.status, amount: i.amount_due, currency: i.currency, created: i.created, pdf: i.invoice_pdf, hosted_url: i.hosted_invoice_url })) });
+});
+
+app.post('/api/billing/cancel', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role !== 'super_admin' && user.role !== 'admin') return c.json({ error: 'Admin only' }, 403);
+  const org = await c.env.DB.prepare('SELECT stripe_subscription_id FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+  if (!org?.stripe_subscription_id) return c.json({ error: 'No active subscription' }, 400);
+  const stripe = getStripe(c.env);
+  await stripe.subscriptions.update(org.stripe_subscription_id, { cancel_at_period_end: true });
+  return c.json({ ok: true, message: 'Subscription will cancel at end of billing period' });
 });
 
 app.post('/api/billing/webhook', async (c) => {

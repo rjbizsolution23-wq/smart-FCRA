@@ -488,7 +488,20 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   function render() {
     const app = document.getElementById('app');
     if (!state.token) { app.innerHTML = renderAuth(); bindAuth(); }
-    else { app.innerHTML = renderShell(); loadPage(state.currentPage); }
+    else {
+      app.innerHTML = renderShell();
+      loadPage(state.currentPage);
+      (async () => {
+        try {
+          const qs = state.impersonateClientId ? `?clientId=${state.impersonateClientId}` : '';
+          const d = await api('/client-portal/alerts/unread-count' + qs);
+          document.querySelectorAll('[id^="notif-badge"]').forEach(el => {
+            if (d.count > 0) { el.textContent = d.count > 9 ? '9+' : String(d.count); el.classList.remove('hidden'); }
+            else el.classList.add('hidden');
+          });
+        } catch {}
+      })();
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -687,6 +700,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       }
     } else {
       navItems = [
+        { id: 'global-search', icon: 'fa-search', label: 'Search' },
         { id: 'admin-overview', icon: 'fa-chart-pie', label: 'Executive Overview' },
         { id: 'admin-clients', icon: 'fa-address-card', label: 'Client Management' },
         { id: 'admin-violation-queue', icon: 'fa-tasks', label: 'Violation Review QA' },
@@ -710,7 +724,12 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         navItems.push({ id: 'admin-console', icon: 'fa-user-shield', label: 'Admin Console' });
       }
     }
-    // Branding URLs - replace with actual image URLs
+    // Mobile nav toggle
+    window._toggleMobileNav = () => {
+      const nav = document.getElementById('mobile-nav');
+      if (nav) nav.classList.toggle('hidden');
+    };
+    // Branding URLs
     const RJ_LOGO = 'https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg';
     const MFSN_BANNER = '/static/logos/mfsn-banner.png';
     const FCRA_LOGO = RJ_LOGO;
@@ -767,6 +786,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       switch(page) {
         case 'dashboard': await pgDashboard(el); break;
         case 'clients': await pgClients(el); break;
+        case 'global-search': await pgGlobalSearch(el); break;
         case 'client-detail': await pgClientDetail(el, state.pageData); break;
         case 'reports': await pgReports(el); break;
         case 'report-history': await pgReportHistory(el); break;
@@ -849,6 +869,30 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   // ═══════════════════════════════════════════════════════════════
   // CLIENTS
   // ═══════════════════════════════════════════════════════════════
+  async function pgGlobalSearch(el) {
+    el.innerHTML = `
+      <div class="fade-in space-y-4 max-w-3xl">
+        <h1 class="text-xl font-bold text-white"><i class="fas fa-search text-blue-400 mr-2"></i>Global Search</h1>
+        <input id="gsearch-input" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-4 py-3 text-white" placeholder="Search clients, violations, documents..." autofocus>
+        <div id="gsearch-results" class="space-y-4"></div>
+      </div>`;
+    const inp = document.getElementById('gsearch-input');
+    let debounce;
+    inp.oninput = () => { clearTimeout(debounce); debounce = setTimeout(async () => {
+      const q = inp.value.trim();
+      if (q.length < 2) { document.getElementById('gsearch-results').innerHTML = ''; return; }
+      try {
+        const d = await api('/search?q=' + encodeURIComponent(q));
+        const el2 = document.getElementById('gsearch-results');
+        el2.innerHTML = `
+          ${(d.clients||[]).length ? `<div class="glass rounded-xl border border-gray-800 p-3"><h3 class="text-xs font-bold text-white uppercase mb-2">Clients (${d.clients.length})</h3>${d.clients.map(c=>`<div class="text-sm py-1 cursor-pointer hover:text-blue-300" onclick="window._nav('client-detail',{clientId:'${c.id}'})">${escapeHtml(c.first_name)} ${escapeHtml(c.last_name)} · ${escapeHtml(c.email||'')} · <span class="text-gray-500">${c.case_status||''}</span></div>`).join('')}</div>` : ''}
+          ${(d.violations||[]).length ? `<div class="glass rounded-xl border border-gray-800 p-3"><h3 class="text-xs font-bold text-white uppercase mb-2">Violations (${d.violations.length})</h3>${d.violations.map(v=>`<div class="text-sm py-1">${escapeHtml(v.account_name)} · ${escapeHtml(v.bureau||'')} · ${escapeHtml(v.statute||'')}</div>`).join('')}</div>` : ''}
+          ${(d.documents||[]).length ? `<div class="glass rounded-xl border border-gray-800 p-3"><h3 class="text-xs font-bold text-white uppercase mb-2">Documents (${d.documents.length})</h3>${d.documents.map(dd=>`<div class="text-sm py-1">${escapeHtml(dd.title||dd.doc_type)} · ${escapeHtml(dd.status)}</div>`).join('')}</div>` : ''}
+          ${!d.clients?.length && !d.violations?.length && !d.documents?.length ? '<p class="text-gray-500">No results</p>' : ''}`;
+      } catch (err) { document.getElementById('gsearch-results').innerHTML = `<p class="text-red-400">${escapeHtml(err.message)}</p>`; }
+    }, 300); };
+  }
+
   async function pgClients(el) {
     const d = await api('/clients');
     el.innerHTML = `<div class="fade-in">
