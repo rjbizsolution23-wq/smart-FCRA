@@ -60,3 +60,19 @@ export function requireEncryptionKey(secret: string | undefined): string {
   }
   return secret;
 }
+
+/** Read-path decrypt — never throws; returns placeholder when key missing or ciphertext invalid. */
+export async function decryptTextSafe(
+  cipherText: string,
+  secret: string | undefined,
+  placeholder = '[encrypted — configure PII_ENCRYPTION_KEY to view]',
+): Promise<string> {
+  if (!cipherText) return '';
+  try {
+    return await decryptText(cipherText, secret);
+  } catch {
+    if (cipherText.startsWith('PLAIN:')) return cipherText.slice(6);
+    if (!secret) return placeholder;
+    return placeholder;
+  }
+}

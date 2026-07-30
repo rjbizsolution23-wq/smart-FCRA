@@ -3,7 +3,7 @@ import { cors } from 'hono/cors';
 import { serveStatic } from 'hono/cloudflare-pages';
 import Stripe from 'stripe';
 import { generateId, hashPassword, verifyPassword, needsPasswordRehash, createSessionToken, generateEmailToken, generateMFASecret, verifyTOTP } from './lib/auth';
-import { encryptText, decryptText, requireEncryptionKey } from './lib/crypto';
+import { encryptText, decryptText, decryptTextSafe, requireEncryptionKey } from './lib/crypto';
 import { generateAiText, listConfiguredProviders, generateFreeImage } from './lib/ai-providers';
 import { sendAppEmail } from './lib/email';
 import { MENTORS, buildMentorContext, KNOWLEDGE_CORPUS_META, retrieveCaseLawKnowledge, type MentorId } from './lib/mentors';
@@ -34,7 +34,7 @@ async function encryptPII(c: any, text: string): Promise<string> {
 }
 
 async function decryptPII(c: any, text: string): Promise<string> {
-  return decryptText(text, c.env.PII_ENCRYPTION_KEY);
+  return decryptTextSafe(text, c.env.PII_ENCRYPTION_KEY);
 }
 
 /** Persist bureau scores on report + client; keep EQ/EX/TU packs distinct. */
@@ -336,6 +336,10 @@ const getStripe = (env: Bindings) => {
     httpClient: Stripe.createFetchHttpClient(),
   });
 };
+
+function stripeConfigured(env: Bindings): boolean {
+  return !!env.STRIPE_API_KEY;
+}
 
 app.use('/api/*', cors());
 
@@ -1350,7 +1354,11 @@ app.get('/api/client-portal/dashboard', authMiddleware, async (c) => {
   }
 
   const reports = await c.env.DB.prepare('SELECT id, bureau, report_date, file_name, created_at, status, total_accounts, total_collections, total_inquiries FROM credit_reports WHERE client_id = ? AND org_id = ? ORDER BY report_date DESC').bind(client.id, user.org_id).all();
-  const violations = await c.env.DB.prepare('SELECT * FROM violations WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC').bind(client.id, user.org_id).all();
+  const violations = await c.env.DB.prepare(
+    `SELECT v.*, cr.bureau FROM violations v
+     LEFT JOIN credit_reports cr ON v.report_id = cr.id
+     WHERE v.client_id = ? AND v.org_id = ? ORDER BY v.created_at DESC`
+  ).bind(client.id, user.org_id).all();
   const documents = await c.env.DB.prepare('SELECT id, doc_type, title, status, created_at, signature_timestamp FROM documents WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC').bind(client.id, user.org_id).all();
   const activity = await c.env.DB.prepare('SELECT * FROM activity_log WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 30').bind(client.id, user.org_id).all();
 
@@ -2761,8 +2769,12 @@ app.get('/api/search', authMiddleware, async (c) => {
     `SELECT id, first_name, last_name, email, phone, case_status FROM clients WHERE org_id = ? AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR phone LIKE ?) ORDER BY created_at DESC LIMIT 20`
   ).bind(user.org_id, like, like, like, like).all();
   const violations = await c.env.DB.prepare(
-    `SELECT v.id, v.account_name, v.bureau, v.statute, v.severity, v.client_id FROM violations v WHERE v.org_id = ? AND (v.account_name LIKE ? OR v.statute LIKE ?) ORDER BY v.created_at DESC LIMIT 20`
-  ).bind(user.org_id, like, like).all();
+    `SELECT v.id, v.account_name, v.statute, v.severity, v.client_id, v.category, cr.bureau
+     FROM violations v
+     LEFT JOIN credit_reports cr ON v.report_id = cr.id
+     WHERE v.org_id = ? AND (v.account_name LIKE ? OR v.statute LIKE ? OR v.category LIKE ?)
+     ORDER BY v.created_at DESC LIMIT 20`
+  ).bind(user.org_id, like, like, like).all();
   const documents = await c.env.DB.prepare(
     `SELECT d.id, d.title, d.doc_type, d.status, d.client_id FROM documents d WHERE d.org_id = ? AND (d.title LIKE ? OR d.doc_type LIKE ?) ORDER BY d.created_at DESC LIMIT 20`
   ).bind(user.org_id, like, like).all();
@@ -3736,6 +3748,7 @@ app.post('/api/billing/checkout', authMiddleware, async (c) => {
   const user = c.get('user');
   const { planId } = await c.req.json();
   if (!planId) return c.json({ error: 'Plan ID required' }, 400);
+  if (!stripeConfigured(c.env)) return c.json({ error: 'Stripe is not configured for this environment' }, 503);
 
   const stripe = getStripe(c.env);
   const org = await c.env.DB.prepare('SELECT * FROM organizations WHERE id = ?').bind(user.org_id).first();
@@ -3793,6 +3806,7 @@ app.post('/api/billing/checkout', authMiddleware, async (c) => {
 
 app.post('/api/billing/portal', authMiddleware, async (c) => {
   const user = c.get('user');
+  if (!stripeConfigured(c.env)) return c.json({ error: 'Stripe is not configured' }, 503);
   const stripe = getStripe(c.env);
   const org = await c.env.DB.prepare('SELECT stripe_customer_id FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
   if (!org?.stripe_customer_id) return c.json({ error: 'Subscribe first' }, 400);
@@ -3805,16 +3819,23 @@ app.post('/api/billing/portal', authMiddleware, async (c) => {
 
 app.get('/api/billing/invoices', authMiddleware, async (c) => {
   const user = c.get('user');
-  const stripe = getStripe(c.env);
+  if (!stripeConfigured(c.env)) return c.json({ invoices: [], unconfigured: true });
   const org = await c.env.DB.prepare('SELECT stripe_customer_id FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
   if (!org?.stripe_customer_id) return c.json({ invoices: [] });
-  const invoices = await stripe.invoices.list({ customer: org.stripe_customer_id, limit: 20 });
-  return c.json({ invoices: invoices.data.map((i: any) => ({ id: i.id, number: i.number, status: i.status, amount: i.amount_due, currency: i.currency, created: i.created, pdf: i.invoice_pdf, hosted_url: i.hosted_invoice_url })) });
+  try {
+    const stripe = getStripe(c.env);
+    const invoices = await stripe.invoices.list({ customer: org.stripe_customer_id, limit: 20 });
+    return c.json({ invoices: invoices.data.map((i: any) => ({ id: i.id, number: i.number, status: i.status, amount: i.amount_due, currency: i.currency, created: i.created, pdf: i.invoice_pdf, hosted_url: i.hosted_invoice_url })) });
+  } catch (e: any) {
+    console.warn('[billing] invoices list failed', e.message);
+    return c.json({ invoices: [], error: e.message || 'Stripe unavailable' });
+  }
 });
 
 app.post('/api/billing/cancel', authMiddleware, async (c) => {
   const user = c.get('user');
   if (user.role !== 'super_admin' && user.role !== 'admin') return c.json({ error: 'Admin only' }, 403);
+  if (!stripeConfigured(c.env)) return c.json({ error: 'Stripe is not configured' }, 503);
   const org = await c.env.DB.prepare('SELECT stripe_subscription_id FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
   if (!org?.stripe_subscription_id) return c.json({ error: 'No active subscription' }, 400);
   const stripe = getStripe(c.env);
@@ -4083,12 +4104,9 @@ app.get('/api/reports', authMiddleware, async (c) => {
   const decryptedReports = [];
   for (const r of results as any[]) {
     const rDecrypted = { ...r };
-    if (rDecrypted.raw_text) {
-      rDecrypted.raw_text = await decryptPII(c, rDecrypted.raw_text);
-    }
-    if (rDecrypted.parsed_data) {
-      rDecrypted.parsed_data = await decryptPII(c, rDecrypted.parsed_data);
-    }
+    // List view does not need encrypted blobs — omit to keep pages fast and resilient
+    delete rDecrypted.raw_text;
+    delete rDecrypted.parsed_data;
     decryptedReports.push(rDecrypted);
   }
 

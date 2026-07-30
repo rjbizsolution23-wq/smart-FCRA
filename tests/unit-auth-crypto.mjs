@@ -44,7 +44,7 @@ if (!auth || !cryptoMod) {
 }
 
 const { hashPassword, verifyPassword, needsPasswordRehash, verifyTOTP, generateMFASecret } = auth;
-const { encryptText, decryptText } = cryptoMod;
+const { encryptText, decryptText, decryptTextSafe } = cryptoMod;
 
 const hash = await hashPassword('demo123456');
 assert(hash.startsWith('pbkdf2$'), 'hash uses pbkdf2 prefix');
@@ -69,6 +69,9 @@ const enc = await encryptText('sensitive-report-text', key);
 assert(!enc.startsWith('PLAIN:'), 'ciphertext is not plaintext');
 assert((await decryptText(enc, key)) === 'sensitive-report-text', 'round-trip decrypt');
 assert((await decryptText('PLAIN:legacy', key)) === 'legacy', 'legacy PLAIN readable');
+const safeMissing = await decryptTextSafe(enc, undefined);
+assert(safeMissing.includes('encrypted'), 'safe decrypt without key returns placeholder');
+assert((await decryptTextSafe('PLAIN:legacy', undefined)) === 'legacy', 'safe decrypt reads PLAIN legacy');
 
 const secret = generateMFASecret();
 assert(secret.length >= 16, 'MFA secret length');
