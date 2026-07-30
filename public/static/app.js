@@ -1157,7 +1157,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         ${statCard('fa-file-contract','Documents',res.documents.length,'purple')}
       </div>
       ${renderBureauTriad(res)}
-      <div class="flex border-b border-gray-800 mb-4">${['reports','violations','bureaus','documents','mailing','activity'].map((t)=>`<button class="client-tab pb-2.5 px-4 text-sm font-medium ${(data.initialTab||'violations')===t?'text-blue-400 border-b-2 border-blue-400':'text-gray-500 border-b-2 border-transparent hover:text-gray-300'}" data-tab="${t}">${t==='mailing'?'Mailing Campaigns':t==='bureaus'?'Tri-Bureau':(t[0].toUpperCase()+t.slice(1))} (${t==='activity'?res.activity.length:t==='mailing'?res.documents.filter(d=>d.status==='sent').length:t==='bureaus'?'3':res[t==='bureaus'?'reports':t].length})</button>`).join('')}</div>
+      <div class="flex border-b border-gray-800 mb-4 overflow-x-auto">${['reports','violations','bureaus','documents','mailing','compliance','email-log','activity'].map((t)=>`<button class="client-tab pb-2.5 px-4 text-sm font-medium whitespace-nowrap ${(data.initialTab||'violations')===t?'text-blue-400 border-b-2 border-blue-400':'text-gray-500 border-b-2 border-transparent hover:text-gray-300'}" data-tab="${t}">${t==='mailing'?'Mailing':t==='bureaus'?'Tri-Bureau':t==='email-log'?'Email Log':t==='compliance'?'Legal / RON':(t[0].toUpperCase()+t.slice(1))} ${t==='activity'?'('+res.activity.length+')':t==='mailing'?'('+res.documents.filter(d=>d.status==='sent').length+')':t==='bureaus'?'':t==='compliance'||t==='email-log'?'':'('+res[t].length+')'}</button>`).join('')}</div>
       <div id="client-tab-content">${(data.initialTab && data.initialTab !== 'violations') ? '' : renderViolationsList(res.violations)}</div>
 
       <!-- Edit Client Slide-Over Panel -->
@@ -1348,16 +1348,18 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       const ct = $('#client-tab-content');
       const tabBtn = document.querySelector(`.client-tab[data-tab="${initialTab}"]`);
       if (tabBtn) {
-        document.querySelectorAll('.client-tab').forEach(t => { t.className = 'client-tab pb-2.5 px-4 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-gray-300'; });
-        tabBtn.className = 'client-tab pb-2.5 px-4 text-sm font-medium text-blue-400 border-b-2 border-blue-400';
+        document.querySelectorAll('.client-tab').forEach(t => { t.className = 'client-tab pb-2.5 px-4 text-sm font-medium whitespace-nowrap text-gray-500 border-b-2 border-transparent hover:text-gray-300'; });
+        tabBtn.className = 'client-tab pb-2.5 px-4 text-sm font-medium whitespace-nowrap text-blue-400 border-b-2 border-blue-400';
         if (initialTab === 'bureaus' && ct) loadBureauComparisonTab(ct, c.id);
+        else if (initialTab === 'compliance' && ct) loadClientComplianceTab(ct, c.id);
+        else if (initialTab === 'email-log' && ct) loadClientEmailLogTab(ct, c.id);
         else if (ct) tabBtn.click();
       }
     }
     document.querySelectorAll('.client-tab').forEach(tab => {
       tab.onclick = () => {
-        document.querySelectorAll('.client-tab').forEach(t => { t.className = 'client-tab pb-2.5 px-4 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-gray-300'; });
-        tab.className = 'client-tab pb-2.5 px-4 text-sm font-medium text-blue-400 border-b-2 border-blue-400';
+        document.querySelectorAll('.client-tab').forEach(t => { t.className = 'client-tab pb-2.5 px-4 text-sm font-medium whitespace-nowrap text-gray-500 border-b-2 border-transparent hover:text-gray-300'; });
+        tab.className = 'client-tab pb-2.5 px-4 text-sm font-medium whitespace-nowrap text-blue-400 border-b-2 border-blue-400';
         const ct = $('#client-tab-content');
         switch(tab.dataset.tab) {
           case 'reports': ct.innerHTML = renderReportsList(res.reports); break;
@@ -1365,10 +1367,68 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           case 'bureaus': loadBureauComparisonTab(ct, c.id); break;
           case 'documents': ct.innerHTML = renderDocsList(res.documents); break;
           case 'mailing': ct.innerHTML = renderMailingTab(res.documents, c); break;
+          case 'compliance': loadClientComplianceTab(ct, c.id); break;
+          case 'email-log': loadClientEmailLogTab(ct, c.id); break;
           case 'activity': ct.innerHTML = renderActivityList(res.activity); break;
         }
       };
     });
+  }
+
+  async function loadClientComplianceTab(el, clientId) {
+    el.innerHTML = '<div class="flex items-center justify-center py-12"><i class="fas fa-spinner fa-spin text-blue-400 text-xl"></i></div>';
+    try {
+      const data = await api(`/clients/${clientId}/compliance-summary`);
+      const contracts = data.contracts || [];
+      const ron = data.ron || [];
+      const video = data.video || [];
+      el.innerHTML = `
+        <div class="space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <h3 class="text-sm font-bold text-white"><i class="fas fa-shield-alt text-emerald-400 mr-1.5"></i>Legal contracts · RON · Video</h3>
+            <button onclick="window._nav('compliance-hub',{clientId:'${clientId}'})" class="text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg font-bold">Open Compliance Hub</button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px]">
+            <div class="glass rounded-xl border border-gray-800 p-3"><div class="text-gray-500 uppercase font-bold mb-1">CROA flag</div><div class="text-white font-semibold">${data.client?.croa_contract_agreed ? 'Agreed' : 'Missing'}</div></div>
+            <div class="glass rounded-xl border border-gray-800 p-3"><div class="text-gray-500 uppercase font-bold mb-1">Contracts</div><div class="text-white font-semibold">${contracts.length}</div></div>
+            <div class="glass rounded-xl border border-gray-800 p-3"><div class="text-gray-500 uppercase font-bold mb-1">RON / Video</div><div class="text-white font-semibold">${ron.length} / ${video.length}</div></div>
+          </div>
+          <div class="glass rounded-xl border border-gray-800 p-4">
+            <h4 class="text-xs font-bold text-white mb-2">Contracts</h4>
+            ${contracts.length ? contracts.map(x => `<div class="flex justify-between gap-2 py-1.5 border-b border-gray-800/50 text-xs"><span class="text-gray-300">${escapeHtml(x.contract_type)} ${x.requires_notarization ? '· notary' : ''}</span><span class="font-bold ${x.status==='signed'?'text-emerald-400':x.status==='pending'?'text-amber-300':'text-gray-400'}">${escapeHtml(x.status)}</span></div>`).join('') : '<p class="text-xs text-gray-500">No contracts issued yet.</p>'}
+          </div>
+          <div class="glass rounded-xl border border-gray-800 p-4">
+            <h4 class="text-xs font-bold text-white mb-2">RON sessions</h4>
+            ${ron.length ? ron.map(x => `<div class="flex justify-between gap-2 py-1.5 border-b border-gray-800/50 text-xs"><span class="text-gray-300">${escapeHtml(x.state_code || '—')} · ${escapeHtml(x.vendor || '')}</span><span class="text-cyan-300 font-bold">${escapeHtml(x.status)}</span></div>`).join('') : '<p class="text-xs text-gray-500">No RON sessions.</p>'}
+          </div>
+        </div>`;
+    } catch (err) {
+      el.innerHTML = `<div class="text-red-400 text-sm p-4">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function loadClientEmailLogTab(el, clientId) {
+    el.innerHTML = '<div class="flex items-center justify-center py-12"><i class="fas fa-spinner fa-spin text-blue-400 text-xl"></i></div>';
+    try {
+      const data = await api(`/clients/${clientId}/email-log?limit=100`);
+      const rows = data.deliveries || [];
+      el.innerHTML = `
+        <div class="space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="text-sm font-bold text-white"><i class="fas fa-envelope-open-text text-cyan-400 mr-1.5"></i>Email delivery log</h3>
+            <span class="text-[10px] text-gray-500">Honest status: sent · simulated · failed · skipped</span>
+          </div>
+          ${rows.length ? `<div class="overflow-x-auto"><table class="w-full text-xs"><thead><tr class="text-gray-500 text-left border-b border-gray-800"><th class="py-2 pr-2">When</th><th class="py-2 pr-2">Template</th><th class="py-2 pr-2">Subject</th><th class="py-2 pr-2">Status</th><th class="py-2">Provider</th></tr></thead><tbody>
+            ${rows.map(r => {
+              const st = r.status || '';
+              const color = st === 'sent' ? 'text-emerald-400' : st === 'simulated' ? 'text-amber-300' : st === 'failed' ? 'text-red-400' : 'text-gray-400';
+              return `<tr class="border-b border-gray-800/40"><td class="py-2 pr-2 text-gray-500 whitespace-nowrap">${shortDate(r.created_at)}</td><td class="py-2 pr-2 text-gray-300 font-mono">${escapeHtml(r.template_id || '—')}</td><td class="py-2 pr-2 text-gray-400 max-w-[220px] truncate">${escapeHtml(r.subject || '')}</td><td class="py-2 pr-2 font-bold ${color}">${escapeHtml(st)}</td><td class="py-2 text-gray-500">${escapeHtml(r.provider || '—')}</td></tr>`;
+            }).join('')}
+          </tbody></table></div>` : '<p class="text-sm text-gray-500">No email deliveries logged for this client yet.</p>'}
+        </div>`;
+    } catch (err) {
+      el.innerHTML = `<div class="text-red-400 text-sm p-4">${escapeHtml(err.message)}</div>`;
+    }
   }
 
 
@@ -1420,7 +1480,8 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       ${(status === 'TRI_BUREAU_READY' || status === 'WORKFLOW_FIRED') && current.Equifax ? `
         <div class="mt-3 flex flex-wrap gap-2">
           <button onclick="window._launchAttorneyWorkflow('${current.Equifax}')" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold"><i class="fas fa-gavel mr-1"></i>Launch Full Suit Pack</button>
-          <button onclick="window._nav('client-documents')" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">E-Sign Queue</button>
+          <button onclick="window._nav('client-detail',{clientId:'${res.client.id}',initialTab:'documents'})" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">E-Sign Queue</button>
+          <button onclick="window._nav('compliance-hub',{clientId:'${res.client.id}'})" class="bg-emerald-800 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Compliance Hub</button>
         </div>` : ''}
     </div>`;
   }
@@ -4973,11 +5034,12 @@ Status: Discharged`;
     }
     if (!confirm(`Mail "${decodeURIComponent(id)}"?\n\nTo: ${recipientName}\n${recipientAddress}\n${recipientCity}, ${recipientState} ${recipientZip}\n\nThis will send via Click2Mail.`)) return;
     try {
-      const res = await fetch(`/api/documents/${id}/send`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ recipientName, recipientAddress, recipientCity, recipientState, recipientZip }) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Send failed');
-      toast(`Mailed successfully! Mailing ID: ${data.mailingId}`,'success');
-    } catch(err) { toast(err.message,'error'); }
+      const data = await api(`/documents/${id}/send`, {
+        method: 'POST',
+        body: JSON.stringify({ recipientName, recipientAddress, recipientCity, recipientState, recipientZip }),
+      });
+      toast(`Mailed successfully! Mailing ID: ${data.mailingId}`, 'success');
+    } catch (err) { toast(err.message, 'error'); }
   };
 
   // ═══════════════════════════════════════════════════════════════

@@ -87,7 +87,7 @@ export async function dispatchClientAlert(
         text: opts.body,
         purpose: 'noreply',
       });
-      const status = mail.sent ? 'sent' : mail.simulated ? 'sent' : 'failed';
+      const status = mail.sent ? 'sent' : mail.simulated ? 'simulated' : 'failed';
       await env.DB.prepare(`UPDATE portal_alerts SET status = ?, sent_at = datetime('now'), provider_ref = ? WHERE id = ?`)
         .bind(status, mail.provider || null, id)
         .run();
@@ -108,7 +108,7 @@ export async function dispatchClientAlert(
         .bind(id, opts.orgId, opts.clientId, opts.eventType, opts.title, opts.body.slice(0, 300))
         .run();
       const sms = await sendSms(env, opts.phone, `${opts.title}: ${opts.body}`.slice(0, 320));
-      const status = sms.sent ? 'sent' : sms.simulated ? 'sent' : 'failed';
+      const status = sms.sent ? 'sent' : sms.simulated ? 'simulated' : 'failed';
       await env.DB.prepare(`UPDATE portal_alerts SET status = ?, sent_at = datetime('now'), provider_ref = ? WHERE id = ?`)
         .bind(status, sms.sid || sms.error || null, id)
         .run();

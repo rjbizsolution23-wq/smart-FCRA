@@ -1,0 +1,46 @@
+name: Smart FCRA v2 — Enterprise Comms Pack
+
+# Onboarding drip, CROA nudge, dispute-due reminders, admin daily digest.
+# Schedule: 14:00 UTC ≈ 8:00 AM US Central (after morning ritual at 13:00 UTC).
+# Requires GitHub secrets: JOURNEY_CRON_SECRET (or MAILING_WEBHOOK_SECRET), optional APP_BASE_URL.
+
+on:
+  schedule:
+    - cron: '0 14 * * *'
+  workflow_dispatch:
+    inputs:
+      org_id:
+        description: 'Optional org ID to scope the run'
+        required: false
+        default: ''
+
+jobs:
+  enterprise-comms:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Dispatch enterprise email workflows
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          JOURNEY_CRON_SECRET: ${{ secrets.JOURNEY_CRON_SECRET }}
+          MAILING_WEBHOOK_SECRET: ${{ secrets.MAILING_WEBHOOK_SECRET }}
+          ORG_ID: ${{ github.event.inputs.org_id || '' }}
+        run: |
+          set -euo pipefail
+          BASE="${APP_BASE_URL:-https://smart-fcra-v2.pages.dev}"
+          SECRET="${JOURNEY_CRON_SECRET:-${MAILING_WEBHOOK_SECRET:-}}"
+          if [ -z "$SECRET" ]; then
+            echo "::error::JOURNEY_CRON_SECRET (or MAILING_WEBHOOK_SECRET) is not configured."
+            exit 1
+          fi
+          PAYLOAD='{}'
+          if [ -n "$ORG_ID" ]; then
+            PAYLOAD="{\"orgId\":\"${ORG_ID}\"}"
+          fi
+          echo "Enterprise comms dispatch → ${BASE%/}/api/cron/enterprise-comms"
+          RESP=$(curl -fsS -X POST "${BASE%/}/api/cron/enterprise-comms" \
+            -H "Content-Type: application/json" \
+            -H "X-Cron-Secret: ${SECRET}" \
+            -d "${PAYLOAD}")
+          echo "$RESP"
+          echo "Enterprise comms cron complete."

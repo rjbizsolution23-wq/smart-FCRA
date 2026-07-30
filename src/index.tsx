@@ -18,6 +18,8 @@ import { detectViolations, calculateLitigationScore, type CreditReportData } fro
 import { analyzeReportLive } from './engine/violation-factcheck';
 import { seedKnowledgeBase, retrieveKnowledge } from './lib/knowledge-base';
 import { listEmailTemplates, sendTemplatedClientMessage, EMAIL_TEMPLATES } from './lib/email-templates';
+import { runEnterpriseCommsCron } from './lib/email-workflows';
+import { loadOrgBrand, brandVars } from './lib/org-branding';
 import { issueClientContractPack, createLegalContract, signLegalContract, recordEsignConsent } from './lib/legal-contracts';
 import { ESIGN_DISCLOSURE_TEXT, ESIGN_DISCLOSURE_VERSION, type ContractType, documentRequiresNotarization, sha256Hex } from './data/legal-contracts';
 import { createVideoRoom, issueRoomToken, completeVideoSession, videoConfigured } from './lib/twilio-video';
@@ -404,6 +406,7 @@ type Bindings = {
   SENDGRID_API_KEY?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_EMAIL_API_TOKEN?: string;
+  CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_EMAIL_FROM_NOREPLY?: string;
   CLOUDFLARE_EMAIL_FROM_ONBOARDING?: string;
   FREE_AI_ONLY?: string;
@@ -788,7 +791,11 @@ app.post('/api/auth/register', async (c) => {
     return c.json({ error: `Internal error (db insert): ${e.message}` }, 500);
   }
 
-  if (c.env.CLOUDFLARE_EMAIL_API_TOKEN || c.env.RESEND_API_KEY || c.env.SENDGRID_API_KEY) {
+  if (
+    ((c.env.CLOUDFLARE_EMAIL_API_TOKEN || c.env.CLOUDFLARE_API_TOKEN) && c.env.CLOUDFLARE_ACCOUNT_ID) ||
+    c.env.RESEND_API_KEY ||
+    c.env.SENDGRID_API_KEY
+  ) {
     const verifyToken = generateEmailToken();
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     await c.env.DB.prepare(
@@ -797,11 +804,22 @@ app.post('/api/auth/register', async (c) => {
     const base = c.env.FRONTEND_URL || c.env.APP_BASE_URL || 'https://smart-fcra-v2.pages.dev';
     const verifyUrl = `${base}/?verifyEmail=${verifyToken}`;
     try {
-      await sendAppEmail(c.env, {
-        to: email,
-        subject: 'Verify your Smart FCRA account',
-        html: `<p>Welcome to Smart FCRA Supreme.</p><p><a href="${verifyUrl}">Verify your email</a> to activate your account.</p>`,
-        purpose: 'onboarding',
+      const brand = await loadOrgBrand(c.env, orgId);
+      await sendTemplatedClientMessage(c.env, {
+        templateId: 'account_verify',
+        orgId,
+        clientId: `user:${userId}`,
+        email,
+        notifyEmail: true,
+        notifySms: false,
+        skipClientAlert: true,
+        brand,
+        vars: {
+          ...brandVars(brand),
+          name,
+          verifyUrl,
+          portalUrl: `${base}/`,
+        },
       });
     } catch (e) {
       console.error('[REGISTER] verification email failed', e);
@@ -1126,14 +1144,25 @@ app.post('/api/auth/forgot-password', async (c) => {
     'INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
   ).bind(generateId(), user.id, token, expires).run();
 
-  const base = c.env.FRONTEND_URL || 'https://smart-fcra.pages.dev';
+  const base = c.env.FRONTEND_URL || c.env.APP_BASE_URL || 'https://smart-fcra-v2.pages.dev';
   const resetUrl = `${base}/?resetToken=${token}`;
   try {
-    await sendAppEmail(c.env, {
-      to: user.email,
-      subject: 'Reset your Smart FCRA password',
-      html: `<p>Hello ${user.name || ''},</p><p><a href="${resetUrl}">Reset your password</a>. This link expires in 1 hour.</p>`,
-      purpose: 'noreply',
+    const brand = await loadOrgBrand(c.env, null);
+    await sendTemplatedClientMessage(c.env, {
+      templateId: 'password_reset',
+      orgId: 'system',
+      clientId: `user:${user.id}`,
+      email: user.email,
+      notifyEmail: true,
+      notifySms: false,
+      skipClientAlert: true,
+      brand,
+      vars: {
+        ...brandVars(brand),
+        name: user.name || '',
+        resetUrl,
+        portalUrl: `${base}/`,
+      },
     });
   } catch (e) {
     console.error('[PASSWORD RESET] email failed', e);
@@ -1726,14 +1755,27 @@ app.post('/api/client-portal/messages', authMiddleware, async (c) => {
   if (body.sendEmail === true || body.channel === 'email') {
     if (client.email && !isSyntheticPortalEmail(client.email)) {
       try {
-        const mail = await sendAppEmail(c.env, {
-          to: client.email,
-          subject: body.subject || `Message from your Smart FCRA credit team`,
-          html: `<div style="font-family:system-ui,sans-serif;padding:16px"><p>${String(text).replace(/</g,'&lt;').replace(/\n/g,'<br/>')}</p><p style="color:#64748b;font-size:12px">Reply inside your Smart FCRA portal.</p></div>`,
-          text,
-          purpose: 'noreply',
+        const brand = await loadOrgBrand(c.env, user.org_id);
+        const mail = await sendTemplatedClientMessage(c.env, {
+          templateId: 'staff_message',
+          orgId: user.org_id,
+          clientId: client.id,
+          email: client.email,
+          phone: client.phone_e164 || client.phone,
+          notifyEmail: true,
+          notifySms: false,
+          skipClientAlert: true, // alert + portal_alerts handled below once
+          brand,
+          vars: {
+            ...brandVars(brand),
+            clientName: `${client.first_name || ''} ${client.last_name || ''}`.trim(),
+            subject: body.subject || `Message from ${brand.fromName}`,
+            body: text,
+            portalUrl: `${portalBaseUrl(c.env)}/`,
+          },
         });
-        emailStatus = mail.sent ? `sent:${mail.provider}` : (mail.simulated ? 'simulated' : 'failed');
+        emailStatus = mail.deliveryStatus || mail.channels?.email || 'unknown';
+        if (mail.channels?.provider) emailStatus = `${emailStatus}:${mail.channels.provider}`;
       } catch (e: any) {
         emailStatus = `failed:${e.message}`;
       }
@@ -1753,6 +1795,7 @@ app.post('/api/client-portal/messages', authMiddleware, async (c) => {
   let alertResult: any = null;
   if (isStaff) {
     try {
+      // In-app + optional SMS only — email already sent via staff_message template when requested
       alertResult = await dispatchClientAlert(c.env, {
         orgId: user.org_id,
         clientId: client.id,
@@ -1761,8 +1804,8 @@ app.post('/api/client-portal/messages', authMiddleware, async (c) => {
         body: text.slice(0, 1500),
         email: client.email,
         phone: client.phone_e164 || client.phone,
-        notifyEmail: client.notify_email !== 0,
-        notifySms: client.notify_sms === 1,
+        notifyEmail: false,
+        notifySms: client.notify_sms === 1 && !(body.sendEmail === true || body.channel === 'email'),
       });
     } catch (e: any) {
       alertResult = { error: e.message };
@@ -1801,20 +1844,40 @@ app.post('/api/clients/:id/email', authMiddleware, async (c) => {
   }
   const text = String(body.body || body.message || '').trim();
   if (!text) return c.json({ error: 'Message required' }, 400);
-  const subject = body.subject || 'Message from your Smart FCRA credit team';
+  const brand = await loadOrgBrand(c.env, user.org_id);
+  const subject = body.subject || `Message from ${brand.fromName}`;
   const msgId = generateId();
   await c.env.DB.prepare(
     `INSERT INTO portal_messages (id, org_id, client_id, sender_user_id, sender_role, channel, subject, body, created_at)
      VALUES (?, ?, ?, ?, 'staff', 'email', ?, ?, datetime('now'))`
   ).bind(msgId, user.org_id, clientId, user.id, subject, text).run();
-  const mail = await sendAppEmail(c.env, {
-    to: client.email,
-    subject,
-    html: `<div style="font-family:system-ui,sans-serif;padding:16px"><p>${text.replace(/</g,'&lt;').replace(/\n/g,'<br/>')}</p></div>`,
-    text,
-    purpose: 'noreply',
+  const mail = await sendTemplatedClientMessage(c.env, {
+    templateId: 'staff_message',
+    orgId: user.org_id,
+    clientId,
+    email: client.email,
+    phone: client.phone_e164 || client.phone,
+    notifyEmail: true,
+    notifySms: false,
+    brand,
+    vars: {
+      ...brandVars(brand),
+      clientName: `${client.first_name || ''} ${client.last_name || ''}`.trim(),
+      subject,
+      body: text,
+      portalUrl: `${portalBaseUrl(c.env)}/`,
+    },
   });
-  return c.json({ ok: true, messageId: msgId, email: { sent: mail.sent, simulated: mail.simulated, provider: mail.provider } });
+  return c.json({
+    ok: true,
+    messageId: msgId,
+    email: {
+      sent: mail.deliveryStatus === 'sent',
+      simulated: mail.deliveryStatus === 'simulated',
+      provider: mail.channels?.provider,
+      status: mail.deliveryStatus,
+    },
+  });
 });
 
 // Resend portal welcome / create account
@@ -1849,6 +1912,8 @@ app.post('/api/clients/:id/portal-invite', authMiddleware, async (c) => {
     email,
     temporaryPassword: password,
     requestUrl: c.req.url,
+    orgId: user.org_id,
+    clientId,
   });
   try {
     await c.env.DB.prepare(`UPDATE clients SET portal_welcome_sent_at = datetime('now') WHERE id = ?`).bind(clientId).run();
@@ -1856,7 +1921,9 @@ app.post('/api/clients/:id/portal-invite', authMiddleware, async (c) => {
   return c.json({
     ok: mail.ok,
     loginUrl: mail.loginUrl,
-    emailStatus: mail.ok ? (mail.simulated ? 'simulated' : `sent:${mail.provider}`) : `failed:${mail.error}`,
+    emailStatus: mail.ok
+      ? (mail.simulated || mail.deliveryStatus === 'simulated' ? 'simulated' : `sent:${mail.provider || 'email'}`)
+      : `failed:${mail.error || 'send'}`,
     temporaryPassword: password,
   });
 });
@@ -2469,6 +2536,33 @@ app.post('/api/cron/daily-motivation', async (c) => {
     scheduleNote: 'Intended for daily morning dispatch (~7:00 AM US Central / 13:00 UTC via GitHub Actions)',
     ranAt: new Date().toISOString(),
   });
+});
+
+/** Cron: onboarding drip + CROA nudge + dispute-due + admin digest */
+app.post('/api/cron/enterprise-comms', async (c) => {
+  const secret = c.env.JOURNEY_CRON_SECRET || c.env.MAILING_WEBHOOK_SECRET;
+  const provided = c.req.header('X-Cron-Secret') || c.req.header('Authorization')?.replace(/^Bearer\s+/i, '');
+  if (!secret || provided !== secret) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const result = await runEnterpriseCommsCron(c.env, { orgId: body.orgId });
+  await writeSecurityAudit(c.env, {
+    orgId: body.orgId || null,
+    actorRole: 'system',
+    action: 'enterprise_comms_cron',
+    resourceType: 'email_workflows',
+    detail: result,
+  }).catch(() => null);
+  return c.json({ ok: true, ...result });
+});
+
+app.post('/api/admin/enterprise-comms/dispatch', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role !== 'admin' && user.role !== 'super_admin') return c.json({ error: 'Admin only' }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const result = await runEnterpriseCommsCron(c.env, { orgId: body.orgId || user.org_id });
+  return c.json({ ok: true, ...result });
 });
 
 app.get('/api/client-portal/tradelines', authMiddleware, async (c) => {
@@ -3330,11 +3424,17 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
     try {
       const clientRow = await c.env.DB.prepare('SELECT bureau_pack_status FROM clients WHERE id = ? AND org_id = ?')
         .bind(clientId, user.org_id).first() as any;
-      // launch-workflow endpoint logic inlined lightly via fetch to self is hard on CF — call pack builder below
       if (clientRow?.bureau_pack_status !== 'WORKFLOW_FIRED') {
-        workflow = { ready: true, message: 'Tri-bureau pack complete — launch suit pack from client CRM' };
+        workflow = await launchAttorneyWorkflowPack(c, {
+          orgId: user.org_id,
+          userId: user.id,
+          reportId,
+          clientId,
+        });
       }
-    } catch { /* ignore */ }
+    } catch (e: any) {
+      workflow = { ready: true, error: e?.message || 'auto_launch_failed', message: 'Tri-bureau pack complete — launch suit pack from client CRM' };
+    }
   }
 
   await notifyClientAnalysisReady(c, {
@@ -3787,10 +3887,12 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
         email: extractedEmail!,
         temporaryPassword: generatedPassword,
         requestUrl: c.req.url,
+        orgId: user.org_id,
+        clientId,
       });
       portalLoginUrl = mail.loginUrl;
-      if (mail.ok && !mail.simulated) emailStatus = `sent:${mail.provider}`;
-      else if (mail.simulated) emailStatus = 'simulated';
+      if (mail.ok && !mail.simulated && mail.deliveryStatus !== 'simulated') emailStatus = `sent:${mail.provider}`;
+      else if (mail.simulated || mail.deliveryStatus === 'simulated') emailStatus = 'simulated';
       else emailStatus = `failed:${mail.error || 'unknown'}`;
 
       try {
@@ -4167,12 +4269,26 @@ app.post('/api/billing/webhook', async (c) => {
           await c.env.DB.prepare(
             `UPDATE tradeline_orders SET status = 'paid', paid_at = datetime('now'), stripe_payment_intent = ? WHERE id = ? AND org_id = ?`
           ).bind(sessionObj.payment_intent || sessionObj.id, sessionObj.metadata.orderId, sessionObj.metadata.orgId).run();
-          await dispatchClientAlert(c.env, {
+          let clientEmail: string | null = null;
+          let clientName = '';
+          try {
+            const cl = await c.env.DB.prepare('SELECT first_name, last_name, email, notify_email FROM clients WHERE id = ? AND org_id = ?')
+              .bind(sessionObj.metadata.clientId, sessionObj.metadata.orgId).first() as any;
+            if (cl?.email && !isSyntheticPortalEmail(cl.email) && cl.notify_email !== 0) clientEmail = cl.email;
+            clientName = `${cl?.first_name || ''} ${cl?.last_name || ''}`.trim();
+          } catch { /* soft */ }
+          await sendTemplatedClientMessage(c.env, {
             orgId: sessionObj.metadata.orgId,
             clientId: sessionObj.metadata.clientId,
-            eventType: 'tradeline',
-            title: 'Boost tool subscription confirmed',
-            body: `Your ${sessionObj.metadata.productId || 'boost'} enrollment is paid and being provisioned.`,
+            templateId: 'tradeline_confirmed',
+            email: clientEmail,
+            notifyEmail: !!clientEmail,
+            notifySms: false,
+            vars: {
+              clientName,
+              productId: sessionObj.metadata.productId || 'boost',
+              portalUrl: `${portalBaseUrl(c.env)}/`,
+            },
           });
         } catch (e) { console.warn('[tradeline webhook]', e); }
         break;
@@ -4485,20 +4601,34 @@ function inferSourceProvider(payload: any, fileName?: string): string {
 }
 
 /** Fire the full attorney workflow pack from a single report analysis. */
-app.post('/api/reports/:id/launch-workflow', authMiddleware, async (c) => {
-  const user = c.get('user');
-  const id = c.req.param('id');
-  const report = await c.env.DB.prepare('SELECT * FROM credit_reports WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
-  if (!report) return c.json({ error: 'Not found' }, 404);
+async function launchAttorneyWorkflowPack(
+  c: any,
+  opts: { orgId: string; userId: string; reportId: string; clientId?: string },
+): Promise<{
+  success: boolean;
+  documents: any[];
+  caseStatus: string;
+  bureau: string;
+  litigationScore: any;
+  nextStep: string;
+  error?: string;
+}> {
+  const report = await c.env.DB.prepare('SELECT * FROM credit_reports WHERE id = ? AND org_id = ?')
+    .bind(opts.reportId, opts.orgId).first() as any;
+  if (!report) return { success: false, documents: [], caseStatus: '', bureau: '', litigationScore: null, nextStep: '', error: 'Report not found' };
 
-  const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(report.client_id, user.org_id).first() as any;
-  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const clientId = opts.clientId || report.client_id;
+  const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?')
+    .bind(clientId, opts.orgId).first() as any;
+  if (!client) return { success: false, documents: [], caseStatus: '', bureau: '', litigationScore: null, nextStep: '', error: 'Client not found' };
 
   const violationsResult = await c.env.DB.prepare(
     'SELECT * FROM violations WHERE report_id = ? AND org_id = ? ORDER BY severity ASC'
-  ).bind(id, user.org_id).all();
+  ).bind(opts.reportId, opts.orgId).all();
   const violations = (violationsResult?.results || []) as any[];
-  if (!violations.length) return c.json({ error: 'No violations to package yet' }, 400);
+  if (!violations.length) {
+    return { success: false, documents: [], caseStatus: '', bureau: report.bureau || '', litigationScore: null, nextStep: '', error: 'No violations to package yet' };
+  }
 
   const packTypes = [
     'bureau-dispute',
@@ -4522,7 +4652,7 @@ app.post('/api/reports/:id/launch-workflow', authMiddleware, async (c) => {
     today,
     violations,
     bureau: report.bureau || 'Equifax',
-    reportId: id,
+    reportId: opts.reportId,
     clientPhone: client.phone || '',
     clientEmail: client.email || '',
   };
@@ -4537,9 +4667,9 @@ app.post('/api/reports/:id/launch-workflow', authMiddleware, async (c) => {
       'INSERT INTO documents (id, org_id, client_id, report_id, violation_ids, doc_type, doc_subtype, title, recipient_name, recipient_address, content, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).bind(
       docId,
-      user.org_id,
+      opts.orgId,
       client.id,
-      id,
+      opts.reportId,
       JSON.stringify(violations.map((v) => v.id)),
       docType,
       docDef.category,
@@ -4548,48 +4678,63 @@ app.post('/api/reports/:id/launch-workflow', authMiddleware, async (c) => {
       null,
       content,
       'draft',
-      user.id
+      opts.userId
     ).run();
     generated.push({ id: docId, docType, title });
   }
 
+  const litScore = calculateLitigationScore(violations);
   await c.env.DB.prepare(
     'UPDATE clients SET case_status = ?, lvs_score = ?, estimated_recovery = ? WHERE id = ? AND org_id = ?'
   ).bind(
     'DISPUTE',
-    calculateLitigationScore(violations).score,
-    calculateLitigationScore(violations).totalDamagesMax,
+    litScore.score,
+    litScore.totalDamagesMax,
     client.id,
-    user.org_id
+    opts.orgId
   ).run();
 
   try {
     await c.env.DB.prepare(
       `UPDATE clients SET bureau_pack_status = 'WORKFLOW_FIRED' WHERE id = ? AND org_id = ?`
-    ).bind(client.id, user.org_id).run();
+    ).bind(client.id, opts.orgId).run();
   } catch { /* optional column */ }
 
   await c.env.DB.prepare(
     'INSERT INTO activity_log (id, org_id, client_id, report_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     generateId(),
-    user.org_id,
+    opts.orgId,
     client.id,
-    id,
-    user.id,
+    opts.reportId,
+    opts.userId,
     'workflow_launched',
     `Launched attorney workflow pack (${generated.length} documents) for ${report.bureau}`,
-    JSON.stringify({ docs: generated.map((g) => g.docType), bureau: report.bureau })
+    JSON.stringify({ docs: generated.map((g) => g.docType), bureau: report.bureau, auto: true })
   ).run();
 
-  return c.json({
+  return {
     success: true,
     documents: generated,
     caseStatus: 'DISPUTE',
-    bureau: report.bureau,
-    litigationScore: calculateLitigationScore(violations),
+    bureau: report.bureau || '',
+    litigationScore: litScore,
     nextStep: 'Client portal e-sign queue is ready for the generated pack',
+  };
+}
+
+app.post('/api/reports/:id/launch-workflow', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const result = await launchAttorneyWorkflowPack(c, {
+    orgId: user.org_id,
+    userId: user.id,
+    reportId: id,
   });
+  if (!result.success) {
+    return c.json({ error: result.error || 'Workflow failed' }, result.error?.includes('not found') ? 404 : 400);
+  }
+  return c.json(result);
 });
 
 app.get('/api/reports/:id/comparison', authMiddleware, async (c) => {
@@ -6050,7 +6195,34 @@ app.post('/api/team/invite', authMiddleware, async (c) => {
   const hash = await hashPassword(password);
   await c.env.DB.prepare('INSERT INTO users (id, org_id, email, name, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)').bind(id, user.org_id, email, name, hash, role || 'member').run();
 
-  return c.json({ id, message: 'Team member added' }, 201);
+  let emailStatus: string | null = null;
+  try {
+    const brand = await loadOrgBrand(c.env, user.org_id);
+    const loginUrl = `${portalBaseUrl(c.env, c.req.url)}/`;
+    const mail = await sendTemplatedClientMessage(c.env, {
+      templateId: 'team_invite',
+      orgId: user.org_id,
+      clientId: `team:${id}`,
+      email,
+      notifyEmail: true,
+      notifySms: false,
+      skipClientAlert: true,
+      brand,
+      vars: {
+        ...brandVars(brand),
+        name,
+        email,
+        temporaryPassword: password,
+        loginUrl,
+        portalUrl: loginUrl,
+      },
+    });
+    emailStatus = mail.deliveryStatus || mail.channels?.email || null;
+  } catch (e: any) {
+    emailStatus = `failed:${e.message}`;
+  }
+
+  return c.json({ id, message: 'Team member added', emailStatus }, 201);
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -6534,6 +6706,78 @@ app.get('/api/admin/email-templates', authMiddleware, adminGateMiddleware, async
   return c.json({ templates: listEmailTemplates(), registry });
 });
 
+app.get('/api/clients/:id/email-log', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Unauthorized' }, 403);
+  const clientId = c.req.param('id');
+  const client = await c.env.DB.prepare('SELECT id FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first();
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const limit = Math.min(Number(c.req.query('limit') || 100), 500);
+  let rows: any[] = [];
+  try {
+    const r = await c.env.DB.prepare(
+      `SELECT id, template_id, event_type, to_email, subject, provider, status, error_message, message_id, brand_name, created_at
+       FROM email_delivery_log WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT ?`
+    ).bind(clientId, user.org_id, limit).all();
+    rows = r?.results || [];
+  } catch { /* migration pending */ }
+  return c.json({ clientId, deliveries: rows });
+});
+
+app.get('/api/admin/email-delivery-log', authMiddleware, adminGateMiddleware, async (c) => {
+  const user = c.get('user');
+  const limit = Math.min(Number(c.req.query('limit') || 200), 1000);
+  const status = c.req.query('status');
+  let sql = `SELECT * FROM email_delivery_log WHERE org_id = ?`;
+  const binds: any[] = [user.org_id];
+  if (status) {
+    sql += ` AND status = ?`;
+    binds.push(status);
+  }
+  sql += ` ORDER BY created_at DESC LIMIT ?`;
+  binds.push(limit);
+  let rows: any[] = [];
+  try {
+    const r = await c.env.DB.prepare(sql).bind(...binds).all();
+    rows = r?.results || [];
+  } catch { /* migration pending */ }
+  return c.json({ deliveries: rows });
+});
+
+app.get('/api/clients/:id/compliance-summary', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Unauthorized' }, 403);
+  const clientId = c.req.param('id');
+  const client = await c.env.DB.prepare('SELECT id, first_name, last_name, croa_contract_agreed, permissible_purpose_consent FROM clients WHERE id = ? AND org_id = ?')
+    .bind(clientId, user.org_id).first() as any;
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  let contracts: any[] = [];
+  let ron: any[] = [];
+  let video: any[] = [];
+  let emails: any[] = [];
+  try {
+    contracts = (await c.env.DB.prepare(
+      `SELECT id, contract_type, status, requires_notarization, signed_at, created_at FROM legal_contracts WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 50`
+    ).bind(clientId, user.org_id).all())?.results || [];
+  } catch { /* soft */ }
+  try {
+    ron = (await c.env.DB.prepare(
+      `SELECT id, status, state_code, vendor, created_at, completed_at FROM ron_sessions WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 20`
+    ).bind(clientId, user.org_id).all())?.results || [];
+  } catch { /* soft */ }
+  try {
+    video = (await c.env.DB.prepare(
+      `SELECT id, room_name, purpose, status, created_at FROM video_conference_sessions WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 20`
+    ).bind(clientId, user.org_id).all())?.results || [];
+  } catch { /* soft */ }
+  try {
+    emails = (await c.env.DB.prepare(
+      `SELECT id, template_id, status, subject, to_email, provider, created_at FROM email_delivery_log WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 40`
+    ).bind(clientId, user.org_id).all())?.results || [];
+  } catch { /* soft */ }
+  return c.json({ client, contracts, ron, video, emails });
+});
+
 // 0. POST /api/admin/backup/trigger — snapshot D1 tables to R2 vault
 const D1_BACKUP_TABLES = [
   'organizations', 'users', 'clients', 'credit_reports', 'violations', 'documents',
@@ -6542,6 +6786,7 @@ const D1_BACKUP_TABLES = [
   'underwriting_snapshots', 'security_audit_log', 'privacy_requests', 'roadmap_progress',
   'client_journey_state', 'daily_motivation_log', 'knowledge_chunks', 'email_template_registry',
   'legal_contracts', 'esign_consent_events', 'video_conference_sessions', 'ron_sessions', 'ron_state_rules',
+  'email_delivery_log', 'onboarding_drip_log',
 ];
 
 app.post('/api/admin/journey/dispatch-daily', authMiddleware, adminGateMiddleware, async (c) => {

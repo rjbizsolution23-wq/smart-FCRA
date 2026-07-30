@@ -91,7 +91,7 @@ const tok = await createTwilioVideoAccessToken({}, { identity: 'client:1', roomN
 assert(tok.simulated === true && tok.token.startsWith('sim_'), 'simulated token');
 
 const templates = listEmailTemplates();
-for (const id of ['contract_ready', 'video_conference_invite', 'ron_session_update']) {
+for (const id of ['contract_ready', 'video_conference_invite', 'ron_session_update', 'onboarding_day1', 'team_invite', 'admin_daily_digest']) {
   assert(templates.some((t) => t.id === id), `template ${id}`);
 }
 

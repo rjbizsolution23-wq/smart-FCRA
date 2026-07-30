@@ -80,6 +80,7 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
     requestBody: { focusGoal: 'mortgage|auto|student|debt|rebuild', motivationOptIn: 'boolean', journeyOptIn: 'boolean' } },
   { method: 'post', path: '/api/client-portal/journey/send-today', summary: 'Generate/send today’s motivational wake-up', tags: ['Client Portal'], security: true },
   { method: 'post', path: '/api/cron/daily-motivation', summary: 'Cron: batch daily motivational messages (X-Cron-Secret)', tags: ['Cron'] },
+  { method: 'post', path: '/api/cron/enterprise-comms', summary: 'Cron: onboarding drip, CROA nudge, dispute-due, admin digest (X-Cron-Secret)', tags: ['Cron'] },
   { method: 'post', path: '/api/admin/journey/dispatch-daily', summary: 'Admin: dispatch daily motivations now', tags: ['Admin'], security: true },
   // Billing
   { method: 'post', path: '/api/billing/checkout', summary: 'Stripe checkout session', tags: ['Billing'], security: true },

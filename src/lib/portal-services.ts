@@ -2,7 +2,7 @@
  * Client portal helpers — welcome email, fundability persistence, base URL.
  */
 import type { EmailEnv } from './email';
-import { sendAppEmail } from './email';
+import { sendTemplatedClientMessage } from './email-templates';
 import { buildFundabilityReport, type FundabilityInput } from '../data/fundability-engine';
 import { computeRevolvingUtilization } from '../engine/parser';
 import type { ParsedAccount } from '../engine/violations';
@@ -12,6 +12,12 @@ export type PortalEnv = EmailEnv & {
   FRONTEND_URL?: string;
   APP_BASE_URL?: string;
   DB: D1Database;
+  COMPANY_NAME?: string;
+  COMPANY_OWNER?: string;
+  COMPANY_EMAIL?: string;
+  COMPANY_LOGO?: string;
+  COMPANY_ADDRESS?: string;
+  COMPANY_WEBSITE?: string;
 };
 
 export function portalBaseUrl(env: PortalEnv, requestUrl?: string): string {
@@ -28,14 +34,6 @@ export function portalBaseUrl(env: PortalEnv, requestUrl?: string): string {
   return 'https://smart-fcra-v2.pages.dev';
 }
 
-function escapeHtml(s: string): string {
-  return String(s || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 export function isSyntheticPortalEmail(email: string | null | undefined): boolean {
   if (!email) return true;
   const e = email.toLowerCase();
@@ -50,55 +48,42 @@ export async function sendPortalWelcomeEmail(
     email: string;
     temporaryPassword: string;
     requestUrl?: string;
+    orgId?: string;
+    clientId?: string;
   },
-): Promise<{ ok: boolean; simulated?: boolean; provider?: string; error?: string; loginUrl: string }> {
+): Promise<{
+  ok: boolean;
+  simulated?: boolean;
+  provider?: string;
+  error?: string;
+  loginUrl: string;
+  deliveryStatus?: string;
+}> {
   const base = portalBaseUrl(env, opts.requestUrl);
   const loginUrl = `${base}/`;
-  const subject = `Your Smart FCRA client portal is ready — ${opts.clientName}`;
-  const text = [
-    `Hi ${opts.clientName},`,
-    '',
-    'Welcome to Smart FCRA. Your personal client portal is live.',
-    '',
-    `Login: ${loginUrl}`,
-    `Email: ${opts.email}`,
-    `Temporary password: ${opts.temporaryPassword}`,
-    '',
-    'Please sign in and change your password after first login.',
-    'Inside your portal you can message your credit team, view fundability roadmaps,',
-    'upload documents & creditor replies, use your personal finance tutor,',
-    'and explore literacy resources plus profile-smart tradeline options.',
-    '',
-    '— Smart FCRA · Rick Jefferson Solutions',
-  ].join('\n');
-
-  const html = `<!DOCTYPE html><html><body style="font-family:system-ui,sans-serif;background:#0b1220;color:#e2e8f0;padding:24px">
-  <div style="max-width:560px;margin:0 auto;background:#111827;border:1px solid #1e293b;border-radius:12px;padding:28px">
-    <h1 style="color:#38bdf8;margin:0 0 8px;font-size:22px">Smart FCRA</h1>
-    <p style="color:#94a3b8;margin:0 0 20px">Your client portal is ready</p>
-    <p>Hi <strong>${escapeHtml(opts.clientName)}</strong>,</p>
-    <p>Your personal portal is live — messaging, reports, fundability roadmaps, document vault, and your AI finance tutor.</p>
-    <p style="background:#0f172a;padding:14px;border-radius:8px;font-size:14px">
-      <strong>Login:</strong> <a href="${escapeHtml(loginUrl)}" style="color:#38bdf8">${escapeHtml(loginUrl)}</a><br/>
-      <strong>Email:</strong> ${escapeHtml(opts.email)}<br/>
-      <strong>Temporary password:</strong> <code style="color:#fbbf24">${escapeHtml(opts.temporaryPassword)}</code>
-    </p>
-    <p style="font-size:13px;color:#94a3b8">Change your password after first login. Never share credentials.</p>
-    <p style="margin-top:24px;font-size:12px;color:#64748b">Rick Jefferson Solutions · Smart FCRA</p>
-  </div></body></html>`;
-
   try {
-    const result = await sendAppEmail(env, {
-      to: opts.to,
-      subject,
-      html,
-      text,
-      purpose: 'onboarding',
+    const result = await sendTemplatedClientMessage(env as any, {
+      templateId: 'portal_welcome',
+      orgId: opts.orgId || 'system',
+      clientId: opts.clientId || 'portal-invite',
+      email: opts.to,
+      notifyEmail: true,
+      notifySms: false,
+      skipClientAlert: !opts.clientId,
+      vars: {
+        clientName: opts.clientName,
+        email: opts.email,
+        temporaryPassword: opts.temporaryPassword,
+        loginUrl,
+        portalUrl: loginUrl,
+      },
     });
+    const status = result.deliveryStatus || result.channels?.email || 'unknown';
     return {
-      ok: result.sent || result.simulated,
-      simulated: result.simulated,
-      provider: result.provider,
+      ok: !!result.ok || status === 'sent' || status === 'simulated',
+      simulated: status === 'simulated' || !!result.channels?.simulated,
+      provider: result.channels?.provider,
+      deliveryStatus: status,
       loginUrl,
     };
   } catch (e: any) {

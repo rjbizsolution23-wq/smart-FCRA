@@ -22,6 +22,7 @@ export type SendEmailOpts = {
   /** noreply | onboarding | custom */
   purpose?: 'noreply' | 'onboarding' | 'support';
   from?: string;
+  fromName?: string;
 };
 
 async function sendViaCloudflare(env: EmailEnv, opts: SendEmailOpts): Promise<{ sent: boolean; provider: string; messageId?: string }> {
@@ -77,7 +78,7 @@ async function sendViaSendGrid(apiKey: string, from: string, opts: SendEmailOpts
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       personalizations: [{ to: [{ email: opts.to }] }],
-      from: { email, name: 'Smart FCRA' },
+      from: { email, name: opts.fromName || 'Smart FCRA' },
       subject: opts.subject,
       content: [{ type: 'text/html', value: opts.html }],
     }),
