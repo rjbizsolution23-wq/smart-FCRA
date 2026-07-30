@@ -1395,11 +1395,11 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           </div>
           <div class="glass rounded-xl border border-gray-800 p-4">
             <h4 class="text-xs font-bold text-white mb-2">Contracts</h4>
-            ${contracts.length ? contracts.map(x => `<div class="flex justify-between gap-2 py-1.5 border-b border-gray-800/50 text-xs"><span class="text-gray-300">${escapeHtml(x.contract_type)} ${x.requires_notarization ? '· notary' : ''}</span><span class="font-bold ${x.status==='signed'?'text-emerald-400':x.status==='pending'?'text-amber-300':'text-gray-400'}">${escapeHtml(x.status)}</span></div>`).join('') : '<p class="text-xs text-gray-500">No contracts issued yet.</p>'}
+            ${contracts.length ? contracts.map(x => `<div class="flex justify-between gap-2 py-1.5 border-b border-gray-800/50 text-xs"><span class="text-gray-300">${escapeHtml(x.contract_type)} ${x.notarized_at ? '· notarized' : ''}</span><span class="font-bold ${x.status==='signed'||x.status==='notarized'?'text-emerald-400':x.status==='awaiting_esign'||x.status==='pending'?'text-amber-300':'text-gray-400'}">${escapeHtml(x.status)}</span></div>`).join('') : '<p class="text-xs text-gray-500">No contracts issued yet.</p>'}
           </div>
           <div class="glass rounded-xl border border-gray-800 p-4">
             <h4 class="text-xs font-bold text-white mb-2">RON sessions</h4>
-            ${ron.length ? ron.map(x => `<div class="flex justify-between gap-2 py-1.5 border-b border-gray-800/50 text-xs"><span class="text-gray-300">${escapeHtml(x.state_code || '—')} · ${escapeHtml(x.vendor || '')}</span><span class="text-cyan-300 font-bold">${escapeHtml(x.status)}</span></div>`).join('') : '<p class="text-xs text-gray-500">No RON sessions.</p>'}
+            ${ron.length ? ron.map(x => `<div class="flex justify-between gap-2 py-1.5 border-b border-gray-800/50 text-xs"><span class="text-gray-300">${escapeHtml(x.principal_state || x.state_code || '—')} · ${escapeHtml(x.vendor || '')}</span><span class="text-cyan-300 font-bold">${escapeHtml(x.status)}</span></div>`).join('') : '<p class="text-xs text-gray-500">No RON sessions.</p>'}
           </div>
         </div>`;
     } catch (err) {
@@ -8928,6 +8928,7 @@ async function pgAdminConsole(el) {
           <h2 class="text-sm font-bold text-white">Alert Preferences</h2>
           <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="n-email" checked> Email alerts for staff messages & bureau updates</label>
           <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="n-sms"> SMS alerts (requires Twilio + phone)</label>
+          <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="n-newsletter"> Weekly education newsletter (tips, fundability, compliance) — explicit opt-in</label>
           <input id="n-phone" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white" placeholder="Mobile for SMS (optional)">
           <select id="n-lang" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white">
             <option value="en">English</option><option value="es">Español</option>
@@ -8993,6 +8994,12 @@ async function pgAdminConsole(el) {
           phone: document.getElementById('n-phone').value,
           preferredLanguage: document.getElementById('n-lang').value,
         }))});
+        await api('/client-portal/newsletter/opt-in', {
+          method: 'POST',
+          body: JSON.stringify(portalClientBody({
+            optIn: document.getElementById('n-newsletter').checked,
+          })),
+        }).catch(() => null);
         toast('Preferences saved', 'success');
       } catch (err) { toast(err.message, 'error'); }
     };
@@ -9427,10 +9434,11 @@ async function pgAdminConsole(el) {
     try {
       const clientId = state.pageData?.clientId || '';
       const q = clientId ? `?clientId=${clientId}` : '';
-      const [overview, posture, states] = await Promise.all([
+      const [overview, posture, states, ops] = await Promise.all([
         api('/compliance/overview' + q),
         api('/security/posture'),
         api('/compliance/ron-states'),
+        api('/admin/ops/runs?limit=30').catch(() => ({ runs: [], alerts: [], catalog: null })),
       ]);
 
       window._hubIssuePack = async () => {
@@ -9454,6 +9462,13 @@ async function pgAdminConsole(el) {
         if (res.error) return toast(res.error, 'error');
         toast(`Seeded ${res.seeded} state rules`, 'success');
       };
+      window._hubOpsDispatch = async (pack) => {
+        toast(`Dispatching ${pack} ops pack…`, 'info');
+        const res = await api('/admin/ops/dispatch', { method: 'POST', body: JSON.stringify({ pack }) });
+        if (res.error) return toast(res.error, 'error');
+        toast(`${pack} pack ${res.ok ? 'OK' : 'partial'} · ${(res.jobs || []).length} jobs`, res.ok ? 'success' : 'warning');
+        pgComplianceHub(el);
+      };
 
       const controls = (posture.controls || []).map(c => `
         <div class="flex items-start justify-between gap-2 py-2 border-b border-gray-800/60">
@@ -9461,11 +9476,15 @@ async function pgAdminConsole(el) {
           <span class="text-[10px] font-bold uppercase ${c.status === 'enforced' ? 'text-emerald-400' : c.status === 'misconfigured' || c.status === 'degraded' ? 'text-amber-400' : 'text-cyan-400'}">${escapeHtml(c.status)}</span>
         </div>`).join('');
 
+      const runs = ops.runs || [];
+      const alerts = ops.alerts || [];
+      const schedules = ops.catalog?.schedules || {};
+
       el.innerHTML = `
         <div class="fade-in space-y-6">
           <div>
             <h2 class="text-xl font-bold text-white">Compliance Hub</h2>
-            <p class="text-sm text-gray-400">Contracts, E-SIGN, video conferences, RON state matrix — zero-trust controls.</p>
+            <p class="text-sm text-gray-400">Contracts, E-SIGN, video, RON, and scheduled ops that keep client + CRO operations healthy.</p>
           </div>
           <div class="glass rounded-xl p-4 border border-gray-800 grid grid-cols-1 md:grid-cols-3 gap-3">
             <input id="hub-client-id" value="${escapeHtml(clientId)}" placeholder="Client ID" class="bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
@@ -9474,6 +9493,34 @@ async function pgAdminConsole(el) {
               <button onclick="window._hubIssuePack()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-2 rounded-lg">Issue contract pack</button>
               <button onclick="window._hubVideo()" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-2 rounded-lg">Start video</button>
               <button onclick="window._hubSeedRon()" class="bg-violet-700 hover:bg-violet-600 text-white text-xs font-bold px-3 py-2 rounded-lg">Seed RON states</button>
+            </div>
+          </div>
+          <div class="glass rounded-xl p-4 border border-emerald-500/20">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <h3 class="text-sm font-bold text-white"><i class="fas fa-clock text-emerald-400 mr-1.5"></i>Scheduled ops packs</h3>
+              <div class="flex flex-wrap gap-2">
+                <button onclick="window._hubOpsDispatch('hourly')" class="text-[10px] font-bold bg-gray-800 hover:bg-gray-700 text-white px-2.5 py-1.5 rounded-lg">Run hourly</button>
+                <button onclick="window._hubOpsDispatch('daily')" class="text-[10px] font-bold bg-emerald-700 hover:bg-emerald-600 text-white px-2.5 py-1.5 rounded-lg">Run daily</button>
+                <button onclick="window._hubOpsDispatch('weekly')" class="text-[10px] font-bold bg-cyan-700 hover:bg-cyan-600 text-white px-2.5 py-1.5 rounded-lg">Run weekly</button>
+                <button onclick="window._hubOpsDispatch('monthly')" class="text-[10px] font-bold bg-amber-700 hover:bg-amber-600 text-white px-2.5 py-1.5 rounded-lg">Run monthly</button>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px] text-gray-400 mb-3">
+              ${Object.entries(schedules).map(([k,v]) => `<div><span class="text-emerald-300 font-bold uppercase">${escapeHtml(k)}</span> — ${escapeHtml(String(v))}</div>`).join('') || '<div>Catalog loads after migration 0015.</div>'}
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div>
+                <h4 class="text-xs font-bold text-white mb-2">Recent job runs</h4>
+                ${runs.length ? runs.slice(0, 12).map(r => {
+                  const st = r.status || '';
+                  const color = st === 'ok' ? 'text-emerald-400' : st === 'error' ? 'text-red-400' : 'text-amber-300';
+                  return `<div class="flex justify-between gap-2 py-1 border-b border-gray-800/50 text-[11px]"><span class="text-gray-300 font-mono">${escapeHtml(r.job_name)}</span><span class="${color} font-bold">${escapeHtml(st)}</span></div>`;
+                }).join('') : '<p class="text-xs text-gray-500">No runs yet — dispatch a pack or wait for GitHub Actions.</p>'}
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-white mb-2">Ops alerts</h4>
+                ${alerts.length ? alerts.slice(0, 10).map(a => `<div class="py-1.5 border-b border-gray-800/50 text-[11px]"><div class="font-semibold ${a.severity==='critical'?'text-red-400':a.severity==='warning'?'text-amber-300':'text-cyan-300'}">${escapeHtml(a.title)}</div><div class="text-gray-500">${escapeHtml((a.body||'').slice(0,120))}</div></div>`).join('') : '<p class="text-xs text-gray-500">No ops alerts.</p>'}
+              </div>
             </div>
           </div>
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">

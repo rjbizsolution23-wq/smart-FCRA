@@ -1,0 +1,34 @@
+name: Smart FCRA v2 — Ops Weekly CRO + Client Value
+
+# Monday 15:00 UTC: fundability refresh, education newsletter, owner report,
+# knowledge-base health, R2 backup snapshot.
+# Requires: JOURNEY_CRON_SECRET (or MAILING_WEBHOOK_SECRET), optional APP_BASE_URL.
+
+on:
+  schedule:
+    - cron: '0 15 * * 1'
+  workflow_dispatch:
+
+jobs:
+  ops-weekly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Dispatch weekly ops pack
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          JOURNEY_CRON_SECRET: ${{ secrets.JOURNEY_CRON_SECRET }}
+          MAILING_WEBHOOK_SECRET: ${{ secrets.MAILING_WEBHOOK_SECRET }}
+        run: |
+          set -euo pipefail
+          BASE="${APP_BASE_URL:-https://smart-fcra-v2.pages.dev}"
+          SECRET="${JOURNEY_CRON_SECRET:-${MAILING_WEBHOOK_SECRET:-}}"
+          if [ -z "$SECRET" ]; then
+            echo "::error::JOURNEY_CRON_SECRET (or MAILING_WEBHOOK_SECRET) is not configured."
+            exit 1
+          fi
+          echo "Ops weekly → ${BASE%/}/api/cron/ops pack=weekly"
+          curl -fsS -X POST "${BASE%/}/api/cron/ops" \
+            -H "Content-Type: application/json" \
+            -H "X-Cron-Secret: ${SECRET}" \
+            -d '{"pack":"weekly"}'

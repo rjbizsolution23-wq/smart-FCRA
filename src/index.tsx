@@ -20,6 +20,7 @@ import { seedKnowledgeBase, retrieveKnowledge } from './lib/knowledge-base';
 import { listEmailTemplates, sendTemplatedClientMessage, EMAIL_TEMPLATES } from './lib/email-templates';
 import { runEnterpriseCommsCron } from './lib/email-workflows';
 import { loadOrgBrand, brandVars } from './lib/org-branding';
+import { runOpsPack, runOpsJob, listOpsJobs, touchClientEngagement, type OpsJobName } from './lib/ops-scheduler';
 import { issueClientContractPack, createLegalContract, signLegalContract, recordEsignConsent } from './lib/legal-contracts';
 import { ESIGN_DISCLOSURE_TEXT, ESIGN_DISCLOSURE_VERSION, type ContractType, documentRequiresNotarization, sha256Hex } from './data/legal-contracts';
 import { createVideoRoom, issueRoomToken, completeVideoSession, videoConfigured } from './lib/twilio-video';
@@ -2450,6 +2451,7 @@ app.post('/api/client-portal/journey/check-in', authMiddleware, async (c) => {
     const result = await checkInJourney(c.env, client);
     // Ensure today's motivation exists in-app (idempotent)
     await generateAndDispatchDailyMotivation(c.env, client).catch(() => null);
+    await touchClientEngagement(c.env, client.id);
     return c.json({
       ok: true,
       streak: result.streak,
@@ -2563,6 +2565,136 @@ app.post('/api/admin/enterprise-comms/dispatch', authMiddleware, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const result = await runEnterpriseCommsCron(c.env, { orgId: body.orgId || user.org_id });
   return c.json({ ok: true, ...result });
+});
+
+/** Unified ops cron packs: hourly | daily | weekly | monthly (or explicit jobs[]) */
+app.post('/api/cron/ops', async (c) => {
+  const secret = c.env.JOURNEY_CRON_SECRET || c.env.MAILING_WEBHOOK_SECRET;
+  const provided = c.req.header('X-Cron-Secret') || c.req.header('Authorization')?.replace(/^Bearer\s+/i, '');
+  if (!secret || provided !== secret) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const pack = String(body.pack || 'daily');
+  const jobs = Array.isArray(body.jobs) ? (body.jobs as OpsJobName[]) : undefined;
+  const result = await runOpsPack(c.env, pack, {
+    orgId: body.orgId,
+    jobs,
+    triggeredBy: 'cron',
+  });
+  await writeSecurityAudit(c.env, {
+    orgId: body.orgId || null,
+    actorRole: 'system',
+    action: 'ops_cron_pack',
+    resourceType: 'ops_scheduler',
+    detail: { pack, jobCount: result.jobs?.length, ok: result.ok },
+  }).catch(() => null);
+  return c.json({ ok: result.ok, ...result });
+});
+
+app.post('/api/cron/ops/:job', async (c) => {
+  const secret = c.env.JOURNEY_CRON_SECRET || c.env.MAILING_WEBHOOK_SECRET;
+  const provided = c.req.header('X-Cron-Secret') || c.req.header('Authorization')?.replace(/^Bearer\s+/i, '');
+  if (!secret || provided !== secret) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  const job = c.req.param('job') as OpsJobName;
+  const body = await c.req.json().catch(() => ({}));
+  const result = await runOpsJob(c.env, job, {
+    orgId: body.orgId,
+    pack: 'manual',
+    triggeredBy: 'cron',
+    limit: body.limit,
+  });
+  return c.json({ ok: result.status === 'ok', ...result });
+});
+
+app.get('/api/admin/ops/jobs', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role !== 'admin' && user.role !== 'super_admin') return c.json({ error: 'Admin only' }, 403);
+  return c.json(listOpsJobs());
+});
+
+app.get('/api/admin/ops/runs', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role !== 'admin' && user.role !== 'super_admin') return c.json({ error: 'Admin only' }, 403);
+  const limit = Math.min(Number(c.req.query('limit') || 50), 200);
+  let runs: any[] = [];
+  let alerts: any[] = [];
+  try {
+    runs = (await c.env.DB.prepare(
+      `SELECT * FROM scheduled_job_runs ORDER BY started_at DESC LIMIT ?`
+    ).bind(limit).all())?.results || [];
+  } catch { /* migration pending */ }
+  try {
+    alerts = (await c.env.DB.prepare(
+      `SELECT * FROM ops_alerts WHERE org_id IS NULL OR org_id = ? ORDER BY created_at DESC LIMIT 40`
+    ).bind(user.org_id).all())?.results || [];
+  } catch { /* soft */ }
+  return c.json({ runs, alerts, catalog: listOpsJobs() });
+});
+
+app.post('/api/admin/ops/dispatch', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role !== 'admin' && user.role !== 'super_admin') return c.json({ error: 'Admin only' }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  if (body.job) {
+    const result = await runOpsJob(c.env, body.job as OpsJobName, {
+      orgId: body.orgId || user.org_id,
+      pack: 'manual',
+      triggeredBy: `admin:${user.id}`,
+      limit: body.limit,
+    });
+    return c.json({ ok: result.status === 'ok', ...result });
+  }
+  const result = await runOpsPack(c.env, body.pack || 'daily', {
+    orgId: body.orgId || user.org_id,
+    jobs: body.jobs,
+    triggeredBy: `admin:${user.id}`,
+  });
+  return c.json({ ok: result.ok, ...result });
+});
+
+app.post('/api/client-portal/newsletter/opt-in', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  const client = await resolvePortalClientSafe(c, user, body.clientId);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const optIn = body.optIn !== false ? 1 : 0;
+  try {
+    await c.env.DB.prepare(`UPDATE clients SET newsletter_opt_in = ?, updated_at = datetime('now') WHERE id = ?`)
+      .bind(optIn, client.id).run();
+  } catch {
+    return c.json({ error: 'Newsletter preference column unavailable — apply migration 0015' }, 503);
+  }
+  if (optIn && client.email && !isSyntheticPortalEmail(client.email)) {
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO newsletter_subscriptions (id, org_id, client_id, email, status, topics_json, opted_in_at)
+         VALUES (?, ?, ?, ?, 'active', ?, datetime('now'))
+         ON CONFLICT(org_id, email) DO UPDATE SET status = 'active', opted_out_at = NULL, client_id = excluded.client_id`
+      ).bind(
+        generateId(),
+        user.org_id,
+        client.id,
+        client.email,
+        JSON.stringify(['education', 'fundability']),
+      ).run();
+    } catch { /* soft */ }
+  } else if (!optIn && client.email) {
+    try {
+      await c.env.DB.prepare(
+        `UPDATE newsletter_subscriptions SET status = 'unsubscribed', opted_out_at = datetime('now') WHERE org_id = ? AND email = ?`
+      ).bind(user.org_id, client.email).run();
+      await c.env.DB.prepare(
+        `INSERT INTO email_suppressions (id, org_id, email, reason, source, created_at)
+         VALUES (?, ?, ?, 'unsubscribe', 'newsletter_opt_out', datetime('now'))
+         ON CONFLICT(email, reason) DO NOTHING`
+      ).bind(generateId(), user.org_id, client.email).run();
+    } catch { /* soft */ }
+  }
+  await touchClientEngagement(c.env, client.id);
+  return c.json({ ok: true, newsletterOptIn: !!optIn });
 });
 
 app.get('/api/client-portal/tradelines', authMiddleware, async (c) => {
@@ -6757,12 +6889,12 @@ app.get('/api/clients/:id/compliance-summary', authMiddleware, async (c) => {
   let emails: any[] = [];
   try {
     contracts = (await c.env.DB.prepare(
-      `SELECT id, contract_type, status, requires_notarization, signed_at, created_at FROM legal_contracts WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 50`
+      `SELECT id, contract_type, status, signature_timestamp, notarized_at, created_at FROM legal_contracts WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 50`
     ).bind(clientId, user.org_id).all())?.results || [];
   } catch { /* soft */ }
   try {
     ron = (await c.env.DB.prepare(
-      `SELECT id, status, state_code, vendor, created_at, completed_at FROM ron_sessions WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 20`
+      `SELECT id, status, principal_state, vendor, created_at, completed_at FROM ron_sessions WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 20`
     ).bind(clientId, user.org_id).all())?.results || [];
   } catch { /* soft */ }
   try {
@@ -6787,6 +6919,8 @@ const D1_BACKUP_TABLES = [
   'client_journey_state', 'daily_motivation_log', 'knowledge_chunks', 'email_template_registry',
   'legal_contracts', 'esign_consent_events', 'video_conference_sessions', 'ron_sessions', 'ron_state_rules',
   'email_delivery_log', 'onboarding_drip_log',
+  'scheduled_job_runs', 'email_suppressions', 'newsletter_subscriptions', 'newsletter_issues',
+  'newsletter_deliveries', 'compliance_snapshots', 'ops_alerts',
 ];
 
 app.post('/api/admin/journey/dispatch-daily', authMiddleware, adminGateMiddleware, async (c) => {

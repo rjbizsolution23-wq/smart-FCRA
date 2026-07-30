@@ -27,7 +27,13 @@ export type TemplateId =
   | 'unsigned_contract_nudge'
   | 'dispute_due_reminder'
   | 'admin_daily_digest'
-  | 'team_invite';
+  | 'team_invite'
+  | 'inactive_reengage'
+  | 'weekly_owner_report'
+  | 'client_newsletter'
+  | 'privacy_sla_alert'
+  | 'bureau_followup_staff'
+  | 'ops_health_alert';
 
 export type EmailTemplate = {
   id: TemplateId;
@@ -262,6 +268,60 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
     subject: (v) => `You're invited to ${v.brandName || 'Smart FCRA'}`,
     html: (v) => shell('Team access', `<p>Hi ${esc(v.name || '')},</p><p>You have been added to ${esc(v.brandName || 'the team')}.</p><p><strong>Login:</strong> <a href="${esc(v.loginUrl || '#')}" style="color:#22d3ee">${esc(v.loginUrl || '')}</a><br/><strong>Email:</strong> ${esc(v.email || '')}<br/><strong>Temporary password:</strong> ${esc(v.temporaryPassword || '')}</p>`, v),
     text: (v) => `Team invite ${v.loginUrl} ${v.email} ${v.temporaryPassword}`,
+  },
+  {
+    id: 'inactive_reengage',
+    name: 'Inactive client re-engagement',
+    description: 'Win-back for clients silent for 14+ days',
+    eventType: 'reengage',
+    subject: (v) => `${v.brandName || 'Your credit team'} misses you — quick check-in`,
+    html: (v) => shell('We are still on your file', `<p>Hi ${esc(v.clientName || '')},</p><p>It has been ${esc(v.daysSilent || 'a while')} since your last activity. Your disputes and fundability roadmap are waiting.</p><p>${esc(v.nudge || 'Open the portal for today\'s next step.')}</p><p><a href="${esc(v.portalUrl || '#')}" style="color:#22d3ee">Continue your journey</a></p>`, v),
+    text: (v) => `Re-engage: ${v.portalUrl}`,
+  },
+  {
+    id: 'weekly_owner_report',
+    name: 'Weekly CRO owner report',
+    description: 'Monday ops/business summary for org admins',
+    eventType: 'owner_report',
+    subject: (v) => `${v.brandName || 'Smart FCRA'} weekly owner report · ${v.weekKey || ''}`,
+    html: (v) => shell('Weekly owner report', `<pre style="white-space:pre-wrap;font-family:system-ui;color:#cbd5e1">${esc(v.reportBody || '')}</pre><p><a href="${esc(v.portalUrl || '#')}" style="color:#22d3ee">Open dashboard</a></p>`, v),
+    text: (v) => v.reportBody || '',
+  },
+  {
+    id: 'client_newsletter',
+    name: 'Client education newsletter',
+    description: 'Weekly opt-in education / fundability tips',
+    eventType: 'newsletter',
+    subject: (v) => v.subject || `${v.brandName || 'Smart FCRA'} weekly tips`,
+    html: (v) => shell(v.title || 'This week in credit', `<div>${v.bodyHtml || esc(v.bodyText || '')}</div><p style="font-size:11px;color:#64748b;margin-top:20px">You opted into educational updates. <a href="${esc(v.unsubscribeUrl || v.portalUrl || '#')}" style="color:#94a3b8">Manage preferences</a></p>`, v),
+    text: (v) => v.bodyText || '',
+  },
+  {
+    id: 'privacy_sla_alert',
+    name: 'Privacy request SLA alert',
+    description: 'Staff alert when privacy export/delete nears SLA',
+    eventType: 'privacy_sla',
+    subject: (v) => `Privacy request SLA · ${v.requestType || 'request'} · ${v.daysOpen || '?'}d open`,
+    html: (v) => shell('Privacy SLA', `<p>Request <strong>${esc(v.requestId || '')}</strong> (${esc(v.requestType || '')}) for ${esc(v.clientName || 'client')} has been open ${esc(v.daysOpen || '?')} days.</p><p>Status: ${esc(v.status || '')}. Act in Compliance Hub.</p>`, v),
+    text: (v) => `Privacy SLA ${v.requestId} open ${v.daysOpen}d`,
+  },
+  {
+    id: 'bureau_followup_staff',
+    name: 'Bureau follow-up staff digest',
+    description: 'Overdue / no-response dispute escalation for staff',
+    eventType: 'bureau_followup',
+    subject: (v) => `Bureau follow-ups needed · ${v.count || '0'} items`,
+    html: (v) => shell('Bureau follow-ups', `<pre style="white-space:pre-wrap;font-family:system-ui;color:#cbd5e1">${esc(v.digestBody || '')}</pre>`, v),
+    text: (v) => v.digestBody || '',
+  },
+  {
+    id: 'ops_health_alert',
+    name: 'Ops health alert',
+    description: 'Email delivery / backup / security threshold alerts',
+    eventType: 'ops_health',
+    subject: (v) => `[${(v.severity || 'warning').toUpperCase()}] ${v.title || 'Ops alert'}`,
+    html: (v) => shell(v.title || 'Ops alert', `<pre style="white-space:pre-wrap;font-family:system-ui;color:#cbd5e1">${esc(v.body || '')}</pre>`, v),
+    text: (v) => v.body || '',
   },
 ];
 

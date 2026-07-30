@@ -1,0 +1,33 @@
+name: Smart FCRA v2 — Ops Hourly Integrity
+
+# Housekeeping (expired sessions/tokens), email health, RON/video cleanup.
+# Requires: JOURNEY_CRON_SECRET (or MAILING_WEBHOOK_SECRET), optional APP_BASE_URL.
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ops-hourly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Dispatch hourly ops pack
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          JOURNEY_CRON_SECRET: ${{ secrets.JOURNEY_CRON_SECRET }}
+          MAILING_WEBHOOK_SECRET: ${{ secrets.MAILING_WEBHOOK_SECRET }}
+        run: |
+          set -euo pipefail
+          BASE="${APP_BASE_URL:-https://smart-fcra-v2.pages.dev}"
+          SECRET="${JOURNEY_CRON_SECRET:-${MAILING_WEBHOOK_SECRET:-}}"
+          if [ -z "$SECRET" ]; then
+            echo "::error::JOURNEY_CRON_SECRET (or MAILING_WEBHOOK_SECRET) is not configured."
+            exit 1
+          fi
+          echo "Ops hourly → ${BASE%/}/api/cron/ops pack=hourly"
+          curl -fsS -X POST "${BASE%/}/api/cron/ops" \
+            -H "Content-Type: application/json" \
+            -H "X-Cron-Secret: ${SECRET}" \
+            -d '{"pack":"hourly"}'

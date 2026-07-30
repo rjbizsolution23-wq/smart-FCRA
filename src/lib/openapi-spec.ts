@@ -81,6 +81,10 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
   { method: 'post', path: '/api/client-portal/journey/send-today', summary: 'Generate/send today’s motivational wake-up', tags: ['Client Portal'], security: true },
   { method: 'post', path: '/api/cron/daily-motivation', summary: 'Cron: batch daily motivational messages (X-Cron-Secret)', tags: ['Cron'] },
   { method: 'post', path: '/api/cron/enterprise-comms', summary: 'Cron: onboarding drip, CROA nudge, dispute-due, admin digest (X-Cron-Secret)', tags: ['Cron'] },
+  { method: 'post', path: '/api/cron/ops', summary: 'Cron: unified ops packs hourly|daily|weekly|monthly (X-Cron-Secret)', tags: ['Cron'] },
+  { method: 'post', path: '/api/cron/ops/{job}', summary: 'Cron: run a single ops job by name (X-Cron-Secret)', tags: ['Cron'] },
+  { method: 'post', path: '/api/admin/ops/dispatch', summary: 'Admin: dispatch ops pack or single job', tags: ['Admin'], security: true },
+  { method: 'get', path: '/api/admin/ops/runs', summary: 'Admin: recent scheduled job runs + ops alerts', tags: ['Admin'], security: true },
   { method: 'post', path: '/api/admin/journey/dispatch-daily', summary: 'Admin: dispatch daily motivations now', tags: ['Admin'], security: true },
   // Billing
   { method: 'post', path: '/api/billing/checkout', summary: 'Stripe checkout session', tags: ['Billing'], security: true },
