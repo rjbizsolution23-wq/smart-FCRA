@@ -25,6 +25,7 @@ import { buildOpenApiSpec, buildSwaggerUiHtml } from './lib/openapi-spec';
 import { captureSentryException } from './lib/sentry';
 import { importBureauReportsBatch } from './lib/bureau-import';
 import { loadClientJourney, checkInJourney, generateAndDispatchDailyMotivation, dispatchDailyMotivationBatch } from './lib/portal-journey';
+import { loadTutorCompanion, tutorChatSystemBlock, buildTutorFallbackReply } from './lib/portal-tutor';
 import sampleMfsnReport from './data/sample-mfsn-report.json';
 
 // Secure field-level cryptographic helpers mapped to Worker bindings
@@ -1975,26 +1976,39 @@ app.post('/api/client-portal/education/:lessonId/complete', authMiddleware, asyn
   return c.json({ ok: true, score, total, passed, correctAnswers: lesson.quiz.map(q => q.answer) });
 });
 
-// ── Personal tutor ────────────────────────────────────────────
+// ── Personal tutor (grows with client journey) ────────────────
 app.get('/api/client-portal/tutor', authMiddleware, async (c) => {
   const user = c.get('user');
   const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
   if (!client) return c.json({ error: 'Client not found' }, 404);
-  let memory: any = null;
   try {
-    memory = await c.env.DB.prepare('SELECT * FROM tutor_memory WHERE client_id = ? AND org_id = ?').bind(client.id, user.org_id).first();
-  } catch { /* soft */ }
-  let progress: any[] = [];
-  try {
-    const rows = await c.env.DB.prepare('SELECT lesson_id, status, quiz_score, quiz_total FROM education_progress WHERE client_id = ?').bind(client.id).all();
-    progress = rows?.results || [];
-  } catch { /* soft */ }
-  return c.json({
-    mentor: MENTORS.find(m => m.id === 'personal-finance-tutor'),
-    memory,
-    progress,
-    client: { id: client.id, first_name: client.first_name, eq_score: client.eq_score, ex_score: client.ex_score, tu_score: client.tu_score },
-  });
+    const companion = await loadTutorCompanion(c.env, client);
+    return c.json({
+      mentor: MENTORS.find(m => m.id === 'personal-finance-tutor'),
+      memory: companion.memory,
+      progress: companion.progress,
+      growth: companion.growth,
+      journeyPhase: companion.input.journeyPhase,
+      focusGoal: companion.input.focusGoal,
+      client: {
+        id: client.id,
+        first_name: client.first_name,
+        eq_score: client.eq_score,
+        ex_score: client.ex_score,
+        tu_score: client.tu_score,
+      },
+    });
+  } catch (e: any) {
+    console.error('[tutor] load failed', e);
+    return c.json({
+      mentor: MENTORS.find(m => m.id === 'personal-finance-tutor'),
+      memory: null,
+      progress: [],
+      growth: null,
+      client: { id: client.id, first_name: client.first_name },
+      warning: e.message,
+    });
+  }
 });
 
 app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
@@ -2005,42 +2019,90 @@ app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
   const message = String(body.message || '').trim();
   if (!message) return c.json({ error: 'Message required' }, 400);
 
-  let memory: any = null;
-  try {
-    memory = await c.env.DB.prepare('SELECT * FROM tutor_memory WHERE client_id = ?').bind(client.id).first();
-  } catch { /* soft */ }
+  const companion = await loadTutorCompanion(c.env, client);
+  const { growth, input, memory } = companion;
 
   const { mentor, knowledgeBlock } = buildMentorContext('personal-finance-tutor', message);
+  const growthBlock = tutorChatSystemBlock(input, growth, memory?.summary, memory?.goals_json);
   const context = [
     `Client: ${client.first_name} ${client.last_name}`,
     `Scores EQ/EX/TU: ${client.eq_score || '—'} / ${client.ex_score || '—'} / ${client.tu_score || '—'}`,
-    memory?.summary ? `Tutor memory: ${memory.summary}` : '',
-    memory?.goals_json ? `Goals: ${memory.goals_json}` : '',
   ].filter(Boolean).join('\n');
 
-  const result = await generateAiText(c.env, [
-    { role: 'system', content: `${mentor.systemPrompt}\n\n${knowledgeBlock}\n\nClient context:\n${context}` },
-    { role: 'user', content: message },
-  ]);
-
+  let reply = '';
+  let provider = 'fallback';
+  let model = 'tutor-growth-local';
   try {
-    const summary = `${(memory?.summary || '').slice(0, 800)}\nLast Q: ${message.slice(0, 200)}\nLast A: ${(result.text || '').slice(0, 400)}`.trim();
-    await c.env.DB.prepare(
-      `INSERT INTO tutor_memory (id, org_id, client_id, summary, sessions_count, updated_at)
-       VALUES (?, ?, ?, ?, 1, datetime('now'))
-       ON CONFLICT(client_id) DO UPDATE SET summary = excluded.summary, sessions_count = COALESCE(tutor_memory.sessions_count,0)+1, updated_at = datetime('now')`
-    ).bind(generateId(), user.org_id, client.id, summary.slice(0, 4000)).run();
-  } catch { /* soft */ }
+    const result = await generateAiText(c.env, [
+      { role: 'system', content: `${mentor.systemPrompt}\n\n${knowledgeBlock}\n\n${growthBlock}\n\nClient context:\n${context}` },
+      { role: 'user', content: message },
+    ]);
+    reply = result.text || '';
+    provider = result.provider || provider;
+    model = result.model || model;
+  } catch (e: any) {
+    console.warn('[tutor] AI unavailable, using growth fallback', e?.message);
+  }
 
-  // Also mirror into portal messages as system/tutor thread optional
+  if (!reply || reply.length < 20) {
+    reply = buildTutorFallbackReply(input, message, growth);
+    provider = 'fallback';
+    model = 'tutor-growth-local';
+  }
+
+  const nextSessions = (memory?.sessions_count || 0) + 1;
+  try {
+    const summary = `${(memory?.summary || '').slice(0, 800)}\n[L${growth.level}/${growth.rank}] Q: ${message.slice(0, 200)}\nA: ${reply.slice(0, 400)}`.trim();
+    await c.env.DB.prepare(
+      `INSERT INTO tutor_memory (id, org_id, client_id, summary, sessions_count, level, xp, rank_title, growth_json, updated_at)
+       VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, datetime('now'))
+       ON CONFLICT(client_id) DO UPDATE SET
+         summary = excluded.summary,
+         sessions_count = COALESCE(tutor_memory.sessions_count,0)+1,
+         level = excluded.level,
+         xp = excluded.xp,
+         rank_title = excluded.rank_title,
+         growth_json = excluded.growth_json,
+         updated_at = datetime('now')`
+    ).bind(
+      generateId(),
+      user.org_id,
+      client.id,
+      summary.slice(0, 4000),
+      growth.level,
+      growth.xp + 12,
+      growth.rankTitle,
+      JSON.stringify({ rank: growth.rank, curriculumFocus: growth.curriculumFocus, phase: input.journeyPhase }),
+    ).run();
+  } catch {
+    try {
+      const summary = `${(memory?.summary || '').slice(0, 800)}\n[L${growth.level}/${growth.rank}] Q: ${message.slice(0, 200)}\nA: ${reply.slice(0, 400)}`.trim();
+      await c.env.DB.prepare(
+        `INSERT INTO tutor_memory (id, org_id, client_id, summary, sessions_count, updated_at)
+         VALUES (?, ?, ?, ?, 1, datetime('now'))
+         ON CONFLICT(client_id) DO UPDATE SET summary = excluded.summary, sessions_count = COALESCE(tutor_memory.sessions_count,0)+1, updated_at = datetime('now')`
+      ).bind(generateId(), user.org_id, client.id, summary.slice(0, 4000)).run();
+    } catch { /* soft */ }
+  }
+
   if (body.logToInbox) {
     await c.env.DB.prepare(
       `INSERT INTO portal_messages (id, org_id, client_id, sender_user_id, sender_role, channel, subject, body, created_at)
        VALUES (?, ?, ?, ?, 'system', 'portal', 'Tutor session', ?, datetime('now'))`
-    ).bind(generateId(), user.org_id, client.id, user.id, `You: ${message}\n\nAlex: ${result.text}`).run();
+    ).bind(generateId(), user.org_id, client.id, user.id, `You: ${message}\n\nAlex: ${reply}`).run();
   }
 
-  return c.json({ reply: result.text, provider: result.provider, model: result.model, mentor: mentor.id });
+  // Recompute growth after session bump for response
+  const refreshed = await loadTutorCompanion(c.env, client).catch(() => companion);
+
+  return c.json({
+    reply,
+    provider,
+    model,
+    mentor: mentor.id,
+    growth: refreshed.growth,
+    leveledUp: refreshed.growth.level > growth.level,
+  });
 });
 
 // ── Fundability + tradelines + roadmaps ───────────────────────

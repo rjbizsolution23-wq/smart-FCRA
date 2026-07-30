@@ -7788,15 +7788,45 @@ async function pgAdminConsole(el) {
 
   async function pgClientTutor(el) {
     const qs = portalClientQs();
-    let history = [{ role: 'tutor', text: 'Hi — I am Alex Rivera, your personal finance tutor. Ask me about budgeting, quizzes, fundability, or paste bank numbers for a cash-flow check.' }];
+    let history = [];
+    let growthCache = null;
     async function paint() {
       const meta = await api('/client-portal/tutor' + qs);
+      growthCache = meta.growth || growthCache;
+      const g = growthCache;
+      if (!history.length) {
+        history = [{ role: 'tutor', text: g?.greeting || 'Hi — I am Alex Rivera, your personal finance tutor. I grow with you as you learn and progress through your journey.' }];
+      }
+      const prompts = (g?.suggestedPrompts || [
+        { label: 'Quiz me', prompt: 'Quiz me on FICO basics' },
+        { label: 'Budget plan', prompt: 'Build me a weekly budget plan for fundability' },
+        { label: 'Next steps', prompt: 'What should I do next for mortgage readiness?' },
+      ]);
       el.innerHTML = `
         <div class="fade-in space-y-4 max-w-3xl">
-          <div class="bg-gradient-to-r from-slate-950 via-violet-950/35 to-slate-950 border border-violet-500/25 rounded-2xl p-5">
-            <h1 class="text-xl font-bold text-white"><i class="fas fa-user-graduate text-violet-300 mr-2"></i>${escapeHtml(meta.mentor?.name || 'Personal Tutor')}</h1>
-            <p class="text-sm text-slate-400 mt-1">${escapeHtml(meta.mentor?.blurb || '')}</p>
-            ${meta.memory?.summary ? `<p class="text-xs text-violet-200/70 mt-2 line-clamp-2">Memory: ${escapeHtml(meta.memory.summary.slice(0,240))}</p>` : ''}
+          <div class="relative overflow-hidden bg-gradient-to-br from-slate-950 via-violet-950/40 to-slate-950 border border-violet-500/25 rounded-2xl p-5 shadow-xl">
+            <div class="absolute -top-12 -right-8 w-40 h-40 bg-violet-400/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2 mb-1">
+                  <span class="text-[10px] uppercase tracking-[0.18em] font-bold text-violet-300/90">Growing with you</span>
+                  ${g ? `<span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-violet-500/20 border border-violet-400/30 text-violet-100">Lvl ${g.level}</span>
+                  <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-gray-300">${escapeHtml(g.rankTitle)}</span>
+                  ${meta.journeyPhase ? `<span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-400/25 text-cyan-200">${escapeHtml(meta.journeyPhase)}</span>` : ''}` : ''}
+                </div>
+                <h1 class="text-xl font-bold text-white"><i class="fas fa-user-graduate text-violet-300 mr-2"></i>${escapeHtml(meta.mentor?.name || 'Alex Rivera')}</h1>
+                <p class="text-sm text-slate-400 mt-1">${escapeHtml(g?.curriculumFocus || meta.mentor?.blurb || '')}</p>
+                ${g?.nextUnlock ? `<p class="text-[11px] text-violet-200/70 mt-2"><i class="fas fa-lock-open mr-1"></i>${escapeHtml(g.nextUnlock)}</p>` : ''}
+              </div>
+              ${g ? `<div class="shrink-0 w-full sm:w-44">
+                <div class="flex justify-between text-[10px] font-mono text-gray-400 mb-1"><span>Growth XP</span><span>${g.xp}</span></div>
+                <div class="h-2 rounded-full bg-slate-900 border border-slate-700 overflow-hidden">
+                  <div class="h-full bg-gradient-to-r from-violet-500 to-cyan-400 transition-all duration-700" style="width:${Math.min(100, 12 + g.level * 8 + (g.xp % 40))}%"></div>
+                </div>
+                <div class="text-[10px] text-gray-500 mt-1.5">${(g.growthNotes || []).slice(0,2).map(n => escapeHtml(n)).join(' · ')}</div>
+              </div>` : ''}
+            </div>
+            ${meta.memory?.summary ? `<p class="relative text-xs text-violet-200/60 mt-3 line-clamp-2 border-t border-white/5 pt-3">Memory: ${escapeHtml(meta.memory.summary.slice(0,240))}</p>` : ''}
           </div>
           <div id="tutor-thread" class="glass rounded-2xl border border-gray-800 p-4 h-[380px] overflow-y-auto space-y-3">
             ${history.map(h => `
@@ -7809,10 +7839,9 @@ async function pgAdminConsole(el) {
             <button class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">Send</button>
           </form>
           <div class="flex flex-wrap gap-2 text-xs">
-            <button type="button" class="tutor-quick px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:border-violet-500/40" data-q="Quiz me on FICO basics">Quiz me</button>
-            <button type="button" class="tutor-quick px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:border-violet-500/40" data-q="Build me a weekly budget plan for fundability">Budget plan</button>
-            <button type="button" class="tutor-quick px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:border-violet-500/40" data-q="What should I do next for mortgage readiness?">Mortgage next steps</button>
+            ${prompts.map(p => `<button type="button" class="tutor-quick px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:border-violet-500/40" data-q="${escapeHtml(p.prompt)}">${escapeHtml(p.label)}</button>`).join('')}
             <button type="button" onclick="window._nav('client-knowledge')" class="px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300">Open Education Hub</button>
+            <button type="button" onclick="window._nav('client-journey')" class="px-3 py-1.5 rounded-lg border border-cyan-700/50 text-cyan-300">My Journey</button>
           </div>
         </div>`;
       const thread = document.getElementById('tutor-thread');
@@ -7826,6 +7855,8 @@ async function pgAdminConsole(el) {
             body: JSON.stringify(portalClientBody({ message: msg })),
           });
           history.push({ role: 'tutor', text: res.reply || '(no reply)' });
+          if (res.growth) growthCache = res.growth;
+          if (res.leveledUp) toast(`Alex leveled up — now Level ${res.growth.level} (${res.growth.rankTitle})!`, 'success');
         } catch (err) {
           history.push({ role: 'tutor', text: 'Error: ' + err.message });
         }
