@@ -13,6 +13,10 @@ export type AuditEnv = {
   TWILIO_ACCOUNT_SID?: string;
   TWILIO_AUTH_TOKEN?: string;
   TWILIO_PHONE_NUMBER?: string;
+  TWILIO_API_KEY_SID?: string;
+  TWILIO_API_KEY_SECRET?: string;
+  RON_VENDOR?: string;
+  RON_VENDOR_API_KEY?: string;
   FRONTEND_URL?: string;
 };
 
@@ -130,6 +134,30 @@ export function buildSecurityPosture(env: AuditEnv) {
       title: 'SMS alerts (Twilio)',
       status: env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER ? 'available' : 'ready_when_configured',
       detail: 'Optional Twilio SMS for staff replies and bureau updates when credentials are set.',
+    },
+    {
+      id: 'esign-ueta',
+      title: 'E-SIGN / UETA consent audit trail',
+      status: 'enforced',
+      detail: 'Versioned disclosure hash, IP/UA, content SHA-256, and intent-to-sign recorded before electronic signatures.',
+    },
+    {
+      id: 'croa-lpoa-pack',
+      title: 'CROA + Limited POA contract pack',
+      status: 'enforced',
+      detail: 'Generated service agreements and limited powers of attorney stored with content hashes in the encrypted vault.',
+    },
+    {
+      id: 'twilio-video',
+      title: 'Twilio Video conferences',
+      status: env.TWILIO_API_KEY_SID && env.TWILIO_API_KEY_SECRET && env.TWILIO_ACCOUNT_SID ? 'available' : 'ready_when_configured',
+      detail: 'Advisor video rooms with short-lived access tokens; recordings can be retained in R2 vault.',
+    },
+    {
+      id: 'ron-orchestration',
+      title: 'Remote Online Notarization orchestration',
+      status: env.RON_VENDOR_API_KEY ? 'available' : 'sandbox_ready',
+      detail: 'State eligibility matrix + vendor webhook path; sandbox labeled non-legal until certified RON vendor is connected.',
     },
   ] as const;
 

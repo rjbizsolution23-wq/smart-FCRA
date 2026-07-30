@@ -866,6 +866,8 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'client-tradelines', icon: 'fa-handshake', label: t('nav.boostTools') },
         { id: 'client-tutor', icon: 'fa-user-graduate', label: t('nav.tutor') },
         { id: 'client-documents', icon: 'fa-file-signature', label: t('nav.documents') },
+        { id: 'client-legal', icon: 'fa-balance-scale', label: 'Legal & Notary' },
+        { id: 'client-video', icon: 'fa-video', label: 'Video' },
         { id: 'client-knowledge', icon: 'fa-graduation-cap', label: t('nav.education') },
         { id: 'client-settings', icon: 'fa-user-shield', label: t('nav.security') },
         { id: 'ai-studio', icon: 'fa-robot', label: t('nav.aiMentors') },
@@ -885,6 +887,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'report-history', icon: 'fa-history', label: 'Report History' },
         { id: 'violations', icon: 'fa-exclamation-triangle', label: 'Violations' },
         { id: 'documents', icon: 'fa-file-contract', label: 'Documents' },
+        { id: 'compliance-hub', icon: 'fa-shield-alt', label: 'Compliance Hub' },
         { id: 'mailing-campaigns', icon: 'fa-mail-bulk', label: 'Mailing Campaigns' },
         { id: 'founder-os', icon: 'fa-briefcase', label: 'Founder OS' },
         { id: 'sales-tools', icon: 'fa-chart-pie', label: 'Sales Tools' },
@@ -991,6 +994,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'report-detail': await pgReportDetail(el, state.pageData); break;
         case 'violations': await pgViolations(el); break;
         case 'documents': await pgDocuments(el); break;
+        case 'compliance-hub': await pgComplianceHub(el); break;
         case 'mailing-campaigns': await pgMailingCampaigns(el); break;
         case 'founder-os': await pgFounderOS(el); break;
         case 'sales-tools': await pgSalesTools(el); break;
@@ -1017,6 +1021,8 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'client-tradelines': await pgClientTradelines(el); break;
         case 'client-tutor': await pgClientTutor(el); break;
         case 'client-documents': await pgClientDocuments(el); break;
+        case 'client-legal': await pgClientLegal(el); break;
+        case 'client-video': await pgClientVideo(el); break;
         case 'client-knowledge': await pgClientKnowledge(el); break;
         case 'client-settings': await pgClientSettings(el); break;
 
@@ -9158,7 +9164,7 @@ async function pgAdminConsole(el) {
 
         try {
           const serialized = JSON.stringify(strokes);
-          const res = await api(`/documents/${activeDocId}/sign`, { method: 'POST', body: JSON.stringify({ signatureData: serialized }) });
+          const res = await api(`/documents/${activeDocId}/sign`, { method: 'POST', body: JSON.stringify({ signatureData: serialized, esignConsent: true }) });
           if (res && res.ok) {
             toast('Signature registered successfully!', 'success');
             await sleep(1000);
@@ -9175,6 +9181,258 @@ async function pgAdminConsole(el) {
       renderDocWorkspace();
     } catch (err) {
       el.innerHTML = `<div class="text-red-400 p-4"><i class="fas fa-exclamation-triangle mr-2"></i>${err.message}</div>`;
+    }
+  }
+
+  async function pgClientLegal(el) {
+    try {
+      const q = state.impersonateClientId ? `?clientId=${state.impersonateClientId}` : '';
+      const [contractsRes, ronRes, disclosure, overview] = await Promise.all([
+        api('/legal-contracts' + q),
+        api('/ron/sessions' + q),
+        api('/compliance/esign-disclosure'),
+        api('/compliance/overview' + q),
+      ]);
+      const contracts = contractsRes.contracts || [];
+      const ronSessions = ronRes.sessions || [];
+
+      window._issueContractPack = async () => {
+        const stateCode = ($('#legal-governing-state')?.value || '').trim().toUpperCase();
+        const body = { governingState: stateCode || undefined };
+        if (state.impersonateClientId) body.clientId = state.impersonateClientId;
+        toast('Issuing CROA / LPOA / E-SIGN pack…', 'info');
+        const res = await api('/legal-contracts/issue-pack', { method: 'POST', body: JSON.stringify(body) });
+        if (res.error) return toast(res.error, 'error');
+        toast(`Issued ${res.count} agreements`, 'success');
+        pgClientLegal(el);
+      };
+
+      window._signLegalContract = async (contractId) => {
+        if (!$('#esign-agree')?.checked) return toast('You must agree to the E-SIGN / UETA disclosure first.', 'warning');
+        const typed = ($('#legal-sign-name')?.value || '').trim();
+        if (typed.length < 2) return toast('Type your full legal name to sign.', 'warning');
+        const res = await api(`/legal-contracts/${contractId}/sign`, {
+          method: 'POST',
+          body: JSON.stringify({ signatureData: JSON.stringify({ type: 'typed', name: typed, at: new Date().toISOString() }), esignConsent: true }),
+        });
+        if (res.error) return toast(res.error, 'error');
+        toast(res.requiresNotarization ? 'Signed — notarization required next' : 'Signed & vaulted', 'success');
+        pgClientLegal(el);
+      };
+
+      window._startRonForContract = async (contractId) => {
+        const stateCode = ($('#legal-governing-state')?.value || '').trim().toUpperCase();
+        const body = { contractId, principalState: stateCode || undefined };
+        if (state.impersonateClientId) body.clientId = state.impersonateClientId;
+        const res = await api('/ron/sessions', { method: 'POST', body: JSON.stringify(body) });
+        if (res.error) return toast(res.error, 'error');
+        toast(res.sandbox ? 'Sandbox RON session started (not a legal notarial act)' : 'RON session started', res.sandbox ? 'warning' : 'success');
+        pgClientLegal(el);
+      };
+
+      window._ronIdentity = async (sessionId) => {
+        const res = await api(`/ron/sessions/${sessionId}/identity`, {
+          method: 'POST',
+          body: JSON.stringify({
+            fullNameMatchesId: true,
+            governmentIdPresented: true,
+            selfieMatchesId: true,
+            kbaPassed: true,
+            credentialAnalysisPassed: true,
+            attestation: true,
+          }),
+        });
+        if (res.error) return toast(res.error, 'error');
+        toast('Identity checklist verified', 'success');
+        pgClientLegal(el);
+      };
+
+      window._ronComplete = async (sessionId) => {
+        const res = await api(`/ron/sessions/${sessionId}/complete`, { method: 'POST', body: JSON.stringify({}) });
+        if (res.error) return toast(res.error, 'error');
+        toast(res.sandbox ? 'Sandbox certificate stored in vault' : 'Notarization completed — sealed copy in vault', res.sandbox ? 'warning' : 'success');
+        pgClientLegal(el);
+      };
+
+      el.innerHTML = `
+        <div class="fade-in space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+            <div>
+              <h2 class="text-xl font-bold text-white">Legal Contracts & Online Notary</h2>
+              <p class="text-sm text-gray-400 mt-1">CROA service agreement, Limited POA, E-SIGN consent, and RON workflow — vaulted with content hashes.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <input id="legal-governing-state" maxlength="2" placeholder="State (e.g. NM)" class="w-28 bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white uppercase" />
+              <button onclick="window._issueContractPack()" class="bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold px-4 py-2 rounded-lg">Issue full pack</button>
+            </div>
+          </div>
+
+          <div class="glass rounded-xl p-4 border border-cyan-900/40">
+            <div class="text-xs font-bold text-cyan-300 uppercase mb-2">E-SIGN / UETA Disclosure · ${escapeHtml(disclosure.version || '')}</div>
+            <pre class="text-[11px] text-gray-300 whitespace-pre-wrap max-h-40 overflow-y-auto mb-3">${escapeHtml(disclosure.text || '')}</pre>
+            <label class="flex items-start gap-2 text-sm text-gray-200"><input id="esign-agree" type="checkbox" class="mt-1" /> <span>I have read this disclosure and consent to electronic signatures and records.</span></label>
+            <input id="legal-sign-name" class="mt-3 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="Type full legal name to sign" />
+          </div>
+
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 text-center">
+            <div class="glass rounded-lg p-3 border border-gray-800"><div class="text-[10px] text-gray-500 uppercase">E-SIGN events</div><div class="text-lg font-bold text-white">${overview.esignConsentEvents || 0}</div></div>
+            <div class="glass rounded-lg p-3 border border-gray-800"><div class="text-[10px] text-gray-500 uppercase">RON vendor</div><div class="text-sm font-bold text-amber-300">${escapeHtml(overview.ronVendor || 'sandbox')}</div></div>
+            <div class="glass rounded-lg p-3 border border-gray-800"><div class="text-[10px] text-gray-500 uppercase">Contracts</div><div class="text-lg font-bold text-white">${contracts.length}</div></div>
+            <div class="glass rounded-lg p-3 border border-gray-800"><div class="text-[10px] text-gray-500 uppercase">RON sessions</div><div class="text-lg font-bold text-white">${ronSessions.length}</div></div>
+          </div>
+
+          <div class="space-y-3">
+            <h3 class="text-sm font-bold text-white">Agreements</h3>
+            ${contracts.length ? contracts.map(c => `
+              <div class="glass rounded-xl p-4 border border-gray-800">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div class="text-sm font-semibold text-white">${escapeHtml(c.contract_type)} · <span class="text-gray-400">${escapeHtml(c.status)}</span></div>
+                    <div class="text-[10px] text-gray-500 font-mono mt-1">hash ${escapeHtml((c.content_hash || '').slice(0, 16))}… · ${escapeHtml(c.governing_state || '—')}</div>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    ${c.status === 'awaiting_esign' || c.status === 'draft' ? `<button onclick="window._signLegalContract('${c.id}')" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg">E-Sign</button>` : ''}
+                    ${c.status === 'awaiting_ron' || c.status === 'signed' ? `<button onclick="window._startRonForContract('${c.id}')" class="text-xs bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg">Start notary</button>` : ''}
+                    ${c.status === 'notarized' ? `<span class="text-xs text-emerald-400 font-bold">Notarized ${escapeHtml(c.notarized_at || '')}</span>` : ''}
+                  </div>
+                </div>
+              </div>`).join('') : '<p class="text-sm text-gray-500">No contracts yet — issue the full pack to begin.</p>'}
+          </div>
+
+          <div class="space-y-3">
+            <h3 class="text-sm font-bold text-white">Notarization sessions</h3>
+            ${ronSessions.length ? ronSessions.map(s => `
+              <div class="glass rounded-xl p-4 border border-gray-800 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div class="text-sm text-white">${escapeHtml(s.status)} · ${escapeHtml(s.vendor)} · ${escapeHtml(s.principal_state || '')}</div>
+                  <div class="text-[10px] text-gray-500">Retain until ${escapeHtml(s.retention_until || '—')}</div>
+                </div>
+                <div class="flex gap-2">
+                  ${s.status === 'identity_pending' ? `<button onclick="window._ronIdentity('${s.id}')" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg">Complete ID checklist</button>` : ''}
+                  ${s.status === 'identity_verified' ? `<button onclick="window._ronComplete('${s.id}')" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg">Seal / complete</button>` : ''}
+                </div>
+              </div>`).join('') : '<p class="text-sm text-gray-500">No RON sessions yet.</p>'}
+          </div>
+          <p class="text-[11px] text-gray-500">Sandbox RON certificates are for platform testing only and are <strong class="text-amber-400">not</strong> lawful notarial acts. Connect a certified RON vendor (RON_VENDOR + API key) for production notarization.</p>
+        </div>`;
+    } catch (err) {
+      el.innerHTML = `<div class="text-red-400 p-4">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function pgClientVideo(el) {
+    try {
+      const q = state.impersonateClientId ? `?clientId=${state.impersonateClientId}` : '';
+      const res = await api('/video/sessions' + q);
+      const sessions = res.sessions || [];
+
+      window._joinVideoSession = async (sessionId) => {
+        const tok = await api(`/video/sessions/${sessionId}/token`, { method: 'POST', body: '{}' });
+        if (tok.error) return toast(tok.error, 'error');
+        el.querySelector('#video-token-box')?.remove();
+        const box = document.createElement('div');
+        box.id = 'video-token-box';
+        box.className = 'glass rounded-xl p-4 border border-cyan-800 mt-4';
+        box.innerHTML = `<div class="text-xs text-cyan-300 font-bold mb-2">Access token ${tok.simulated ? '(simulated — configure Twilio API keys for live rooms)' : 'ready'}</div>
+          <div class="text-[11px] text-gray-400 mb-2">Room: <code class="text-white">${escapeHtml(tok.roomName || '')}</code> · expires ${tok.expiresAt || '—'}</div>
+          <textarea readonly class="w-full h-24 bg-gray-950 border border-gray-800 rounded-lg p-2 text-[10px] text-gray-300 font-mono">${escapeHtml(tok.token || '')}</textarea>
+          <p class="text-[11px] text-gray-500 mt-2">Embed Twilio Video JS SDK with this token in production clients. Token is short-lived and scoped to this room.</p>`;
+        el.appendChild(box);
+        toast('Video token issued', 'success');
+      };
+
+      el.innerHTML = `
+        <div class="fade-in space-y-4">
+          <div>
+            <h2 class="text-xl font-bold text-white">Secure Video Conferences</h2>
+            <p class="text-sm text-gray-400">Advisor consults via Twilio Video (separate from RON). ${res.configured ? 'Twilio configured.' : 'Running in simulated token mode until TWILIO_API_KEY_* secrets are set.'}</p>
+          </div>
+          ${sessions.length ? sessions.map(s => `
+            <div class="glass rounded-xl p-4 border border-gray-800 flex items-center justify-between gap-3">
+              <div>
+                <div class="text-sm text-white font-semibold">${escapeHtml(s.purpose || 'advisor_consult')} · ${escapeHtml(s.status)}</div>
+                <div class="text-[10px] text-gray-500 font-mono">${escapeHtml(s.room_name || '')}</div>
+              </div>
+              <button onclick="window._joinVideoSession('${s.id}')" class="text-xs bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-1.5 rounded-lg">Join / get token</button>
+            </div>`).join('') : '<p class="text-sm text-gray-500">No conferences yet. Your advisor will schedule one from Compliance Hub.</p>'}
+        </div>`;
+    } catch (err) {
+      el.innerHTML = `<div class="text-red-400 p-4">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function pgComplianceHub(el) {
+    try {
+      const clientId = state.pageData?.clientId || '';
+      const q = clientId ? `?clientId=${clientId}` : '';
+      const [overview, posture, states] = await Promise.all([
+        api('/compliance/overview' + q),
+        api('/security/posture'),
+        api('/compliance/ron-states'),
+      ]);
+
+      window._hubIssuePack = async () => {
+        const cid = $('#hub-client-id')?.value?.trim();
+        if (!cid) return toast('Client ID required', 'warning');
+        const st = ($('#hub-state')?.value || '').trim().toUpperCase();
+        const res = await api('/legal-contracts/issue-pack', { method: 'POST', body: JSON.stringify({ clientId: cid, governingState: st || undefined }) });
+        if (res.error) return toast(res.error, 'error');
+        toast(`Pack issued (${res.count})`, 'success');
+      };
+      window._hubVideo = async () => {
+        const cid = $('#hub-client-id')?.value?.trim();
+        if (!cid) return toast('Client ID required', 'warning');
+        const res = await api('/video/sessions', { method: 'POST', body: JSON.stringify({ clientId: cid, purpose: 'advisor_consult' }) });
+        if (res.error) return toast(res.error, 'error');
+        toast(`Video room ${res.roomName}`, 'success');
+        pgComplianceHub(el);
+      };
+      window._hubSeedRon = async () => {
+        const res = await api('/compliance/seed-ron-states', { method: 'POST', body: '{}' });
+        if (res.error) return toast(res.error, 'error');
+        toast(`Seeded ${res.seeded} state rules`, 'success');
+      };
+
+      const controls = (posture.controls || []).map(c => `
+        <div class="flex items-start justify-between gap-2 py-2 border-b border-gray-800/60">
+          <div><div class="text-xs font-semibold text-white">${escapeHtml(c.title)}</div><div class="text-[10px] text-gray-500">${escapeHtml(c.detail || '')}</div></div>
+          <span class="text-[10px] font-bold uppercase ${c.status === 'enforced' ? 'text-emerald-400' : c.status === 'misconfigured' || c.status === 'degraded' ? 'text-amber-400' : 'text-cyan-400'}">${escapeHtml(c.status)}</span>
+        </div>`).join('');
+
+      el.innerHTML = `
+        <div class="fade-in space-y-6">
+          <div>
+            <h2 class="text-xl font-bold text-white">Compliance Hub</h2>
+            <p class="text-sm text-gray-400">Contracts, E-SIGN, video conferences, RON state matrix — zero-trust controls.</p>
+          </div>
+          <div class="glass rounded-xl p-4 border border-gray-800 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <input id="hub-client-id" value="${escapeHtml(clientId)}" placeholder="Client ID" class="bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
+            <input id="hub-state" maxlength="2" placeholder="State" class="bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white uppercase" />
+            <div class="flex flex-wrap gap-2">
+              <button onclick="window._hubIssuePack()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-2 rounded-lg">Issue contract pack</button>
+              <button onclick="window._hubVideo()" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-2 rounded-lg">Start video</button>
+              <button onclick="window._hubSeedRon()" class="bg-violet-700 hover:bg-violet-600 text-white text-xs font-bold px-3 py-2 rounded-lg">Seed RON states</button>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="glass rounded-xl p-4 border border-gray-800">
+              <h3 class="text-sm font-bold text-white mb-2">Overview</h3>
+              <pre class="text-[11px] text-gray-400 whitespace-pre-wrap">${escapeHtml(JSON.stringify({ contracts: overview.contracts, ron: overview.ron, video: overview.video, esign: overview.esignConsentEvents, vendor: overview.ronVendor, videoConfigured: overview.videoConfigured }, null, 2))}</pre>
+            </div>
+            <div class="glass rounded-xl p-4 border border-gray-800 max-h-[28rem] overflow-y-auto">
+              <h3 class="text-sm font-bold text-white mb-2">Security posture · score ${posture.score ?? '—'}</h3>
+              ${controls}
+            </div>
+          </div>
+          <div class="glass rounded-xl p-4 border border-gray-800">
+            <h3 class="text-sm font-bold text-white mb-2">RON state matrix (${(states.states || []).length})</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-64 overflow-y-auto">
+              ${(states.states || []).slice(0, 60).map(s => `<div class="text-[10px] bg-gray-900/60 rounded px-2 py-1 border border-gray-800"><span class="text-white font-bold">${escapeHtml(s.state_code)}</span> ${s.ron_allowed ? '<span class="text-emerald-400">RON</span>' : '<span class="text-red-400">OFF</span>'} · ${s.recording_retention_years || 7}y</div>`).join('')}
+            </div>
+          </div>
+        </div>`;
+    } catch (err) {
+      el.innerHTML = `<div class="text-red-400 p-4">${escapeHtml(err.message)}</div>`;
     }
   }
 

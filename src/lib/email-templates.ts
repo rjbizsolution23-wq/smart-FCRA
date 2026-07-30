@@ -18,7 +18,10 @@ export type TemplateId =
   | 'staff_message'
   | 'tradeline_confirmed'
   | 'journey_checkin_nudge'
-  | 'fundability_update';
+  | 'fundability_update'
+  | 'contract_ready'
+  | 'video_conference_invite'
+  | 'ron_session_update';
 
 export type EmailTemplate = {
   id: TemplateId;
@@ -160,6 +163,33 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
     subject: (v) => `Fundability update: ${v.score || '—'}/100`,
     html: (v) => shell('Fundability update', `<p>Hi ${esc(v.clientName || '')},</p><p>Your fundability score is <strong>${esc(v.score || '—')}</strong>. Goal: ${esc(v.goal || 'mortgage')}.</p><p><a href="${esc(v.portalUrl || '#')}" style="color:#22d3ee">Open roadmap</a></p>`),
     text: (v) => `Fundability ${v.score}. ${v.portalUrl}`,
+  },
+  {
+    id: 'contract_ready',
+    name: 'Legal contract ready',
+    description: 'CROA / LPOA / consent pack ready to e-sign',
+    eventType: 'contract_ready',
+    subject: (v) => `Action required: sign your ${v.contractType || 'legal'} agreement`,
+    html: (v) => shell('Agreements ready', `<p>Hi ${esc(v.clientName || '')},</p><p>Your compliance agreements are ready for secure e-sign${v.requiresNotarization === 'true' ? ' (notarization may follow)' : ''}.</p><p><a href="${esc(v.portalUrl || '#')}" style="color:#22d3ee">Review &amp; sign</a></p>`),
+    text: (v) => `Sign your ${v.contractType} agreement: ${v.portalUrl}`,
+  },
+  {
+    id: 'video_conference_invite',
+    name: 'Video conference invite',
+    description: 'Advisor video room invite',
+    eventType: 'video_conference',
+    subject: (v) => v.title || 'Your secure video conference is ready',
+    html: (v) => shell('Video conference', `<p>Hi ${esc(v.clientName || '')},</p><p>Join your secure advisor conference.</p><p>Room: <strong>${esc(v.roomName || '')}</strong></p><p><a href="${esc(v.portalUrl || '#')}" style="color:#22d3ee">Join in portal</a></p>`),
+    text: (v) => `Join video conference ${v.roomName}: ${v.portalUrl}`,
+  },
+  {
+    id: 'ron_session_update',
+    name: 'Notarization session update',
+    description: 'RON identity / completion notices',
+    eventType: 'ron_session',
+    subject: (v) => `Notarization: ${v.status || 'update'}`,
+    html: (v) => shell('Online notarization', `<p>Hi ${esc(v.clientName || '')},</p><p>Status: <strong>${esc(v.status || '')}</strong></p><p>${esc(v.note || '')}</p><p><a href="${esc(v.portalUrl || '#')}" style="color:#22d3ee">Open portal</a></p>`),
+    text: (v) => `Notarization ${v.status}. ${v.portalUrl}`,
   },
 ];
 

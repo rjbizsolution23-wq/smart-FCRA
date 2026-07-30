@@ -18,6 +18,10 @@ import { detectViolations, calculateLitigationScore, type CreditReportData } fro
 import { analyzeReportLive } from './engine/violation-factcheck';
 import { seedKnowledgeBase, retrieveKnowledge } from './lib/knowledge-base';
 import { listEmailTemplates, sendTemplatedClientMessage, EMAIL_TEMPLATES } from './lib/email-templates';
+import { issueClientContractPack, createLegalContract, signLegalContract, recordEsignConsent } from './lib/legal-contracts';
+import { ESIGN_DISCLOSURE_TEXT, ESIGN_DISCLOSURE_VERSION, type ContractType, documentRequiresNotarization, sha256Hex } from './data/legal-contracts';
+import { createVideoRoom, issueRoomToken, completeVideoSession, videoConfigured } from './lib/twilio-video';
+import { seedRonStateRules, createRonSession, submitRonIdentityChecklist, completeRonSession, handleRonWebhook, getRonStateRule, DEFAULT_RON_STATE_RULES, resolveVendor } from './lib/ron-service';
 import { mapMfsnToInternal } from './engine/mfsn-mapper';
 import { mapSmartCreditToInternal } from './engine/smartcredit-mapper';
 import { DOCUMENT_TYPES, type DocumentData } from './engine/documents';
@@ -387,6 +391,12 @@ type Bindings = {
   TWILIO_ACCOUNT_SID?: string;
   TWILIO_AUTH_TOKEN?: string;
   TWILIO_PHONE_NUMBER?: string;
+  TWILIO_API_KEY_SID?: string;
+  TWILIO_API_KEY_SECRET?: string;
+  RON_VENDOR?: string;
+  RON_VENDOR_API_KEY?: string;
+  RON_VENDOR_API_URL?: string;
+  RON_WEBHOOK_SECRET?: string;
   SENTRY_DSN?: string;
   PII_ENCRYPTION_KEY?: string;
   RESEND_API_KEY?: string;
@@ -2826,27 +2836,59 @@ app.post('/api/admin/privacy-requests/:id/fulfill', authMiddleware, async (c) =>
 app.post('/api/documents/:id/sign', authMiddleware, async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
-  const { signatureData } = await c.req.json();
+  const body = await c.req.json();
+  const signatureData = body.signatureData;
   if (!signatureData) return c.json({ error: 'Signature data is required' }, 400);
+  if (body.esignConsent !== true && body.esignConsent !== undefined) {
+    // Prefer explicit consent; allow legacy clients but record disclosure when possible
+  }
 
   // If role is client, enforce zero-trust ownership match on documents
+  let clientRow: any = null;
   if (user.role === 'client') {
-    const client = await c.env.DB.prepare('SELECT * FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
-    if (!client) return c.json({ error: 'Client profile not found' }, 404);
+    clientRow = await c.env.DB.prepare('SELECT * FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
+    if (!clientRow) return c.json({ error: 'Client profile not found' }, 404);
 
-    const doc = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ? AND client_id = ? AND org_id = ?').bind(id, client.id, user.org_id).first();
+    const doc = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ? AND client_id = ? AND org_id = ?').bind(id, clientRow.id, user.org_id).first();
     if (!doc) return c.json({ error: 'Document not found or unauthorized' }, 403);
   } else {
     const doc = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ? AND org_id = ?').bind(id, user.org_id).first();
     if (!doc) return c.json({ error: 'Document not found' }, 404);
   }
 
+  const docFull = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
   const ip = c.req.header('CF-Connecting-IP') || '127.0.0.1';
+  const ua = c.req.header('User-Agent') || '';
   const timestamp = new Date().toISOString();
+  const contentHash = docFull?.content_hash || (docFull?.content ? await sha256Hex(docFull.content) : null);
 
-  await c.env.DB.prepare(
-    'UPDATE documents SET status = "signed", signature_data = ?, signature_ip = ?, signature_timestamp = ?, updated_at = datetime("now") WHERE id = ? AND org_id = ?'
-  ).bind(signatureData, ip, timestamp, id, user.org_id).run();
+  let esignConsentId: string | null = null;
+  if (docFull?.client_id && body.esignConsent !== false) {
+    try {
+      const consent = await recordEsignConsent(c.env, {
+        orgId: user.org_id,
+        clientId: docFull.client_id,
+        userId: user.id,
+        contentHash: contentHash || undefined,
+        documentId: id,
+        ip,
+        ua,
+      });
+      esignConsentId = consent.consentId;
+    } catch (e) {
+      console.warn('[esign] consent record skipped', e);
+    }
+  }
+
+  try {
+    await c.env.DB.prepare(
+      'UPDATE documents SET status = "signed", signature_data = ?, signature_ip = ?, signature_timestamp = ?, esign_consent_id = COALESCE(?, esign_consent_id), content_hash = COALESCE(content_hash, ?), updated_at = datetime("now") WHERE id = ? AND org_id = ?'
+    ).bind(signatureData, ip, timestamp, esignConsentId, contentHash, id, user.org_id).run();
+  } catch {
+    await c.env.DB.prepare(
+      'UPDATE documents SET status = "signed", signature_data = ?, signature_ip = ?, signature_timestamp = ?, updated_at = datetime("now") WHERE id = ? AND org_id = ?'
+    ).bind(signatureData, ip, timestamp, id, user.org_id).run();
+  }
 
   const signedDoc = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
   let packProgress: any = null;
@@ -2876,7 +2918,7 @@ app.post('/api/documents/:id/sign', authMiddleware, async (c) => {
       user.id,
       'document_signed',
       `E-signed document ${signedDoc.title || signedDoc.doc_type}`,
-      JSON.stringify({ ip, packProgress })
+      JSON.stringify({ ip, packProgress, esignConsentId, contentHash, requiresNotarization: documentRequiresNotarization(signedDoc.doc_type) })
     ).run();
 
     if (packProgress.complete) {
@@ -2886,7 +2928,21 @@ app.post('/api/documents/:id/sign', authMiddleware, async (c) => {
     }
   }
 
-  return c.json({ ok: true, timestamp, ip, packProgress });
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'document_esign',
+    resourceType: 'document', resourceId: id, ip, detail: { esignConsentId, contentHash },
+  });
+
+  return c.json({
+    ok: true,
+    timestamp,
+    ip,
+    packProgress,
+    esignConsentId,
+    contentHash,
+    requiresNotarization: documentRequiresNotarization(signedDoc?.doc_type || ''),
+    esignDisclosureVersion: ESIGN_DISCLOSURE_VERSION,
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -6025,6 +6081,418 @@ app.get('/api/settings/statutes', (c) => {
 // PLATFORM SUPER ADMIN ENDPOINTS (Gated to role === 'super_admin')
 // ═══════════════════════════════════════════════════════════════
 
+// ── Legal contracts / ESIGN / Video / RON ──────────────────────
+app.get('/api/compliance/esign-disclosure', authMiddleware, async (c) => {
+  const hash = await sha256Hex(ESIGN_DISCLOSURE_TEXT);
+  return c.json({
+    version: ESIGN_DISCLOSURE_VERSION,
+    hash,
+    text: ESIGN_DISCLOSURE_TEXT,
+  });
+});
+
+app.get('/api/compliance/ron-states', authMiddleware, async (c) => {
+  let rows: any[] = [];
+  try {
+    const all = await c.env.DB.prepare('SELECT * FROM ron_state_rules ORDER BY state_code').all();
+    rows = all?.results || [];
+  } catch { /* */ }
+  if (!rows.length) rows = DEFAULT_RON_STATE_RULES;
+  const q = String(c.req.query('state') || '').toUpperCase();
+  if (q) {
+    const one = rows.find((r) => r.state_code === q) || await getRonStateRule(c.env, q);
+    return c.json({ state: one, vendor: resolveVendor(c.env) });
+  }
+  return c.json({ states: rows, vendor: resolveVendor(c.env), count: rows.length });
+});
+
+app.post('/api/compliance/seed-ron-states', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role !== 'admin' && user.role !== 'super_admin') return c.json({ error: 'Admin only' }, 403);
+  const n = await seedRonStateRules(c.env);
+  return c.json({ ok: true, seeded: n });
+});
+
+app.get('/api/legal-contracts', authMiddleware, async (c) => {
+  const user = c.get('user');
+  let clientId = c.req.query('clientId');
+  if (user.role === 'client') {
+    const client = await c.env.DB.prepare('SELECT id FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
+    if (!client) return c.json({ error: 'Client not found' }, 404);
+    clientId = client.id;
+  }
+  if (!clientId) return c.json({ error: 'clientId required' }, 400);
+  const rows = await c.env.DB.prepare(
+    `SELECT id, contract_type, template_version, content_hash, governing_state, status, document_id, vault_upload_id, ron_session_id, notarized_at, notary_name, signature_timestamp, created_at, updated_at
+     FROM legal_contracts WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC`
+  ).bind(clientId, user.org_id).all();
+  return c.json({ contracts: rows?.results || [] });
+});
+
+app.get('/api/legal-contracts/:id', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const row = await c.env.DB.prepare(`SELECT * FROM legal_contracts WHERE id = ? AND org_id = ?`).bind(id, user.org_id).first() as any;
+  if (!row) return c.json({ error: 'Not found' }, 404);
+  if (user.role === 'client') {
+    const client = await c.env.DB.prepare('SELECT id FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
+    if (!client || client.id !== row.client_id) return c.json({ error: 'Forbidden' }, 403);
+  }
+  return c.json({ contract: row, esignDisclosureVersion: ESIGN_DISCLOSURE_VERSION });
+});
+
+app.post('/api/legal-contracts/issue-pack', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json();
+  let clientId = body.clientId;
+  if (user.role === 'client') {
+    const me = await c.env.DB.prepare('SELECT * FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
+    if (!me) return c.json({ error: 'Client not found' }, 404);
+    clientId = me.id;
+  }
+  const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first() as any;
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const pack = await issueClientContractPack(c.env, {
+    orgId: user.org_id,
+    client,
+    userId: user.id,
+    governingState: body.governingState || client.governing_state || client.state,
+  });
+  try {
+    const email = client.email && !String(client.email).includes('.noreply@') ? client.email : null;
+    await sendTemplatedClientMessage(c.env, {
+      templateId: 'contract_ready',
+      orgId: user.org_id,
+      clientId: client.id,
+      email,
+      notifyEmail: !!email && client.notify_email !== 0,
+      vars: {
+        clientName: `${client.first_name} ${client.last_name}`,
+        contractType: 'CROA / LPOA pack',
+        requiresNotarization: 'true',
+        portalUrl: `${portalBaseUrl(c.env)}/`,
+      },
+    });
+  } catch { /* soft */ }
+  return c.json({ ok: true, ...pack });
+});
+
+app.post('/api/legal-contracts', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json();
+  const contractType = body.contractType as ContractType;
+  if (!['croa_service', 'limited_poa', 'esign_consent', 'representation_auth'].includes(contractType)) {
+    return c.json({ error: 'Invalid contractType' }, 400);
+  }
+  let clientId = body.clientId;
+  if (user.role === 'client') {
+    const me = await c.env.DB.prepare('SELECT * FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
+    if (!me) return c.json({ error: 'Client not found' }, 404);
+    clientId = me.id;
+  }
+  const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first() as any;
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const created = await createLegalContract(c.env, {
+    orgId: user.org_id,
+    client,
+    userId: user.id,
+    contractType,
+    governingState: body.governingState || client.governing_state || client.state,
+  });
+  return c.json({ ok: true, ...created });
+});
+
+app.post('/api/legal-contracts/:id/sign', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const body = await c.req.json();
+  if (!body.signatureData) return c.json({ error: 'signatureData required' }, 400);
+  if (body.esignConsent !== true) return c.json({ error: 'esignConsent must be true — review E-SIGN disclosure first' }, 400);
+
+  const row = await c.env.DB.prepare(`SELECT * FROM legal_contracts WHERE id = ? AND org_id = ?`).bind(id, user.org_id).first() as any;
+  if (!row) return c.json({ error: 'Not found' }, 404);
+  if (user.role === 'client') {
+    const me = await c.env.DB.prepare('SELECT id FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
+    if (!me || me.id !== row.client_id) return c.json({ error: 'Forbidden' }, 403);
+  }
+
+  try {
+    const result = await signLegalContract(c.env, {
+      orgId: user.org_id,
+      contractId: id,
+      userId: user.id,
+      signatureData: body.signatureData,
+      ip: c.req.header('CF-Connecting-IP') || undefined,
+      ua: c.req.header('User-Agent') || undefined,
+      esignConsent: true,
+    });
+    return c.json({ ok: true, ...result });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 400);
+  }
+});
+
+app.post('/api/video/sessions', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff schedules conferences' }, 403);
+  const body = await c.req.json();
+  const clientId = body.clientId || null;
+  if (clientId) {
+    const client = await c.env.DB.prepare('SELECT id, email, first_name, last_name, notify_email FROM clients WHERE id = ? AND org_id = ?')
+      .bind(clientId, user.org_id).first() as any;
+    if (!client) return c.json({ error: 'Client not found' }, 404);
+    const session = await createVideoRoom(c.env, {
+      orgId: user.org_id,
+      clientId,
+      hostUserId: user.id,
+      purpose: body.purpose || 'advisor_consult',
+      recordingEnabled: body.recordingEnabled !== false,
+    });
+    try {
+      await sendTemplatedClientMessage(c.env, {
+        templateId: 'video_conference_invite',
+        orgId: user.org_id,
+        clientId,
+        email: client.email,
+        notifyEmail: client.notify_email !== 0,
+        vars: {
+          clientName: `${client.first_name} ${client.last_name}`,
+          roomName: session.roomName,
+          title: 'Your secure video conference is ready',
+          portalUrl: `${portalBaseUrl(c.env)}/`,
+        },
+      });
+    } catch { /* soft */ }
+    return c.json({ ok: true, configured: videoConfigured(c.env), ...session });
+  }
+  const session = await createVideoRoom(c.env, {
+    orgId: user.org_id,
+    hostUserId: user.id,
+    purpose: body.purpose || 'advisor_consult',
+    recordingEnabled: body.recordingEnabled !== false,
+  });
+  return c.json({ ok: true, configured: videoConfigured(c.env), ...session });
+});
+
+app.get('/api/video/sessions', authMiddleware, async (c) => {
+  const user = c.get('user');
+  let sql = `SELECT id, client_id, room_name, room_sid, purpose, status, recording_enabled, scheduled_at, started_at, ended_at, created_at FROM video_conference_sessions WHERE org_id = ?`;
+  const binds: any[] = [user.org_id];
+  if (user.role === 'client') {
+    const me = await c.env.DB.prepare('SELECT id FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
+    if (!me) return c.json({ sessions: [] });
+    sql += ` AND client_id = ?`;
+    binds.push(me.id);
+  } else if (c.req.query('clientId')) {
+    sql += ` AND client_id = ?`;
+    binds.push(c.req.query('clientId'));
+  }
+  sql += ` ORDER BY created_at DESC LIMIT 50`;
+  const rows = await c.env.DB.prepare(sql).bind(...binds).all();
+  return c.json({ sessions: rows?.results || [], configured: videoConfigured(c.env) });
+});
+
+app.post('/api/video/sessions/:id/token', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const session = await c.env.DB.prepare(`SELECT * FROM video_conference_sessions WHERE id = ? AND org_id = ?`).bind(id, user.org_id).first() as any;
+  if (!session) return c.json({ error: 'Not found' }, 404);
+  if (user.role === 'client') {
+    const me = await c.env.DB.prepare('SELECT id FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
+    if (!me || me.id !== session.client_id) return c.json({ error: 'Forbidden' }, 403);
+  }
+  try {
+    const token = await issueRoomToken(c.env, {
+      sessionId: id,
+      orgId: user.org_id,
+      identity: `${user.role}:${user.id}:${user.email || 'user'}`.slice(0, 120),
+    });
+    return c.json({ ok: true, ...token });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 400);
+  }
+});
+
+app.post('/api/video/sessions/:id/complete', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const result = await completeVideoSession(c.env, {
+    sessionId: c.req.param('id'),
+    orgId: user.org_id,
+    recordingSid: body.recordingSid,
+    compositionSid: body.compositionSid,
+  });
+  return c.json(result);
+});
+
+app.post('/api/ron/sessions', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json();
+  let clientId = body.clientId;
+  if (user.role === 'client') {
+    const me = await c.env.DB.prepare('SELECT * FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
+    if (!me) return c.json({ error: 'Client not found' }, 404);
+    clientId = me.id;
+  }
+  const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first() as any;
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const state = body.principalState || client.governing_state || client.state;
+  if (!state) return c.json({ error: 'principalState / client state required' }, 400);
+
+  try {
+    const session = await createRonSession(c.env, {
+      orgId: user.org_id,
+      clientId,
+      contractId: body.contractId,
+      documentId: body.documentId,
+      videoSessionId: body.videoSessionId,
+      principalState: state,
+      userId: user.id,
+    });
+    try {
+      await sendTemplatedClientMessage(c.env, {
+        templateId: 'ron_session_update',
+        orgId: user.org_id,
+        clientId,
+        email: client.email,
+        notifyEmail: client.notify_email !== 0,
+        vars: {
+          clientName: `${client.first_name} ${client.last_name}`,
+          status: session.status,
+          note: session.legalNotice,
+          portalUrl: `${portalBaseUrl(c.env)}/`,
+        },
+      });
+    } catch { /* soft */ }
+    return c.json({ ok: true, ...session });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 400);
+  }
+});
+
+app.get('/api/ron/sessions', authMiddleware, async (c) => {
+  const user = c.get('user');
+  let sql = `SELECT id, client_id, contract_id, document_id, vendor, status, principal_state, retention_until, sealed_vault_upload_id, created_at, completed_at FROM ron_sessions WHERE org_id = ?`;
+  const binds: any[] = [user.org_id];
+  if (user.role === 'client') {
+    const me = await c.env.DB.prepare('SELECT id FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
+    if (!me) return c.json({ sessions: [] });
+    sql += ` AND client_id = ?`;
+    binds.push(me.id);
+  } else if (c.req.query('clientId')) {
+    sql += ` AND client_id = ?`;
+    binds.push(c.req.query('clientId'));
+  }
+  sql += ` ORDER BY created_at DESC LIMIT 50`;
+  const rows = await c.env.DB.prepare(sql).bind(...binds).all();
+  return c.json({ sessions: rows?.results || [], vendor: resolveVendor(c.env) });
+});
+
+app.get('/api/ron/sessions/:id', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const row = await c.env.DB.prepare(`SELECT * FROM ron_sessions WHERE id = ? AND org_id = ?`).bind(c.req.param('id'), user.org_id).first() as any;
+  if (!row) return c.json({ error: 'Not found' }, 404);
+  if (user.role === 'client') {
+    const me = await c.env.DB.prepare('SELECT id FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
+    if (!me || me.id !== row.client_id) return c.json({ error: 'Forbidden' }, 403);
+  }
+  return c.json({ session: row });
+});
+
+app.post('/api/ron/sessions/:id/identity', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json();
+  const row = await c.env.DB.prepare(`SELECT * FROM ron_sessions WHERE id = ? AND org_id = ?`).bind(c.req.param('id'), user.org_id).first() as any;
+  if (!row) return c.json({ error: 'Not found' }, 404);
+  if (user.role === 'client') {
+    const me = await c.env.DB.prepare('SELECT id FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
+    if (!me || me.id !== row.client_id) return c.json({ error: 'Forbidden' }, 403);
+  }
+  try {
+    const result = await submitRonIdentityChecklist(c.env, {
+      orgId: user.org_id,
+      sessionId: row.id,
+      userId: user.id,
+      fullNameMatchesId: !!body.fullNameMatchesId,
+      governmentIdPresented: !!body.governmentIdPresented,
+      selfieMatchesId: !!body.selfieMatchesId,
+      kbaPassed: body.kbaPassed !== false,
+      credentialAnalysisPassed: body.credentialAnalysisPassed !== false,
+      attestation: !!body.attestation,
+    });
+    return c.json({ ok: true, ...result });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 400);
+  }
+});
+
+app.post('/api/ron/sessions/:id/complete', authMiddleware, async (c) => {
+  const user = c.get('user');
+  // Staff or sandbox client completion after identity
+  const body = await c.req.json().catch(() => ({}));
+  const row = await c.env.DB.prepare(`SELECT * FROM ron_sessions WHERE id = ? AND org_id = ?`).bind(c.req.param('id'), user.org_id).first() as any;
+  if (!row) return c.json({ error: 'Not found' }, 404);
+  if (user.role === 'client') {
+    const me = await c.env.DB.prepare('SELECT id FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
+    if (!me || me.id !== row.client_id) return c.json({ error: 'Forbidden' }, 403);
+    if (row.vendor !== 'sandbox') return c.json({ error: 'Production RON completion is vendor-driven' }, 403);
+  }
+  try {
+    const result = await completeRonSession(c.env, {
+      orgId: user.org_id,
+      sessionId: row.id,
+      userId: user.id,
+      notaryName: body.notaryName,
+      notaryCommission: body.notaryCommission,
+      notaryState: body.notaryState,
+      aVRecordingRef: body.aVRecordingRef,
+    });
+    return c.json({ ok: true, ...result });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 400);
+  }
+});
+
+app.post('/api/webhooks/ron', async (c) => {
+  const signature = c.req.header('X-Ron-Signature') || c.req.header('X-Webhook-Secret');
+  const payload = await c.req.json();
+  try {
+    const result = await handleRonWebhook(c.env, { signature, payload });
+    return c.json({ ok: true, ...result });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 401);
+  }
+});
+
+app.get('/api/compliance/overview', authMiddleware, async (c) => {
+  const user = c.get('user');
+  let clientFilter = '';
+  const binds: any[] = [user.org_id];
+  if (user.role === 'client') {
+    const me = await c.env.DB.prepare('SELECT id FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
+    if (!me) return c.json({ error: 'Client not found' }, 404);
+    clientFilter = ' AND client_id = ?';
+    binds.push(me.id);
+  } else if (c.req.query('clientId')) {
+    clientFilter = ' AND client_id = ?';
+    binds.push(c.req.query('clientId'));
+  }
+  const contracts = await c.env.DB.prepare(`SELECT status, contract_type, COUNT(*) as c FROM legal_contracts WHERE org_id = ?${clientFilter} GROUP BY status, contract_type`).bind(...binds).all().catch(() => ({ results: [] }));
+  const ron = await c.env.DB.prepare(`SELECT status, COUNT(*) as c FROM ron_sessions WHERE org_id = ?${clientFilter} GROUP BY status`).bind(...binds).all().catch(() => ({ results: [] }));
+  const video = await c.env.DB.prepare(`SELECT status, COUNT(*) as c FROM video_conference_sessions WHERE org_id = ?${clientFilter} GROUP BY status`).bind(...binds).all().catch(() => ({ results: [] }));
+  const esign = await c.env.DB.prepare(`SELECT COUNT(*) as c FROM esign_consent_events WHERE org_id = ?${clientFilter}`).bind(...binds).first().catch(() => ({ c: 0 }));
+  return c.json({
+    contracts: contracts?.results || [],
+    ron: ron?.results || [],
+    video: video?.results || [],
+    esignConsentEvents: (esign as any)?.c || 0,
+    videoConfigured: videoConfigured(c.env),
+    ronVendor: resolveVendor(c.env),
+    esignDisclosureVersion: ESIGN_DISCLOSURE_VERSION,
+  });
+});
+
 const adminGateMiddleware = async (c: any, next: any) => {
   const user = c.get('user');
   if (!user || user.role !== 'super_admin') {
@@ -6073,6 +6541,7 @@ const D1_BACKUP_TABLES = [
   'education_progress', 'tutor_memory', 'fundability_snapshots', 'tradeline_orders',
   'underwriting_snapshots', 'security_audit_log', 'privacy_requests', 'roadmap_progress',
   'client_journey_state', 'daily_motivation_log', 'knowledge_chunks', 'email_template_registry',
+  'legal_contracts', 'esign_consent_events', 'video_conference_sessions', 'ron_sessions', 'ron_state_rules',
 ];
 
 app.post('/api/admin/journey/dispatch-daily', authMiddleware, adminGateMiddleware, async (c) => {
