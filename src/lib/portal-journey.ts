@@ -2,6 +2,7 @@
  * Persist journey state + generate/send daily motivational wake-ups.
  */
 import { dispatchClientAlert, type AlertEnv } from './alerts';
+import { sendTemplatedClientMessage } from './email-templates';
 import {
   buildJourneyPlan,
   nextStreak,
@@ -254,16 +255,34 @@ export async function generateAndDispatchDailyMotivation(
 
   const deliveryBody = motivation.ritualBody || `${motivation.body}\n\n→ Today's focus: ${motivation.focusAction}\n\n${motivation.encouragement}`;
 
-  const channels = await dispatchClientAlert(env, {
+  const channels = await sendTemplatedClientMessage(env, {
+    templateId: 'daily_morning_ritual',
     orgId: client.org_id,
     clientId: client.id,
-    eventType: 'daily_motivation',
-    title: motivation.title,
-    body: deliveryBody,
     email: wantEmail ? email : null,
     phone: client.phone_e164 || client.phone,
     notifyEmail: !!wantEmail,
     notifySms: wantSms,
+    vars: {
+      clientName: `${client.first_name || ''} ${client.last_name || ''}`.trim(),
+      title: motivation.title,
+      ritualBody: deliveryBody,
+      body: deliveryBody,
+      portalUrl: '/',
+    },
+  }).then((r) => r.channels).catch(async () => {
+    // Fallback to plain alert bus if template path fails
+    return dispatchClientAlert(env, {
+      orgId: client.org_id,
+      clientId: client.id,
+      eventType: 'daily_motivation',
+      title: motivation.title,
+      body: deliveryBody,
+      email: wantEmail ? email : null,
+      phone: client.phone_e164 || client.phone,
+      notifyEmail: !!wantEmail,
+      notifySms: wantSms,
+    });
   });
 
   // Also drop into Messages so the morning ritual is visible in the portal inbox

@@ -15,6 +15,9 @@ import { writeSecurityAudit, buildSecurityPosture, passwordMeetsPolicy } from '.
 import { dispatchClientAlert } from './lib/alerts';
 import { parseCreditReportText } from './engine/parser';
 import { detectViolations, calculateLitigationScore, type CreditReportData } from './engine/violations';
+import { analyzeReportLive } from './engine/violation-factcheck';
+import { seedKnowledgeBase, retrieveKnowledge } from './lib/knowledge-base';
+import { listEmailTemplates, sendTemplatedClientMessage, EMAIL_TEMPLATES } from './lib/email-templates';
 import { mapMfsnToInternal } from './engine/mfsn-mapper';
 import { mapSmartCreditToInternal } from './engine/smartcredit-mapper';
 import { DOCUMENT_TYPES, type DocumentData } from './engine/documents';
@@ -157,9 +160,104 @@ async function saveViolationsForReport(c: any, orgId: string, reportId: string, 
   // Replace violations for this report on re-ingest
   await c.env.DB.prepare('DELETE FROM violations WHERE report_id = ? AND org_id = ?').bind(reportId, orgId).run();
   for (const v of violations) {
-    await c.env.DB.prepare(
-      'INSERT INTO violations (id, org_id, report_id, client_id, category, subcategory, severity, statute, statute_text, legal_standard, evidence, explanation, case_law, account_name, account_number, dofd, falloff_date, days_overdue, statutory_damages_min, statutory_damages_max, actual_damages_est, punitive_damages_est, attorney_fees_est, total_damages_min, total_damages_max, defendant_type, defendant_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).bind(v.id, orgId, reportId, clientId, v.category, v.subcategory, v.severity, v.statute, v.statuteText, v.legalStandard, v.evidence, v.explanation, v.caseLaw, v.accountName || null, v.accountNumber || null, v.dofd || null, v.falloffDate || null, v.daysOverdue || null, v.statutoryDamagesMin, v.statutoryDamagesMax, v.actualDamagesEst, v.punitiveDamagesEst, v.attorneyFeesEst, v.totalDamagesMin, v.totalDamagesMax, v.defendantType, v.defendantName).run();
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO violations (id, org_id, report_id, client_id, category, subcategory, severity, statute, statute_text, legal_standard, evidence, explanation, case_law, account_name, account_number, dofd, falloff_date, days_overdue, statutory_damages_min, statutory_damages_max, actual_damages_est, punitive_damages_est, attorney_fees_est, total_damages_min, total_damages_max, defendant_type, defendant_name, fact_check_status, confidence, reasoning_json, analysis_mode)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        v.id, orgId, reportId, clientId, v.category, v.subcategory, v.severity, v.statute, v.statuteText, v.legalStandard,
+        v.evidence, v.explanation, v.caseLaw, v.accountName || null, v.accountNumber || null, v.dofd || null, v.falloffDate || null,
+        v.daysOverdue || null, v.statutoryDamagesMin, v.statutoryDamagesMax, v.actualDamagesEst, v.punitiveDamagesEst, v.attorneyFeesEst,
+        v.totalDamagesMin, v.totalDamagesMax, v.defendantType, v.defendantName,
+        v.factCheckStatus || 'verified', v.confidence ?? null,
+        v.reasoning ? JSON.stringify(v.reasoning) : null,
+        v.analysisMode || 'live_rules_engine',
+      ).run();
+    } catch {
+      await c.env.DB.prepare(
+        'INSERT INTO violations (id, org_id, report_id, client_id, category, subcategory, severity, statute, statute_text, legal_standard, evidence, explanation, case_law, account_name, account_number, dofd, falloff_date, days_overdue, statutory_damages_min, statutory_damages_max, actual_damages_est, punitive_damages_est, attorney_fees_est, total_damages_min, total_damages_max, defendant_type, defendant_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(v.id, orgId, reportId, clientId, v.category, v.subcategory, v.severity, v.statute, v.statuteText, v.legalStandard, v.evidence, v.explanation, v.caseLaw, v.accountName || null, v.accountNumber || null, v.dofd || null, v.falloffDate || null, v.daysOverdue || null, v.statutoryDamagesMin, v.statutoryDamagesMax, v.actualDamagesEst, v.punitiveDamagesEst, v.attorneyFeesEst, v.totalDamagesMin, v.totalDamagesMax, v.defendantType, v.defendantName).run();
+    }
+  }
+}
+
+/** Live parse → detect → fact-check (no mock data). */
+function liveAnalyzeParsedReport(parsed: CreditReportData) {
+  return analyzeReportLive(parsed, detectViolations);
+}
+
+/** Attach parsed reasoning for API/UI consumers. */
+function hydrateViolationRows(rows: any[]): any[] {
+  return (rows || []).map((v) => {
+    let reasoning = v.reasoning || null;
+    if (!reasoning && v.reasoning_json) {
+      try { reasoning = JSON.parse(v.reasoning_json); } catch { reasoning = null; }
+    }
+    return {
+      ...v,
+      factCheckStatus: v.fact_check_status || v.factCheckStatus || null,
+      confidence: v.confidence ?? null,
+      analysisMode: v.analysis_mode || v.analysisMode || 'live_rules_engine',
+      reasoning,
+    };
+  });
+}
+
+/** Fire catalog email/alert after live analysis completes. */
+async function notifyClientAnalysisReady(
+  c: any,
+  opts: {
+    orgId: string;
+    clientId: string;
+    client?: any;
+    bureau: string;
+    analysis: { violations: any[]; rawCount: number; reasoningSummary: string };
+  },
+) {
+  try {
+    const client = opts.client || await c.env.DB.prepare(
+      'SELECT * FROM clients WHERE id = ? AND org_id = ?'
+    ).bind(opts.clientId, opts.orgId).first();
+    if (!client) return null;
+    const email =
+      client.email && !String(client.email).includes('.noreply@') && !String(client.email).endsWith('@smartfcra.local')
+        ? client.email
+        : null;
+    const portalUrl = `${portalBaseUrl(c.env)}/`;
+    const vars = {
+      clientName: `${client.first_name || ''} ${client.last_name || ''}`.trim(),
+      bureau: opts.bureau,
+      violationCount: String(opts.analysis.violations.length),
+      rawCount: String(opts.analysis.rawCount),
+      reasoningSummary: opts.analysis.reasoningSummary,
+      portalUrl,
+    };
+    const analyzed = await sendTemplatedClientMessage(c.env, {
+      templateId: 'report_analyzed',
+      orgId: opts.orgId,
+      clientId: opts.clientId,
+      email,
+      phone: client.phone_e164 || client.phone,
+      notifyEmail: !!email && client.notify_email !== 0,
+      notifySms: false,
+      vars,
+    });
+    if (opts.analysis.violations.length > 0) {
+      await sendTemplatedClientMessage(c.env, {
+        templateId: 'violations_ready',
+        orgId: opts.orgId,
+        clientId: opts.clientId,
+        email,
+        phone: client.phone_e164 || client.phone,
+        notifyEmail: !!email && client.notify_email !== 0,
+        notifySms: false,
+        vars,
+      });
+    }
+    return analyzed;
+  } catch (e) {
+    console.warn('[notify] analysis template skipped', e);
+    return null;
   }
 }
 
@@ -1185,7 +1283,7 @@ app.get('/api/clients/:id', authMiddleware, async (c) => {
   return c.json({
     client,
     reports: reportsResult,
-    violations: violations?.results || [],
+    violations: hydrateViolationRows(violations?.results || []),
     documents: documents?.results || [],
     activity: activity?.results || [],
     bureauPack: pack,
@@ -1441,7 +1539,8 @@ app.post('/api/client-portal/onboard', authMiddleware, async (c) => {
 
   await backpopulateClientInfo(c, client.id, parsed.personalInfo, user.org_id);
 
-  const violations = detectViolations(parsed);
+  const analysis = liveAnalyzeParsedReport(parsed);
+  const violations = analysis.violations;
   const litScore = calculateLitigationScore(violations);
   const encryptedRawText = await encryptPII(c, rawText);
   const encryptedParsedData = await encryptPII(c, JSON.stringify(parsed));
@@ -1535,9 +1634,17 @@ app.post('/api/client-portal/onboard', authMiddleware, async (c) => {
     'INSERT INTO activity_log (id, org_id, client_id, report_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     generateId(), user.org_id, client.id, reportId, user.id, 'client_self_onboard',
-    `Client uploaded ${resolvedBureau} report: ${violations.length} violations found`,
-    JSON.stringify({ score: litScore.score, bureau: resolvedBureau, mode })
+    `Client uploaded ${resolvedBureau} report: ${violations.length} grounded findings (${analysis.rawCount} raw hits, ${analysis.rejectedCount} rejected)`,
+    JSON.stringify({ score: litScore.score, bureau: resolvedBureau, mode, analysisMode: analysis.analysisMode, reasoningSummary: analysis.reasoningSummary })
   ).run();
+
+  await notifyClientAnalysisReady(c, {
+    orgId: user.org_id,
+    clientId: client.id,
+    client,
+    bureau: resolvedBureau,
+    analysis,
+  });
 
   return c.json({
     success: true,
@@ -1545,6 +1652,12 @@ app.post('/api/client-portal/onboard', authMiddleware, async (c) => {
     reportId,
     bureau: resolvedBureau,
     mode,
+    analysisMode: analysis.analysisMode,
+    reasoningSummary: analysis.reasoningSummary,
+    rawDetectorHits: analysis.rawCount,
+    rejectedCount: analysis.rejectedCount,
+    verifiedCount: analysis.verifiedCount,
+    needsReviewCount: analysis.needsReviewCount,
     violationsFound: violations.length,
     violations: violations.slice(0, 50),
     litigationScore: litScore,
@@ -2823,6 +2936,31 @@ app.post('/api/documents/:id/record-response', authMiddleware, async (c) => {
   }
   await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(generateId(), user.org_id, doc?.client_id, id, user.id, 'bureau_response_recorded', `Bureau response: ${result}`, JSON.stringify({ result })).run();
+
+  if (doc?.client_id) {
+    try {
+      const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(doc.client_id, user.org_id).first() as any;
+      if (client) {
+        const email =
+          client.email && !String(client.email).includes('.noreply@') && !String(client.email).endsWith('@smartfcra.local')
+            ? client.email
+            : null;
+        await sendTemplatedClientMessage(c.env, {
+          templateId: 'bureau_response_recorded',
+          orgId: user.org_id,
+          clientId: client.id,
+          email,
+          notifyEmail: !!email && client.notify_email !== 0,
+          vars: {
+            clientName: `${client.first_name} ${client.last_name}`,
+            result: String(result),
+            portalUrl: `${portalBaseUrl(c.env)}/`,
+          },
+        });
+      }
+    } catch { /* soft */ }
+  }
+
   return c.json({ ok: true, result });
 });
 
@@ -3015,7 +3153,8 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
 
   await backpopulateClientInfo(c, clientId, parsed.personalInfo, user.org_id);
 
-  const violations = detectViolations(parsed);
+  const analysis = liveAnalyzeParsedReport(parsed);
+  const violations = analysis.violations;
   const litScore = calculateLitigationScore(violations);
   const encryptedRawText = await encryptPII(c, rawText);
   const encryptedParsedData = await encryptPII(c, JSON.stringify(parsed));
@@ -3125,8 +3264,8 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
     reportId,
     user.id,
     mode === 'replaced' ? 'report_replaced' : 'report_analyzed',
-    `${mode === 'replaced' ? 'Updated' : 'Analyzed'} ${resolvedBureau} credit report: ${violations.length} violations`,
-    JSON.stringify({ score: litScore.score, bureau: resolvedBureau, pack: pack.status, mode })
+    `${mode === 'replaced' ? 'Updated' : 'Analyzed'} ${resolvedBureau} credit report: ${violations.length} grounded findings (${analysis.rawCount} raw, ${analysis.rejectedCount} rejected)`,
+    JSON.stringify({ score: litScore.score, bureau: resolvedBureau, pack: pack.status, mode, analysisMode: analysis.analysisMode, reasoningSummary: analysis.reasoningSummary })
   ).run();
 
   // Auto-fire attorney workflow when tri-bureau pack first becomes complete
@@ -3142,6 +3281,14 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
     } catch { /* ignore */ }
   }
 
+  await notifyClientAnalysisReady(c, {
+    orgId: user.org_id,
+    clientId,
+    client,
+    bureau: resolvedBureau,
+    analysis,
+  });
+
   return c.json({
     reportId,
     bureau: resolvedBureau,
@@ -3151,6 +3298,12 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
     totalCollections: parsed.collections.length,
     totalInquiries: parsed.inquiries.length,
     totalPublicRecords: parsed.publicRecords.length,
+    analysisMode: analysis.analysisMode,
+    reasoningSummary: analysis.reasoningSummary,
+    rawDetectorHits: analysis.rawCount,
+    rejectedCount: analysis.rejectedCount,
+    verifiedCount: analysis.verifiedCount,
+    needsReviewCount: analysis.needsReviewCount,
     violationsFound: violations.length,
     violations,
     litigationScore: litScore,
@@ -3615,8 +3768,9 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
     ).run();
   }
 
-  // 6. Detect violations and calculate score
-  const violations = detectViolations(parsed);
+  // 6. Detect violations and calculate score (live + fact-check)
+  const analysis = liveAnalyzeParsedReport(parsed);
+  const violations = analysis.violations;
   const litScore = calculateLitigationScore(violations);
   const reportId = generateId();
 
@@ -3676,8 +3830,8 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
     reportId,
     user.id,
     'report_analyzed',
-    `Autopilot processed ${onboardBureau} report for ${firstName} ${lastName}: ${violations.length} violations found`,
-    JSON.stringify({ score: litScore.score, bureau: onboardBureau, pack: onboardPack.status })
+    `Autopilot processed ${onboardBureau} report for ${firstName} ${lastName}: ${violations.length} grounded findings (${analysis.rawCount} raw, ${analysis.rejectedCount} rejected)`,
+    JSON.stringify({ score: litScore.score, bureau: onboardBureau, pack: onboardPack.status, analysisMode: analysis.analysisMode, reasoningSummary: analysis.reasoningSummary })
   ).run();
 
   // 10. Fundability snapshot for portal
@@ -3700,6 +3854,13 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
     console.warn('[onboard] fundability skipped', e);
   }
 
+  await notifyClientAnalysisReady(c, {
+    orgId: user.org_id,
+    clientId,
+    bureau: onboardBureau,
+    analysis,
+  });
+
   return c.json({
     success: true,
     clientId,
@@ -3713,6 +3874,12 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
     totalCollections: parsed.collections.length,
     totalInquiries: parsed.inquiries.length,
     totalPublicRecords: parsed.publicRecords.length,
+    analysisMode: analysis.analysisMode,
+    reasoningSummary: analysis.reasoningSummary,
+    rawDetectorHits: analysis.rawCount,
+    rejectedCount: analysis.rejectedCount,
+    verifiedCount: analysis.verifiedCount,
+    needsReviewCount: analysis.needsReviewCount,
     violationsFound: violations.length,
     violations,
     litigationScore: litScore,
@@ -3747,8 +3914,9 @@ app.post('/api/reports/mfsn-import', authMiddleware, async (c) => {
   for (const report of mappedReports) {
     const reportId = generateId();
     
-    // Detect violations for this specific bureau report
-    const violations = detectViolations(report);
+    // Live detect → fact-check for this bureau report
+    const analysis = liveAnalyzeParsedReport(report);
+    const violations = analysis.violations;
     const litScore = calculateLitigationScore(violations);
 
     // Save report with Field-Level AES-GCM Encryptions
@@ -3786,14 +3954,9 @@ app.post('/api/reports/mfsn-import', authMiddleware, async (c) => {
       console.warn('[MFSN] score column update skipped', e);
     }
 
-    // Save violations
-    for (const v of violations) {
-      await c.env.DB.prepare(
-        'INSERT INTO violations (id, org_id, report_id, client_id, category, subcategory, severity, statute, statute_text, legal_standard, evidence, explanation, case_law, account_name, account_number, dofd, falloff_date, days_overdue, statutory_damages_min, statutory_damages_max, actual_damages_est, punitive_damages_est, attorney_fees_est, total_damages_min, total_damages_max, defendant_type, defendant_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).bind(v.id, user.org_id, reportId, clientId, v.category, v.subcategory, v.severity, v.statute, v.statuteText, v.legalStandard, v.evidence, v.explanation, v.caseLaw, v.accountName || null, v.accountNumber || null, v.dofd || null, v.falloffDate || null, v.daysOverdue || null, v.statutoryDamagesMin, v.statutoryDamagesMax, v.actualDamagesEst, v.punitiveDamagesEst, v.attorneyFeesEst, v.totalDamagesMin, v.totalDamagesMax, v.defendantType, v.defendantName).run();
-    }
+    await saveViolationsForReport(c, user.org_id, reportId, clientId, violations);
 
-    await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, report_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, clientId, reportId, user.id, 'report_analyzed', `Imported MFSN report (${report.bureau}): ${violations.length} violations found`, JSON.stringify({ score: litScore.score })).run();
+    await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, report_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, clientId, reportId, user.id, 'report_analyzed', `Imported MFSN report (${report.bureau}): ${violations.length} grounded findings`, JSON.stringify({ score: litScore.score, analysisMode: analysis.analysisMode, reasoningSummary: analysis.reasoningSummary })).run();
 
     results.push({
       bureau: report.bureau,
@@ -4074,6 +4237,28 @@ app.post('/api/billing/mailing-callback', async (c) => {
     JSON.stringify({ trackingNumber: uspsTrackingNumber, responseDueDate: responseDueDateStr, sentDate: sentDateStr })
   ).run();
 
+  try {
+    const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ?').bind(doc.client_id).first() as any;
+    if (client) {
+      const email =
+        client.email && !String(client.email).includes('.noreply@') && !String(client.email).endsWith('@smartfcra.local')
+          ? client.email
+          : null;
+      await sendTemplatedClientMessage(c.env, {
+        templateId: 'dispute_mailed',
+        orgId: doc.org_id,
+        clientId: doc.client_id,
+        email,
+        notifyEmail: !!email && client.notify_email !== 0,
+        vars: {
+          clientName: `${client.first_name} ${client.last_name}`,
+          tracking: uspsTrackingNumber || 'pending',
+          portalUrl: `${portalBaseUrl(c.env)}/`,
+        },
+      });
+    }
+  } catch { /* soft */ }
+
   return c.json({ ok: true, responseDueDate: responseDueDateStr });
 });
 
@@ -4228,7 +4413,7 @@ app.get('/api/reports/:id', authMiddleware, async (c) => {
     rawPayload,
     rawPayloadType,
     sourceProvider: report.source_provider || (rawPayloadType === 'json' ? inferSourceProvider(rawPayload, report.file_name) : 'manual'),
-    violations: violations?.results || [],
+    violations: hydrateViolationRows(violations?.results || []),
     litigationScore: litScore,
     documents: documents?.results || [],
   });
@@ -4773,7 +4958,8 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
       totalPublicRecords += report.publicRecords.length;
       totalCollections += report.collections.length;
       
-      const bureauViolations = detectViolations(report);
+      const bureauAnalysis = liveAnalyzeParsedReport(report);
+      const bureauViolations = bureauAnalysis.violations;
       allViolations = [...allViolations, ...bureauViolations];
     }
 
@@ -4801,13 +4987,20 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
       totalCollections
     ).run();
 
-    for (const v of allViolations) {
-      await c.env.DB.prepare(
-        'INSERT INTO violations (id, org_id, report_id, client_id, category, subcategory, severity, statute, statute_text, legal_standard, evidence, explanation, case_law, account_name, account_number, dofd, falloff_date, days_overdue, statutory_damages_min, statutory_damages_max, actual_damages_est, punitive_damages_est, attorney_fees_est, total_damages_min, total_damages_max, defendant_type, defendant_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).bind(v.id, user.org_id, reportId, clientId, v.category, v.subcategory, v.severity, v.statute, v.statuteText, v.legalStandard, v.evidence, v.explanation, v.caseLaw, v.accountName || null, v.accountNumber || null, v.dofd || null, v.falloffDate || null, v.daysOverdue || null, v.statutoryDamagesMin, v.statutoryDamagesMax, v.actualDamagesEst, v.punitiveDamagesEst, v.attorneyFeesEst, v.totalDamagesMin, v.totalDamagesMax, v.defendantType, v.defendantName).run();
-    }
+    await saveViolationsForReport(c, user.org_id, reportId, clientId, allViolations);
 
-    await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, report_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, clientId, reportId, user.id, 'report_imported', `Real import from MyFreeScoreNow: ${allViolations.length} violations found across 3 bureaus`, JSON.stringify({ score: litScore.score })).run();
+    await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, report_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, clientId, reportId, user.id, 'report_imported', `Real import from MyFreeScoreNow: ${allViolations.length} grounded findings across 3 bureaus`, JSON.stringify({ score: litScore.score, analysisMode: 'live_rules_engine' })).run();
+
+    await notifyClientAnalysisReady(c, {
+      orgId: user.org_id,
+      clientId,
+      bureau: 'MyFreeScoreNow (3B)',
+      analysis: {
+        violations: allViolations,
+        rawCount: allViolations.length,
+        reasoningSummary: `Live MFSN 3B import: ${allViolations.length} fact-checked findings.`,
+      },
+    });
 
     return c.json({
       reportId,
@@ -5176,7 +5369,7 @@ app.get('/api/violations', authMiddleware, async (c) => {
   query += ' ORDER BY v.created_at DESC';
 
   const result = await c.env.DB.prepare(query).bind(...params).all();
-  return c.json({ violations: result?.results || [] });
+  return c.json({ violations: hydrateViolationRows(result?.results || []) });
 });
 
 app.put('/api/violations/:id', authMiddleware, async (c) => {
@@ -5282,6 +5475,25 @@ app.post('/api/documents/generate', authMiddleware, async (c) => {
   ).bind(docId, user.org_id, clientId, reportId || null, JSON.stringify(violationIds || []), docType, docDef.category, title, creditorName || null, creditorAddress || null, content, 'draft', user.id).run();
 
   await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, clientId, docId, user.id, 'document_generated', `Generated ${docDef.name}`).run();
+
+  try {
+    const email =
+      client.email && !String(client.email).includes('.noreply@') && !String(client.email).endsWith('@smartfcra.local')
+        ? client.email
+        : null;
+    await sendTemplatedClientMessage(c.env, {
+      templateId: 'dispute_letters_ready',
+      orgId: user.org_id,
+      clientId,
+      email,
+      notifyEmail: !!email && client.notify_email !== 0,
+      vars: {
+        clientName: `${client.first_name} ${client.last_name}`,
+        docCount: '1',
+        portalUrl: `${portalBaseUrl(c.env)}/`,
+      },
+    });
+  } catch { /* soft */ }
 
   return c.json({ id: docId, title, content, docType, category: docDef.category });
 });
@@ -5429,9 +5641,14 @@ app.post('/api/ai/mentors/:id/chat', authMiddleware, async (c) => {
     return c.json({ error: 'This mentor is staff-only' }, 403);
   }
 
+  const retrieved = await retrieveKnowledge(c.env, message, 5);
+  const ragBlock = retrieved.results.length
+    ? `\n\nRETRIEVED KNOWLEDGE (cite ONLY these — do not invent cases or statutes):\n${retrieved.results.map((r, i) => `[${i + 1}] ${r.title}${r.citation ? ` (${r.citation})` : ''}\n${r.body}`).join('\n\n')}\nRetrieval method: ${retrieved.method}. If the answer is not supported by retrieved knowledge or the curated mentor block, say you need attorney review.`
+    : `\n\nNo DB knowledge hits. Use only the curated mentor knowledge block. Never invent case names or holdings.`;
+
   try {
     const result = await generateAiText(c.env, [
-      { role: 'system', content: `${mentor.systemPrompt}\n\n${knowledgeBlock}` },
+      { role: 'system', content: `${mentor.systemPrompt}\n\n${knowledgeBlock}${ragBlock}` },
       { role: 'user', content: message },
     ]);
     await c.env.DB.prepare(
@@ -5439,7 +5656,7 @@ app.post('/api/ai/mentors/:id/chat', authMiddleware, async (c) => {
     ).bind(
       generateId(), user.org_id, user.id, 'ai_mentor_chat',
       `Mentor ${mentor.id} via ${result.provider}`,
-      JSON.stringify({ mentorId: mentor.id, provider: result.provider, model: result.model })
+      JSON.stringify({ mentorId: mentor.id, provider: result.provider, model: result.model, kbMethod: retrieved.method, kbHits: retrieved.results.length })
     ).run();
     return c.json({
       reply: result.text,
@@ -5447,6 +5664,7 @@ app.post('/api/ai/mentors/:id/chat', authMiddleware, async (c) => {
       provider: result.provider,
       model: result.model,
       knowledgeUsed: true,
+      knowledge: { method: retrieved.method, results: retrieved.results.map((r) => ({ id: r.id, title: r.title, citation: r.citation, score: r.score })) },
     });
   } catch (err: any) {
     return c.json({ error: err.message }, 502);
@@ -5485,7 +5703,21 @@ app.post('/api/ai/chat', authMiddleware, async (c) => {
 
 app.get('/api/ai/knowledge/search', authMiddleware, async (c) => {
   const q = c.req.query('q') || '';
-  return c.json({ query: q, results: retrieveCaseLawKnowledge(q, 8), meta: KNOWLEDGE_CORPUS_META });
+  if (!q.trim()) return c.json({ query: q, results: [], method: 'empty', meta: KNOWLEDGE_CORPUS_META });
+  const dbHit = await retrieveKnowledge(c.env, q, 8);
+  // Merge curated in-memory corpus as secondary (never invent beyond either)
+  const memory = retrieveCaseLawKnowledge(q, 4).map((r: any) => ({
+    ...r,
+    method: 'memory_corpus',
+    score: r.score || 0.5,
+  }));
+  return c.json({
+    query: q,
+    results: dbHit.results.length ? dbHit.results : memory,
+    method: dbHit.method,
+    memoryFallback: !dbHit.results.length,
+    meta: { ...KNOWLEDGE_CORPUS_META, seededHint: dbHit.seededHint || null },
+  });
 });
 
 app.post('/api/ai/media/generate', authMiddleware, async (c) => {
@@ -5713,6 +5945,28 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
 
   await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, doc.client_id, id, user.id, 'document_mailed', `Mailed "${doc.title}" to ${recipientName || doc.recipient_name || 'recipient'}`).run();
 
+  try {
+    const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(doc.client_id, user.org_id).first() as any;
+    if (client) {
+      const email =
+        client.email && !String(client.email).includes('.noreply@') && !String(client.email).endsWith('@smartfcra.local')
+          ? client.email
+          : null;
+      await sendTemplatedClientMessage(c.env, {
+        templateId: 'dispute_mailed',
+        orgId: user.org_id,
+        clientId: doc.client_id,
+        email,
+        notifyEmail: !!email && client.notify_email !== 0,
+        vars: {
+          clientName: `${client.first_name} ${client.last_name}`,
+          tracking: mailingData?.id ? String(mailingData.id) : 'pending',
+          portalUrl: `${portalBaseUrl(c.env)}/`,
+        },
+      });
+    }
+  } catch { /* soft */ }
+
   return c.json({ success: true, mailingId: mailingData.id, message: `Document mailed successfully` });
 });
 
@@ -5779,13 +6033,46 @@ const adminGateMiddleware = async (c: any, next: any) => {
   return next();
 };
 
+app.post('/api/admin/knowledge/seed', authMiddleware, adminGateMiddleware, async (c) => {
+  const user = c.get('user');
+  const kb = await seedKnowledgeBase(c.env);
+  for (const t of EMAIL_TEMPLATES) {
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO email_template_registry (id, name, description, event_type, enabled, updated_at)
+         VALUES (?, ?, ?, ?, 1, datetime('now'))
+         ON CONFLICT(id) DO UPDATE SET name = excluded.name, description = excluded.description, event_type = excluded.event_type, updated_at = datetime('now')`
+      ).bind(t.id, t.name, t.description, t.eventType).run();
+    } catch (e) {
+      console.warn('[kb] template registry upsert', e);
+    }
+  }
+  await c.env.DB.prepare(
+    'INSERT INTO activity_log (id, org_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(
+    generateId(), user.org_id, user.id, 'knowledge_seeded',
+    `Seeded knowledge base: ${kb.upserted} chunks (${kb.embedded} embedded)`,
+    JSON.stringify(kb)
+  ).run();
+  return c.json({ ok: true, knowledge: kb, templates: listEmailTemplates() });
+});
+
+app.get('/api/admin/email-templates', authMiddleware, adminGateMiddleware, async (c) => {
+  let registry: any[] = [];
+  try {
+    const rows = await c.env.DB.prepare('SELECT * FROM email_template_registry ORDER BY id').all();
+    registry = rows?.results || [];
+  } catch { /* migration pending */ }
+  return c.json({ templates: listEmailTemplates(), registry });
+});
+
 // 0. POST /api/admin/backup/trigger — snapshot D1 tables to R2 vault
 const D1_BACKUP_TABLES = [
   'organizations', 'users', 'clients', 'credit_reports', 'violations', 'documents',
   'sessions', 'activity_log', 'portal_messages', 'portal_uploads', 'portal_alerts',
   'education_progress', 'tutor_memory', 'fundability_snapshots', 'tradeline_orders',
   'underwriting_snapshots', 'security_audit_log', 'privacy_requests', 'roadmap_progress',
-  'client_journey_state', 'daily_motivation_log',
+  'client_journey_state', 'daily_motivation_log', 'knowledge_chunks', 'email_template_registry',
 ];
 
 app.post('/api/admin/journey/dispatch-daily', authMiddleware, adminGateMiddleware, async (c) => {
@@ -5868,7 +6155,7 @@ app.post('/api/admin/demo/load-case', authMiddleware, adminGateMiddleware, async
     return c.json({ error: 'Demo sample payload could not be mapped' }, 500);
   }
 
-  const demoViolationCount = bureauReports.reduce((s, r) => s + detectViolations(r).length, 0);
+  const demoViolationCount = bureauReports.reduce((s, r) => s + liveAnalyzeParsedReport(r).violations.length, 0);
 
   const batch = await importBureauReportsBatch(c, {
     generateId,

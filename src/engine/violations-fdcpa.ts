@@ -104,10 +104,14 @@ export function detectFDCPAViolations(
   // RULE 3: REPORTING DISPUTED DEBT WITHOUT DISPUTE INDICATOR
   // ===============================================================
   collections.forEach(account => {
-    // If the account was previously marked disputed but has no dispute indicators
-    const remarks = (account.remarks || '').toLowerCase();
-    const isDisputedInSystem = account.isCollection; // Placeholder check
-    const hasDisputeIndicator = remarks.includes('dispute') || remarks.includes('customer meets');
+    // Only fire when the report itself shows a dispute — never invent dispute status
+    const remarks = String((account as any).remarks || account.comments || '').toLowerCase();
+    const isDisputedInSystem = !!(account.disputeFlag || remarks.includes('dispute') || remarks.includes('disputed'));
+    const hasDisputeIndicator =
+      remarks.includes('dispute') ||
+      remarks.includes('customer meets') ||
+      remarks.includes('compliance condition') ||
+      remarks.includes('xb');
 
     if (isDisputedInSystem && !hasDisputeIndicator && account.pastDueAmount) {
       const damages = calculateViolationDamages('15 U.S.C. § 1692e(8)', 'high', state, parseFloat(account.currentBalance || '0'));

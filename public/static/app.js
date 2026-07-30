@@ -1527,6 +1527,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
                     <div class="flex items-center gap-2 mb-1">
                       ${checkboxHtml}
                       <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-${sevColor(v.severity)}/20 text-${sevColor(v.severity)}">${v.severity}</span>
+                      ${(v.factCheckStatus || v.fact_check_status) ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${(v.factCheckStatus||v.fact_check_status)==='verified'?'bg-emerald-900/40 text-emerald-400':(v.factCheckStatus||v.fact_check_status)==='needs_review'?'bg-amber-900/40 text-amber-400':'bg-gray-800 text-gray-400'}">${v.factCheckStatus||v.fact_check_status}${v.confidence!=null?` · ${v.confidence}%`:''}</span>` : ''}
                       <span class="text-xs text-gray-400">${v.category} &bull; ${v.statute}</span>
                       <i class="fas fa-chevron-down text-[10px] text-gray-500 group-open:rotate-180 transition-transform"></i>
                     </div>
@@ -1539,6 +1540,12 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
                 </div>
               </summary>
               <div class="mt-2 p-3 space-y-2 text-sm border-t border-gray-800/60 bg-gray-900/10 rounded-b-lg fade-in">
+                ${(() => {
+                  let steps = v.reasoning;
+                  if (!steps && v.reasoning_json) { try { steps = JSON.parse(v.reasoning_json); } catch(e) { steps = null; } }
+                  if (!Array.isArray(steps) || !steps.length) return '';
+                  return `<div class="bg-cyan-950/30 border border-cyan-900/40 rounded-lg p-3"><div class="text-xs font-semibold text-cyan-300 mb-2"><i class="fas fa-brain mr-1"></i>REASONING (live fact-check)</div><ol class="space-y-2 list-decimal list-inside">${steps.map(s => `<li class="text-xs text-gray-300"><span class="text-cyan-400/80">${escapeHtml(s.thought||'')}</span><div class="ml-4 mt-0.5 text-gray-500">${escapeHtml(s.fact||'')} <span class="text-[10px] uppercase text-gray-600">${escapeHtml(s.source||'')}</span></div></li>`).join('')}</ol></div>`;
+                })()}
                 <div class="bg-gray-800/20 rounded-lg p-3"><div class="text-xs font-semibold text-blue-400 mb-1">STATUTE</div><div class="text-xs text-gray-300">${v.statute_text||v.statuteText||''}</div></div>
                 <div class="bg-gray-800/20 rounded-lg p-3"><div class="text-xs font-semibold text-red-400 mb-1">EVIDENCE</div><div class="text-xs text-gray-300">${v.evidence||''}</div></div>
                 <div class="bg-gray-800/20 rounded-lg p-3"><div class="text-xs font-semibold text-purple-400 mb-1">LEGAL STANDARD</div><div class="text-xs text-gray-300">${v.legal_standard||v.legalStandard||''}</div></div>

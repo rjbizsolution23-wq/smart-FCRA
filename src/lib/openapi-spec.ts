@@ -44,8 +44,9 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
   // Reports
   { method: 'get', path: '/api/reports', summary: 'List credit reports', tags: ['Reports'], security: true },
   { method: 'get', path: '/api/reports/{id}', summary: 'Report detail with violations', tags: ['Reports'], security: true },
-  { method: 'post', path: '/api/reports/upload', summary: 'Upload + analyze credit report text', tags: ['Reports'], security: true,
-    requestBody: { clientId: 'string', bureau: 'string', rawText: 'string', fileName: 'string' } },
+  { method: 'post', path: '/api/reports/upload', summary: 'Upload + live fact-checked analysis of credit report text', tags: ['Reports'], security: true,
+    requestBody: { clientId: 'string', bureau: 'string', rawText: 'string', fileName: 'string' },
+    description: 'Runs parse → rules engine → fact-check. Returns reasoningSummary, verifiedCount, rejectedCount. No mock violations.' },
   { method: 'post', path: '/api/reports/onboard', summary: 'Staff autopilot onboarding (parse + client match)', tags: ['Reports'], security: true },
   { method: 'post', path: '/api/reports/mfsn-import', summary: 'Import MyFreeScoreNow JSON payload', tags: ['Reports'], security: true },
   { method: 'get', path: '/api/reports/{id}/comparison', summary: 'Report delta comparison vs prior pull', tags: ['Reports'], security: true },
@@ -89,7 +90,10 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
   { method: 'post', path: '/api/billing/webhook', summary: 'Stripe webhook (signed)', tags: ['Billing'] },
   // AI
   { method: 'get', path: '/api/ai/mentors', summary: 'List AI mentors', tags: ['AI'], security: true },
-  { method: 'post', path: '/api/ai/mentors/{id}/chat', summary: 'Chat with mentor', tags: ['AI'], security: true },
+  { method: 'post', path: '/api/ai/mentors/{id}/chat', summary: 'Chat with mentor (RAG-constrained to retrieved KB)', tags: ['AI'], security: true },
+  { method: 'get', path: '/api/ai/knowledge/search', summary: 'Search knowledge base (embeddings + keyword)', tags: ['AI'], security: true },
+  { method: 'post', path: '/api/admin/knowledge/seed', summary: 'Seed case-law/statute chunks + email template registry', tags: ['Admin'], security: true },
+  { method: 'get', path: '/api/admin/email-templates', summary: 'List lifecycle email templates', tags: ['Admin'], security: true },
   // Search & admin
   { method: 'get', path: '/api/search', summary: 'Global search', tags: ['Search'], security: true },
   { method: 'get', path: '/api/admin/db-stats', summary: 'Platform DB statistics', tags: ['Admin'], security: true },

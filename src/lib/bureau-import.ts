@@ -1,16 +1,22 @@
 /**
  * Shared per-bureau credit report import pipeline (MFSN, SmartCredit, demo).
+ * Always runs live detect → fact-check (no mock violation invention).
  */
 import type { CreditReportData } from '../engine/violations';
 import { detectViolations, calculateLitigationScore } from '../engine/violations';
+import { analyzeReportLive } from '../engine/violation-factcheck';
 import { normalizeBureau, type BureauName } from '../engine/bureau-utils';
 
 export type BureauImportResult = {
   reportId: string;
   bureau: string;
   violationsFound: number;
+  rawDetectorHits: number;
+  rejectedCount: number;
+  reasoningSummary: string;
   litigationScore: ReturnType<typeof calculateLitigationScore>;
   mode: 'created' | 'replaced';
+  analysisMode: 'live_rules_engine';
 };
 
 export async function importBureauReportsBatch(
@@ -54,7 +60,8 @@ export async function importBureauReportsBatch(
 
   for (const report of bureauReports) {
     const bureau = normalizeBureau(report.bureau);
-    const violations = detectViolations(report);
+    const analysis = analyzeReportLive(report, detectViolations);
+    const violations = analysis.violations;
     const litScore = calculateLitigationScore(violations);
     totalViolations += violations.length;
 
@@ -115,7 +122,17 @@ export async function importBureauReportsBatch(
       sourcePayloadType,
     });
 
-    results.push({ reportId, bureau, violationsFound: violations.length, litigationScore: litScore, mode });
+    results.push({
+      reportId,
+      bureau,
+      violationsFound: violations.length,
+      rawDetectorHits: analysis.rawCount,
+      rejectedCount: analysis.rejectedCount,
+      reasoningSummary: analysis.reasoningSummary,
+      litigationScore: litScore,
+      mode,
+      analysisMode: 'live_rules_engine',
+    });
   }
 
   const bureauPack = await deps.refreshBureauPackStatus(c, clientId, user.org_id);
