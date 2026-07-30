@@ -49,6 +49,14 @@ export type DailyMotivation = {
   phase: JourneyPhase;
   phaseLabel: string;
   encouragement: string;
+  /** Personalized current-status block for the morning ritual */
+  statusSummary: string;
+  /** Daily motivational quote (rotates by date) */
+  quote: string;
+  quoteAttribution: string;
+  /** Full multi-channel delivery body (status + quote + focus) */
+  ritualBody: string;
+  sendDate: string;
 };
 
 export type JourneyPlan = {
@@ -243,6 +251,8 @@ const OPENERS_EN = [
   'Every accurate dispute and paid-down balance moves the needle.',
   'Proud of you for staying on the path. Let’s keep the momentum.',
   'Your future approvals are built by the choices you make this week.',
+  'We are thinking about your progress this morning — you are not alone.',
+  'Today is another chance to program winning habits into your day.',
 ];
 
 const OPENERS_ES = [
@@ -252,6 +262,48 @@ const OPENERS_ES = [
   'Cada disputa precisa y cada saldo bajado mueve la aguja.',
   'Orgullosos de que sigas en el camino. Mantengamos el impulso.',
   'Tus futuras aprobaciones se construyen con las decisiones de esta semana.',
+  'Esta mañana pensamos en tu progreso — no estás solo/a.',
+  'Hoy es otra oportunidad de programar hábitos ganadores.',
+];
+
+const QUOTES_EN: { quote: string; by: string }[] = [
+  { quote: 'We are what we repeatedly do. Excellence, then, is not an act, but a habit.', by: 'Aristotle' },
+  { quote: 'The secret of getting ahead is getting started.', by: 'Mark Twain' },
+  { quote: 'It does not matter how slowly you go as long as you do not stop.', by: 'Confucius' },
+  { quote: 'Discipline is the bridge between goals and accomplishment.', by: 'Jim Rohn' },
+  { quote: 'Small daily improvements are the key to staggering long-term results.', by: 'Robin Sharma' },
+  { quote: 'Your future is created by what you do today, not tomorrow.', by: 'Robert Kiyosaki' },
+  { quote: 'Success is the sum of small efforts repeated day in and day out.', by: 'Robert Collier' },
+  { quote: 'Believe you can and you’re halfway there.', by: 'Theodore Roosevelt' },
+  { quote: 'The only way to do great work is to love what you do — and stay consistent.', by: 'Steve Jobs (adapted)' },
+  { quote: 'Don’t watch the clock; do what it does. Keep going.', by: 'Sam Levenson' },
+  { quote: 'A year from now you may wish you had started today.', by: 'Karen Lamb' },
+  { quote: 'Motivation gets you going. Habit gets you there.', by: 'Zig Ziglar' },
+  { quote: 'What you do every day matters more than what you do once in a while.', by: 'Gretchen Rubin' },
+  { quote: 'Courage doesn’t always roar. Sometimes it is the quiet voice saying I’ll try again tomorrow.', by: 'Mary Anne Radmacher' },
+  { quote: 'Progress, not perfection.', by: 'Anonymous' },
+  { quote: 'You don’t have to be extreme — just consistent.', by: 'Anonymous' },
+  { quote: 'Plant the seed today. Water it every morning. Harvest comes later.', by: 'RJ Business Solutions' },
+  { quote: 'Your credit story is still being written — make today’s paragraph count.', by: 'Smart FCRA' },
+  { quote: 'Show up for your future self. They are counting on this morning.', by: 'Smart FCRA' },
+  { quote: 'One focused action beats a hundred worried thoughts.', by: 'Smart FCRA' },
+  { quote: 'We believe in your growth — even on the quiet days.', by: 'Your credit team' },
+  { quote: 'Stay on the path. We are walking it with you.', by: 'Your credit team' },
+];
+
+const QUOTES_ES: { quote: string; by: string }[] = [
+  { quote: 'Somos lo que hacemos repetidamente. La excelencia, entonces, no es un acto, sino un hábito.', by: 'Aristóteles' },
+  { quote: 'El secreto de avanzar es empezar.', by: 'Mark Twain' },
+  { quote: 'No importa qué tan lento vayas mientras no te detengas.', by: 'Confucio' },
+  { quote: 'La disciplina es el puente entre metas y logros.', by: 'Jim Rohn' },
+  { quote: 'Mejoras diarias pequeñas son la clave de resultados enormes.', by: 'Robin Sharma' },
+  { quote: 'Tu futuro se crea con lo que haces hoy, no mañana.', by: 'Robert Kiyosaki' },
+  { quote: 'El éxito es la suma de pequeños esfuerzos repetidos cada día.', by: 'Robert Collier' },
+  { quote: 'Progreso, no perfección.', by: 'Anónimo' },
+  { quote: 'Planta la semilla hoy. Riégala cada mañana. La cosecha llega después.', by: 'RJ Business Solutions' },
+  { quote: 'Tu historia crediticia aún se escribe — que el párrafo de hoy cuente.', by: 'Smart FCRA' },
+  { quote: 'Preséntate por tu yo del futuro. Cuenta contigo esta mañana.', by: 'Smart FCRA' },
+  { quote: 'Creemos en tu crecimiento — incluso en los días silenciosos.', by: 'Tu equipo de crédito' },
 ];
 
 function dayIndex(dateStr: string): number {
@@ -261,16 +313,62 @@ function dayIndex(dateStr: string): number {
   return h;
 }
 
+function buildStatusSummary(input: JourneyInput, phase: JourneyPhase, lang: 'en' | 'es'): string {
+  const meta = PHASE_META[phase];
+  const avg = avgScores(input);
+  const goal = (input.focusGoal || 'mortgage').toLowerCase();
+  const goalLabel =
+    lang === 'es'
+      ? goal.includes('auto')
+        ? 'auto'
+        : goal.includes('debt')
+          ? 'salida de deudas'
+          : goal.includes('student')
+            ? 'estudios'
+            : 'hipoteca / vivienda'
+      : goal.includes('auto')
+        ? 'auto loan'
+        : goal.includes('debt')
+          ? 'debt escape'
+          : goal.includes('student')
+            ? 'student financing'
+            : 'mortgage / home';
+
+  const lines: string[] = [];
+  if (lang === 'es') {
+    lines.push(`Etapa actual: ${meta.label}`);
+    lines.push(`Meta: ${goalLabel}`);
+    if (avg != null) lines.push(`Promedio de burós: ~${avg}`);
+    if (input.fundabilityOverall != null) lines.push(`Fundabilidad: ${input.fundabilityOverall}/100`);
+    if ((input.violationCount || 0) > 0) lines.push(`Banderas de exactitud en revisión: ${input.violationCount}`);
+    if ((input.streakDays || 0) > 0) lines.push(`Racha de asistencia: ${input.streakDays} día(s)`);
+    if (input.revolvingUtilPct != null) lines.push(`Utilización revolvente: ${input.revolvingUtilPct}%`);
+  } else {
+    lines.push(`Current stage: ${meta.label}`);
+    lines.push(`Focus goal: ${goalLabel}`);
+    if (avg != null) lines.push(`Average bureau score: ~${avg}`);
+    if (input.fundabilityOverall != null) lines.push(`Fundability: ${input.fundabilityOverall}/100`);
+    if ((input.violationCount || 0) > 0) lines.push(`Accuracy flags in review: ${input.violationCount}`);
+    if ((input.streakDays || 0) > 0) lines.push(`Check-in streak: ${input.streakDays} day(s)`);
+    if (input.revolvingUtilPct != null) lines.push(`Revolving utilization: ${input.revolvingUtilPct}%`);
+  }
+  return lines.join('\n');
+}
+
 export function buildDailyMotivation(input: JourneyInput, phase: JourneyPhase, suggestions: JourneySuggestion[]): DailyMotivation {
   const date = input.sendDate || todayUtc();
   const lang = (input.preferredLanguage || 'en').toLowerCase().startsWith('es') ? 'es' : 'en';
   const name = input.firstName || (lang === 'es' ? 'amigo/a' : 'friend');
   const openers = lang === 'es' ? OPENERS_ES : OPENERS_EN;
-  const opener = openers[dayIndex(date) % openers.length];
+  const quotes = lang === 'es' ? QUOTES_ES : QUOTES_EN;
+  const idx = dayIndex(date);
+  const opener = openers[idx % openers.length];
+  const quoteRow = quotes[idx % quotes.length];
   const meta = PHASE_META[phase];
   const focus = suggestions[0];
   const avg = avgScores(input);
   const streak = input.streakDays || 0;
+  const statusSummary = buildStatusSummary(input, phase, lang);
 
   const streakLine =
     streak >= 3
@@ -303,8 +401,13 @@ export function buildDailyMotivation(input: JourneyInput, phase: JourneyPhase, s
 
   const encouragement =
     lang === 'es'
-      ? 'Este portal es tu centro de mando. Vuelve cada día — tu equipo y tus herramientas están aquí.'
-      : 'This portal is your command center. Come back every day — your team and tools are right here.';
+      ? 'Cada mañana pensamos en tu progreso y tu crecimiento. Este portal es tu centro de mando — vuelve hoy y da un paso.'
+      : 'Every morning we are thinking about your progress and your growth. This portal is your command center — come back today and take one step.';
+
+  const ritualBody =
+    lang === 'es'
+      ? `${body}\n\n———\nTU ESTADO HOY\n${statusSummary}\n\n———\nCITA DEL DÍA\n“${quoteRow.quote}”\n— ${quoteRow.by}\n\n→ Enfoque de hoy: ${focusAction}\n\n${encouragement}`
+      : `${body}\n\n———\nYOUR STATUS TODAY\n${statusSummary}\n\n———\nTODAY’S MOTIVATIONAL QUOTE\n“${quoteRow.quote}”\n— ${quoteRow.by}\n\n→ Today’s focus: ${focusAction}\n\n${encouragement}`;
 
   return {
     title: lang === 'es' ? `Buenos días, ${name}` : `Good morning, ${name}`,
@@ -316,6 +419,11 @@ export function buildDailyMotivation(input: JourneyInput, phase: JourneyPhase, s
     phase,
     phaseLabel: meta.label,
     encouragement,
+    statusSummary,
+    quote: quoteRow.quote,
+    quoteAttribution: quoteRow.by,
+    ritualBody,
+    sendDate: date,
   };
 }
 

@@ -2331,7 +2331,7 @@ app.post('/api/cron/daily-motivation', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const stats = await dispatchDailyMotivationBatch(c.env, {
     orgId: body.orgId,
-    limit: body.limit || 300,
+    limit: body.limit || 2000,
   });
   await writeSecurityAudit(c.env, {
     orgId: body.orgId || null,
@@ -2340,7 +2340,12 @@ app.post('/api/cron/daily-motivation', async (c) => {
     resourceType: 'journey',
     detail: stats,
   }).catch(() => null);
-  return c.json({ ok: true, ...stats, ranAt: new Date().toISOString() });
+  return c.json({
+    ok: true,
+    ...stats,
+    scheduleNote: 'Intended for daily morning dispatch (~7:00 AM US Central / 13:00 UTC via GitHub Actions)',
+    ranAt: new Date().toISOString(),
+  });
 });
 
 app.get('/api/client-portal/tradelines', authMiddleware, async (c) => {
@@ -5787,9 +5792,9 @@ app.post('/api/admin/journey/dispatch-daily', authMiddleware, adminGateMiddlewar
   const body = await c.req.json().catch(() => ({}));
   const stats = await dispatchDailyMotivationBatch(c.env, {
     orgId: body.orgId || c.get('user')?.org_id,
-    limit: body.limit || 200,
+    limit: body.limit || 2000,
   });
-  return c.json({ ok: true, ...stats });
+  return c.json({ ok: true, ...stats, scheduleNote: 'Morning ritual ~7:00 AM US Central (13:00 UTC)' });
 });
 
 app.post('/api/admin/backup/trigger', authMiddleware, adminGateMiddleware, async (c) => {

@@ -7204,9 +7204,10 @@ async function pgAdminConsole(el) {
               <a href="/api/docs" target="_blank" rel="noopener" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2 rounded-lg"><i class="fas fa-external-link-alt"></i>Open API Docs</a>
             </div>
             <div class="glass rounded-xl border border-emerald-800/40 p-5 mt-4">
-              <h3 class="text-sm font-bold text-white mb-2"><i class="fas fa-sun text-emerald-400 mr-1.5"></i>Daily Client Motivation</h3>
-              <p class="text-xs text-gray-400 mb-4">Send personalized wake-up encouragement to opted-in clients (in-app + email/SMS per prefs). GitHub Actions also runs this daily.</p>
-              <button id="btn-admin-journey-dispatch" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg"><i class="fas fa-paper-plane mr-1"></i>Dispatch Today's Messages</button>
+              <h3 class="text-sm font-bold text-white mb-2"><i class="fas fa-sun text-emerald-400 mr-1.5"></i>Daily Morning Motivation Ritual</h3>
+              <p class="text-xs text-gray-400 mb-2">Every client gets a personalized morning message — current status + motivational quote — at <strong class="text-white">7:00 AM US Central</strong> (13:00 UTC) via GitHub Actions. Delivered in-app, Messages inbox, and email/SMS per prefs.</p>
+              <p class="text-[11px] text-gray-500 mb-4">Requires <code class="text-emerald-300">JOURNEY_CRON_SECRET</code> on Cloudflare + GitHub. Manual run below sends today’s ritual now.</p>
+              <button id="btn-admin-journey-dispatch" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg"><i class="fas fa-paper-plane mr-1"></i>Send This Morning's Ritual Now</button>
               <pre id="admin-journey-result" class="mt-3 text-[10px] text-gray-500 font-mono whitespace-pre-wrap hidden"></pre>
             </div>`;
         const backupBtn = document.getElementById('btn-admin-backup');
@@ -8030,6 +8031,7 @@ async function pgAdminConsole(el) {
     const streak = st.streakDays || 0;
     const compact = !!opts.compact;
     const bodyLines = String(today.body || '').split('\n').filter(Boolean);
+    const statusLines = String(today.statusSummary || '').split('\n').filter(Boolean);
     return `
       <div class="relative overflow-hidden rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-slate-950 via-cyan-950/30 to-slate-950 p-5 shadow-xl ${compact ? '' : 'md:p-6'}">
         <div class="absolute -top-16 -right-10 w-48 h-48 bg-cyan-400/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -8037,9 +8039,10 @@ async function pgAdminConsole(el) {
         <div class="relative flex flex-col ${compact ? 'gap-3' : 'md:flex-row md:items-start md:justify-between gap-4'}">
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-2 mb-2">
-              <span class="text-[10px] uppercase tracking-[0.2em] font-bold text-cyan-300/90">${escapeHtml(t('journey.title'))}</span>
+              <span class="text-[10px] uppercase tracking-[0.2em] font-bold text-cyan-300/90">${escapeHtml(t('journey.morningRitual') || 'Morning ritual')}</span>
               <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-gray-300">${escapeHtml(j.phaseLabel || today.phaseLabel || 'Journey')}</span>
               ${streak ? `<span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-emerald-300">${escapeHtml(t('journey.streak', { count: streak }))}</span>` : ''}
+              <span class="text-[10px] text-slate-500 font-mono">Daily · 7am CT</span>
             </div>
             <h2 class="text-xl md:text-2xl font-bold text-white tracking-tight">${escapeHtml(today.title || t('journey.todaysFocus'))}</h2>
             <p class="mt-2 text-sm text-slate-300 leading-relaxed whitespace-pre-line max-w-2xl">${escapeHtml(bodyLines.slice(0, compact ? 2 : 4).join('\n'))}</p>
@@ -8052,13 +8055,24 @@ async function pgAdminConsole(el) {
             ${compact ? `<button type="button" onclick="window._nav('client-journey')" class="bg-white/5 hover:bg-white/10 border border-white/15 text-white text-xs font-bold px-4 py-2.5 rounded-xl">${escapeHtml(t('journey.openJourney'))}</button>` : ''}
           </div>
         </div>
+        ${today.quote ? `
+        <blockquote class="relative mt-4 rounded-xl border border-violet-400/25 bg-violet-500/10 px-4 py-3">
+          <div class="text-[10px] uppercase tracking-wider font-bold text-violet-300 mb-1">${escapeHtml(t('journey.dailyQuote') || "Today's quote")}</div>
+          <p class="text-sm text-violet-50 leading-relaxed">“${escapeHtml(today.quote)}”</p>
+          <footer class="text-[11px] text-violet-200/70 mt-1.5">— ${escapeHtml(today.quoteAttribution || '')}</footer>
+        </blockquote>` : ''}
         <div class="relative mt-4 grid ${compact ? 'grid-cols-1' : 'md:grid-cols-2'} gap-3">
           <div class="rounded-xl border border-amber-400/25 bg-amber-500/10 p-3">
             <div class="text-[10px] uppercase tracking-wider font-bold text-amber-300 mb-1">${escapeHtml(t('journey.todaysFocus'))}</div>
             <div class="text-sm font-semibold text-white">${escapeHtml(today.focusAction || 'Take one small step today')}</div>
             <button type="button" onclick="window._nav('${escapeHtml(today.focusCta || 'client-fundability')}')" class="mt-2 text-[11px] font-bold text-amber-200 hover:text-white underline underline-offset-2">Go →</button>
           </div>
-          ${!compact && typeof j.progressPct === 'number' ? `
+          ${statusLines.length ? `
+          <div class="rounded-xl border border-white/10 bg-black/20 p-3">
+            <div class="text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-2">${escapeHtml(t('journey.yourStatus') || 'Your status today')}</div>
+            <ul class="space-y-1">${statusLines.slice(0, compact ? 3 : 6).map(line => `<li class="text-[11px] text-slate-300 font-mono">• ${escapeHtml(line)}</li>`).join('')}</ul>
+            ${!compact && typeof j.progressPct === 'number' ? `<div class="mt-3 h-2 rounded-full bg-slate-900 border border-slate-700 overflow-hidden"><div class="h-full bg-gradient-to-r from-cyan-500 to-emerald-400" style="width:${Math.min(100, j.progressPct)}%"></div></div>` : ''}
+          </div>` : (!compact && typeof j.progressPct === 'number' ? `
           <div class="rounded-xl border border-white/10 bg-black/20 p-3">
             <div class="flex items-center justify-between text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-2">
               <span>Journey progress</span><span class="text-white font-mono">${j.progressPct}%</span>
@@ -8066,7 +8080,7 @@ async function pgAdminConsole(el) {
             <div class="h-2 rounded-full bg-slate-900 border border-slate-700 overflow-hidden">
               <div class="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-700" style="width:${Math.min(100, j.progressPct)}%"></div>
             </div>
-          </div>` : ''}
+          </div>` : '')}
         </div>
         ${suggestions.length ? `
         <div class="relative mt-4">
@@ -8802,7 +8816,7 @@ async function pgAdminConsole(el) {
               <option value="rebuild" ${journeyState.focusGoal === 'rebuild' ? 'selected' : ''}>General rebuild</option>
             </select>
           </label>
-          <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="j-motivation" ${journeyState.motivationOptIn !== false ? 'checked' : ''}> ${escapeHtml(t('journey.motivationOptIn'))}</label>
+          <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="j-motivation" ${journeyState.motivationOptIn !== false ? 'checked' : ''}> Daily morning ritual (status + motivational quote ~7am CT)</label>
           <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="j-optin" checked> Keep me on the personalized journey experience</label>
           <button class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-2 rounded-lg">Save journey preferences</button>
         </form>

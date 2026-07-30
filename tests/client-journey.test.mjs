@@ -76,6 +76,10 @@ assert(plan.phase === 'discover' || plan.phase === 'dispute' || plan.phase === '
 assert(plan.progressPct >= 0 && plan.progressPct <= 100, 'progress pct in range');
 assert(plan.today.title.toLowerCase().includes('jordan'), 'motivation greets by name');
 assert(plan.today.body.length > 40, 'motivation body present');
+assert(plan.today.quote && plan.today.quote.length > 10, 'daily quote present');
+assert(plan.today.quoteAttribution, 'quote attribution present');
+assert(plan.today.statusSummary.includes('Dispute') || plan.today.statusSummary.includes('stage') || plan.today.statusSummary.length > 10, 'status summary present');
+assert(plan.today.ritualBody.includes(plan.today.quote), 'ritual body includes quote');
 assert(plan.suggestions.length >= 1, 'has suggestions');
 assert(plan.milestones.length >= 4, 'has milestones');
 

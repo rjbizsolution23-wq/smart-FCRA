@@ -1,36 +1,48 @@
-name: Smart FCRA v2 — Daily Client Motivation
+name: Smart FCRA v2 — Daily Morning Motivation Ritual
+
+# Sends every client a morning status + motivational quote at the same time each day.
+# Schedule: 13:00 UTC ≈ 7:00 AM US Central (CST) / 8:00 AM Central (CDT).
+# Requires GitHub secrets: JOURNEY_CRON_SECRET (or MAILING_WEBHOOK_SECRET), optional APP_BASE_URL.
 
 on:
   schedule:
-    # Every day 13:00 UTC (~8am US Eastern / 7am Central)
+    # Fixed daily morning slot — same time every day
     - cron: '0 13 * * *'
   workflow_dispatch:
     inputs:
       limit:
-        description: 'Max clients to process'
+        description: 'Max clients to process (default all up to 2000)'
         required: false
-        default: '300'
+        default: '2000'
+      force_note:
+        description: 'Manual run note (optional)'
+        required: false
+        default: 'manual morning ritual'
 
 jobs:
-  dispatch-motivation:
+  morning-ritual:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - name: Send daily motivational wake-ups
+      - name: Dispatch morning motivation to every opted-in client
         env:
           APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
           JOURNEY_CRON_SECRET: ${{ secrets.JOURNEY_CRON_SECRET }}
           MAILING_WEBHOOK_SECRET: ${{ secrets.MAILING_WEBHOOK_SECRET }}
-          LIMIT: ${{ github.event.inputs.limit || '300' }}
+          LIMIT: ${{ github.event.inputs.limit || '2000' }}
         run: |
+          set -euo pipefail
           BASE="${APP_BASE_URL:-https://smart-fcra-v2.pages.dev}"
-          SECRET="${JOURNEY_CRON_SECRET:-$MAILING_WEBHOOK_SECRET}"
+          SECRET="${JOURNEY_CRON_SECRET:-${MAILING_WEBHOOK_SECRET:-}}"
           if [ -z "$SECRET" ]; then
-            echo "JOURNEY_CRON_SECRET (or MAILING_WEBHOOK_SECRET) is not configured — skipping."
-            exit 0
+            echo "::error::JOURNEY_CRON_SECRET (or MAILING_WEBHOOK_SECRET) is not configured. Morning ritual cannot run."
+            exit 1
           fi
-          curl -fsS -X POST "${BASE%/}/api/cron/daily-motivation" \
+          echo "Morning ritual dispatch → ${BASE%/}/api/cron/daily-motivation (limit=${LIMIT})"
+          echo "Scheduled window: 13:00 UTC daily (~7am US Central)"
+          RESP=$(curl -fsS -X POST "${BASE%/}/api/cron/daily-motivation" \
             -H "Content-Type: application/json" \
             -H "X-Cron-Secret: ${SECRET}" \
-            -d "{\"limit\": ${LIMIT}}"
-          echo ""
-          echo "Daily motivation dispatch complete."
+            -d "{\"limit\": ${LIMIT}}")
+          echo "$RESP"
+          echo "Daily morning motivation ritual complete."

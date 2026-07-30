@@ -154,10 +154,45 @@ export async function loadClientJourney(
           body: logged.body,
           focusAction: logged.focus_action || plan.today.focusAction,
           focusCta: plan.today.focusCta,
-          suggestions: plan.suggestions,
+          suggestions: (() => {
+            try {
+              const parsed = JSON.parse(logged.suggestions_json || 'null');
+              if (Array.isArray(parsed)) return parsed;
+              if (parsed?.suggestions) return parsed.suggestions;
+              return plan.suggestions;
+            } catch {
+              return plan.suggestions;
+            }
+          })(),
           phase: (logged.phase || plan.phase) as any,
           phaseLabel: plan.phaseLabel,
           encouragement: plan.today.encouragement,
+          statusSummary: (() => {
+            try {
+              const parsed = JSON.parse(logged.suggestions_json || '{}');
+              return parsed?.statusSummary || plan.today.statusSummary;
+            } catch {
+              return plan.today.statusSummary;
+            }
+          })(),
+          quote: (() => {
+            try {
+              const parsed = JSON.parse(logged.suggestions_json || '{}');
+              return parsed?.quote || plan.today.quote;
+            } catch {
+              return plan.today.quote;
+            }
+          })(),
+          quoteAttribution: (() => {
+            try {
+              const parsed = JSON.parse(logged.suggestions_json || '{}');
+              return parsed?.quoteAttribution || plan.today.quoteAttribution;
+            } catch {
+              return plan.today.quoteAttribution;
+            }
+          })(),
+          ritualBody: logged.body || plan.today.ritualBody,
+          sendDate: logged.send_date || plan.today.sendDate,
         }
       : plan.today,
   };
@@ -184,10 +219,10 @@ export async function generateAndDispatchDailyMotivation(
   client: any,
   opts?: { force?: boolean },
 ): Promise<{ sent: boolean; skipped?: string; motivation?: DailyMotivation; channels?: any }> {
+  // Only skip when client explicitly opted out of the morning ritual
   if (client.journey_opt_in === 0) {
     return { sent: false, skipped: 'opted_out' };
   }
-  const optIn = client.journey_opt_in !== 0 && client.notify_email !== 0;
   const stateRow = await env.DB.prepare(
     `SELECT * FROM client_journey_state WHERE client_id = ?`
   ).bind(client.id).first() as any;
@@ -209,17 +244,43 @@ export async function generateAndDispatchDailyMotivation(
 
   await ensureJourneyState(env, client, plan);
 
+  // Prefer real email; skip synthetic portal placeholders
+  const email =
+    client.email && !String(client.email).includes('.noreply@') && !String(client.email).endsWith('@smartfcra.local')
+      ? client.email
+      : null;
+  const wantEmail = email && client.notify_email !== 0;
+  const wantSms = !!client.notify_sms && !!(client.phone_e164 || client.phone);
+
+  const deliveryBody = motivation.ritualBody || `${motivation.body}\n\n→ Today's focus: ${motivation.focusAction}\n\n${motivation.encouragement}`;
+
   const channels = await dispatchClientAlert(env, {
     orgId: client.org_id,
     clientId: client.id,
     eventType: 'daily_motivation',
     title: motivation.title,
-    body: `${motivation.body}\n\n→ Today's focus: ${motivation.focusAction}\n\n${motivation.encouragement}`,
-    email: optIn && client.email ? client.email : null,
+    body: deliveryBody,
+    email: wantEmail ? email : null,
     phone: client.phone_e164 || client.phone,
-    notifyEmail: optIn !== false && !!client.email && client.notify_email !== 0,
-    notifySms: !!client.notify_sms && !!(client.phone_e164 || client.phone),
+    notifyEmail: !!wantEmail,
+    notifySms: wantSms,
   });
+
+  // Also drop into Messages so the morning ritual is visible in the portal inbox
+  try {
+    await env.DB.prepare(
+      `INSERT INTO portal_messages (id, org_id, client_id, sender_user_id, sender_role, channel, subject, body, created_at)
+       VALUES (?, ?, ?, null, 'system', 'portal', ?, ?, datetime('now'))`
+    ).bind(
+      generateId(),
+      client.org_id,
+      client.id,
+      motivation.title,
+      deliveryBody,
+    ).run();
+  } catch (e) {
+    console.warn('[journey] morning message inbox insert failed', e);
+  }
 
   const logId = generateId();
   try {
@@ -240,11 +301,16 @@ export async function generateAndDispatchDailyMotivation(
       client.id,
       today,
       motivation.title,
-      motivation.body,
+      deliveryBody,
       motivation.focusAction,
-      JSON.stringify(motivation.suggestions),
+      JSON.stringify({
+        suggestions: motivation.suggestions,
+        quote: motivation.quote,
+        quoteAttribution: motivation.quoteAttribution,
+        statusSummary: motivation.statusSummary,
+      }),
       plan.phase,
-      JSON.stringify({ email: channels.email, sms: channels.sms, in_app: true }),
+      JSON.stringify({ email: channels.email, sms: channels.sms, in_app: true, inbox: true }),
       JSON.stringify(channels.alertIds || []),
     ).run();
   } catch (e) {
@@ -261,46 +327,60 @@ export async function generateAndDispatchDailyMotivation(
 export async function dispatchDailyMotivationBatch(
   env: JourneyEnv,
   opts?: { orgId?: string; limit?: number },
-): Promise<{ processed: number; sent: number; skipped: number; errors: number }> {
-  const limit = Math.min(opts?.limit || 200, 500);
-  let clients: any[] = [];
-  try {
-    let q = `SELECT * FROM clients WHERE status != 'purged' AND COALESCE(journey_opt_in, 1) = 1`;
-    const binds: any[] = [];
-    if (opts?.orgId) {
-      q += ` AND org_id = ?`;
-      binds.push(opts.orgId);
-    }
-    q += ` ORDER BY updated_at DESC LIMIT ?`;
-    binds.push(limit);
-    const rows = await env.DB.prepare(q).bind(...binds).all();
-    clients = (rows?.results || []) as any[];
-  } catch {
-    let q = `SELECT * FROM clients WHERE status != 'purged'`;
-    const binds: any[] = [];
-    if (opts?.orgId) {
-      q += ` AND org_id = ?`;
-      binds.push(opts.orgId);
-    }
-    q += ` ORDER BY updated_at DESC LIMIT ?`;
-    binds.push(limit);
-    const rows = await env.DB.prepare(q).bind(...binds).all();
-    clients = (rows?.results || []) as any[];
-  }
+): Promise<{ processed: number; sent: number; skipped: number; errors: number; pages: number }> {
+  const pageSize = 150;
+  const maxClients = Math.min(opts?.limit || 2000, 5000);
+  let processed = 0;
   let sent = 0;
   let skipped = 0;
   let errors = 0;
+  let pages = 0;
+  let offset = 0;
 
-  for (const client of clients) {
+  while (processed < maxClients) {
+    pages++;
+    let clients: any[] = [];
     try {
-      const r = await generateAndDispatchDailyMotivation(env, client);
-      if (r.sent) sent++;
-      else skipped++;
-    } catch (e) {
-      console.error('[journey] dispatch failed for', client.id, e);
-      errors++;
+      let q = `SELECT * FROM clients WHERE COALESCE(status, 'active') != 'purged' AND COALESCE(journey_opt_in, 1) = 1`;
+      const binds: any[] = [];
+      if (opts?.orgId) {
+        q += ` AND org_id = ?`;
+        binds.push(opts.orgId);
+      }
+      q += ` ORDER BY id ASC LIMIT ? OFFSET ?`;
+      binds.push(Math.min(pageSize, maxClients - processed), offset);
+      const rows = await env.DB.prepare(q).bind(...binds).all();
+      clients = (rows?.results || []) as any[];
+    } catch {
+      let q = `SELECT * FROM clients WHERE COALESCE(status, 'active') != 'purged'`;
+      const binds: any[] = [];
+      if (opts?.orgId) {
+        q += ` AND org_id = ?`;
+        binds.push(opts.orgId);
+      }
+      q += ` ORDER BY id ASC LIMIT ? OFFSET ?`;
+      binds.push(Math.min(pageSize, maxClients - processed), offset);
+      const rows = await env.DB.prepare(q).bind(...binds).all();
+      clients = (rows?.results || []) as any[];
     }
+
+    if (!clients.length) break;
+
+    for (const client of clients) {
+      processed++;
+      try {
+        const r = await generateAndDispatchDailyMotivation(env, client);
+        if (r.sent) sent++;
+        else skipped++;
+      } catch (e) {
+        console.error('[journey] dispatch failed for', client.id, e);
+        errors++;
+      }
+    }
+
+    offset += clients.length;
+    if (clients.length < pageSize) break;
   }
 
-  return { processed: clients.length, sent, skipped, errors };
+  return { processed, sent, skipped, errors, pages };
 }
