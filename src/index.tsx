@@ -10,6 +10,8 @@ import { MENTORS, buildMentorContext, KNOWLEDGE_CORPUS_META, retrieveCaseLawKnow
 import { estimateViolationScoreLift } from './data/fundability-engine';
 import { sendPortalWelcomeEmail, computeAndStoreFundability, portalBaseUrl, isSyntheticPortalEmail, tradelineRecsForClient } from './lib/portal-services';
 import { EDUCATION_LIBRARY, getLessonById, TRADELINE_CATALOG } from './data/portal-education';
+import { matchLenders } from './data/funding/lender-matching';
+import { catalogStats, LENDER_CATALOG } from './data/funding/lenders-catalog';
 import { parseBankStatementText } from './data/bank-underwriting';
 import { writeSecurityAudit, buildSecurityPosture, passwordMeetsPolicy } from './lib/security-compliance';
 import { dispatchClientAlert } from './lib/alerts';
@@ -2343,6 +2345,14 @@ app.get('/api/client-portal/fundability', authMiddleware, async (c) => {
     goal,
   });
 
+  const lenderMatches = matchLenders({
+    avgScore: avg,
+    accountCount: report?.total_accounts || 0,
+    collectionCount: report?.total_collections || 0,
+    goal,
+    limit: 15,
+  });
+
   const progressRows = await c.env.DB.prepare(
     `SELECT roadmap_key, completed_steps_json, completed_docs_json, notes, updated_at
      FROM roadmap_progress WHERE client_id = ? AND org_id = ?`
@@ -2362,7 +2372,62 @@ app.get('/api/client-portal/fundability', authMiddleware, async (c) => {
     }
   }
 
-  return c.json({ fundability, tradelines, catalog: TRADELINE_CATALOG, progress });
+  return c.json({
+    fundability,
+    tradelines,
+    catalog: TRADELINE_CATALOG,
+    progress,
+    lenders: lenderMatches,
+    lenderCatalogStats: catalogStats(),
+  });
+});
+
+// Curated lender / CU / builder matches (deterministic — not the polluted 1656 dump)
+app.get('/api/client-portal/funding/matches', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+
+  const goal = c.req.query('goal') || undefined;
+  const typeQ = (c.req.query('type') || '').trim().toUpperCase();
+  const limit = Math.min(65, Math.max(1, Number(c.req.query('limit') || 20) || 20));
+
+  const report = await c.env.DB.prepare(
+    `SELECT total_accounts, total_collections FROM credit_reports
+     WHERE client_id = ? AND org_id = ? ORDER BY COALESCE(is_current,1) DESC, created_at DESC LIMIT 1`
+  ).bind(client.id, user.org_id).first() as any;
+
+  const scores = [client.eq_score, client.ex_score, client.tu_score].filter((n: any) => typeof n === 'number' && n > 0);
+  const avg = scores.length ? Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length) : 600;
+
+  const types = typeQ
+    ? ([typeQ] as any[]).filter((t) =>
+        ['RENT_REPORTER', 'PRIMARY_TRADELINE', 'BUSINESS_CARD', 'CREDIT_UNION', 'FINANCIAL_INSTITUTION'].includes(t)
+      )
+    : undefined;
+
+  const result = matchLenders({
+    avgScore: avg,
+    accountCount: report?.total_accounts || 0,
+    collectionCount: report?.total_collections || 0,
+    goal,
+    types: types?.length ? types : undefined,
+    limit,
+  });
+
+  return c.json({
+    avgScore: avg,
+    goal: goal || null,
+    ...result,
+    catalogStats: catalogStats(),
+  });
+});
+
+app.get('/api/client-portal/funding/catalog', authMiddleware, async (c) => {
+  return c.json({
+    catalog: LENDER_CATALOG,
+    stats: catalogStats(),
+  });
 });
 
 // Persist interactive roadmap wizard progress (steps + docs checklists)

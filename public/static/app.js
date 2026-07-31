@@ -7779,6 +7779,31 @@ async function pgAdminConsole(el) {
               <div class="space-y-2">${(f.actions||[]).map(a=>`
                 <div class="flex gap-3 text-sm"><span class="text-amber-400 font-mono text-xs mt-0.5">#${a.priority}</span><div><div class="text-white font-medium">${escapeHtml(a.title)}</div><div class="text-xs text-gray-400">${escapeHtml(a.detail)}</div></div></div>`).join('')}</div>
             </div>
+
+            ${(() => {
+              const lm = d.lenders || {};
+              const tops = (lm.matches || []).slice(0, 8);
+              const stats = d.lenderCatalogStats || {};
+              if (!tops.length) return '';
+              return `<div class="glass rounded-2xl border border-teal-500/20 p-5 space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <h2 class="text-sm font-bold text-white uppercase tracking-wider"><i class="fas fa-university text-teal-400 mr-1.5"></i>Lender &amp; Tradeline Matches</h2>
+                  <span class="text-[10px] font-mono text-teal-300/80">${stats.curatedCount || 65} curated · dump ${stats.dumpClaimedTotal || 1656} rejected</span>
+                </div>
+                <p class="text-[11px] text-slate-500">Deterministic match on verified products only — not the polluted markdown scrape.</p>
+                <div class="space-y-2">${tops.map(m => `
+                  <div class="flex flex-wrap items-start justify-between gap-2 rounded-lg bg-slate-900/60 border border-slate-800 px-3 py-2">
+                    <div>
+                      <div class="text-sm text-white font-medium">${escapeHtml(m.name)}</div>
+                      <div class="text-[10px] text-slate-500 mt-0.5">${escapeHtml(m.type)} · min ${m.minCreditScore} · match ${m.matchScore}</div>
+                      ${(m.reasons||[]).length ? `<div class="text-[10px] text-slate-400 mt-1">${escapeHtml((m.reasons||[]).slice(0,2).join(' · '))}</div>` : ''}
+                    </div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded ${m.eligible ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : m.nearMiss ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' : 'bg-rose-500/10 text-rose-300 border border-rose-500/20'}">${m.eligible ? 'Eligible' : m.nearMiss ? 'Near miss' : 'Below min'}</span>
+                  </div>`).join('')}
+                </div>
+              </div>`;
+            })()}
+
             <button onclick="window._nav('client-tradelines')" class="bg-amber-600/90 hover:bg-amber-500 text-white text-sm font-semibold px-4 py-2.5 rounded-lg">See profile-smart boost tools →</button>
           </div>`;
 

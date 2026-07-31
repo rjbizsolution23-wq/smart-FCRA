@@ -68,6 +68,8 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
   { method: 'post', path: '/api/client-portal/uploads', summary: 'Upload to encrypted vault', tags: ['Client Portal'], security: true },
   { method: 'get', path: '/api/client-portal/uploads/{id}/download', summary: 'Download vault object', tags: ['Client Portal'], security: true },
   { method: 'get', path: '/api/client-portal/fundability', summary: 'Fundability score + roadmap + progress', tags: ['Client Portal'], security: true },
+  { method: 'get', path: '/api/client-portal/funding/matches', summary: 'Deterministic lender / CU / builder matches (curated catalog)', tags: ['Client Portal'], security: true },
+  { method: 'get', path: '/api/client-portal/funding/catalog', summary: 'Curated lender catalog (65 verified; dump 1656 rejected)', tags: ['Client Portal'], security: true },
   { method: 'put', path: '/api/client-portal/roadmap-progress', summary: 'Save interactive roadmap step/doc progress', tags: ['Client Portal'], security: true,
     requestBody: { roadmapKey: 'mortgage|auto|student|debt', completedSteps: 'string[]', completedDocs: 'string[]' } },
   { method: 'get', path: '/api/client-portal/education', summary: 'Education library + progress', tags: ['Client Portal'], security: true },
