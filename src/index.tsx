@@ -2787,6 +2787,14 @@ app.get('/api/client-portal/tradelines', authMiddleware, async (c) => {
       collectionCount: report?.total_collections || 0,
       goal,
     }),
+    lenders: matchLenders({
+      avgScore: avg,
+      accountCount: report?.total_accounts || 0,
+      collectionCount: report?.total_collections || 0,
+      goal,
+      limit: 12,
+    }),
+    lenderCatalogStats: catalogStats(),
     orders,
   });
 });
