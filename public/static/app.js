@@ -7781,26 +7781,54 @@ async function pgAdminConsole(el) {
             </div>
 
             ${(() => {
+              const inst = d.institutional || null;
               const lm = d.lenders || {};
-              const tops = (lm.matches || []).slice(0, 8);
+              const tops = (lm.matches || []).slice(0, 6);
               const stats = d.lenderCatalogStats || {};
-              if (!tops.length) return '';
-              return `<div class="glass rounded-2xl border border-teal-500/20 p-5 space-y-3">
+              const moneyCap = (n) => (typeof n === 'number' ? ('$' + Math.round(n).toLocaleString()) : '—');
+              const tierCls = (t) => {
+                if (t === 'GUARANTEED_APPROVAL') return 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30';
+                if (t === 'HIGH_APPROVAL_ODDS') return 'bg-teal-500/15 text-teal-300 border border-teal-500/30';
+                if (t === 'MODERATE_APPROVAL_ODDS') return 'bg-amber-500/15 text-amber-300 border border-amber-500/30';
+                return 'bg-rose-500/10 text-rose-300 border border-rose-500/20';
+              };
+              const row = (m) => `
+                <div class="flex flex-wrap items-start justify-between gap-2 rounded-lg bg-slate-900/60 border border-slate-800 px-3 py-2">
+                  <div>
+                    <div class="text-sm text-white font-medium">${escapeHtml(m.name)}</div>
+                    <div class="text-[10px] text-slate-500 mt-0.5">${escapeHtml(m.type || '')} · min ${m.minCreditScore ?? '—'} · ${m.matchPercentage != null ? (m.matchPercentage + '%') : ('match ' + (m.matchScore ?? '—'))}${m.estimatedApprovalLimit ? ' · ' + escapeHtml(m.estimatedApprovalLimit) : ''}</div>
+                    ${(m.whyApproved || m.reasons || []).length ? `<div class="text-[10px] text-slate-400 mt-1">${escapeHtml((m.whyApproved || m.reasons || []).slice(0, 2).join(' · '))}</div>` : ''}
+                  </div>
+                  <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded ${m.approvalTier ? tierCls(m.approvalTier) : (m.eligible ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : m.nearMiss ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' : 'bg-rose-500/10 text-rose-300 border border-rose-500/20')}">${m.approvalTier ? escapeHtml(String(m.approvalTier).replace(/_/g, ' ')) : (m.eligible ? 'Eligible' : m.nearMiss ? 'Near miss' : 'Below min')}</span>
+                </div>`;
+              const bucket = (title, rows) => {
+                const list = (rows || []).slice(0, 5);
+                if (!list.length) return '';
+                return `<div class="space-y-2"><h3 class="text-[11px] font-bold uppercase tracking-wider text-teal-200/90">${escapeHtml(title)}</h3>${list.map(row).join('')}</div>`;
+              };
+              if (!inst && !tops.length) return '';
+              return `<div class="glass rounded-2xl border border-teal-500/20 p-5 space-y-4">
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                  <h2 class="text-sm font-bold text-white uppercase tracking-wider"><i class="fas fa-university text-teal-400 mr-1.5"></i>Lender &amp; Tradeline Matches</h2>
-                  <span class="text-[10px] font-mono text-teal-300/80">${stats.curatedCount || 65} curated · dump ${stats.dumpClaimedTotal || 1656} rejected</span>
+                  <h2 class="text-sm font-bold text-white uppercase tracking-wider"><i class="fas fa-university text-teal-400 mr-1.5"></i>Funding Cockpit</h2>
+                  <span class="text-[10px] font-mono text-teal-300/80">${inst ? ((inst.totalLendersEvaluated || d.institutionalCount || 0) + ' evaluated') : ((stats.curatedCount || 65) + ' curated')} · ${stats.curatedCount || 65} verified catalog</span>
                 </div>
-                <p class="text-[11px] text-slate-500">Deterministic match on verified products only — not the polluted markdown scrape.</p>
-                <div class="space-y-2">${tops.map(m => `
-                  <div class="flex flex-wrap items-start justify-between gap-2 rounded-lg bg-slate-900/60 border border-slate-800 px-3 py-2">
-                    <div>
-                      <div class="text-sm text-white font-medium">${escapeHtml(m.name)}</div>
-                      <div class="text-[10px] text-slate-500 mt-0.5">${escapeHtml(m.type)} · min ${m.minCreditScore} · match ${m.matchScore}</div>
-                      ${(m.reasons||[]).length ? `<div class="text-[10px] text-slate-400 mt-1">${escapeHtml((m.reasons||[]).slice(0,2).join(' · '))}</div>` : ''}
-                    </div>
-                    <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded ${m.eligible ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : m.nearMiss ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' : 'bg-rose-500/10 text-rose-300 border border-rose-500/20'}">${m.eligible ? 'Eligible' : m.nearMiss ? 'Near miss' : 'Below min'}</span>
-                  </div>`).join('')}
+                ${inst ? `<div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-center">
+                  <div class="rounded-lg bg-slate-900/50 border border-slate-800 p-2"><div class="text-[9px] uppercase text-slate-500">Guaranteed</div><div class="text-lg font-bold text-emerald-300 font-mono">${inst.guaranteedApprovalsCount ?? 0}</div></div>
+                  <div class="rounded-lg bg-slate-900/50 border border-slate-800 p-2"><div class="text-[9px] uppercase text-slate-500">High odds</div><div class="text-lg font-bold text-teal-300 font-mono">${inst.highApprovalsCount ?? 0}</div></div>
+                  <div class="rounded-lg bg-slate-900/50 border border-slate-800 p-2"><div class="text-[9px] uppercase text-slate-500">Capital pot.</div><div class="text-lg font-bold text-white font-mono">${moneyCap(inst.totalEstimatedCapitalPotential)}</div></div>
+                  <div class="rounded-lg bg-slate-900/50 border border-slate-800 p-2"><div class="text-[9px] uppercase text-slate-500">Biz vendors</div><div class="text-lg font-bold text-white font-mono">${d.businessVendorCount ?? '—'}</div></div>
                 </div>
+                <p class="text-[11px] text-slate-500">Precision underwriting vs institutional DB. Auto-generated state CU placeholders are scaffolding, not verified affiliates.</p>
+                <div class="grid md:grid-cols-2 gap-4">
+                  ${bucket('Top credit unions', inst.topCreditUnions)}
+                  ${bucket('Top overall', inst.topOverall)}
+                  ${bucket('Primary tradelines / rent', inst.topPrimaryTradelines)}
+                  ${bucket('Business cards (0% paths)', inst.top0PercentBusinessCards)}
+                </div>` : ''}
+                ${tops.length ? `<div class="space-y-2 pt-2 border-t border-slate-800/80">
+                  <h3 class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Curated catalog (verified 65)</h3>
+                  ${tops.map(row).join('')}
+                </div>` : ''}
               </div>`;
             })()}
 

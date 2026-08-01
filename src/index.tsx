@@ -15,7 +15,7 @@ import { catalogStats, LENDER_CATALOG } from './data/funding/lenders-catalog';
 import { parseBankStatementText } from './data/bank-underwriting';
 import { writeSecurityAudit, buildSecurityPosture, passwordMeetsPolicy } from './lib/security-compliance';
 import { dispatchClientAlert } from './lib/alerts';
-import { parseCreditReportText } from './engine/parser';
+import { parseCreditReportText, computeRevolvingUtilization } from './engine/parser';
 import { detectViolations, calculateLitigationScore, type CreditReportData } from './engine/violations';
 import { analyzeReportLive } from './engine/violation-factcheck';
 import { seedKnowledgeBase, retrieveKnowledge } from './lib/knowledge-base';
@@ -28,7 +28,12 @@ import { ESIGN_DISCLOSURE_TEXT, ESIGN_DISCLOSURE_VERSION, type ContractType, doc
 import { createVideoRoom, issueRoomToken, completeVideoSession, videoConfigured } from './lib/twilio-video';
 import { seedRonStateRules, createRonSession, submitRonIdentityChecklist, completeRonSession, handleRonWebhook, getRonStateRule, DEFAULT_RON_STATE_RULES, resolveVendor } from './lib/ron-service';
 import { mapMfsnToInternal } from './engine/mfsn-mapper';
+import { MFSNClient, MFSNError, resolveMfsnCredentials } from './engine/mfsn-client';
 import { mapSmartCreditToInternal } from './engine/smartcredit-mapper';
+import { LenderMatchingEngine } from './data/funding/institutional-matching';
+import { MASTER_LENDERS_DATABASE } from './data/funding/lenders-database';
+import { MASTER_BUSINESS_VENDORS } from './data/funding/business-credit';
+import { buildInstitutionalProfile, slimInstitutionalReport } from './data/funding/profile-from-client';
 import { DOCUMENT_TYPES, type DocumentData } from './engine/documents';
 import { generatePDFReport, type PDFReportData, generatePDFFromText } from './engine/pdf-generator';
 import { FOUNDER_TEMPLATES } from './engine/founder-templates';
@@ -391,6 +396,11 @@ type Bindings = {
   AI?: any;
   SMARTCREDIT_CLIENT_KEY?: string;
   SMARTCREDIT_CLIENT_SECRET?: string;
+  /** MyFreeScoreNow partner credentials — set via wrangler secret / .dev.vars only */
+  MFSN_API_URL?: string;
+  MFSN_EMAIL?: string;
+  MFSN_PASSWORD?: string;
+  MFSN_CLIENT_TOKEN?: string;
   RATE_LIMIT_KV?: any;
   DOCS?: R2Bucket;
   TWILIO_ACCOUNT_SID?: string;
@@ -2353,6 +2363,36 @@ app.get('/api/client-portal/fundability', authMiddleware, async (c) => {
     limit: 15,
   });
 
+  let utilPct: number | null = null;
+  let highestLimit = 2500;
+  if (parsedAccounts.length) {
+    try {
+      const util = computeRevolvingUtilization(parsedAccounts);
+      utilPct = util.utilPct;
+      for (const a of parsedAccounts) {
+        const lim = Number(a.creditLimit || a.highCredit || 0);
+        if (lim > highestLimit) highestLimit = lim;
+      }
+    } catch { /* soft */ }
+  }
+
+  let institutional = null;
+  try {
+    const profile = buildInstitutionalProfile({
+      eqScore: client.eq_score,
+      exScore: client.ex_score,
+      tuScore: client.tu_score,
+      utilizationPct: utilPct,
+      inquiries: report?.total_inquiries || 0,
+      collections: report?.total_collections || 0,
+      highestLimit,
+      monthlyIncome: client.estimated_monthly_income,
+      state: client.state || client.mailing_state,
+      isBusinessOwner: Boolean(client.business_name || String(goal || '').includes('business')),
+    });
+    institutional = slimInstitutionalReport(LenderMatchingEngine.runComprehensiveMatch(profile));
+  } catch { /* soft */ }
+
   const progressRows = await c.env.DB.prepare(
     `SELECT roadmap_key, completed_steps_json, completed_docs_json, notes, updated_at
      FROM roadmap_progress WHERE client_id = ? AND org_id = ?`
@@ -2378,55 +2418,112 @@ app.get('/api/client-portal/fundability', authMiddleware, async (c) => {
     catalog: TRADELINE_CATALOG,
     progress,
     lenders: lenderMatches,
+    institutional,
     lenderCatalogStats: catalogStats(),
+    institutionalCount: MASTER_LENDERS_DATABASE.length,
+    businessVendorCount: MASTER_BUSINESS_VENDORS.length,
   });
 });
 
-// Curated lender / CU / builder matches (deterministic — not the polluted 1656 dump)
+// Lender matches: mode=institutional (600+ precision) | simple (curated 65)
 app.get('/api/client-portal/funding/matches', authMiddleware, async (c) => {
   const user = c.get('user');
   const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
   if (!client) return c.json({ error: 'Client not found' }, 404);
 
   const goal = c.req.query('goal') || undefined;
+  const mode = (c.req.query('mode') || 'institutional').toLowerCase();
   const typeQ = (c.req.query('type') || '').trim().toUpperCase();
   const limit = Math.min(65, Math.max(1, Number(c.req.query('limit') || 20) || 20));
 
   const report = await c.env.DB.prepare(
-    `SELECT total_accounts, total_collections FROM credit_reports
+    `SELECT total_accounts, total_collections, total_inquiries, parsed_data FROM credit_reports
      WHERE client_id = ? AND org_id = ? ORDER BY COALESCE(is_current,1) DESC, created_at DESC LIMIT 1`
   ).bind(client.id, user.org_id).first() as any;
 
   const scores = [client.eq_score, client.ex_score, client.tu_score].filter((n: any) => typeof n === 'number' && n > 0);
   const avg = scores.length ? Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length) : 600;
 
-  const types = typeQ
-    ? ([typeQ] as any[]).filter((t) =>
-        ['RENT_REPORTER', 'PRIMARY_TRADELINE', 'BUSINESS_CARD', 'CREDIT_UNION', 'FINANCIAL_INSTITUTION'].includes(t)
-      )
-    : undefined;
+  let utilPct: number | null = null;
+  let highestLimit = 2500;
+  if (report?.parsed_data) {
+    try {
+      const parsed = JSON.parse(await decryptPII(c, report.parsed_data));
+      const accounts = [...(parsed.accounts || []), ...(parsed.collections || [])];
+      const util = computeRevolvingUtilization(accounts);
+      utilPct = util.utilPct;
+      for (const a of parsed.accounts || []) {
+        const lim = Number(a.creditLimit || a.highCredit || 0);
+        if (lim > highestLimit) highestLimit = lim;
+      }
+    } catch { /* soft */ }
+  }
 
-  const result = matchLenders({
-    avgScore: avg,
-    accountCount: report?.total_accounts || 0,
-    collectionCount: report?.total_collections || 0,
-    goal,
-    types: types?.length ? types : undefined,
-    limit,
+  if (mode === 'simple') {
+    const types = typeQ
+      ? ([typeQ] as any[]).filter((t) =>
+          ['RENT_REPORTER', 'PRIMARY_TRADELINE', 'BUSINESS_CARD', 'CREDIT_UNION', 'FINANCIAL_INSTITUTION'].includes(t)
+        )
+      : undefined;
+    const result = matchLenders({
+      avgScore: avg,
+      accountCount: report?.total_accounts || 0,
+      collectionCount: report?.total_collections || 0,
+      goal,
+      types: types?.length ? types : undefined,
+      limit,
+    });
+    return c.json({
+      mode: 'simple',
+      avgScore: avg,
+      goal: goal || null,
+      ...result,
+      catalogStats: catalogStats(),
+    });
+  }
+
+  const profile = buildInstitutionalProfile({
+    eqScore: client.eq_score,
+    exScore: client.ex_score,
+    tuScore: client.tu_score,
+    utilizationPct: utilPct,
+    inquiries: report?.total_inquiries || 0,
+    collections: report?.total_collections || 0,
+    highestLimit,
+    monthlyIncome: client.estimated_monthly_income,
+    state: client.state || client.mailing_state,
+    isBusinessOwner: Boolean(client.business_name || goal?.includes('business')),
   });
+  const full = LenderMatchingEngine.runComprehensiveMatch(profile);
 
   return c.json({
+    mode: 'institutional',
     avgScore: avg,
     goal: goal || null,
-    ...result,
+    profile,
+    institutional: slimInstitutionalReport(full),
+    simplePreview: matchLenders({
+      avgScore: avg,
+      accountCount: report?.total_accounts || 0,
+      collectionCount: report?.total_collections || 0,
+      goal,
+      limit: 8,
+    }),
     catalogStats: catalogStats(),
+    institutionalCount: MASTER_LENDERS_DATABASE.length,
+    businessVendorCount: MASTER_BUSINESS_VENDORS.length,
   });
 });
 
 app.get('/api/client-portal/funding/catalog', authMiddleware, async (c) => {
+  const featured = MASTER_LENDERS_DATABASE.filter((l) => !l.id.startsWith('cu-auto-')).slice(0, 80);
   return c.json({
-    catalog: LENDER_CATALOG,
-    stats: catalogStats(),
+    curated: LENDER_CATALOG,
+    curatedStats: catalogStats(),
+    institutionalFeatured: featured,
+    institutionalTotal: MASTER_LENDERS_DATABASE.length,
+    businessVendors: MASTER_BUSINESS_VENDORS.slice(0, 40),
+    businessVendorTotal: MASTER_BUSINESS_VENDORS.length,
   });
 });
 
@@ -5300,49 +5397,24 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
   if (!planCheck.allowed) return c.json({ error: planCheck.message }, 403);
 
   const body = await c.req.json();
-  const { clientId, username, password, clientEmail, secretWord } = body;
+  const { clientId, clientEmail } = body;
 
-  if (!clientId || !username || !password || !clientEmail) {
-    return c.json({ error: 'Client ID, API username, password, and client email are required' }, 400);
+  if (!clientId || !clientEmail) {
+    return c.json({ error: 'Client ID and client email are required' }, 400);
+  }
+
+  const creds = resolveMfsnCredentials(body, c.env);
+  if (!creds) {
+    return c.json({
+      error: 'MFSN credentials required (username/password/secretWord in body, or MFSN_EMAIL / MFSN_PASSWORD / MFSN_CLIENT_TOKEN secrets)',
+    }, 400);
   }
 
   try {
-    // 1. Authenticate with MyFreeScoreNow
-    const loginFormData = new FormData();
-    loginFormData.append('email', username);
-    loginFormData.append('password', password);
+    const client = new MFSNClient(creds);
+    const { raw: mfsnReportData, normalized } = await client.fetchAndNormalize(String(clientEmail));
 
-    const loginRes = await fetch('https://api.myfreescorenow.com/api/auth/login', {
-      method: 'POST',
-      body: loginFormData,
-    });
-
-    const loginData: any = await loginRes.json();
-    if (!loginData.success) {
-      return c.json({ error: `MFSN Auth Failed: ${loginData.message || 'Unknown error'}` }, 401);
-    }
-
-    const accessToken = loginData.token;
-
-    // 2. Fetch 3B Credit Report JSON
-    const fetchFormData = new FormData();
-    fetchFormData.append('email', clientEmail);
-    fetchFormData.append('client_token', secretWord || '');
-
-    const fetchRes = await fetch('https://api.myfreescorenow.com/api/auth/fetch-3B-json', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-      },
-      body: fetchFormData,
-    });
-
-    const mfsnReportData: any = await fetchRes.json();
-    if (!mfsnReportData.success) {
-      return c.json({ error: `MFSN Fetch Failed: ${mfsnReportData.message || 'Unknown error'}` }, 400);
-    }
-
-    // 3. Map MFSN Data to Internal Format
+    // Map MFSN Data to Internal Format
     const bureauReports = mapMfsnToInternal(mfsnReportData);
     if (bureauReports.length === 0) {
       return c.json({ error: 'No bureau data found in MFSN report response' }, 404);
@@ -5350,6 +5422,26 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
 
     const primaryReport = bureauReports[0];
     await backpopulateClientInfo(c, clientId, primaryReport.personalInfo, user.org_id);
+
+    // Persist per-bureau scores when present on normalized payload
+    try {
+      let eq: number | null = null;
+      let ex: number | null = null;
+      let tu: number | null = null;
+      for (const s of normalized.scores || []) {
+        if (s.provider === 'EFX') eq = s.score;
+        if (s.provider === 'EXP') ex = s.score;
+        if (s.provider === 'TU') tu = s.score;
+      }
+      if (eq || ex || tu) {
+        await c.env.DB.prepare(
+          `UPDATE clients SET eq_score = COALESCE(?, eq_score), ex_score = COALESCE(?, ex_score), tu_score = COALESCE(?, tu_score), updated_at = datetime('now') WHERE id = ? AND org_id = ?`
+        ).bind(eq, ex, tu, clientId, user.org_id).run();
+      }
+    } catch (e) {
+      console.warn('[MFSN] score update skipped', e);
+    }
+
     const reportId = generateId();
 
     let totalAccounts = 0;
@@ -5363,10 +5455,9 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
       totalInquiries += report.inquiries.length;
       totalPublicRecords += report.publicRecords.length;
       totalCollections += report.collections.length;
-      
+
       const bureauAnalysis = liveAnalyzeParsedReport(report);
-      const bureauViolations = bureauAnalysis.violations;
-      allViolations = [...allViolations, ...bureauViolations];
+      allViolations = [...allViolations, ...bureauAnalysis.violations];
     }
 
     const litScore = calculateLitigationScore(allViolations);
@@ -5377,25 +5468,25 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
     await c.env.DB.prepare(
       'INSERT INTO credit_reports (id, org_id, client_id, uploaded_by, bureau, report_date, file_name, raw_text, parsed_data, status, total_accounts, total_inquiries, total_public_records, total_collections, analysis_started_at, analysis_completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime("now"), datetime("now"))'
     ).bind(
-      reportId, 
-      user.org_id, 
-      clientId, 
-      user.id, 
-      'MyFreeScoreNow (3B)', 
-      primaryReport.reportDate, 
-      `mfsn_${username}.json`, 
-      encryptedRawText, 
-      encryptedParsedData, 
-      'analyzed', 
-      totalAccounts, 
-      totalInquiries, 
-      totalPublicRecords, 
-      totalCollections
+      reportId,
+      user.org_id,
+      clientId,
+      user.id,
+      'MyFreeScoreNow (3B)',
+      primaryReport.reportDate,
+      `mfsn_${String(clientEmail).replace(/[^a-z0-9@._-]/gi, '_')}.json`,
+      encryptedRawText,
+      encryptedParsedData,
+      'analyzed',
+      totalAccounts,
+      totalInquiries,
+      totalPublicRecords,
+      totalCollections,
     ).run();
 
     await saveViolationsForReport(c, user.org_id, reportId, clientId, allViolations);
 
-    await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, report_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, clientId, reportId, user.id, 'report_imported', `Real import from MyFreeScoreNow: ${allViolations.length} grounded findings across 3 bureaus`, JSON.stringify({ score: litScore.score, analysisMode: 'live_rules_engine' })).run();
+    await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, report_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, clientId, reportId, user.id, 'report_imported', `Real import from MyFreeScoreNow: ${allViolations.length} grounded findings across 3 bureaus`, JSON.stringify({ score: litScore.score, analysisMode: 'live_rules_engine', bureaus: normalized.bureaus })).run();
 
     await notifyClientAnalysisReady(c, {
       orgId: user.org_id,
@@ -5407,6 +5498,23 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
         reasoningSummary: `Live MFSN 3B import: ${allViolations.length} fact-checked findings.`,
       },
     });
+
+    // Soft: attach institutional funding snapshot for staff UI
+    let fundingPreview = null;
+    try {
+      const profile = buildInstitutionalProfile({
+        eqScore: normalized.scores.find((s) => s.provider === 'EFX')?.score,
+        exScore: normalized.scores.find((s) => s.provider === 'EXP')?.score,
+        tuScore: normalized.scores.find((s) => s.provider === 'TU')?.score,
+        inquiries: normalized.summary.totalInquiries,
+        collections: normalized.summary.totalCollections,
+        negativeAccounts: normalized.summary.totalNegativeAccounts,
+        highestLimit: Math.max(2500, ...normalized.accounts.map((a) => a.creditLimit || 0)),
+      });
+      fundingPreview = slimInstitutionalReport(LenderMatchingEngine.runComprehensiveMatch(profile));
+    } catch { /* soft */ }
+
+    try { await client.logout(); } catch { /* soft */ }
 
     return c.json({
       reportId,
@@ -5420,9 +5528,15 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
       violationsFound: allViolations.length,
       violations: allViolations,
       litigationScore: litScore,
+      normalizedSummary: normalized.summary,
+      scores: normalized.scores,
+      fundingPreview,
     });
   } catch (err: any) {
     console.error('MFSN Import Error:', err);
+    if (err instanceof MFSNError) {
+      return c.json({ error: err.message, code: err.code }, err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode as any : 500);
+    }
     return c.json({ error: `Connection Error: ${err.message}` }, 500);
   }
 });
