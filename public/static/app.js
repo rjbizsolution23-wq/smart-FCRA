@@ -731,7 +731,23 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
               <p class="text-[10px] text-amber-300 leading-relaxed"><strong>FCRA NOTICE:</strong> We prepare dispute documents only. NOT legal advice. See <a href="/compliance/disclaimers" class="underline hover:text-amber-200">disclaimers</a>.</p>
             </div>
             <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition text-sm">Sign In</button>
-          </form></div>
+          </form>
+            <div class="mt-4 rounded-xl border border-cyan-500/25 bg-gradient-to-br from-slate-950 via-cyan-950/20 to-slate-950 p-3.5 space-y-2.5">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-[11px] font-bold uppercase tracking-wider text-cyan-300"><i class="fas fa-flask mr-1.5"></i>Live demo logins</p>
+                <span class="text-[9px] font-mono text-cyan-500/80">sandbox</span>
+              </div>
+              <button type="button" id="demo-login-admin" class="w-full text-left rounded-lg bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 px-3 py-2.5 transition">
+                <div class="text-xs font-bold text-white">Staff / Admin walkthrough</div>
+                <div class="text-[10px] text-blue-200/80 font-mono mt-0.5">demo@example.com · demo123456</div>
+              </button>
+              <button type="button" id="demo-login-client" class="w-full text-left rounded-lg bg-teal-600/15 hover:bg-teal-600/25 border border-teal-500/30 px-3 py-2.5 transition">
+                <div class="text-xs font-bold text-white">Client portal (Salisha)</div>
+                <div class="text-[10px] text-teal-200/80 font-mono mt-0.5">salisha.mcdowell@example.com · demo123456</div>
+              </button>
+              <p class="text-[10px] text-slate-500 leading-relaxed">Admin path: Clients → Salisha → <strong class="text-slate-300">Preview Portal</strong> for the full customer cockpit without signing out.</p>
+            </div>
+          </div>
           <div id="auth-register" class="hidden"><form id="register-form" class="space-y-4">
             <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Organization Name</label><input type="text" name="orgName" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none" placeholder="Your Firm Name"></div>
             <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Full Name</label><input type="text" name="name" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none" placeholder="John Doe"></div>
@@ -779,6 +795,27 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     }
 
     const lf = $('#login-form'), rf = $('#register-form'), mf = $('#mfa-form'), ff = $('#forgot-form'), rsf = $('#reset-form');
+    async function demoLogin(email, password) {
+      try {
+        const d = await api('/auth/login', { method:'POST', body:JSON.stringify({ email, password })});
+        if (d.requiresMfa) {
+          const uid = document.getElementById('mfa-user-id');
+          const tt = document.getElementById('mfa-temp-token');
+          if (uid) uid.value = d.userId || '';
+          if (tt) tt.value = d.tempToken || '';
+          window._switchAuthPanel('mfa');
+          toast('Enter MFA code to continue', 'info');
+          return;
+        }
+        setState({token:d.token,user:d.user,org:d.org});
+        toast('Welcome — demo ready','success');
+        render();
+      } catch (err) { toast(err.message || 'Demo login failed', 'error'); }
+    }
+    const demoAdmin = document.getElementById('demo-login-admin');
+    const demoClient = document.getElementById('demo-login-client');
+    if (demoAdmin) demoAdmin.onclick = () => demoLogin('demo@example.com', 'demo123456');
+    if (demoClient) demoClient.onclick = () => demoLogin('salisha.mcdowell@example.com', 'demo123456');
     if (lf) lf.onsubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
@@ -1046,6 +1083,22 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   async function pgDashboard(el) {
     const d = await api('/dashboard');
     el.innerHTML = `<div class="fade-in">
+      <div class="rounded-2xl border border-amber-500/25 bg-gradient-to-r from-slate-950 via-amber-950/30 to-slate-950 p-5 mb-6 space-y-3">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 class="text-lg font-bold text-white"><i class="fas fa-presentation text-amber-400 mr-2"></i>Demo Walkthrough</h2>
+            <p class="text-sm text-slate-400 mt-1">One click prepares Salisha’s case, portal login, and Funding Cockpit for a live show.</p>
+          </div>
+          <button type="button" id="btn-demo-prepare" class="bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold px-4 py-2.5 rounded-lg shadow-lg shadow-amber-900/30"><i class="fas fa-magic mr-1.5"></i>Prepare Demo Now</button>
+        </div>
+        <div id="demo-prepare-result" class="hidden text-xs text-slate-300 space-y-2"></div>
+        <div class="flex flex-wrap gap-2 text-[11px]">
+          <button type="button" onclick="window._nav('clients')" class="px-3 py-1.5 rounded-lg bg-slate-900/70 border border-slate-700 text-slate-200 hover:text-white">1. Open Clients</button>
+          <button type="button" onclick="window._nav('client-detail',{clientId:'cli_demo_001'})" class="px-3 py-1.5 rounded-lg bg-slate-900/70 border border-slate-700 text-slate-200 hover:text-white">2. Salisha workspace</button>
+          <button type="button" onclick="window._startImpersonating('cli_demo_001','Salisha McDowell')" class="px-3 py-1.5 rounded-lg bg-teal-600/20 border border-teal-500/40 text-teal-200 hover:text-white">3. Preview Client Portal</button>
+          <button type="button" onclick="window._startImpersonating('cli_demo_001','Salisha McDowell'); setTimeout(()=>window._nav('client-fundability'), 50)" class="px-3 py-1.5 rounded-lg bg-cyan-600/20 border border-cyan-500/40 text-cyan-200 hover:text-white">4. Funding Cockpit</button>
+        </div>
+      </div>
       <div class="bg-blue-900/20 border border-blue-600/30 rounded-xl p-4 mb-6">
         <h3 class="text-sm font-semibold text-blue-300 mb-2"><i class="fas fa-scale mr-2"></i>Your Rights Under the FCRA</h3>
         <p class="text-xs text-blue-200/80 leading-relaxed">
@@ -1070,6 +1123,34 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       ${d.violationsBySeverity.length?`<div class="glass rounded-xl p-5 mb-6"><h3 class="text-sm font-semibold text-white mb-3"><i class="fas fa-chart-bar mr-2 text-orange-400"></i>By Severity</h3><div class="grid grid-cols-2 lg:grid-cols-4 gap-3">${d.violationsBySeverity.map(v=>`<div class="bg-gray-800/60 rounded-lg p-3 border-l-4 border-${sevColor(v.severity)}"><div class="text-xs text-gray-400 uppercase">${v.severity}</div><div class="text-lg font-bold text-${sevColor(v.severity)}">${v.count}</div></div>`).join('')}</div></div>`:''}
       ${d.recentViolations.length?`<div class="glass rounded-xl p-5"><h3 class="text-sm font-semibold text-white mb-3"><i class="fas fa-history mr-2 text-blue-400"></i>Recent Violations</h3><div class="space-y-2">${d.recentViolations.map(v=>`<div class="bg-gray-800/40 rounded-lg p-3 flex items-center gap-3 border-l-4 border-${sevColor(v.severity)}"><div class="flex-1 min-w-0"><div class="text-sm font-medium text-white truncate">${v.subcategory}</div><div class="text-xs text-gray-400">${v.first_name} ${v.last_name} &bull; ${v.statute}</div></div><span class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-${sevColor(v.severity)}/20 text-${sevColor(v.severity)}">${v.severity}</span></div>`).join('')}</div></div>`:`<div class="glass rounded-xl p-8 text-center"><i class="fas fa-rocket text-4xl text-blue-500/40 mb-4"></i><h3 class="text-lg font-semibold text-white mb-2">Ready to Start</h3><p class="text-sm text-gray-400 mb-4">Add a client and upload a credit report to begin</p><button onclick="window._nav('clients')" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition">Add Your First Client</button></div>`}
     </div>`;
+    const prepBtn = document.getElementById('btn-demo-prepare');
+    if (prepBtn) prepBtn.onclick = async () => {
+      prepBtn.disabled = true;
+      prepBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i>Preparing…';
+      try {
+        const r = await api('/admin/demo/prepare', { method: 'POST', body: JSON.stringify({ loadCase: true }) });
+        const box = document.getElementById('demo-prepare-result');
+        if (box) {
+          box.classList.remove('hidden');
+          box.innerHTML = `
+            <div class="rounded-lg bg-emerald-950/40 border border-emerald-500/30 p-3 space-y-1">
+              <div><strong class="text-emerald-300">Ready.</strong> ${escapeHtml(r.message || '')}</div>
+              <div class="font-mono text-[11px] text-slate-300">Staff: ${escapeHtml(r.staffEmail)} / ${escapeHtml(r.staffPassword)}</div>
+              <div class="font-mono text-[11px] text-slate-300">Client portal: ${escapeHtml(r.portalEmail)} / ${escapeHtml(r.portalPassword)}</div>
+              <div class="pt-1 flex flex-wrap gap-2">
+                <button type="button" class="text-amber-300 font-bold underline" onclick="window._nav('client-detail',{clientId:'${escapeHtml(r.clientId)}'})">Open Salisha</button>
+                <button type="button" class="text-teal-300 font-bold underline" onclick="window._startImpersonating('${escapeHtml(r.clientId)}','Salisha McDowell')">Preview Portal</button>
+                <button type="button" class="text-cyan-300 font-bold underline" onclick="window._startImpersonating('${escapeHtml(r.clientId)}','Salisha McDowell'); setTimeout(()=>window._nav('client-fundability'),50)">Funding Cockpit</button>
+              </div>
+            </div>`;
+        }
+        toast('Demo prepared', 'success');
+      } catch (err) {
+        toast(err.message || 'Demo prepare failed', 'error');
+      }
+      prepBtn.disabled = false;
+      prepBtn.innerHTML = '<i class="fas fa-magic mr-1.5"></i>Prepare Demo Now';
+    };
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -7268,8 +7349,11 @@ async function pgAdminConsole(el) {
             </div>
             <div class="glass rounded-xl border border-gray-800 p-5">
               <h3 class="text-sm font-bold text-white mb-2"><i class="fas fa-flask text-amber-400 mr-1.5"></i>Demo Tri-Bureau Case</h3>
-              <p class="text-xs text-gray-400 mb-4">Load bundled MFSN sample with scores, violations, and fundability for sales demos.</p>
-              <button id="btn-admin-demo-load" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-4 py-2 rounded-lg"><i class="fas fa-magic mr-1"></i>Load Demo Case</button>
+              <p class="text-xs text-gray-400 mb-4">Prepare Salisha walkthrough (portal password + sample case) or reload the bundled MFSN sample.</p>
+              <div class="flex flex-wrap gap-2">
+                <button id="btn-admin-demo-prepare" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-4 py-2 rounded-lg"><i class="fas fa-magic mr-1"></i>Prepare Demo Walkthrough</button>
+                <button id="btn-admin-demo-load" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold px-4 py-2 rounded-lg"><i class="fas fa-sync mr-1"></i>Reload Sample Case</button>
+              </div>
               <div id="admin-demo-result" class="mt-3 text-xs text-gray-400 hidden"></div>
             </div>
           </div>
@@ -7295,6 +7379,22 @@ async function pgAdminConsole(el) {
             toast('Backup snapshot saved to R2', 'success');
           } catch (err) { toast(err.message, 'error'); }
           backupBtn.disabled = false;
+        };
+        const demoPrepBtn = document.getElementById('btn-admin-demo-prepare');
+        if (demoPrepBtn) demoPrepBtn.onclick = async () => {
+          demoPrepBtn.disabled = true;
+          try {
+            const r = await api('/admin/demo/prepare', { method: 'POST', body: JSON.stringify({ loadCase: true }) });
+            const box = document.getElementById('admin-demo-result');
+            if (box) {
+              box.classList.remove('hidden');
+              box.innerHTML = `Ready · portal <code class="text-amber-200">${escapeHtml(r.portalEmail)}</code> / <code class="text-amber-200">${escapeHtml(r.portalPassword)}</code> ·
+                <button class="text-blue-400 font-bold ml-1" onclick="window._nav('client-detail',{clientId:'${r.clientId}'})">Open Workspace</button>
+                <button class="text-teal-400 font-bold ml-2" onclick="window._startImpersonating('${r.clientId}','Salisha McDowell')">Preview Portal</button>`;
+            }
+            toast(r.message || 'Demo prepared', 'success');
+          } catch (err) { toast(err.message, 'error'); }
+          demoPrepBtn.disabled = false;
         };
         const demoBtn = document.getElementById('btn-admin-demo-load');
         if (demoBtn) demoBtn.onclick = async () => {

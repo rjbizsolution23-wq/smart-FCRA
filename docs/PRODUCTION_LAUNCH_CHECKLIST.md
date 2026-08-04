@@ -79,12 +79,13 @@ npm run preview
 npx playwright test
 ```
 
-## Demo credentials (local seed only)
+## Demo credentials (local seed / sandbox)
 
 | Email | Password | Role |
 |-------|----------|------|
 | demo@example.com | demo123456 | super_admin |
+| salisha.mcdowell@example.com | demo123456 | client portal |
 | member@iso-a.example | demo123456 | member |
 | suspended@iso-b.example | demo123456 | admin (suspended org) |
 
-Change all seed passwords before any shared staging environment.
+See [DEMO_WALKTHROUGH.md](./DEMO_WALKTHROUGH.md) for the live show script.

@@ -7168,18 +7168,155 @@ app.post('/api/admin/backup/trigger', authMiddleware, adminGateMiddleware, async
   });
 });
 
+const DEMO_CLIENT_ID = 'cli_demo_001';
+const DEMO_CLIENT_EMAIL = 'salisha.mcdowell@example.com';
+const DEMO_PORTAL_PASSWORD = 'demo123456';
+
+/** Ensure Salisha demo client + portal login exist for live walkthroughs. */
+async function ensureDemoClientAndPortal(c: any, orgId: string) {
+  let client = await c.env.DB.prepare(
+    `SELECT * FROM clients WHERE id = ? AND org_id = ?`
+  ).bind(DEMO_CLIENT_ID, orgId).first() as any;
+
+  if (!client) {
+    client = await c.env.DB.prepare(
+      `SELECT * FROM clients WHERE org_id = ? AND lower(email) = ? LIMIT 1`
+    ).bind(orgId, DEMO_CLIENT_EMAIL).first() as any;
+  }
+
+  if (!client) {
+    await c.env.DB.prepare(
+      `INSERT INTO clients (
+         id, org_id, first_name, last_name, email, phone, address_line1, city, state, zip,
+         status, notes, tags, permissible_purpose_consent, croa_contract_agreed, tsr_advance_fee_waived,
+         consent_timestamp, eq_score, ex_score, tu_score, estimated_monthly_income, estimated_monthly_debt,
+         created_at, updated_at
+       ) VALUES (?, ?, 'Salisha', 'McDowell', ?, '(414) 430-4277', '1342 NM 333', 'Tijeras', 'NM', '87059',
+         'active', 'Demo client for sales walkthroughs', '["Premium","Lead","Demo"]', 1, 1, 1,
+         datetime('now'), 642, 635, 648, 6200, 1650, datetime('now'), datetime('now'))`
+    ).bind(DEMO_CLIENT_ID, orgId, DEMO_CLIENT_EMAIL).run();
+    client = await c.env.DB.prepare(`SELECT * FROM clients WHERE id = ?`).bind(DEMO_CLIENT_ID).first() as any;
+  } else {
+    await c.env.DB.prepare(
+      `UPDATE clients SET
+         eq_score = COALESCE(eq_score, 642),
+         ex_score = COALESCE(ex_score, 635),
+         tu_score = COALESCE(tu_score, 648),
+         estimated_monthly_income = COALESCE(estimated_monthly_income, 6200),
+         estimated_monthly_debt = COALESCE(estimated_monthly_debt, 1650),
+         updated_at = datetime('now')
+       WHERE id = ?`
+    ).bind(client.id).run();
+  }
+
+  const email = (client.email || DEMO_CLIENT_EMAIL).trim();
+  const passwordHash = await hashPassword(DEMO_PORTAL_PASSWORD);
+  const existingUser = await c.env.DB.prepare(
+    `SELECT id FROM users WHERE lower(email) = lower(?) AND org_id = ?`
+  ).bind(email, orgId).first() as any;
+  if (!existingUser) {
+    await c.env.DB.prepare(
+      `INSERT INTO users (id, org_id, email, name, password_hash, role, is_active, must_change_password)
+       VALUES (?, ?, ?, ?, ?, 'client', 1, 0)`
+    ).bind(generateId(), orgId, email, `${client.first_name} ${client.last_name}`, passwordHash).run();
+  } else {
+    await c.env.DB.prepare(
+      `UPDATE users SET password_hash = ?, name = ?, role = 'client', is_active = 1, must_change_password = 0 WHERE id = ?`
+    ).bind(passwordHash, `${client.first_name} ${client.last_name}`, existingUser.id).run();
+  }
+
+  return { clientId: client.id as string, email, portalPassword: DEMO_PORTAL_PASSWORD };
+}
+
+// One-click sales demo prep: Salisha client + portal login + optional sample case
+app.post('/api/admin/demo/prepare', authMiddleware, adminGateMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  const loadCase = body.loadCase !== false;
+
+  const ensured = await ensureDemoClientAndPortal(c, user.org_id);
+  let caseResult: any = null;
+
+  if (loadCase) {
+    const reportCount = await c.env.DB.prepare(
+      `SELECT COUNT(*) as c FROM credit_reports WHERE client_id = ? AND org_id = ?`
+    ).bind(ensured.clientId, user.org_id).first() as any;
+    if (!reportCount?.c || body.forceReload) {
+      const bureauReports = mapMfsnToInternal(sampleMfsnReport as any);
+      if (bureauReports.length) {
+        const demoViolationCount = bureauReports.reduce((s, r) => s + liveAnalyzeParsedReport(r).violations.length, 0);
+        caseResult = await importBureauReportsBatch(c, {
+          generateId,
+          encryptPII,
+          backpopulateClientInfo,
+          saveViolationsForReport,
+          persistBureauScores,
+          markPriorBureauReportsStale,
+          refreshBureauPackStatus,
+          computeAndStoreFundability,
+        }, {
+          clientId: ensured.clientId,
+          bureauReports,
+          rawPayload: sampleMfsnReport,
+          sourceProvider: 'DemoSandbox',
+          sourcePayloadType: 'mfsn-sample',
+          fileNamePrefix: 'demo-mfsn',
+          activityAction: 'demo_case_loaded',
+          activityDescription: `Prepared demo walkthrough (${bureauReports.length} bureaus, ${demoViolationCount} violations)`,
+        });
+        caseResult = { ...caseResult, violationsFound: demoViolationCount };
+      }
+    }
+  }
+
+  let fundingPreview = null;
+  try {
+    const profile = buildInstitutionalProfile({
+      eqScore: 642,
+      exScore: 635,
+      tuScore: 648,
+      utilizationPct: 28,
+      inquiries: 2,
+      collections: 0,
+      highestLimit: 7500,
+      monthlyIncome: 6200,
+      state: 'NM',
+    });
+    fundingPreview = slimInstitutionalReport(LenderMatchingEngine.runComprehensiveMatch(profile));
+  } catch { /* soft */ }
+
+  return c.json({
+    ok: true,
+    sandbox: true,
+    clientId: ensured.clientId,
+    clientName: 'Salisha McDowell',
+    portalEmail: ensured.email,
+    portalPassword: ensured.portalPassword,
+    staffEmail: 'demo@example.com',
+    staffPassword: 'demo123456',
+    caseLoaded: !!caseResult,
+    caseResult,
+    fundingPreview,
+    walkthrough: [
+      'Sign in as staff (demo@example.com) or use one-click Admin Demo',
+      'Open Clients → Salisha McDowell → Preview Portal',
+      'Show Cockpit, Fundability (Funding Cockpit), Violations, Documents',
+      'Optional: sign out and login as client portal with the portal credentials below',
+    ],
+    message: 'Demo walkthrough ready — staff + client portal credentials reset for this sandbox.',
+  });
+});
+
 // Load tri-bureau demo case from bundled MFSN sample (sales / training sandbox)
 app.post('/api/admin/demo/load-case', authMiddleware, adminGateMiddleware, async (c) => {
   const user = c.get('user');
   const body = await c.req.json().catch(() => ({}));
   let clientId = body.clientId as string | undefined;
+  let isNewClient = false;
 
   if (!clientId) {
-    clientId = generateId();
-    await c.env.DB.prepare(
-      `INSERT INTO clients (id, org_id, first_name, last_name, email, phone, status, permissible_purpose_consent, croa_contract_agreed, tsr_advance_fee_waived, consent_timestamp, created_at, updated_at)
-       VALUES (?, ?, 'Demo', 'Admin', 'demo-case@smartfcra.local', '(505) 555-0199', 'active', 1, 1, 1, datetime('now'), datetime('now'), datetime('now'))`
-    ).bind(clientId, user.org_id).run();
+    const ensured = await ensureDemoClientAndPortal(c, user.org_id);
+    clientId = ensured.clientId;
   } else {
     const existing = await c.env.DB.prepare('SELECT id FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first();
     if (!existing) return c.json({ error: 'Client not found' }, 404);
@@ -7215,7 +7352,7 @@ app.post('/api/admin/demo/load-case', authMiddleware, adminGateMiddleware, async
   return c.json({
     ok: true,
     clientId,
-    isNewClient: !body.clientId,
+    isNewClient,
     ...batch,
     violationsFound: demoViolationCount,
     sandbox: true,

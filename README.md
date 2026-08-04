@@ -112,6 +112,12 @@ Our repository layout is engineered for immediate technical onboarding and insti
 * [Node.js](https://nodejs.org/) v18+ & `npm` / `pnpm`
 * Cloudflare Account with [Wrangler](https://developers.cloudflare.com/workers/wrangler/) CLI configured.
 
+### Live demo (share this)
+
+- **URL:** https://smart-fcra-v2.pages.dev  
+- **Staff:** `demo@example.com` / `demo123456`  
+- Walkthrough: [docs/DEMO_WALKTHROUGH.md](docs/DEMO_WALKTHROUGH.md)
+
 ### Local Development Setup
 1. **Clone the Repository**:
    ```bash
@@ -122,19 +128,23 @@ Our repository layout is engineered for immediate technical onboarding and insti
    ```bash
    npm install
    ```
-3. **Apply Database Migrations (Local D1 Dev Sandbox)**:
+3. **Local secrets**:
+   ```bash
+   cp .dev.vars.example .dev.vars
+   ```
+4. **Apply Database Migrations (Local D1 Dev Sandbox)**:
    ```bash
    npx wrangler d1 migrations apply fcra-detector-v2 --local
    ```
-4. **Seed Sandbox Data**:
+5. **Seed Sandbox Data**:
    ```bash
    npx wrangler d1 execute fcra-detector-v2 --local --file=./seed.sql
    ```
-5. **Run Local Dev Server**:
+6. **Run Local Dev Server**:
    ```bash
    npx vite
    ```
-
+   Local `wrangler pages dev` requires a Cloudflare API token when AI/R2 remote bindings are active. For an immediate show, use the live demo URL above.
 ### Deploying to Production (Cloudflare Pages)
 Compile assets and promote to the **separate** Cloudflare Pages project (`smart-fcra-v2` — does not overwrite original `smart-fcra`):
 ```bash

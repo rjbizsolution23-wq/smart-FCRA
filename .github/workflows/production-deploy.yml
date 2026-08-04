@@ -31,14 +31,24 @@ jobs:
       - name: Reset local D1 + seed
         run: npm run db:reset
 
+      - name: Write local secrets for preview
+        run: cp .dev.vars.example .dev.vars
+
       - name: E2E security tests
         run: |
+          npm run build
           npm run preview &
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:3000/api/health && break
+          PREVIEW_PID=$!
+          for i in $(seq 1 45); do
+            if curl -sf http://127.0.0.1:3000/api/health; then
+              echo "preview ready"
+              break
+            fi
             sleep 2
           done
+          curl -sf http://127.0.0.1:3000/api/health || (kill $PREVIEW_PID 2>/dev/null; exit 1)
           npx playwright test tests/multi-tenant-isolation.spec.ts
+          kill $PREVIEW_PID 2>/dev/null || true
 
   deploy-to-cloudflare:
     needs: validate-and-test

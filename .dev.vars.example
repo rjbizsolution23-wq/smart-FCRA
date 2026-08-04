@@ -1,0 +1,13 @@
+# Local Wrangler / Pages secrets (copy to .dev.vars — never commit .dev.vars)
+PII_ENCRYPTION_KEY=local-dev-only-pii-key-min-32-chars!!
+FRONTEND_URL=http://localhost:3000
+APP_BASE_URL=http://localhost:3000
+ENVIRONMENT=development
+FREE_AI_ONLY=true
+# Optional partner integrations (leave blank for sandbox demos):
+# MFSN_EMAIL=
+# MFSN_PASSWORD=
+# MFSN_CLIENT_TOKEN=
+# MFSN_API_URL=https://api.myfreescorenow.com
+# STRIPE_API_KEY=
+# JOURNEY_CRON_SECRET=

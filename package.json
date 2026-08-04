@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "wrangler pages dev dist --d1=fcra-detector-v2 --local --ip 0.0.0.0 --port 3000",
+    "preview": "node scripts/local-pages-preview.mjs",
+    "preview:raw": "wrangler pages dev dist --d1=fcra-detector-v2 --local --ip 0.0.0.0 --port 3000",
     "deploy": "npm run build && wrangler pages deploy dist --project-name smart-fcra-v2",
     "db:create": "wrangler d1 create fcra-detector-v2",
     "db:migrate:local": "wrangler d1 migrations apply fcra-detector-v2 --local",
