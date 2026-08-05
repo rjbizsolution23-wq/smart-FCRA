@@ -5,7 +5,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && mkdir -p dist/static && cp -r public/static/* dist/static/",
+    "build": "node scripts/embed-spa.mjs && vite build && mkdir -p dist/static && cp -r public/static/* dist/static/",
     "preview": "node scripts/local-pages-preview.mjs",
     "preview:raw": "wrangler pages dev dist --d1=fcra-detector-v2 --local --ip 0.0.0.0 --port 3000",
     "deploy": "npm run build && wrangler pages deploy dist --project-name smart-fcra-v2",
@@ -13,8 +13,8 @@
     "db:migrate:local": "wrangler d1 migrations apply fcra-detector-v2 --local",
     "db:seed": "wrangler d1 execute fcra-detector-v2 --local --file=./seed.sql",
     "db:reset": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local && npm run db:seed",
-    "test:unit": "npx tsx tests/unit-auth-crypto.mjs && npx tsx tests/violations-engine.test.mjs && npx tsx tests/parser-scores.test.mjs && npx tsx tests/roadmap-progress.test.mjs && npx tsx tests/client-journey.test.mjs && npx tsx tests/tutor-growth.test.mjs && npx tsx tests/violation-factcheck.test.mjs && npx tsx tests/legal-ron-video.test.mjs && npx tsx tests/enterprise-comms.test.mjs && npx tsx tests/ops-scheduler.test.mjs && npx tsx tests/lender-matching.test.mjs && npx tsx tests/mfsn-institutional.test.mjs",
-    "test:api": "npx tsx tests/api-routes.test.mjs",
+    "test:unit": "node scripts/embed-spa.mjs && npx tsx tests/unit-auth-crypto.mjs && npx tsx tests/violations-engine.test.mjs && npx tsx tests/parser-scores.test.mjs && npx tsx tests/roadmap-progress.test.mjs && npx tsx tests/client-journey.test.mjs && npx tsx tests/tutor-growth.test.mjs && npx tsx tests/violation-factcheck.test.mjs && npx tsx tests/legal-ron-video.test.mjs && npx tsx tests/enterprise-comms.test.mjs && npx tsx tests/ops-scheduler.test.mjs && npx tsx tests/lender-matching.test.mjs && npx tsx tests/mfsn-institutional.test.mjs",
+    "test:api": "node scripts/embed-spa.mjs && npx tsx tests/api-routes.test.mjs",
     "test:all": "npm run test:unit && npm run test:api",
     "test:e2e": "npx playwright test"
   },

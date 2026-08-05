@@ -33,3 +33,4 @@ logs/
 *.pem
 playwright-report/
 test-results/
+src/generated/

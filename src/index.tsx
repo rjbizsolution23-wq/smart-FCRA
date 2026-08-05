@@ -44,8 +44,7 @@ import { importBureauReportsBatch } from './lib/bureau-import';
 import { loadClientJourney, checkInJourney, generateAndDispatchDailyMotivation, dispatchDailyMotivationBatch } from './lib/portal-journey';
 import { loadTutorCompanion, tutorChatSystemBlock, buildTutorFallbackReply } from './lib/portal-tutor';
 import sampleMfsnReport from './data/sample-mfsn-report.json';
-// Bundle SPA into the Worker so /static/app.js cannot go blank from a bad Pages asset deploy
-import spaAppSource from '../public/static/app.js?raw';
+import { spaAppSource } from './generated/spa-source';
 
 // Secure field-level cryptographic helpers mapped to Worker bindings
 async function encryptPII(c: any, text: string): Promise<string> {
