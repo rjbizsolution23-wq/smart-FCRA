@@ -1380,7 +1380,6 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         if (r.temporaryPassword) console.info('[portal-invite]', r.loginUrl, r.temporaryPassword);
       } catch (err) { toast(err.message, 'error'); }
     };
-    document.getElementById('btn-edit-client');
     const modal = document.getElementById('edit-client-modal');
     if (btnEdit && modal) {
       btnEdit.onclick = () => modal.classList.remove('hidden');

@@ -70,6 +70,12 @@ jobs:
       - name: Build Production Bundle
         run: npm run build
 
+      - name: Verify SPA bundle
+        run: |
+          test -f dist/static/app.js
+          node --check dist/static/app.js
+          echo "static app.js OK ($(wc -c < dist/static/app.js) bytes)"
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:

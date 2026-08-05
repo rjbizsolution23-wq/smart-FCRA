@@ -44,6 +44,8 @@ import { importBureauReportsBatch } from './lib/bureau-import';
 import { loadClientJourney, checkInJourney, generateAndDispatchDailyMotivation, dispatchDailyMotivationBatch } from './lib/portal-journey';
 import { loadTutorCompanion, tutorChatSystemBlock, buildTutorFallbackReply } from './lib/portal-tutor';
 import sampleMfsnReport from './data/sample-mfsn-report.json';
+// Bundle SPA into the Worker so /static/app.js cannot go blank from a bad Pages asset deploy
+import spaAppSource from '../public/static/app.js?raw';
 
 // Secure field-level cryptographic helpers mapped to Worker bindings
 async function encryptPII(c: any, text: string): Promise<string> {
@@ -557,7 +559,16 @@ app.onError(async (err, c) => {
   return c.json({ error: 'Internal Server Error', message: err.message }, 500);
 });
 
-// Serve static assets in local development and production
+// Serve SPA from the Worker bundle first (prevents blank screen if Pages asset is stale/corrupt)
+app.get('/static/app.js', (c) => {
+  return c.body(spaAppSource, 200, {
+    'Content-Type': 'application/javascript; charset=utf-8',
+    'Cache-Control': 'no-cache, must-revalidate',
+    'X-Content-Type-Options': 'nosniff',
+  });
+});
+
+// Serve other static assets in local development and production
 app.use('/static/*', serveStatic());
 app.use('/content/*', serveStatic());
 
@@ -8100,7 +8111,7 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=20260805-blankfix"></script>
 </body>
 </html>`;
 }
