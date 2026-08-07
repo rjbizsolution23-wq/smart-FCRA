@@ -3729,13 +3729,30 @@ Status: Discharged`;
   window._launchAttorneyWorkflow = async function(reportId) {
     if (!reportId) return toast('Pick a bureau report first', 'error');
     try {
-      toast('Launching attorney suit pack…', 'info');
+      toast('Building intelligent letter pack from violations…', 'info');
       const res = await api(`/reports/${reportId}/launch-workflow`, { method: 'POST', body: '{}' });
-      toast(`Generated ${(res.documents || []).length} legal documents — ready for e-sign`, 'success');
+      const strat = res.strategy?.strategySummary ? ` · ${res.strategy.strategySummary}` : '';
+      toast(`Generated ${(res.documents || []).length} firm-branded documents${strat}`, 'success');
       if (res.documents?.length) window._nav('documents');
       else window._nav('report-detail', { reportId, focusTab: 'legal-pack' });
     } catch (err) {
       toast(err.message || 'Workflow failed', 'error');
+    }
+  };
+
+  window._recommendLetters = async function(clientId, reportId) {
+    if (!clientId && !reportId) return toast('Client or report required', 'error');
+    try {
+      const res = await api('/documents/recommend', {
+        method: 'POST',
+        body: JSON.stringify({ clientId, reportId }),
+      });
+      const recs = res.strategy?.recommendations || [];
+      const lines = recs.slice(0, 12).map((r, i) => `${i + 1}. ${r.name} — ${r.reason}`).join('\n');
+      const brand = res.firmBrandingConfigured ? `Firm brand: ${res.firmName}` : 'WARNING: Firm letterhead not configured in Settings';
+      alert(`Letter strategy (${recs.length} docs)\n${res.strategy?.strategySummary || ''}\n${brand}\n\n${lines}\n\nUse Launch Workflow to generate the full pack.`);
+    } catch (err) {
+      toast(err.message || 'Recommend failed', 'error');
     }
   };
 
@@ -5532,10 +5549,11 @@ Status: Discharged`;
         </div>` : ''}
 
         <div class="glass rounded-xl p-6 border border-gray-700">
-          <h2 class="text-sm font-semibold text-white mb-4 flex items-center gap-2"><i class="fas fa-building text-blue-400"></i> Firm Letterhead</h2>
+          <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-building text-blue-400"></i> Firm Letterhead</h2>
+          <p class="text-xs text-gray-500 mb-4">Printed on every dispute PDF and letter body. Fill this once — branding follows every client file.</p>
           <form id="letterhead-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="md:col-span-2"><label class="block text-xs text-gray-400 mb-1">Organization Display Name</label><input name="orgName" value="${escapeHtml(org.name || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
-            <div><label class="block text-xs text-gray-400 mb-1">Firm Name</label><input name="firmName" value="${escapeHtml(lh.firmName || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div><label class="block text-xs text-gray-400 mb-1">Firm Name</label><input name="firmName" value="${escapeHtml(lh.firmName || settings.company_name || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
             <div><label class="block text-xs text-gray-400 mb-1">Attorney / Authorized Name</label><input name="attorneyName" value="${escapeHtml(lh.attorneyName || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
             <div class="md:col-span-2"><label class="block text-xs text-gray-400 mb-1">Address</label><input name="address" value="${escapeHtml(lh.address || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
             <div><label class="block text-xs text-gray-400 mb-1">City</label><input name="city" value="${escapeHtml(lh.city || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
@@ -5543,6 +5561,20 @@ Status: Discharged`;
             <div><label class="block text-xs text-gray-400 mb-1">Phone</label><input name="phone" value="${escapeHtml(lh.phone || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
             <div><label class="block text-xs text-gray-400 mb-1">Email</label><input name="email" value="${escapeHtml(lh.email || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
             <div><label class="block text-xs text-gray-400 mb-1">Bar Number</label><input name="barNumber" value="${escapeHtml(lh.barNumber || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div class="md:col-span-2">
+              <label class="block text-xs text-gray-400 mb-1">Letterhead Logo (PNG/JPEG — appears on dispute PDFs)</label>
+              <input id="letterhead-logo" type="file" accept="image/png,image/jpeg" class="block w-full text-xs text-gray-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white">
+              <p class="text-[10px] text-gray-500 mt-1">${lh.logoBase64 || settings.letterhead_logo_base64 ? 'Logo on file — upload a new file to replace.' : 'No logo uploaded yet.'}</p>
+              <input type="hidden" name="logoBase64" id="letterhead-logo-b64" value="">
+            </div>
+            <label class="flex items-center gap-2 text-xs text-gray-300 md:col-span-2 cursor-pointer">
+              <input type="checkbox" name="isHiredAdvocate" ${lh.isHiredAdvocate || settings.is_hired_advocate ? 'checked' : ''} class="rounded border-gray-600 bg-gray-900">
+              Hired advocate / CRO representation disclosure on PDFs
+            </label>
+            <label class="flex items-center gap-2 text-xs text-gray-300 md:col-span-2 cursor-pointer">
+              <input type="checkbox" name="repAgreementAttached" ${lh.repAgreementAttached || settings.rep_agreement_attached ? 'checked' : ''} class="rounded border-gray-600 bg-gray-900">
+              Representation agreement / POA on file
+            </label>
             <div class="md:col-span-2"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">Save Letterhead</button></div>
           </form>
         </div>
@@ -5594,28 +5626,49 @@ Status: Discharged`;
           e.target.reset();
         } catch (err) { toast(err.message, 'error'); }
       };
+      const logoInput = $('#letterhead-logo');
+      if (logoInput) logoInput.onchange = async () => {
+        const file = logoInput.files && logoInput.files[0];
+        if (!file) return;
+        if (file.size > 1.5 * 1024 * 1024) { toast('Logo must be under 1.5MB', 'error'); logoInput.value = ''; return; }
+        const buf = await file.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        const b64 = `data:${file.type || 'image/png'};base64,${btoa(binary)}`;
+        const hidden = $('#letterhead-logo-b64');
+        if (hidden) hidden.value = b64;
+        toast('Logo ready — click Save Letterhead', 'info');
+      };
       if (lhForm) lhForm.onsubmit = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
+        const logoB64 = String(fd.get('logoBase64') || '').trim();
+        const letterhead = {
+          firmName: fd.get('firmName'),
+          attorneyName: fd.get('attorneyName'),
+          address: fd.get('address'),
+          city: fd.get('city'),
+          state: fd.get('state'),
+          zip: fd.get('zip'),
+          phone: fd.get('phone'),
+          email: fd.get('email'),
+          barNumber: fd.get('barNumber'),
+          isHiredAdvocate: !!fd.get('isHiredAdvocate'),
+          repAgreementAttached: !!fd.get('repAgreementAttached'),
+        };
+        if (logoB64) letterhead.logoBase64 = logoB64;
         try {
           await api('/settings/org', {
             method: 'PUT',
             body: JSON.stringify({
               name: fd.get('orgName'),
-              letterhead: {
-                firmName: fd.get('firmName'),
-                attorneyName: fd.get('attorneyName'),
-                address: fd.get('address'),
-                city: fd.get('city'),
-                state: fd.get('state'),
-                zip: fd.get('zip'),
-                phone: fd.get('phone'),
-                email: fd.get('email'),
-                barNumber: fd.get('barNumber'),
-              }
+              isHiredAdvocate: !!fd.get('isHiredAdvocate'),
+              repAgreementAttached: !!fd.get('repAgreementAttached'),
+              letterhead,
             })
           });
-          toast('Letterhead saved', 'success');
+          toast('Letterhead saved — all new letters & PDFs will use this brand', 'success');
           if (state.org) setState({ org: { ...state.org, name: fd.get('orgName') } });
         } catch (err) { toast(err.message, 'error'); }
       };
@@ -7691,8 +7744,11 @@ async function pgAdminConsole(el) {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
               <select id="vault-cat" class="bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white">
                 <option value="id_doc">Photo ID / Utility</option>
-                <option value="creditor_reply">Creditor / Bureau Reply</option>
+                <option value="creditor_reply">Creditor / Bureau Reply (auto-classify)</option>
+                <option value="bureau_response">Bureau Investigation Results</option>
+                <option value="furnisher_response">Furnisher Direct Dispute Reply</option>
                 <option value="bank_statement">Bank Statement (DTI + AI)</option>
+                <option value="credit_report">Credit Report PDF (text extract)</option>
                 <option value="other">Other Document</option>
               </select>
               <input id="vault-name" class="bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white" placeholder="File name">

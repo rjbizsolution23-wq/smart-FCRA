@@ -21,7 +21,16 @@ import { analyzeReportLive } from './engine/violation-factcheck';
 import { seedKnowledgeBase, retrieveKnowledge } from './lib/knowledge-base';
 import { listEmailTemplates, sendTemplatedClientMessage, EMAIL_TEMPLATES } from './lib/email-templates';
 import { runEnterpriseCommsCron } from './lib/email-workflows';
-import { loadOrgBrand, brandVars } from './lib/org-branding';
+import {
+  loadOrgBrand,
+  brandVars,
+  loadOrgLetterhead,
+  mergeLetterheadIntoSettings,
+  brandLetterContent,
+  normalizeOrgLetterhead,
+} from './lib/org-branding';
+import { recommendLetterStrategy, selectWorkflowPackTypes } from './engine/letter-strategy';
+import { classifyBureauReply, isReplyUploadCategory } from './engine/bureau-reply-intel';
 import { runOpsPack, runOpsJob, listOpsJobs, touchClientEngagement, type OpsJobName } from './lib/ops-scheduler';
 import { issueClientContractPack, createLegalContract, signLegalContract, recordEsignConsent } from './lib/legal-contracts';
 import { ESIGN_DISCLOSURE_TEXT, ESIGN_DISCLOSURE_VERSION, type ContractType, documentRequiresNotarization, sha256Hex } from './data/legal-contracts';
@@ -397,6 +406,8 @@ type Bindings = {
   AI?: any;
   SMARTCREDIT_CLIENT_KEY?: string;
   SMARTCREDIT_CLIENT_SECRET?: string;
+  /** Allow SmartCredit sandbox mock username in production (demos only). */
+  ALLOW_SMARTCREDIT_SANDBOX?: string;
   /** MyFreeScoreNow partner credentials — set via wrangler secret / .dev.vars only */
   MFSN_API_URL?: string;
   MFSN_EMAIL?: string;
@@ -2012,6 +2023,39 @@ app.post('/api/client-portal/uploads', authMiddleware, async (c) => {
   let analysis: any = null;
   let underwriting: any = null;
 
+  let replyIntel: ReturnType<typeof classifyBureauReply> | null = null;
+  if (isReplyUploadCategory(category) && contentText.length > 40) {
+    replyIntel = classifyBureauReply(contentText);
+    analysis = { summary: replyIntel.summary, reply: replyIntel };
+    // Auto-update the latest open dispute document for this client when confidence is solid
+    if (replyIntel.confidence >= 0.6 && replyIntel.overallOutcome !== 'inconclusive') {
+      try {
+        const openDoc = await c.env.DB.prepare(
+          `SELECT id FROM documents WHERE client_id = ? AND org_id = ? AND status IN ('sent','mailed','delivered','draft') ORDER BY datetime(COALESCE(sent_at, updated_at, created_at)) DESC LIMIT 1`
+        ).bind(client.id, user.org_id).first() as any;
+        if (openDoc?.id) {
+          await c.env.DB.prepare(
+            `UPDATE documents SET status = 'response_received', dispute_result = ?, updated_at = datetime('now') WHERE id = ? AND org_id = ?`
+          ).bind(replyIntel.suggestedDisputeResult, openDoc.id, user.org_id).run();
+          // Only auto-resolve the whole set on clear full deletion; partial needs staff review
+          if (replyIntel.overallOutcome === 'deleted') {
+            await c.env.DB.prepare(
+              `UPDATE violations SET status = 'resolved', updated_at = datetime('now') WHERE client_id = ? AND org_id = ? AND status != 'resolved'`
+            ).bind(client.id, user.org_id).run().catch(() => {});
+          }
+          await c.env.DB.prepare(
+            'INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+          ).bind(
+            generateId(), user.org_id, client.id, openDoc.id, user.id,
+            'bureau_reply_classified',
+            `Auto-classified upload as ${replyIntel.overallOutcome} (${replyIntel.bureauHint})`,
+            JSON.stringify(replyIntel),
+          ).run();
+        }
+      } catch { /* soft */ }
+    }
+  }
+
   if ((category === 'bank_statement' || body.runUnderwriting) && contentText.length > 40) {
     underwriting = parseBankStatementText(contentText);
     try {
@@ -2110,7 +2154,16 @@ app.post('/api/client-portal/uploads', authMiddleware, async (c) => {
     JSON.stringify({ uploadId: id, category, r2Key: !!r2Key })
   ).run();
 
-  return c.json({ ok: true, id, analysis, underwriting, r2Stored: !!r2Key, sha256, byteSize });
+  return c.json({
+    ok: true,
+    id,
+    analysis,
+    underwriting,
+    replyIntel,
+    r2Stored: !!r2Key,
+    sha256,
+    byteSize,
+  });
 });
 
 // ── Education library + progress ───────────────────────────────
@@ -4764,19 +4817,29 @@ app.put('/api/settings/org', authMiddleware, async (c) => {
     return c.json({ error: 'Only org admins can update settings' }, 403);
   }
   const body = await c.req.json();
-  const org = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+  const org = await c.env.DB.prepare('SELECT name, settings FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
   let settings: any = {};
   try { settings = JSON.parse(org?.settings || '{}'); } catch { settings = {}; }
+  const displayName = (typeof body.name === 'string' && body.name.trim()) ? body.name.trim() : (org?.name || '');
 
   if (body.letterhead && typeof body.letterhead === 'object') {
-    settings.letterhead = {
-      ...(settings.letterhead || {}),
-      ...body.letterhead,
-    };
+    // Persist nested letterhead AND flatten PDF/email keys so every letter/PDF uses firm branding
+    settings = mergeLetterheadIntoSettings(settings, body.letterhead, displayName);
   }
   if (body.branding && typeof body.branding === 'object') {
     settings.branding = { ...(settings.branding || {}), ...body.branding };
   }
+  if (typeof body.isHiredAdvocate === 'boolean') {
+    settings.is_hired_advocate = body.isHiredAdvocate;
+    settings.letterhead = { ...(settings.letterhead || {}), isHiredAdvocate: body.isHiredAdvocate };
+  }
+  if (typeof body.repAgreementAttached === 'boolean') {
+    settings.rep_agreement_attached = body.repAgreementAttached;
+    settings.letterhead = { ...(settings.letterhead || {}), repAgreementAttached: body.repAgreementAttached };
+  }
+  // Re-normalize after branding/advocate flags so flat keys stay in sync
+  settings = mergeLetterheadIntoSettings(settings, settings.letterhead || {}, displayName);
+
   if (typeof body.name === 'string' && body.name.trim()) {
     await c.env.DB.prepare('UPDATE organizations SET name = ?, settings = ?, updated_at = datetime("now") WHERE id = ?')
       .bind(body.name.trim(), JSON.stringify(settings), user.org_id).run();
@@ -4785,7 +4848,7 @@ app.put('/api/settings/org', authMiddleware, async (c) => {
       .bind(JSON.stringify(settings), user.org_id).run();
   }
 
-  return c.json({ ok: true, settings });
+  return c.json({ ok: true, settings, letterhead: normalizeOrgLetterhead(settings, displayName).letterhead });
 });
 
 app.get('/api/health/ready', async (c) => {
@@ -4801,8 +4864,13 @@ app.get('/api/health/ready', async (c) => {
     nvidia: !!c.env.NVIDIA_API_KEY,
     freeAiOnly: String(c.env.FREE_AI_ONLY || 'true').toLowerCase() !== 'false',
     smartcredit: !!(c.env.SMARTCREDIT_CLIENT_KEY && c.env.SMARTCREDIT_CLIENT_SECRET),
+    mfsn: !!resolveMfsnCredentials({}, c.env as any),
     click2mail: !!(c.env.CLICK2MAIL_USERNAME && c.env.CLICK2MAIL_AUTH_BASIC),
+    twilioSms: !!(c.env.TWILIO_ACCOUNT_SID && c.env.TWILIO_AUTH_TOKEN),
     aiProvidersConfigured: providers.filter(p => p.configured && p.free).length,
+    letterBranding: true,
+    letterStrategy: true,
+    bureauReplyIntel: true,
     environment: c.env.ENVIRONMENT || 'development',
   };
   try {
@@ -4942,15 +5010,17 @@ async function launchAttorneyWorkflowPack(
     return { success: false, documents: [], caseStatus: '', bureau: report.bureau || '', litigationScore: null, nextStep: '', error: 'No violations to package yet' };
   }
 
-  const packTypes = [
-    'bureau-dispute',
-    '1681i-letter',
-    'intent-to-sue-fcra',
-    'pre-litigation-settlement',
-    'cfpb-complaint',
-    'fed-complaint',
-  ];
+  const litScorePreview = calculateLitigationScore(violations);
+  const strategy = recommendLetterStrategy(violations, {
+    litigationScore: litScorePreview.score,
+    clientState: client.state || '',
+    includeLitigationPack: true,
+  });
+  const packTypes = strategy.packTypes.length
+    ? strategy.packTypes
+    : selectWorkflowPackTypes(violations, { litigationScore: litScorePreview.score, clientState: client.state || '' });
 
+  const firmLh = await loadOrgLetterhead(c.env, opts.orgId);
   const generated: any[] = [];
   const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const docData: DocumentData = {
@@ -4972,7 +5042,7 @@ async function launchAttorneyWorkflowPack(
   for (const docType of packTypes) {
     const docDef = (DOCUMENT_TYPES as any)[docType];
     if (!docDef) continue;
-    const content = docDef.fn(docData);
+    const content = brandLetterContent(docDef.fn(docData), firmLh);
     const docId = generateId();
     const title = `${docDef.name} - ${client.first_name} ${client.last_name}`;
     await c.env.DB.prepare(
@@ -4995,7 +5065,7 @@ async function launchAttorneyWorkflowPack(
     generated.push({ id: docId, docType, title });
   }
 
-  const litScore = calculateLitigationScore(violations);
+  const litScore = litScorePreview;
   await c.env.DB.prepare(
     'UPDATE clients SET case_status = ?, lvs_score = ?, estimated_recovery = ? WHERE id = ? AND org_id = ?'
   ).bind(
@@ -5021,8 +5091,15 @@ async function launchAttorneyWorkflowPack(
     opts.reportId,
     opts.userId,
     'workflow_launched',
-    `Launched attorney workflow pack (${generated.length} documents) for ${report.bureau}`,
-    JSON.stringify({ docs: generated.map((g) => g.docType), bureau: report.bureau, auto: true })
+    `Launched intelligent workflow pack (${generated.length} documents) for ${report.bureau}: ${strategy.strategySummary}`,
+    JSON.stringify({
+      docs: generated.map((g) => g.docType),
+      bureau: report.bureau,
+      auto: true,
+      signals: strategy.signals,
+      strategySummary: strategy.strategySummary,
+      branded: firmLh.configured,
+    })
   ).run();
 
   return {
@@ -5031,6 +5108,7 @@ async function launchAttorneyWorkflowPack(
     caseStatus: 'DISPUTE',
     bureau: report.bureau || '',
     litigationScore: litScore,
+    strategy,
     nextStep: 'Client portal e-sign queue is ready for the generated pack',
   };
 }
@@ -5570,7 +5648,16 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
   let resolvedTrackingToken = trackingToken;
   let bureauReports: CreditReportData[] = [];
 
+  const envName = String(c.env.ENVIRONMENT || '').toLowerCase();
+  const sandboxAllowed =
+    envName !== 'production' ||
+    String(c.env.ALLOW_SMARTCREDIT_SANDBOX || '').toLowerCase() === 'true';
   const isSandbox = username === 'test_smartcredit@rjbusinesssolutions.com';
+  if (isSandbox && !sandboxAllowed) {
+    return c.json({
+      error: 'SmartCredit sandbox mock is disabled in production. Use live SmartCredit credentials or set ALLOW_SMARTCREDIT_SANDBOX=true for demos.',
+    }, 403);
+  }
 
   try {
     if (isSandbox) {
@@ -5961,6 +6048,41 @@ app.get('/api/documents', authMiddleware, async (c) => {
   return c.json({ documents: result?.results || [] });
 });
 
+/** Intelligent letter recommendations from live violations (CRO decision support). */
+app.post('/api/documents/recommend', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  const clientId = body.clientId;
+  const reportId = body.reportId;
+  if (!clientId && !reportId) return c.json({ error: 'clientId or reportId required' }, 400);
+
+  const client = clientId
+    ? await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first() as any
+    : null;
+  if (clientId && !client) return c.json({ error: 'Client not found' }, 404);
+
+  const violationsResult = reportId
+    ? await c.env.DB.prepare('SELECT * FROM violations WHERE report_id = ? AND org_id = ?').bind(reportId, user.org_id).all()
+    : await c.env.DB.prepare('SELECT * FROM violations WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 100').bind(clientId, user.org_id).all();
+  const violations = (violationsResult?.results || []) as any[];
+  const litScore = violations.length ? calculateLitigationScore(violations) : { score: 0 };
+  const firmLh = await loadOrgLetterhead(c.env, user.org_id);
+  const strategy = recommendLetterStrategy(violations, {
+    litigationScore: (litScore as any).score || 0,
+    clientState: client?.state || body.clientState || '',
+    includeLitigationPack: body.includeLitigationPack !== false,
+  });
+
+  return c.json({
+    ok: true,
+    strategy,
+    litigationScore: litScore,
+    violationCount: violations.length,
+    firmBrandingConfigured: firmLh.configured,
+    firmName: firmLh.firmName || null,
+  });
+});
+
 app.post('/api/documents/generate', authMiddleware, async (c) => {
   const user = c.get('user');
   const { clientId, reportId, violationIds, docType, bureau, creditorName, creditorAddress } = await c.req.json();
@@ -5978,6 +6100,7 @@ app.post('/api/documents/generate', authMiddleware, async (c) => {
   const docDef = (DOCUMENT_TYPES as any)[docType];
   if (!docDef) return c.json({ error: 'Unknown document type' }, 400);
 
+  const firmLh = await loadOrgLetterhead(c.env, user.org_id);
   const docData: DocumentData = {
     clientName: `${client.first_name} ${client.last_name}`,
     clientAddress: client.address_line1 || '',
@@ -5996,7 +6119,7 @@ app.post('/api/documents/generate', authMiddleware, async (c) => {
     clientEmail: client.email || '',
   };
 
-  const content = docDef.fn(docData);
+  const content = brandLetterContent(docDef.fn(docData), firmLh);
   const docId = generateId();
   const title = `${docDef.name} - ${client.first_name} ${client.last_name}`;
 
@@ -6004,7 +6127,7 @@ app.post('/api/documents/generate', authMiddleware, async (c) => {
     'INSERT INTO documents (id, org_id, client_id, report_id, violation_ids, doc_type, doc_subtype, title, recipient_name, recipient_address, content, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(docId, user.org_id, clientId, reportId || null, JSON.stringify(violationIds || []), docType, docDef.category, title, creditorName || null, creditorAddress || null, content, 'draft', user.id).run();
 
-  await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, clientId, docId, user.id, 'document_generated', `Generated ${docDef.name}`).run();
+  await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, clientId, docId, user.id, 'document_generated', `Generated ${docDef.name}${firmLh.configured ? ' (firm-branded)' : ''}`).run();
 
   try {
     const email =
@@ -6041,6 +6164,7 @@ app.post('/api/documents/generate-bulk', authMiddleware, async (c) => {
     : await c.env.DB.prepare('SELECT * FROM violations WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 50').bind(clientId, user.org_id).all();
 
   const violations = violationsResult?.results || [];
+  const firmLh = await loadOrgLetterhead(c.env, user.org_id);
   const generated: any[] = [];
 
   for (const docType of (docTypes || [])) {
@@ -6065,7 +6189,7 @@ app.post('/api/documents/generate-bulk', authMiddleware, async (c) => {
       clientEmail: client.email || '',
     };
 
-    const content = docDef.fn(docData);
+    const content = brandLetterContent(docDef.fn(docData), firmLh);
     const docId = generateId();
     const title = `${docDef.name} - ${client.first_name} ${client.last_name}`;
 
@@ -6348,9 +6472,11 @@ app.get('/api/documents/:id/pdf', authMiddleware, async (c) => {
   const doc = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
   if (!doc) return c.json({ error: 'Document not found' }, 404);
 
-  // Load B2B organization settings for letterhead and brand personalization
+  // Load B2B organization settings — nested letterhead (Settings UI) + flat keys
   const org = await c.env.DB.prepare('SELECT name, settings FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
-  const settings = JSON.parse(org?.settings || '{}');
+  let settings: any = {};
+  try { settings = JSON.parse(org?.settings || '{}'); } catch { settings = {}; }
+  const { letterhead: firmLh } = normalizeOrgLetterhead(settings, org?.name);
 
   // Support real-time UI overrides via query parameters
   const queryHiredAdvocate = c.req.query('isHiredAdvocate');
@@ -6358,22 +6484,24 @@ app.get('/api/documents/:id/pdf', authMiddleware, async (c) => {
 
   const isHiredAdvocate = queryHiredAdvocate !== undefined
     ? queryHiredAdvocate === 'true'
-    : (settings.is_hired_advocate === true || settings.is_hired_advocate === 1);
+    : firmLh.isHiredAdvocate;
 
   const repAgreementAttached = queryRepAttached !== undefined
     ? queryRepAttached === 'true'
-    : (settings.rep_agreement_attached === true || settings.rep_agreement_attached === 1);
+    : firmLh.repAgreementAttached;
 
   const customLetterhead = {
-    orgName: org?.name || 'RJ Business Solutions',
-    logoBase64: settings.letterhead_logo_base64 || undefined,
-    headerText: settings.letterhead_title || doc.title,
-    customSubtext: settings.letterhead_subtext || (settings.business_address ? `Official Communication from ${org?.name} • ${settings.business_address}` : `Official Dispute Document • FCRA Compliance Engine`),
+    orgName: firmLh.firmName || org?.name || 'RJ Business Solutions',
+    logoBase64: firmLh.logoBase64 || undefined,
+    headerText: firmLh.firmName || firmLh.headerText || doc.title,
+    customSubtext: firmLh.customSubtext || `Official Dispute Document • FCRA Compliance Engine`,
     isHiredAdvocate,
     repAgreementAttached
   };
 
-  const pdfBytes = generatePDFFromText(doc.title, doc.content, customLetterhead);
+  // Ensure body also carries firm brand even for legacy docs generated pre-branding
+  const brandedBody = brandLetterContent(doc.content || '', firmLh);
+  const pdfBytes = generatePDFFromText(doc.title, brandedBody, customLetterhead);
 
   return new Response(pdfBytes, {
     headers: {
@@ -8110,7 +8238,7 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/app.js?v=20260805-blankfix"></script>
+  <script src="/static/app.js?v=20260808-cro-ready"></script>
 </body>
 </html>`;
 }
