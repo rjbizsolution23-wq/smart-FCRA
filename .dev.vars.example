@@ -4,11 +4,15 @@ FRONTEND_URL=http://localhost:3000
 APP_BASE_URL=http://localhost:3000
 ENVIRONMENT=development
 FREE_AI_ONLY=true
-# Optional partner integrations (leave blank for sandbox demos):
-# MFSN_EMAIL=
+# MyFreeScoreNow partner / affiliate (see docs/agents/mfsn-partner/AGENT_ACCESS.md)
+# MFSN_EMAIL=rickyjefferson1006@gmail.com
 # MFSN_PASSWORD=
-# MFSN_CLIENT_TOKEN=   # partner token — public /?signup=mfsn uses this; consumers enter username/password
+# MFSN_CLIENT_TOKEN=          # optional default; members usually enter their own MAPIK# token
 # MFSN_API_URL=https://api.myfreescorenow.com
+# MFSN_LEGACY_EMAIL=rickjefferson@rickjeffersonsolutions.com
+# MFSN_LEGACY_PASSWORD=
+# MFSN_AFFILIATE_PORTAL_URL=https://myfreescorenow.com/login
+# MFSN_API_DOCS_URL=https://www.myfreescorenow.com/api-integration
 # PUBLIC_SIGNUP_ORG_ID=org_platform_master
 # Twilio SMS (client texting from CRM + signup welcome)
 # TWILIO_ACCOUNT_SID=

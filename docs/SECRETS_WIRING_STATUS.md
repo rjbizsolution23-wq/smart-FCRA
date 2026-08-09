@@ -32,6 +32,19 @@ Operator secrets live in **gitignored** `.dev.vars` / `secrets.env` only (never 
 
 PBKDF2 iterations are **100,000** (Cloudflare Workers Web Crypto hard cap).
 
+## MyFreeScoreNow (wired)
+
+| Secret | Purpose |
+|--------|---------|
+| `MFSN_EMAIL` | Primary operator: `rickyjefferson1006@gmail.com` |
+| `MFSN_PASSWORD` | Primary operator password (Pages secret + `.dev.vars`) |
+| `MFSN_LEGACY_EMAIL` | `rickjefferson@rickjeffersonsolutions.com` |
+| `MFSN_LEGACY_PASSWORD` | Legacy partner password |
+| `MFSN_CLIENT_TOKEN` | Optional default; members usually supply own `MAPIK#` |
+| `MFSN_API_URL` | `https://api.myfreescorenow.com` |
+
+Agent runbook: `docs/agents/mfsn-partner/AGENT_ACCESS.md` · helper: `node scripts/mfsn-login.mjs`
+
 ## Still optional
 
 1. Stripe `whsec_…` webhook secret

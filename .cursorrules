@@ -34,3 +34,14 @@ Prioritize Workers-compatible patterns (Web Crypto, fetch, D1, R2). Do not intro
 
 ## FULL PROMPT
 See docs/agents/api-integration-master/SYSTEM_PROMPT.txt and BRAIN_REFRESH_PROTOCOL.md
+
+## MYFREESCORENOW (MFSN) — OPERATOR ACCESS
+- Whitelisted primary login: `rickyjefferson1006@gmail.com` (API + affiliate dashboard)
+- Legacy partner login: `rickjefferson@rickjeffersonsolutions.com`
+- Affiliate ID / enroll offers: `A8289` — see `src/data/mfsn-affiliate-offers.ts`
+- Credentials: gitignored `.dev.vars` / `secrets.env` keys `MFSN_EMAIL`, `MFSN_PASSWORD` (never commit passwords)
+- Agent runbook: `docs/agents/mfsn-partner/AGENT_ACCESS.md`
+- Login helper: `node scripts/mfsn-login.mjs` (optional `--pull member@email --client-token 'MAPIK#…'`)
+- Official OpenAPI: login / fetch-3B-json / logout only
+- Docs: https://www.myfreescorenow.com/api-integration · Swagger: https://myfreescorenow.portal.swaggerhub.com/reporting/docs/mfsn-reports-v-1-0-0
+- Members under this affiliate each have their own `MAPIK#` client token; partner Bearer ≠ member token

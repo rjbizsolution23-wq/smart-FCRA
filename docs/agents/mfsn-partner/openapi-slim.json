@@ -1,0 +1,45 @@
+{
+  "info": {
+    "title": "MFSN-REPORTS",
+    "version": "1.0.0",
+    "description": "Specification for the MFSN 2.0 production authentication and 3B report APIs.\nThis spec is derived from the Postman collection \"MFSN 2.0 - PRODUCTION-Fetch 3B\"\nand the observed request/response samples in Postman.\n"
+  },
+  "servers": [
+    {
+      "url": "https://api.myfreescorenow.com",
+      "description": "Production server"
+    }
+  ],
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "summary": "Login and obtain session tokens",
+        "operationId": "login",
+        "parameters": [],
+        "requestBody": true
+      }
+    },
+    "/api/auth/fetch-3B-json": {
+      "post": {
+        "summary": "Fetch 3B credit report as JSON",
+        "operationId": "fetch3BJson",
+        "parameters": [],
+        "requestBody": true
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "summary": "Logout current session",
+        "operationId": "logout",
+        "parameters": [],
+        "requestBody": false
+      }
+    }
+  },
+  "securitySchemes": {
+    "bearerAuth": {
+      "type": "http",
+      "scheme": "bearer"
+    }
+  }
+}

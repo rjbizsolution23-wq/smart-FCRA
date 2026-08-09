@@ -12,9 +12,11 @@ Uploaded source and chat paste contained **live MFSN credentials**. Those defaul
 Set via Cloudflare Pages secrets (or local `.dev.vars`):
 
 ```bash
-wrangler pages secret put MFSN_EMAIL --project-name smart-fcra-v2
+wrangler pages secret put MFSN_EMAIL --project-name smart-fcra-v2          # rickyjefferson1006@gmail.com
 wrangler pages secret put MFSN_PASSWORD --project-name smart-fcra-v2
 wrangler pages secret put MFSN_CLIENT_TOKEN --project-name smart-fcra-v2
+wrangler pages secret put MFSN_LEGACY_EMAIL --project-name smart-fcra-v2  # rickjefferson@rickjeffersonsolutions.com
+wrangler pages secret put MFSN_LEGACY_PASSWORD --project-name smart-fcra-v2
 # optional:
 wrangler pages secret put MFSN_API_URL --project-name smart-fcra-v2
 ```
@@ -22,11 +24,18 @@ wrangler pages secret put MFSN_API_URL --project-name smart-fcra-v2
 Local `.dev.vars` (gitignored):
 
 ```
-MFSN_EMAIL=...
+MFSN_EMAIL=rickyjefferson1006@gmail.com
 MFSN_PASSWORD=...
 MFSN_CLIENT_TOKEN=...
 MFSN_API_URL=https://api.myfreescorenow.com
+MFSN_LEGACY_EMAIL=rickjefferson@rickjeffersonsolutions.com
+MFSN_LEGACY_PASSWORD=...
 ```
+
+Agent access runbook (no passwords in git): `docs/agents/mfsn-partner/AGENT_ACCESS.md`  
+Login helper: `node scripts/mfsn-login.mjs`  
+Official docs: https://www.myfreescorenow.com/api-integration  
+OpenAPI: https://api.swaggerhub.com/apis/myfreescorenowinc/MyFreeScoreNow-Reports/1.0.0/swagger.json
 
 ## Modules installed
 

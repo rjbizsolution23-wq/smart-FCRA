@@ -75,6 +75,14 @@ import {
   listStaffAffiliateOffers,
   normalizeAffiliateOfferCode,
 } from './data/mfsn-affiliate-offers';
+import {
+  MFSN_AFFILIATE_PORTAL_URL,
+  MFSN_API_DOCS_URL,
+  MFSN_OPERATOR_ACCOUNTS,
+  MFSN_OPENAPI_URL,
+  isWhitelistedMfsnOperatorEmail,
+  primaryMfsnOperatorEmail,
+} from './data/mfsn-operator-accounts';
 import { syncClientToGhl, ghlConfigured, verifyGhlConnection, toE164Phone } from './lib/ghl-client';
 import { sendSms } from './lib/alerts';
 import sampleMfsnReport from './data/sample-mfsn-report.json';
@@ -440,6 +448,10 @@ type Bindings = {
   MFSN_EMAIL?: string;
   MFSN_PASSWORD?: string;
   MFSN_CLIENT_TOKEN?: string;
+  MFSN_LEGACY_EMAIL?: string;
+  MFSN_LEGACY_PASSWORD?: string;
+  MFSN_AFFILIATE_PORTAL_URL?: string;
+  MFSN_API_DOCS_URL?: string;
   /** Org that receives public MFSN consumer signups (default org_platform_master). */
   PUBLIC_SIGNUP_ORG_ID?: string;
   DEFAULT_SIGNUP_ORG_ID?: string;
@@ -1210,6 +1222,28 @@ app.get('/api/mfsn/affiliate-offers', authMiddleware, async (c) => {
     ok: true,
     affiliateId: MFSN_AFFILIATE_ID,
     offers: listStaffAffiliateOffers(),
+  });
+});
+
+/** Staff: whitelisted MFSN operator accounts + docs (no passwords). */
+app.get('/api/mfsn/operator-access', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') {
+    return c.json({ error: 'Staff only' }, 403);
+  }
+  const configuredEmail = String(c.env.MFSN_EMAIL || '').trim().toLowerCase();
+  return c.json({
+    ok: true,
+    affiliateId: MFSN_AFFILIATE_ID,
+    primaryEmail: primaryMfsnOperatorEmail(),
+    configuredEmail: configuredEmail || null,
+    configuredEmailWhitelisted: isWhitelistedMfsnOperatorEmail(configuredEmail),
+    partnerConfigured: !!resolvePartnerMfsnCredentials(c.env),
+    operators: MFSN_OPERATOR_ACCOUNTS,
+    affiliatePortalUrl: String(c.env.MFSN_AFFILIATE_PORTAL_URL || MFSN_AFFILIATE_PORTAL_URL),
+    apiDocsUrl: String(c.env.MFSN_API_DOCS_URL || MFSN_API_DOCS_URL),
+    openApiUrl: MFSN_OPENAPI_URL,
+    agentRunbook: '/docs/agents/mfsn-partner/AGENT_ACCESS.md',
   });
 });
 
