@@ -5778,6 +5778,19 @@ Status: Discharged`;
           <p class="text-[10px] text-gray-600 mt-3">Public signup: <a class="text-cyan-400" href="/?signup=mfsn" target="_blank">/?signup=mfsn</a></p>
         </div>
 
+        <div class="glass rounded-xl p-6 border border-orange-900/40" id="ghl-mfsn-sync-panel">
+          <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-cloud-upload-alt text-orange-400"></i> GoHighLevel + MyFreeScoreNow Sync</h2>
+          <p class="text-xs text-gray-500 mb-4">Push every CRM client and every MFSN member into your GHL location with full custom fields, scores, offer codes, and tags.</p>
+          <div id="ghl-integration-status" class="text-xs text-gray-400 mb-4">Checking connection…</div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" id="btn-ghl-ensure-fields" class="bg-orange-800 hover:bg-orange-700 text-white px-3 py-2 rounded-lg text-xs font-semibold">Ensure GHL Fields</button>
+            <button type="button" id="btn-ghl-sync-clients" class="bg-orange-700 hover:bg-orange-600 text-white px-3 py-2 rounded-lg text-xs font-semibold">Sync All CRM Clients</button>
+            <button type="button" id="btn-ghl-sync-mfsn" class="bg-cyan-700 hover:bg-cyan-600 text-white px-3 py-2 rounded-lg text-xs font-semibold">Sync MFSN Active → GHL</button>
+            <button type="button" id="btn-ghl-refresh-status" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-xs font-semibold">Refresh Status</button>
+          </div>
+          <pre id="ghl-sync-log" class="mt-4 hidden text-[10px] text-gray-400 bg-gray-950/60 border border-gray-800 rounded-lg p-3 max-h-40 overflow-auto whitespace-pre-wrap"></pre>
+        </div>
+
         <div class="glass rounded-xl p-6 border border-gray-700">
           <h2 class="text-sm font-semibold text-white mb-4 flex items-center gap-2"><i class="fas fa-key text-amber-400"></i> Change Password</h2>
           <form id="staff-pwd-form" class="flex flex-wrap gap-3 items-end">
@@ -5830,6 +5843,71 @@ Status: Discharged`;
             </tr>`).join('')}</tbody></table></div>`;
         }).catch(() => { affTable.textContent = 'Could not load affiliate offers.'; });
       }
+
+      const ghlStatusEl = $('#ghl-integration-status');
+      const ghlLogEl = $('#ghl-sync-log');
+      const renderGhlStatus = async () => {
+        if (!ghlStatusEl) return;
+        try {
+          const [ghl, mfsn] = await Promise.all([
+            api('/integrations/ghl/status'),
+            api('/integrations/mfsn/status').catch(() => null),
+          ]);
+          const missing = (ghl.fieldsMissing || []).length;
+          const present = (ghl.fieldsPresent || []).length;
+          ghlStatusEl.innerHTML = `
+            <div class="grid sm:grid-cols-2 gap-2">
+              <div>GHL: <span class="${ghl.ok ? 'text-emerald-400' : 'text-rose-400'} font-semibold">${ghl.ok ? 'Connected' : 'Not connected'}</span>${ghl.locationId ? ` · <span class="font-mono text-gray-500">${escapeHtml(String(ghl.locationId).slice(0, 12))}…</span>` : ''}</div>
+              <div>Custom fields: <span class="text-white font-semibold">${present}</span> ready${missing ? ` · <span class="text-amber-300">${missing} missing</span>` : ''}</div>
+              <div>MFSN partner: <span class="${mfsn?.ok ? 'text-emerald-400' : 'text-amber-300'} font-semibold">${mfsn?.ok ? 'Logged in' : (mfsn?.error || 'Check secrets')}</span>${mfsn?.email ? ` · ${escapeHtml(mfsn.email)}` : ''}</div>
+              <div>Active MFSN members: <span class="text-white font-semibold">${mfsn?.activeMemberCount ?? '—'}</span></div>
+            </div>`;
+        } catch (err) {
+          ghlStatusEl.textContent = 'Could not load GHL/MFSN status: ' + (err.message || err);
+        }
+      };
+      const showGhlLog = (obj) => {
+        if (!ghlLogEl) return;
+        ghlLogEl.classList.remove('hidden');
+        ghlLogEl.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
+      };
+      renderGhlStatus();
+      const btnEnsure = $('#btn-ghl-ensure-fields');
+      if (btnEnsure) btnEnsure.onclick = async () => {
+        btnEnsure.disabled = true;
+        try {
+          const d = await api('/integrations/ghl/ensure-fields', { method: 'POST', body: '{}' });
+          toast(`GHL fields ready: ${(d.fields || []).filter((f) => f.ghlFieldId).length}`, 'success');
+          showGhlLog(d);
+          await renderGhlStatus();
+        } catch (err) { toast(err.message, 'error'); }
+        finally { btnEnsure.disabled = false; }
+      };
+      const btnSyncClients = $('#btn-ghl-sync-clients');
+      if (btnSyncClients) btnSyncClients.onclick = async () => {
+        if (!confirm('Sync all active CRM clients to GoHighLevel with full custom fields and tags?')) return;
+        btnSyncClients.disabled = true;
+        try {
+          const d = await api('/integrations/ghl/sync-all-clients', { method: 'POST', body: '{}' });
+          toast(`Synced ${d.synced}/${d.total} clients to GHL`, 'success');
+          showGhlLog({ synced: d.synced, total: d.total, sample: (d.results || []).slice(0, 5) });
+        } catch (err) { toast(err.message, 'error'); }
+        finally { btnSyncClients.disabled = false; }
+      };
+      const btnSyncMfsn = $('#btn-ghl-sync-mfsn');
+      if (btnSyncMfsn) btnSyncMfsn.onclick = async () => {
+        if (!confirm('Pull all ACTIVE MyFreeScoreNow members and upsert them into GoHighLevel (fields + tags)?')) return;
+        btnSyncMfsn.disabled = true;
+        try {
+          const d = await api('/integrations/ghl/sync-mfsn-members', { method: 'POST', body: JSON.stringify({ list: 'active' }) });
+          toast(`Synced ${d.synced}/${d.total} MFSN members → GHL`, 'success');
+          showGhlLog({ list: d.list, synced: d.synced, total: d.total, linked: d.linkedToCrmClients, sample: (d.results || []).slice(0, 8) });
+          await renderGhlStatus();
+        } catch (err) { toast(err.message, 'error'); }
+        finally { btnSyncMfsn.disabled = false; }
+      };
+      const btnRefresh = $('#btn-ghl-refresh-status');
+      if (btnRefresh) btnRefresh.onclick = () => renderGhlStatus();
       if (staffPwdForm) staffPwdForm.onsubmit = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);

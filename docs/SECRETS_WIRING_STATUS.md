@@ -45,6 +45,23 @@ PBKDF2 iterations are **100,000** (Cloudflare Workers Web Crypto hard cap).
 
 Agent runbook: `docs/agents/mfsn-partner/AGENT_ACCESS.md` · helper: `node scripts/mfsn-login.mjs`
 
+## GoHighLevel (wired)
+
+| Secret | Purpose |
+|--------|---------|
+| `GHL_PIT_TOKEN` | Private Integration Token (LeadConnector v2) |
+| `GHL_LOCATION_ID` | Sub-account / location ID |
+| `GHL_API_BASE` | Optional override (default `https://services.leadconnectorhq.com`) |
+
+**Staff Settings → GoHighLevel + MyFreeScoreNow Sync**
+- Ensure GHL Fields — creates missing Smart FCRA / MFSN custom fields
+- Sync All CRM Clients — upserts portal clients with scores, tags, offer codes
+- Sync MFSN Active → GHL — pulls affiliate active members and upserts every contact
+
+API routes: `GET /api/integrations/ghl/status`, `POST /api/integrations/ghl/ensure-fields`, `POST /api/integrations/ghl/sync-all-clients`, `POST /api/integrations/ghl/sync-mfsn-members`, `GET /api/integrations/mfsn/status`
+
+Signup, unlock-analysis, per-client Sync GHL, and MFSN report import also push full custom fields + tags.
+
 ## Still optional
 
 1. Stripe `whsec_…` webhook secret

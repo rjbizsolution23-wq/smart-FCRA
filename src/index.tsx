@@ -83,7 +83,18 @@ import {
   isWhitelistedMfsnOperatorEmail,
   primaryMfsnOperatorEmail,
 } from './data/mfsn-operator-accounts';
-import { syncClientToGhl, ghlConfigured, verifyGhlConnection, toE164Phone } from './lib/ghl-client';
+import {
+  syncClientToGhl,
+  syncMfsnMemberToGhl,
+  ghlConfigured,
+  verifyGhlConnection,
+  toE164Phone,
+  listGhlFieldCatalog,
+  buildGhlTagsForClient,
+  ensureCustomFields,
+  clearGhlFieldCache,
+} from './lib/ghl-client';
+import { fetchMfsnMemberList, loginMfsnAdmin } from './lib/mfsn-admin';
 import { sendSms } from './lib/alerts';
 import sampleMfsnReport from './data/sample-mfsn-report.json';
 import { spaAppSource } from './generated/spa-source';
@@ -1149,18 +1160,21 @@ app.post('/api/public/mfsn-signup', async (c) => {
   let ghlResult: any = null;
   try {
     const clientRow = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ?').bind(clientId).first() as any;
-    ghlResult = await syncClientToGhl(c.env, clientRow || {
+    const ghlClient = clientRow || {
       id: clientId, email: portalEmail, phone: phoneE164 || phone,
       first_name: firstName, last_name: lastName,
       address_line1: addr.addressLine1, city: addr.city, state: addr.state, zip: addr.zip,
       case_status: 'ONBOARDING', payment_status: 'pending', signup_source: 'mfsn_public_signup',
       mfsn_member_email: mfsnUsername, portal_analysis_unlocked: 0,
+      mfsn_affiliate_offer_code: affiliateOffer.code,
       eq_score: null, ex_score: null, tu_score: null,
-    }, {
+    };
+    ghlResult = await syncClientToGhl(c.env, ghlClient, {
       portalUrl: loginUrl,
       violationCount: importResult?.totalViolations || 0,
       analysisUnlocked: false,
-      tags: ['Smart FCRA', 'MFSN Signup', 'Portal Pending Unlock'],
+      orgName: org.name,
+      tags: buildGhlTagsForClient(ghlClient, { analysisUnlocked: false, mfsnStatus: 'ACTIVE' }),
     });
     if (ghlResult.ok && ghlResult.contactId) {
       try {
@@ -2531,7 +2545,7 @@ app.post('/api/clients/:id/unlock-analysis', authMiddleware, async (c) => {
       portalUrl: `${portalBaseUrl(c.env)}/`,
       violationCount: Number(vCount?.c || 0),
       analysisUnlocked: true,
-      tags: ['Smart FCRA', 'Analysis Unlocked', 'Paid Client'],
+      tags: buildGhlTagsForClient(refreshed, { analysisUnlocked: true, mfsnStatus: refreshed?.mfsn_account_status }),
     });
     if (ghlSync?.contactId) {
       try {
@@ -2617,10 +2631,13 @@ app.post('/api/clients/:id/sync-ghl', authMiddleware, async (c) => {
   const vCount = await c.env.DB.prepare(
     'SELECT COUNT(*) as c FROM violations WHERE client_id = ? AND org_id = ?'
   ).bind(clientId, user.org_id).first() as any;
+  const org = await c.env.DB.prepare('SELECT name FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
   const result = await syncClientToGhl(c.env, client, {
     portalUrl: `${portalBaseUrl(c.env)}/`,
     violationCount: Number(vCount?.c || 0),
     analysisUnlocked: isPortalAnalysisUnlocked(client),
+    orgName: org?.name,
+    tags: buildGhlTagsForClient(client, { analysisUnlocked: isPortalAnalysisUnlocked(client) }),
   });
   if (result.ok && result.contactId) {
     try {
@@ -2630,6 +2647,211 @@ app.post('/api/clients/:id/sync-ghl', authMiddleware, async (c) => {
     } catch { /* soft */ }
   }
   return c.json(result, result.ok ? 200 : 502);
+});
+
+/** Staff: GHL connection + custom field catalog status */
+app.get('/api/integrations/ghl/status', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  clearGhlFieldCache();
+  const verify = await verifyGhlConnection(c.env);
+  let fieldIds: Record<string, string> = {};
+  try { fieldIds = await ensureCustomFields(c.env); } catch { /* soft */ }
+  const catalog = listGhlFieldCatalog();
+  const present = catalog.filter((f) => !!fieldIds[f.key]).map((f) => f.key);
+  return c.json({
+    ok: !!verify.ok,
+    configured: ghlConfigured(c.env),
+    locationId: c.env.GHL_LOCATION_ID || null,
+    verify,
+    fieldCatalog: catalog,
+    fieldsPresent: present,
+    fieldsMissing: catalog.filter((f) => !fieldIds[f.key]).map((f) => f.key),
+    mfsnConfigured: !!resolvePartnerMfsnCredentials(c.env),
+  });
+});
+
+/** Staff: sync ALL CRM clients in this org to GHL */
+app.post('/api/integrations/ghl/sync-all-clients', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  if (!ghlConfigured(c.env)) return c.json({ error: 'GoHighLevel is not configured' }, 503);
+  const org = await c.env.DB.prepare('SELECT name FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+  const rows = await c.env.DB.prepare(
+    `SELECT * FROM clients WHERE org_id = ? AND coalesce(status,'active') = 'active' ORDER BY created_at DESC LIMIT 500`
+  ).bind(user.org_id).all();
+  const clients = rows.results || [];
+  const portalUrl = `${portalBaseUrl(c.env)}/`;
+  const results: any[] = [];
+  let ok = 0;
+  for (const client of clients as any[]) {
+    const vCount = await c.env.DB.prepare(
+      'SELECT COUNT(*) as c FROM violations WHERE client_id = ? AND org_id = ?'
+    ).bind(client.id, user.org_id).first() as any;
+    const synced = await syncClientToGhl(c.env, client, {
+      portalUrl,
+      violationCount: Number(vCount?.c || 0),
+      analysisUnlocked: isPortalAnalysisUnlocked(client),
+      orgName: org?.name,
+    });
+    if (synced.ok && synced.contactId) {
+      ok += 1;
+      try {
+        await c.env.DB.prepare(
+          `UPDATE clients SET ghl_contact_id = ?, ghl_synced_at = datetime('now') WHERE id = ? AND org_id = ?`
+        ).bind(synced.contactId, client.id, user.org_id).run();
+      } catch { /* soft */ }
+    }
+    results.push({ clientId: client.id, email: client.email, ...synced });
+  }
+  return c.json({ ok: true, total: clients.length, synced: ok, results });
+});
+
+/**
+ * Staff: pull MyFreeScoreNow active (or paused) members and upsert every contact into GHL
+ * with full custom fields + tags. Also links matching Smart FCRA clients when email matches.
+ */
+app.post('/api/integrations/ghl/sync-mfsn-members', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  if (!ghlConfigured(c.env)) return c.json({ error: 'GoHighLevel is not configured' }, 503);
+
+  const body = await c.req.json().catch(() => ({}));
+  const list = body.list === 'paused' ? 'paused' : 'active';
+  const fetched = await fetchMfsnMemberList(c.env, list);
+  if (!fetched.ok) {
+    return c.json({ error: fetched.error || 'Failed to fetch MFSN members', code: 'MFSN_MEMBER_LIST_FAILED' }, 502);
+  }
+
+  const org = await c.env.DB.prepare('SELECT name FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+  const portalUrl = `${portalBaseUrl(c.env)}/`;
+  const results: any[] = [];
+  let synced = 0;
+  let linked = 0;
+
+  for (const member of fetched.members) {
+    const email = String(member.email || '').trim().toLowerCase();
+    let client: any = null;
+    if (email) {
+      client = await c.env.DB.prepare(
+        `SELECT * FROM clients WHERE org_id = ? AND (lower(email) = ? OR lower(coalesce(mfsn_member_email,'')) = ?) LIMIT 1`
+      ).bind(user.org_id, email, email).first() as any;
+    }
+    let violationCount = 0;
+    if (client?.id) {
+      const v = await c.env.DB.prepare(
+        'SELECT COUNT(*) as c FROM violations WHERE client_id = ? AND org_id = ?'
+      ).bind(client.id, user.org_id).first() as any;
+      violationCount = Number(v?.c || 0);
+    }
+
+    const offer = String(member.publisher_id || '').trim().toUpperCase();
+    if (client?.id && offer && !client.mfsn_affiliate_offer_code) {
+      try {
+        await c.env.DB.prepare(
+          `UPDATE clients SET mfsn_affiliate_offer_code = ?, mfsn_enrolled_under_affiliate = 1, mfsn_member_email = coalesce(mfsn_member_email, ?) WHERE id = ?`
+        ).bind(offer, email || null, client.id).run();
+        client.mfsn_affiliate_offer_code = offer;
+        client.mfsn_member_email = client.mfsn_member_email || email;
+      } catch { /* soft */ }
+    }
+
+    const push = client
+      ? await syncClientToGhl(c.env, {
+          ...client,
+          phone: client.phone || member.phone_number,
+          address_line1: client.address_line1 || member.street_address,
+          city: client.city || member.city,
+          state: client.state || member.state,
+          zip: client.zip || member.zip,
+        }, {
+          portalUrl,
+          violationCount,
+          analysisUnlocked: isPortalAnalysisUnlocked(client),
+          orgName: org?.name,
+          mfsnMember: member,
+        })
+      : await syncMfsnMemberToGhl(c.env, member, {
+          portalUrl,
+          orgName: org?.name,
+          analysisUnlocked: false,
+          paymentStatus: String(member.account_status || '').toUpperCase() === 'ACTIVE' ? 'mfsn_active' : 'pending',
+        });
+
+    if (push.ok) {
+      synced += 1;
+      if (client?.id && push.contactId) {
+        linked += 1;
+        try {
+          await c.env.DB.prepare(
+            `UPDATE clients SET ghl_contact_id = ?, ghl_synced_at = datetime('now') WHERE id = ? AND org_id = ?`
+          ).bind(push.contactId, client.id, user.org_id).run();
+        } catch { /* soft */ }
+      }
+    }
+    results.push({
+      email,
+      memberId: member.member_id,
+      offer,
+      clientId: client?.id || null,
+      ...push,
+    });
+  }
+
+  try {
+    await c.env.DB.prepare(
+      'INSERT INTO activity_log (id, org_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(
+      generateId(), user.org_id, user.id, 'ghl_mfsn_bulk_sync',
+      `Synced ${synced}/${fetched.members.length} MFSN ${list} members to GoHighLevel`,
+      JSON.stringify({ list, synced, linked, operator: fetched.email }),
+    ).run();
+  } catch { /* soft */ }
+
+  return c.json({
+    ok: true,
+    list,
+    mfsnLoginEmail: fetched.email || null,
+    total: fetched.members.length,
+    synced,
+    linkedToCrmClients: linked,
+    results,
+  });
+});
+
+/** Staff: ensure all Smart FCRA custom fields exist in GHL location */
+app.post('/api/integrations/ghl/ensure-fields', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  if (!ghlConfigured(c.env)) return c.json({ error: 'GoHighLevel is not configured' }, 503);
+  clearGhlFieldCache();
+  const fieldIds = await ensureCustomFields(c.env);
+  const catalog = listGhlFieldCatalog();
+  return c.json({
+    ok: true,
+    locationId: c.env.GHL_LOCATION_ID,
+    fields: catalog.map((f) => ({ ...f, ghlFieldId: fieldIds[f.key] || null })),
+  });
+});
+
+/** Staff: quick MFSN admin login probe (no secrets returned) */
+app.get('/api/integrations/mfsn/status', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  const login = await loginMfsnAdmin(c.env);
+  let activeCount: number | null = null;
+  if (login.ok && login.token) {
+    const active = await fetchMfsnMemberList(c.env, 'active', login.token);
+    if (active.ok) activeCount = active.members.length;
+  }
+  return c.json({
+    ok: !!login.ok,
+    email: login.email || null,
+    partnerConfigured: !!resolvePartnerMfsnCredentials(c.env),
+    activeMemberCount: activeCount,
+    error: login.error || null,
+    ghlConfigured: ghlConfigured(c.env),
+  });
 });
 
 // ── Portal uploads (docs, creditor replies, bank statements) ──
@@ -6285,6 +6507,30 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
 
     try { await client.logout(); } catch { /* soft */ }
 
+    // Push refreshed scores + violation count into GoHighLevel
+    let ghlSync: any = null;
+    try {
+      const refreshed = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?')
+        .bind(clientId, user.org_id).first() as any;
+      const orgRow = await c.env.DB.prepare('SELECT name FROM organizations WHERE id = ?')
+        .bind(user.org_id).first() as any;
+      if (refreshed && ghlConfigured(c.env)) {
+        ghlSync = await syncClientToGhl(c.env, refreshed, {
+          portalUrl: `${portalBaseUrl(c.env)}/`,
+          violationCount: allViolations.length,
+          analysisUnlocked: isPortalAnalysisUnlocked(refreshed),
+          orgName: orgRow?.name,
+        });
+        if (ghlSync?.ok && ghlSync.contactId) {
+          try {
+            await c.env.DB.prepare(
+              `UPDATE clients SET ghl_contact_id = ?, ghl_synced_at = datetime('now') WHERE id = ? AND org_id = ?`
+            ).bind(ghlSync.contactId, clientId, user.org_id).run();
+          } catch { /* soft */ }
+        }
+      }
+    } catch { /* soft */ }
+
     return c.json({
       reportId,
       bureau: 'MyFreeScoreNow (Tri-Bureau)',
@@ -6300,6 +6546,8 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
       normalizedSummary: normalized.summary,
       scores: normalized.scores,
       fundingPreview,
+      ghlSynced: !!ghlSync?.ok,
+      ghlContactId: ghlSync?.contactId || null,
     });
   } catch (err: any) {
     console.error('MFSN Import Error:', err);
