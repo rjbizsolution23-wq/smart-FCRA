@@ -863,29 +863,28 @@ app.post('/api/public/mfsn-signup', async (c) => {
   if (!mfsnUsername || !isEmailShaped(mfsnUsername)) {
     return c.json({ error: 'Your MyFreeScoreNow member email is required' }, 400);
   }
-  // Client proves membership with password and/or their client token.
-  if (!mfsnPassword && !mfsnToken) {
+  // Each MFSN member has their own client_token (MAPIK#...). Partner Bearer auth is separate.
+  if (!mfsnToken) {
     return c.json({
-      error: 'Enter your MyFreeScoreNow password and/or client token so we can pull your report.',
-      code: 'MEMBER_AUTH_REQUIRED',
+      error: 'Your MyFreeScoreNow client token is required (starts with MAPIK#). Find it in your MFSN member account / welcome materials.',
+      code: 'MEMBER_TOKEN_REQUIRED',
+      affiliateOffers: listPublicAffiliateOffers(),
     }, 400);
   }
-  if (!isAllowedAffiliateOfferCode(affiliateOfferCode)) {
+  // Default to recommended offer when member is already pulling under our partner API.
+  const resolvedOfferCode = isAllowedAffiliateOfferCode(affiliateOfferCode)
+    ? affiliateOfferCode
+    : 'B01A8289';
+  if (!isAllowedAffiliateOfferCode(resolvedOfferCode)) {
     return c.json({
-      error: 'You must enroll through one of our official MyFreeScoreNow affiliate links before creating a portal.',
+      error: 'Select which RJ Business Solutions MyFreeScoreNow offer you enrolled with.',
       code: 'AFFILIATE_OFFER_REQUIRED',
       affiliateId: MFSN_AFFILIATE_ID,
       affiliateOffers: listPublicAffiliateOffers(),
     }, 403);
   }
-  if (!enrolledUnderAffiliate) {
-    return c.json({
-      error: 'Confirm you created your MyFreeScoreNow account using our affiliate enrollment link.',
-      code: 'AFFILIATE_ATTESTATION_REQUIRED',
-      affiliateOffers: listPublicAffiliateOffers(),
-    }, 403);
-  }
-  const affiliateOffer = getAffiliateOffer(affiliateOfferCode)!;
+  // Attestation is preferred in UI; a successful partner pull below is the hard proof.
+  const affiliateOffer = getAffiliateOffer(resolvedOfferCode)!;
   if (!portalEmail || !isEmailShaped(portalEmail)) {
     return c.json({ error: 'A valid email is required for portal access (use your MFSN email or enter one)' }, 400);
   }
@@ -961,6 +960,24 @@ app.post('/api/public/mfsn-signup', async (c) => {
   const clientName = `${firstName} ${lastName}`.trim();
 
   const signupNotes = `Created via public MyFreeScoreNow signup (affiliate ${affiliateOffer.code}) — analysis locked until payment approval`;
+
+  // users.id is referenced by clients.created_by — insert the portal user first.
+  try {
+    await c.env.DB.prepare(
+      'INSERT INTO users (id, org_id, email, name, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)'
+    ).bind(userId, orgId, portalEmail, clientName, passwordHash, 'client').run();
+  } catch (e: any) {
+    console.error('[mfsn-signup] user insert failed', e);
+    if (String(e?.message || '').toLowerCase().includes('unique')) {
+      return c.json({
+        error: 'An account with this email already exists. Please sign in to your portal.',
+        code: 'EMAIL_EXISTS',
+        loginUrl: `${portalBaseUrl(c.env, c.req.url)}/`,
+      }, 409);
+    }
+    return c.json({ error: 'Failed to create portal login', detail: String(e?.message || e) }, 500);
+  }
+
   try {
     await c.env.DB.prepare(
       `INSERT INTO clients (
@@ -982,37 +999,40 @@ app.post('/api/public/mfsn-signup', async (c) => {
   } catch (e: any) {
     // Soft fallback if migrations 0016/0018 not applied yet
     if (String(e?.message || '').includes('no such column')) {
-      await c.env.DB.prepare(
-        `INSERT INTO clients (
-          id, org_id, created_by, first_name, last_name, email, phone,
-          address_line1, city, state, zip, dob, ssn_last4, notes, status,
-          permissible_purpose_consent, croa_contract_agreed, tsr_advance_fee_waived, consent_timestamp, case_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 1, 1, 1, datetime('now'), 'ONBOARDING')`
-      ).bind(
-        clientId, orgId, userId, firstName, lastName, portalEmail, phone || null,
-        addr.addressLine1 || null, addr.city || null, addr.state || null, addr.zip || null,
-        dob, ssnLast4 || null,
-        signupNotes,
-      ).run();
       try {
         await c.env.DB.prepare(
-          `UPDATE clients SET portal_analysis_unlocked = 0, payment_status = 'pending', signup_source = 'mfsn_public_signup', mfsn_member_email = ? WHERE id = ?`
-        ).bind(mfsnUsername, clientId).run();
-      } catch { /* columns missing until migrate */ }
-      try {
-        await c.env.DB.prepare(
-          `UPDATE clients SET mfsn_affiliate_offer_code = ?, mfsn_enrolled_under_affiliate = 1 WHERE id = ?`
-        ).bind(affiliateOffer.code, clientId).run();
-      } catch { /* migration 0018 pending */ }
+          `INSERT INTO clients (
+            id, org_id, created_by, first_name, last_name, email, phone,
+            address_line1, city, state, zip, dob, ssn_last4, notes, status,
+            permissible_purpose_consent, croa_contract_agreed, tsr_advance_fee_waived, consent_timestamp, case_status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 1, 1, 1, datetime('now'), 'ONBOARDING')`
+        ).bind(
+          clientId, orgId, userId, firstName, lastName, portalEmail, phone || null,
+          addr.addressLine1 || null, addr.city || null, addr.state || null, addr.zip || null,
+          dob, ssnLast4 || null,
+          signupNotes,
+        ).run();
+        try {
+          await c.env.DB.prepare(
+            `UPDATE clients SET portal_analysis_unlocked = 0, payment_status = 'pending', signup_source = 'mfsn_public_signup', mfsn_member_email = ? WHERE id = ?`
+          ).bind(mfsnUsername, clientId).run();
+        } catch { /* columns missing until migrate */ }
+        try {
+          await c.env.DB.prepare(
+            `UPDATE clients SET mfsn_affiliate_offer_code = ?, mfsn_enrolled_under_affiliate = 1 WHERE id = ?`
+          ).bind(affiliateOffer.code, clientId).run();
+        } catch { /* migration 0018 pending */ }
+      } catch (e2: any) {
+        console.error('[mfsn-signup] client insert fallback failed', e2);
+        try { await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId).run(); } catch { /* soft */ }
+        return c.json({ error: 'Failed to create client profile', detail: String(e2?.message || e2) }, 500);
+      }
     } else {
       console.error('[mfsn-signup] client insert failed', e);
-      return c.json({ error: 'Failed to create client profile' }, 500);
+      try { await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId).run(); } catch { /* soft */ }
+      return c.json({ error: 'Failed to create client profile', detail: String(e?.message || e) }, 500);
     }
   }
-
-  await c.env.DB.prepare(
-    'INSERT INTO users (id, org_id, email, name, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)'
-  ).bind(userId, orgId, portalEmail, clientName, passwordHash, 'client').run();
 
   // Import + full analysis (staff-visible; client-gated)
   let importResult: any = null;
