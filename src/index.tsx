@@ -67,6 +67,14 @@ import {
   resolvePublicSignupOrgId,
   isEmailShaped,
 } from './lib/mfsn-signup';
+import {
+  MFSN_AFFILIATE_ID,
+  getAffiliateOffer,
+  isAllowedAffiliateOfferCode,
+  listPublicAffiliateOffers,
+  listStaffAffiliateOffers,
+  normalizeAffiliateOfferCode,
+} from './data/mfsn-affiliate-offers';
 import { syncClientToGhl, ghlConfigured, verifyGhlConnection, toE164Phone } from './lib/ghl-client';
 import { sendSms } from './lib/alerts';
 import sampleMfsnReport from './data/sample-mfsn-report.json';
@@ -830,6 +838,9 @@ app.get('/api/public/mfsn-signup/meta', async (c) => {
     partnerConfigured: !!partner,
     partnerAuthConfigured,
     partnerTokenConfigured,
+    affiliateId: MFSN_AFFILIATE_ID,
+    affiliateOnly: true,
+    affiliateOffers: listPublicAffiliateOffers(),
     twilioConfigured: !!(c.env.TWILIO_ACCOUNT_SID && c.env.TWILIO_AUTH_TOKEN && c.env.TWILIO_PHONE_NUMBER),
     ghlConfigured: ghlConfigured(c.env),
     loginUrl: `${portalBaseUrl(c.env, c.req.url)}/`,
@@ -841,6 +852,8 @@ app.post('/api/public/mfsn-signup', async (c) => {
   const mfsnUsername = String(body.mfsnUsername || body.username || body.memberEmail || '').trim();
   const mfsnPassword = String(body.mfsnPassword || body.password || '').trim();
   const mfsnToken = String(body.mfsnToken || body.secretWord || body.clientToken || '').trim();
+  const affiliateOfferCode = normalizeAffiliateOfferCode(body.affiliateOfferCode || body.offerCode || body.enrollCode);
+  const enrolledUnderAffiliate = body.enrolledUnderAffiliate === true || body.affiliateAttestation === true;
   const portalEmail = String(body.email || body.portalEmail || (isEmailShaped(mfsnUsername) ? mfsnUsername : '')).trim().toLowerCase();
   const phone = String(body.phone || '').trim();
   const pp = body.permissiblePurposeConsent === true;
@@ -857,6 +870,22 @@ app.post('/api/public/mfsn-signup', async (c) => {
       code: 'MEMBER_AUTH_REQUIRED',
     }, 400);
   }
+  if (!isAllowedAffiliateOfferCode(affiliateOfferCode)) {
+    return c.json({
+      error: 'You must enroll through one of our official MyFreeScoreNow affiliate links before creating a portal.',
+      code: 'AFFILIATE_OFFER_REQUIRED',
+      affiliateId: MFSN_AFFILIATE_ID,
+      affiliateOffers: listPublicAffiliateOffers(),
+    }, 403);
+  }
+  if (!enrolledUnderAffiliate) {
+    return c.json({
+      error: 'Confirm you created your MyFreeScoreNow account using our affiliate enrollment link.',
+      code: 'AFFILIATE_ATTESTATION_REQUIRED',
+      affiliateOffers: listPublicAffiliateOffers(),
+    }, 403);
+  }
+  const affiliateOffer = getAffiliateOffer(affiliateOfferCode)!;
   if (!portalEmail || !isEmailShaped(portalEmail)) {
     return c.json({ error: 'A valid email is required for portal access (use your MFSN email or enter one)' }, 400);
   }
@@ -900,10 +929,17 @@ app.post('/api/public/mfsn-signup', async (c) => {
     mfsnReportData = pulled.raw;
     normalized = pulled.normalized;
   } catch (e: any) {
+    const code = e instanceof MFSNError ? e.code : 'MFSN_PULL_FAILED';
     const status = e instanceof MFSNError ? (e.statusCode >= 400 && e.statusCode < 600 ? e.statusCode : 502) : 502;
+    const notUnderAffiliate = code === 'USER_NOT_FOUND' || /not found/i.test(String(e?.message || ''));
     return c.json({
-      error: e?.message || 'Failed to pull MyFreeScoreNow report. Check your member email, password, and/or token.',
-      code: e instanceof MFSNError ? e.code : 'MFSN_PULL_FAILED',
+      error: notUnderAffiliate
+        ? 'No MyFreeScoreNow membership found under our affiliate. Enroll with one of our links first, then try again.'
+        : (e?.message || 'Failed to pull MyFreeScoreNow report. Check your member email, password, and/or token.'),
+      code: notUnderAffiliate ? 'AFFILIATE_MEMBER_REQUIRED' : code,
+      affiliateId: MFSN_AFFILIATE_ID,
+      affiliateOffers: notUnderAffiliate ? listPublicAffiliateOffers() : undefined,
+      enrollUrl: notUnderAffiliate ? affiliateOffer.enrollUrl : undefined,
     }, status as any);
   }
 
@@ -924,24 +960,27 @@ app.post('/api/public/mfsn-signup', async (c) => {
   const passwordHash = await hashPassword(tempPassword);
   const clientName = `${firstName} ${lastName}`.trim();
 
+  const signupNotes = `Created via public MyFreeScoreNow signup (affiliate ${affiliateOffer.code}) — analysis locked until payment approval`;
   try {
     await c.env.DB.prepare(
       `INSERT INTO clients (
         id, org_id, created_by, first_name, last_name, email, phone,
         address_line1, city, state, zip, dob, ssn_last4, notes, status,
         permissible_purpose_consent, croa_contract_agreed, tsr_advance_fee_waived, consent_timestamp,
-        case_status, portal_analysis_unlocked, payment_status, signup_source, mfsn_member_email
+        case_status, portal_analysis_unlocked, payment_status, signup_source, mfsn_member_email,
+        mfsn_affiliate_offer_code, mfsn_enrolled_under_affiliate
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 1, 1, 1, datetime('now'),
-        'ONBOARDING', 0, 'pending', 'mfsn_public_signup', ?)`
+        'ONBOARDING', 0, 'pending', 'mfsn_public_signup', ?, ?, 1)`
     ).bind(
       clientId, orgId, userId, firstName, lastName, portalEmail, phone || null,
       addr.addressLine1 || null, addr.city || null, addr.state || null, addr.zip || null,
       dob, ssnLast4 || null,
-      'Created via public MyFreeScoreNow signup — analysis locked until payment approval',
+      signupNotes,
       mfsnUsername,
+      affiliateOffer.code,
     ).run();
   } catch (e: any) {
-    // Soft fallback if migration 0016 not applied yet
+    // Soft fallback if migrations 0016/0018 not applied yet
     if (String(e?.message || '').includes('no such column')) {
       await c.env.DB.prepare(
         `INSERT INTO clients (
@@ -953,13 +992,18 @@ app.post('/api/public/mfsn-signup', async (c) => {
         clientId, orgId, userId, firstName, lastName, portalEmail, phone || null,
         addr.addressLine1 || null, addr.city || null, addr.state || null, addr.zip || null,
         dob, ssnLast4 || null,
-        'Created via public MyFreeScoreNow signup — analysis locked until payment approval',
+        signupNotes,
       ).run();
       try {
         await c.env.DB.prepare(
           `UPDATE clients SET portal_analysis_unlocked = 0, payment_status = 'pending', signup_source = 'mfsn_public_signup', mfsn_member_email = ? WHERE id = ?`
         ).bind(mfsnUsername, clientId).run();
       } catch { /* columns missing until migrate */ }
+      try {
+        await c.env.DB.prepare(
+          `UPDATE clients SET mfsn_affiliate_offer_code = ?, mfsn_enrolled_under_affiliate = 1 WHERE id = ?`
+        ).bind(affiliateOffer.code, clientId).run();
+      } catch { /* migration 0018 pending */ }
     } else {
       console.error('[mfsn-signup] client insert failed', e);
       return c.json({ error: 'Failed to create client profile' }, 500);
@@ -1130,7 +1174,22 @@ app.post('/api/public/mfsn-signup', async (c) => {
     reportsImported: importResult?.results?.length || 0,
     violationsFound: importResult?.totalViolations || 0,
     analysisLocked: true,
+    affiliateOfferCode: affiliateOffer.code,
+    affiliateId: MFSN_AFFILIATE_ID,
     message: 'Your portal is ready. Sign in with the email and temporary password below (also sent by email/SMS when available). Your credit analysis stays private until our team unlocks it after payment.',
+  });
+});
+
+/** Staff: full MFSN affiliate offer catalog with commissions (A8289). */
+app.get('/api/mfsn/affiliate-offers', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') {
+    return c.json({ error: 'Staff only' }, 403);
+  }
+  return c.json({
+    ok: true,
+    affiliateId: MFSN_AFFILIATE_ID,
+    offers: listStaffAffiliateOffers(),
   });
 });
 
@@ -8815,7 +8874,7 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/app.js?v=20260809-mfsn-partner"></script>
+  <script src="/static/app.js?v=20260809-mfsn-affiliate"></script>
 </body>
 </html>`;
 }

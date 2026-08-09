@@ -674,10 +674,23 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           <div class="text-center mb-6">
             <div class="inline-flex items-center justify-center mb-4"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-16 w-auto rounded-2xl border border-cyan-500/30 object-cover shadow-[0_0_20px_rgba(6,182,212,0.25)]" alt="RJ Business Solutions"></div>
             <h1 class="text-2xl font-bold text-white">Start with MyFreeScoreNow</h1>
-            <p class="text-gray-400 mt-1 text-sm">Enter your MFSN member email plus password and/or token — we pull your report, build your portal, and email your access.</p>
+            <p class="text-gray-400 mt-1 text-sm">Only memberships from our official affiliate links are accepted. Enroll below, then pull your report into your portal.</p>
           </div>
           <div class="glass rounded-2xl p-6 border border-cyan-500/20">
             <form id="mfsn-signup-form" class="space-y-3.5">
+              <div class="rounded-xl border border-cyan-500/25 bg-cyan-950/20 p-3 space-y-2">
+                <div class="text-xs font-semibold text-cyan-200">Step 1 — Enroll under our affiliate</div>
+                <p class="text-[11px] text-gray-400 leading-relaxed">If you are not already a MyFreeScoreNow member through RJ Business Solutions, open one of these links and complete enrollment first.</p>
+                <div id="mfsn-affiliate-offers" class="space-y-1.5 max-h-48 overflow-y-auto pr-1"></div>
+                <label class="block text-xs font-medium text-gray-400 mt-2 mb-1.5">Which offer did you use?</label>
+                <select name="affiliateOfferCode" id="mfsn-offer-select" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500">
+                  <option value="">Select your enroll offer…</option>
+                </select>
+                <label class="flex gap-2 items-start cursor-pointer text-[11px] text-cyan-100/90 mt-2">
+                  <input type="checkbox" name="enrolledUnderAffiliate" required class="mt-0.5">
+                  I created / use a MyFreeScoreNow account enrolled through the RJ Business Solutions affiliate link selected above.
+                </label>
+              </div>
               <div>
                 <label class="block text-xs font-medium text-gray-400 mb-1.5">MyFreeScoreNow Member Email</label>
                 <input name="mfsnUsername" type="email" required autocomplete="username" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500" placeholder="your@email.com">
@@ -844,12 +857,56 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 
     const mfsnSignup = document.getElementById('mfsn-signup-form');
     if (mfsnSignup) {
+      const offerBox = document.getElementById('mfsn-affiliate-offers');
+      const offerSelect = document.getElementById('mfsn-offer-select');
+      const renderOffers = (offers) => {
+        const list = Array.isArray(offers) ? offers : [];
+        if (offerBox) {
+          offerBox.innerHTML = list.map((o) => {
+            const trial = o.trialDays > 0 ? `${o.trialDays}-day trial` : 'No trial';
+            const badge = o.recommended ? '<span class="text-[10px] text-emerald-300 font-semibold ml-1">Recommended</span>' : '';
+            return `<a href="${escapeHtml(o.enrollUrl)}" target="_blank" rel="noopener" class="flex items-center justify-between gap-2 rounded-lg border border-gray-700/80 bg-gray-900/50 px-3 py-2 text-[11px] text-gray-200 hover:border-cyan-500/50">
+              <span><span class="font-mono text-cyan-300">${escapeHtml(o.code)}</span> · ${escapeHtml(o.label)}${badge}<div class="text-gray-500">${escapeHtml(trial)} · monthly</div></span>
+              <span class="text-cyan-400 shrink-0">Enroll <i class="fas fa-external-link-alt text-[9px]"></i></span>
+            </a>`;
+          }).join('') || '<p class="text-[11px] text-amber-200">Affiliate offers unavailable — refresh or contact support.</p>';
+        }
+        if (offerSelect) {
+          const cur = offerSelect.value;
+          offerSelect.innerHTML = '<option value="">Select your enroll offer…</option>' + list.map((o) =>
+            `<option value="${escapeHtml(o.code)}">${escapeHtml(o.code)} — ${escapeHtml(o.label)}</option>`
+          ).join('');
+          if (cur) offerSelect.value = cur;
+        }
+      };
+      // Fallback catalog if meta is slow/offline (must match server allow-list)
+      renderOffers([
+        { code: 'B01A8289', enrollUrl: 'https://app.myfreescorenow.com/enroll/B01A8289', price: 29.9, trialDays: 7, label: '$29.90 · 7-day trial', recommended: true },
+        { code: 'B02A8289', enrollUrl: 'https://app.myfreescorenow.com/enroll/B02A8289', price: 29.9, trialDays: 0, label: '$29.90 · no trial' },
+        { code: 'B03A8289', enrollUrl: 'https://app.myfreescorenow.com/enroll/B03A8289', price: 29.9, trialDays: 0, label: '$29.90 · no trial (B03)' },
+        { code: 'B04A8289', enrollUrl: 'https://app.myfreescorenow.com/enroll/B04A8289', price: 29.9, trialDays: 7, label: '$29.90 · 7-day trial (B04)' },
+        { code: 'B05A8289', enrollUrl: 'https://app.myfreescorenow.com/enroll/B05A8289', price: 24.97, trialDays: 7, label: '$24.97 · 7-day trial' },
+        { code: 'B06A8289', enrollUrl: 'https://app.myfreescorenow.com/enroll/B06A8289', price: 29.9, trialDays: 7, label: '$29.90 · 7-day trial (B06)' },
+        { code: 'B07A8289', enrollUrl: 'https://app.myfreescorenow.com/enroll/B07A8289', price: 39.9, trialDays: 0, label: '$39.90 · no trial' },
+        { code: 'C02A8289', enrollUrl: 'https://app.myfreescorenow.com/enroll/C02A8289', price: 99.95, trialDays: 0, label: '$99.95 · premium · no trial' },
+      ]);
+      api('/public/mfsn-signup/meta').then((m) => { if (m?.affiliateOffers?.length) renderOffers(m.affiliateOffers); }).catch(() => {});
+
       mfsnSignup.onsubmit = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
         const memberEmail = String(fd.get('mfsnUsername') || '').trim();
         const memberPassword = String(fd.get('mfsnPassword') || '').trim();
         const memberToken = String(fd.get('mfsnToken') || '').trim();
+        const affiliateOfferCode = String(fd.get('affiliateOfferCode') || '').trim();
+        if (!affiliateOfferCode) {
+          toast('Select which affiliate enroll offer you used', 'error');
+          return;
+        }
+        if (!fd.get('enrolledUnderAffiliate')) {
+          toast('Confirm you enrolled through our affiliate link', 'error');
+          return;
+        }
         if (!memberPassword && !memberToken) {
           toast('Enter your MyFreeScoreNow password and/or client token', 'error');
           return;
@@ -864,6 +921,8 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
               mfsnUsername: memberEmail,
               mfsnPassword: memberPassword || undefined,
               mfsnToken: memberToken || undefined,
+              affiliateOfferCode,
+              enrolledUnderAffiliate: true,
               email: fd.get('email') || undefined,
               phone: fd.get('phone') || undefined,
               permissiblePurposeConsent: !!fd.get('pp'),
@@ -5720,6 +5779,13 @@ Status: Discharged`;
           </form>
         </div>
 
+        <div class="glass rounded-xl p-6 border border-cyan-900/40" id="mfsn-affiliate-staff-panel">
+          <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-link text-cyan-400"></i> MyFreeScoreNow Affiliate Offers (A8289)</h2>
+          <p class="text-xs text-gray-500 mb-4">Only members enrolled under these links can use public signup / partner report pull. Commission is staff-only knowledge.</p>
+          <div id="mfsn-affiliate-staff-table" class="text-xs text-gray-400">Loading offers…</div>
+          <p class="text-[10px] text-gray-600 mt-3">Public signup: <a class="text-cyan-400" href="/?signup=mfsn" target="_blank">/?signup=mfsn</a></p>
+        </div>
+
         <div class="glass rounded-xl p-6 border border-gray-700">
           <h2 class="text-sm font-semibold text-white mb-4 flex items-center gap-2"><i class="fas fa-key text-amber-400"></i> Change Password</h2>
           <form id="staff-pwd-form" class="flex flex-wrap gap-3 items-end">
@@ -5755,6 +5821,23 @@ Status: Discharged`;
 
       const lhForm = $('#letterhead-form');
       const staffPwdForm = $('#staff-pwd-form');
+      const affTable = $('#mfsn-affiliate-staff-table');
+      if (affTable) {
+        api('/mfsn/affiliate-offers').then((d) => {
+          const offers = d.offers || [];
+          affTable.innerHTML = `<div class="overflow-x-auto"><table class="w-full text-left">
+            <thead><tr class="text-[10px] uppercase text-gray-500 border-b border-gray-800">
+              <th class="py-2 pr-3">Code</th><th class="py-2 pr-3">Price</th><th class="py-2 pr-3">Trial</th><th class="py-2 pr-3">Commission</th><th class="py-2">Enroll</th>
+            </tr></thead>
+            <tbody>${offers.map((o) => `<tr class="border-b border-gray-800/60">
+              <td class="py-2 pr-3 font-mono text-cyan-300">${escapeHtml(o.code)}</td>
+              <td class="py-2 pr-3 text-white">$${Number(o.price).toFixed(2)}</td>
+              <td class="py-2 pr-3">${o.trialDays ? o.trialDays + ' day' : 'None'}</td>
+              <td class="py-2 pr-3 text-emerald-300">$${Number(o.monthlyCommission).toFixed(2)}/mo</td>
+              <td class="py-2"><a class="text-cyan-400 hover:underline" href="${escapeHtml(o.enrollUrl)}" target="_blank" rel="noopener">Open</a></td>
+            </tr>`).join('')}</tbody></table></div>`;
+        }).catch(() => { affTable.textContent = 'Could not load affiliate offers.'; });
+      }
       if (staffPwdForm) staffPwdForm.onsubmit = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);

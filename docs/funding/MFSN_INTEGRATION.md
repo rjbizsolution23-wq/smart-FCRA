@@ -44,6 +44,29 @@ MFSN_API_URL=https://api.myfreescorenow.com
 - `GET /api/client-portal/funding/matches?mode=institutional|simple` — precision underwriting vs curated simple match
 - `GET /api/client-portal/funding/catalog` — curated + institutional stats + business vendors summary
 
+## Affiliate-only enrollment (A8289)
+
+Public signup (`/?signup=mfsn`) **only** accepts MyFreeScoreNow members enrolled under RJ Business Solutions affiliate offers (suffix `A8289`).
+
+| Code | Price | Trial | Commission | Enroll |
+|------|-------|-------|------------|--------|
+| B01A8289 | $29.90 | 7 day | $12.80/mo | https://app.myfreescorenow.com/enroll/B01A8289 |
+| B02A8289 | $29.90 | none | $13.80/mo | https://app.myfreescorenow.com/enroll/B02A8289 |
+| B03A8289 | $29.90 | none | $13.80/mo | https://app.myfreescorenow.com/enroll/B03A8289 |
+| B04A8289 | $29.90 | 7 day | $12.80/mo | https://app.myfreescorenow.com/enroll/B04A8289 |
+| B05A8289 | $24.97 | 7 day | $8.90/mo | https://app.myfreescorenow.com/enroll/B05A8289 |
+| B06A8289 | $29.90 | 7 day | $12.80/mo | https://app.myfreescorenow.com/enroll/B06A8289 |
+| B07A8289 | $39.90 | none | $20.80/mo | https://app.myfreescorenow.com/enroll/B07A8289 |
+| C02A8289 | $99.95 | none | $62.80/mo | https://app.myfreescorenow.com/enroll/C02A8289 |
+
+Source of truth in code: `src/data/mfsn-affiliate-offers.ts`  
+Staff API (commissions included): `GET /api/mfsn/affiliate-offers`  
+Public meta (no commissions): `GET /api/public/mfsn-signup/meta`
+
+Enforcement:
+1. Client must select an allow-listed offer + attest enrollment.
+2. Partner API pull only resolves members under this affiliate; `User not found` → enroll via our links.
+
 ## Note on “600+” lenders
 
 `MASTER_LENDERS_DATABASE` includes featured real CUs/banks/tradelines **plus** programmatically generated state CU placeholders (`XX State Teachers Credit Union`, etc.). Treat auto-generated rows as **matching scaffolding**, not verified affiliate inventory.

@@ -390,9 +390,12 @@ const event = stripe.webhooks.constructEvent(body, sig, env.STRIPE_WEBHOOK_SECRE
 
 SmartFCRA™ Supreme automates the retrieval of authentic Experian, Equifax, and TransUnion (3-Bureau) credit reports through a direct bridge with MyFreeScoreNow.
 
-### 1. Ingestion Flow (Single-Sign-On Linkage)
-Admins send consumers an onboarding track link containing customized affiliate IDs:
-`https://www.myfreescorenow.com/secure-enroll/?PID=rjbusinesssolutions&subid=<client_id>`
+### 1. Ingestion Flow (Affiliate-only enrollment)
+Consumers must enroll through RJ Business Solutions MyFreeScoreNow affiliate offers (ID suffix `A8289`), e.g.:
+`https://app.myfreescorenow.com/enroll/B01A8289`
+
+Full offer + commission catalog: `src/data/mfsn-affiliate-offers.ts` and `docs/funding/MFSN_INTEGRATION.md`.
+Public signup rejects members who are not under this affiliate (partner API `User not found` → enroll first).
 
 ### 2. Retrieval Bridge: `POST /api/reports/import-mfsn`
 Once enrolled, the consumer's credentials are securely verified using MFSN backend API endpoints. The credit report data (returned in standardized JSON/XML format) is mapped to our database using our optimized adapter schema.
