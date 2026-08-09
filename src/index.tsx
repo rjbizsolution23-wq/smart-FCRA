@@ -95,6 +95,24 @@ import {
   clearGhlFieldCache,
 } from './lib/ghl-client';
 import { fetchMfsnMemberList, loginMfsnAdmin } from './lib/mfsn-admin';
+import {
+  tradelineMasterConfigured,
+  fetchTradelines,
+  fetchTradelineById,
+  fetchTradelineMasterUser,
+  filterTradelines,
+  summarizeInventory,
+  submitTradelineOrder,
+  TRADELINE_MARKUP_RATE,
+  TRADELINE_BRAND,
+  TRADELINE_OPS_EMAIL_DEFAULT,
+  TRADELINE_FROM_EMAIL_DEFAULT,
+  type EnrichedTradeline,
+} from './lib/tradelinemaster-client';
+import { syncTradelineInventory, loadCachedTradelines, sendTradelineOrderEmails } from './lib/tradeline-sync';
+import { matchTradelinesForClient, type ClientCreditProfile } from './engine/tradeline-matcher';
+import { CITIZENSHIP_STATUSES, GENDER_OPTIONS, MARITAL_STATUS_OPTIONS } from './data/tradeline-citizenship';
+import { listTradelineEducation } from './data/tradeline-education';
 import { sendSms } from './lib/alerts';
 import sampleMfsnReport from './data/sample-mfsn-report.json';
 import { spaAppSource } from './generated/spa-source';
@@ -491,6 +509,15 @@ type Bindings = {
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_EMAIL_FROM_NOREPLY?: string;
   CLOUDFLARE_EMAIL_FROM_ONBOARDING?: string;
+  /** TradelineMaster broker API (Basic auth) */
+  TRADELINEMASTER_USER_KEY?: string;
+  TRADELINEMASTER_PASS_KEY?: string;
+  TRADELINEMASTER_API_URL?: string;
+  TRADELINEMASTER_REFERER?: string;
+  TRADELINEMASTER_API_VERSION?: string;
+  TRADELINE_MARKUP_RATE?: string;
+  TRADELINE_OPS_EMAIL?: string;
+  TRADELINE_FROM_EMAIL?: string;
   FREE_AI_ONLY?: string;
   AI_DEFAULT_PROVIDER?: string;
   MAILING_WEBHOOK_SECRET?: string;
@@ -2852,6 +2879,511 @@ app.get('/api/integrations/mfsn/status', authMiddleware, async (c) => {
     error: login.error || null,
     ghlConfigured: ghlConfigured(c.env),
   });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// TRADELINEMASTER — RJ Business Solutions marketplace (12.5% markup)
+// ═══════════════════════════════════════════════════════════════
+
+function parseTradelineFilters(q: Record<string, string | undefined>) {
+  const num = (k: string) => (q[k] != null && q[k] !== '' ? Number(q[k]) : undefined);
+  return {
+    lender: q.lender || undefined,
+    minLimit: num('minLimit'),
+    maxLimit: num('maxLimit'),
+    statementDay: num('statementDay'),
+    postingDay: num('postingDay'),
+    minAgeYears: num('minAgeYears'),
+    minPrice: num('minPrice'),
+    maxPrice: num('maxPrice'),
+    cycles: num('cycles'),
+    minSpots: num('minSpots'),
+    q: q.q || q.search || undefined,
+  };
+}
+
+async function getTradelineInventory(env: Bindings, opts: { refresh?: boolean; maxAgeMinutes?: number } = {}) {
+  const maxAge = opts.maxAgeMinutes ?? 180;
+  const cached = await loadCachedTradelines(env);
+  const fetchedAt = cached.meta?.last_fetched_at ? new Date(cached.meta.last_fetched_at).getTime() : 0;
+  const stale = !fetchedAt || Date.now() - fetchedAt > maxAge * 60 * 1000;
+  if (opts.refresh || !cached.tradelines.length || stale) {
+    if (tradelineMasterConfigured(env)) {
+      const sync = await syncTradelineInventory(env);
+      if (sync.ok) {
+        const again = await loadCachedTradelines(env);
+        if (again.tradelines.length) return { ...again, live: true, sync };
+      }
+      // Fall back to live fetch if cache write failed
+      const live = await fetchTradelines(env);
+      if (live.ok) return { tradelines: live.tradelines, meta: { last_fetched_at: live.fetchedAt, last_count: live.tradelines.length }, live: true, sync };
+    }
+  }
+  return { ...cached, live: false };
+}
+
+app.get('/api/tradelines/status', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const configured = tradelineMasterConfigured(c.env);
+  let balance: number | null = null;
+  let userName: string | null = null;
+  let apiOk = false;
+  if (configured && user.role !== 'client') {
+    const u = await fetchTradelineMasterUser(c.env);
+    apiOk = !!u.ok;
+    balance = u.user?.Balance ?? null;
+    userName = u.user?.UserName || null;
+  } else if (configured) {
+    apiOk = true;
+  }
+  const cached = await loadCachedTradelines(c.env);
+  return c.json({
+    ok: configured && (apiOk || !!cached.tradelines.length),
+    configured,
+    brand: TRADELINE_BRAND,
+    markupRate: Number(c.env.TRADELINE_MARKUP_RATE || TRADELINE_MARKUP_RATE),
+    opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT,
+    fromEmail: c.env.TRADELINE_FROM_EMAIL || TRADELINE_FROM_EMAIL_DEFAULT,
+    balance: user.role === 'client' ? undefined : balance,
+    apiUser: user.role === 'client' ? undefined : userName,
+    inventoryCount: cached.tradelines.length,
+    lastFetchedAt: cached.meta?.last_fetched_at || null,
+    lastFetchOk: cached.meta?.last_fetch_ok ?? null,
+  });
+});
+
+app.get('/api/tradelines/meta', authMiddleware, async (c) => {
+  return c.json({
+    ok: true,
+    brand: TRADELINE_BRAND,
+    markupRate: Number(c.env.TRADELINE_MARKUP_RATE || TRADELINE_MARKUP_RATE),
+    opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT,
+    citizenship: CITIZENSHIP_STATUSES,
+    genders: GENDER_OPTIONS,
+    maritalStatuses: MARITAL_STATUS_OPTIONS,
+    education: listTradelineEducation(),
+  });
+});
+
+app.get('/api/tradelines/inventory', authMiddleware, async (c) => {
+  const refresh = c.req.query('refresh') === '1' || c.req.query('refresh') === 'true';
+  const inv = await getTradelineInventory(c.env, { refresh });
+  const filters = parseTradelineFilters({
+    lender: c.req.query('lender') || undefined,
+    minLimit: c.req.query('minLimit') || undefined,
+    maxLimit: c.req.query('maxLimit') || undefined,
+    statementDay: c.req.query('statementDay') || undefined,
+    postingDay: c.req.query('postingDay') || undefined,
+    minAgeYears: c.req.query('minAgeYears') || undefined,
+    minPrice: c.req.query('minPrice') || undefined,
+    maxPrice: c.req.query('maxPrice') || undefined,
+    cycles: c.req.query('cycles') || undefined,
+    minSpots: c.req.query('minSpots') || undefined,
+    q: c.req.query('q') || c.req.query('search') || undefined,
+  });
+  const staff = c.get('user').role !== 'client';
+  let rows = filterTradelines(inv.tradelines, filters);
+  const sort = c.req.query('sort') || 'statement';
+  if (sort === 'price') rows = rows.slice().sort((a, b) => a.retailPrice - b.retailPrice);
+  else if (sort === 'limit') rows = rows.slice().sort((a, b) => b.creditLimit - a.creditLimit);
+  else if (sort === 'age') rows = rows.slice().sort((a, b) => b.accountAgeYears - a.accountAgeYears || b.accountAgeMonths - a.accountAgeMonths);
+  else rows = rows.slice().sort((a, b) => String(a.statementDate).localeCompare(String(b.statementDate)));
+
+  const page = Math.max(1, Number(c.req.query('page') || 1));
+  const pageSize = Math.min(100, Math.max(10, Number(c.req.query('pageSize') || c.req.query('entries') || 25)));
+  const start = (page - 1) * pageSize;
+  const pageRows = rows.slice(start, start + pageSize).map((t) => ({
+    ...t,
+    wholesalePrice: staff ? t.wholesalePrice : undefined,
+    markupAmount: staff ? t.markupAmount : undefined,
+  }));
+
+  return c.json({
+    ok: true,
+    brand: TRADELINE_BRAND,
+    markupRate: Number(c.env.TRADELINE_MARKUP_RATE || TRADELINE_MARKUP_RATE),
+    opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT,
+    summary: summarizeInventory(inv.tradelines),
+    filteredCount: rows.length,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(rows.length / pageSize)),
+    lastFetchedAt: inv.meta?.last_fetched_at || null,
+    liveRefresh: !!inv.live,
+    tradelines: pageRows,
+  });
+});
+
+app.post('/api/tradelines/refresh', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  if (!tradelineMasterConfigured(c.env)) return c.json({ error: 'TradelineMaster not configured' }, 503);
+  const sync = await syncTradelineInventory(c.env);
+  return c.json({ ok: !!sync.ok, ...sync }, sync.ok ? 200 : 502);
+});
+
+app.get('/api/tradelines/item/:id', authMiddleware, async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isFinite(id)) return c.json({ error: 'Invalid id' }, 400);
+  const staff = c.get('user').role !== 'client';
+  let tradeline: EnrichedTradeline | undefined;
+  if (tradelineMasterConfigured(c.env)) {
+    const live = await fetchTradelineById(c.env, id);
+    if (live.ok) tradeline = live.tradeline;
+  }
+  if (!tradeline) {
+    const cached = await loadCachedTradelines(c.env);
+    tradeline = cached.tradelines.find((t) => t.id === id);
+  }
+  if (!tradeline) return c.json({ error: 'Tradeline not found' }, 404);
+  return c.json({
+    ok: true,
+    tradeline: {
+      ...tradeline,
+      wholesalePrice: staff ? tradeline.wholesalePrice : undefined,
+      markupAmount: staff ? tradeline.markupAmount : undefined,
+    },
+    education: listTradelineEducation().slice(0, 3),
+  });
+});
+
+app.get('/api/tradelines/match/:clientId', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const clientId = c.req.param('clientId');
+  let client: any = null;
+  if (user.role === 'client') {
+    client = await resolvePortalClientSafe(c, user, clientId);
+  } else {
+    client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?')
+      .bind(clientId, user.org_id).first();
+  }
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+
+  const inv = await getTradelineInventory(c.env, { refresh: c.req.query('refresh') === '1' });
+  const scores = [client.eq_score, client.ex_score, client.tu_score].filter((n: any) => n != null).map(Number);
+  const profile: ClientCreditProfile = {
+    firstName: client.first_name,
+    lastName: client.last_name,
+    email: client.email,
+    eqScore: client.eq_score,
+    exScore: client.ex_score,
+    tuScore: client.tu_score,
+    avgScore: scores.length ? Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length) : null,
+    accountCount: client.total_accounts ?? null,
+    collectionCount: client.total_collections ?? null,
+    goal: c.req.query('goal') || 'mortgage',
+  };
+
+  // Enrich from latest report counts when present
+  try {
+    const rep = await c.env.DB.prepare(
+      `SELECT total_accounts, total_collections, total_inquiries FROM credit_reports
+       WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 1`,
+    ).bind(client.id, user.org_id).first() as any;
+    if (rep) {
+      profile.accountCount = rep.total_accounts ?? profile.accountCount;
+      profile.collectionCount = rep.total_collections ?? profile.collectionCount;
+      profile.inquiryCount = rep.total_inquiries ?? null;
+    }
+  } catch { /* soft */ }
+
+  const matched = matchTradelinesForClient(profile, inv.tradelines, Number(c.req.query('limit') || 12));
+  const staff = user.role !== 'client';
+  return c.json({
+    ok: true,
+    clientId: client.id,
+    clientName: `${client.first_name || ''} ${client.last_name || ''}`.trim(),
+    ...matched,
+    matches: matched.matches.map((m) => ({
+      ...m,
+      tradeline: {
+        ...m.tradeline,
+        wholesalePrice: staff ? m.tradeline.wholesalePrice : undefined,
+        markupAmount: staff ? m.tradeline.markupAmount : undefined,
+      },
+    })),
+    opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT,
+  });
+});
+
+app.post('/api/tradelines/match', authMiddleware, async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const inv = await getTradelineInventory(c.env);
+  const profile: ClientCreditProfile = {
+    firstName: body.firstName,
+    lastName: body.lastName,
+    email: body.email,
+    eqScore: body.eqScore,
+    exScore: body.exScore,
+    tuScore: body.tuScore,
+    avgScore: body.avgScore,
+    accountCount: body.accountCount,
+    revolvingCount: body.revolvingCount,
+    installmentCount: body.installmentCount,
+    collectionCount: body.collectionCount,
+    inquiryCount: body.inquiryCount,
+    oldestAccountYears: body.oldestAccountYears,
+    utilizationPct: body.utilizationPct,
+    goal: body.goal || 'general',
+    hasThinFile: !!body.hasThinFile,
+  };
+  const matched = matchTradelinesForClient(profile, inv.tradelines, Number(body.limit || 12));
+  return c.json({ ok: true, ...matched, opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT });
+});
+
+app.get('/api/tradelines/orders', authMiddleware, async (c) => {
+  const user = c.get('user');
+  try {
+    let rows;
+    if (user.role === 'client') {
+      const client = await resolvePortalClientSafe(c, user);
+      if (!client) return c.json({ orders: [] });
+      rows = await c.env.DB.prepare(
+        `SELECT id, tradeline_id, lender, credit_limit, retail_price, status, tlm_order_id, created_at, updated_at
+         FROM tradeline_master_orders WHERE org_id = ? AND client_id = ? ORDER BY created_at DESC LIMIT 100`,
+      ).bind(user.org_id, client.id).all();
+    } else {
+      rows = await c.env.DB.prepare(
+        `SELECT id, client_id, tradeline_id, lender, credit_limit, wholesale_price, retail_price, status, tlm_order_id, tlm_message, created_at, updated_at
+         FROM tradeline_master_orders WHERE org_id = ? ORDER BY created_at DESC LIMIT 200`,
+      ).bind(user.org_id).all();
+    }
+    return c.json({ ok: true, orders: rows.results || [] });
+  } catch (e: any) {
+    if (String(e?.message || '').includes('no such table')) {
+      return c.json({ ok: true, orders: [], warning: 'Migration 0019 required' });
+    }
+    throw e;
+  }
+});
+
+app.post('/api/tradelines/order', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  const tradelineId = Number(body.tradelineId || body.TradelineID);
+  if (!Number.isFinite(tradelineId)) return c.json({ error: 'tradelineId required' }, 400);
+
+  const inv = await getTradelineInventory(c.env);
+  let tradeline = inv.tradelines.find((t) => t.id === tradelineId);
+  if (!tradeline && tradelineMasterConfigured(c.env)) {
+    const live = await fetchTradelineById(c.env, tradelineId);
+    tradeline = live.tradeline;
+  }
+  if (!tradeline) return c.json({ error: 'Tradeline not found or sold out' }, 404);
+  if (tradeline.spotsAvailable < 1) return c.json({ error: 'No spots available on this tradeline' }, 409);
+
+  let clientId: string | null = body.clientId || null;
+  if (user.role === 'client') {
+    const portalClient = await resolvePortalClientSafe(c, user, body.clientId);
+    if (!portalClient) return c.json({ error: 'Client profile required' }, 400);
+    clientId = portalClient.id;
+  } else if (clientId) {
+    const owned = await c.env.DB.prepare('SELECT id FROM clients WHERE id = ? AND org_id = ?')
+      .bind(clientId, user.org_id).first();
+    if (!owned) return c.json({ error: 'Client not found' }, 404);
+  }
+
+  const clientPayload = {
+    FirstName: String(body.firstName || body.FirstName || '').trim(),
+    MiddleName: String(body.middleName || body.MiddleName || '').trim() || undefined,
+    LastName: String(body.lastName || body.LastName || '').trim(),
+    Suffix: String(body.suffix || body.Suffix || '').trim() || undefined,
+    Email: String(body.email || body.Email || '').trim().toLowerCase(),
+    Phone: String(body.phone || body.Phone || '').trim(),
+    DOB: String(body.dob || body.DOB || '').trim(),
+    SSN: String(body.ssn || body.SSN || '').replace(/\D/g, ''),
+    GenderId: Number(body.genderId || body.GenderId || 1),
+    MaritalStatusId: Number(body.maritalStatusId || body.MaritalStatusId || 1),
+    CitizenshipStatusId: Number(body.citizenshipStatusId || body.CitizenshipStatusId || 1),
+    PhysicalAddress: String(body.physicalAddress || body.PhysicalAddress || '').trim(),
+    City: String(body.city || body.City || '').trim(),
+    StateCode: String(body.stateCode || body.StateCode || body.state || '').trim().toUpperCase().slice(0, 2),
+    ZipCode: String(body.zipCode || body.ZipCode || body.zip || '').trim(),
+    CreditReportAgencyURL: String(body.creditReportAgencyURL || body.CreditReportAgencyURL || '').trim() || undefined,
+    CreditReportAgencyUsername: String(body.creditReportAgencyUsername || body.CreditReportAgencyUsername || '').trim() || undefined,
+    CreditReportAgencyPassword: String(body.creditReportAgencyPassword || body.CreditReportAgencyPassword || '').trim() || undefined,
+  };
+
+  if (!clientPayload.FirstName || !clientPayload.LastName || !clientPayload.Email) {
+    return c.json({ error: 'First name, last name, and email are required' }, 400);
+  }
+  if (!clientPayload.DOB || clientPayload.SSN.length < 9) {
+    return c.json({ error: 'Valid date of birth and 9-digit SSN are required' }, 400);
+  }
+  if (!clientPayload.PhysicalAddress || !clientPayload.City || !clientPayload.StateCode || !clientPayload.ZipCode) {
+    return c.json({ error: 'Full physical address is required' }, 400);
+  }
+
+  const placeLive = !!body.placeLive && user.role !== 'client';
+  const orderId = generateId();
+  let status = 'awaiting_payment';
+  let tlmOrderId: number | null = null;
+  let tlmStatus: number | null = null;
+  let tlmMessage: string | null = null;
+
+  // Smart match impact snapshot
+  const impact = matchTradelinesForClient(
+    {
+      firstName: clientPayload.FirstName,
+      lastName: clientPayload.LastName,
+      email: clientPayload.Email,
+      goal: body.goal || 'general',
+    },
+    [tradeline],
+    1,
+  ).matches[0] || null;
+
+  if (placeLive) {
+    if (!tradelineMasterConfigured(c.env)) {
+      return c.json({ error: 'TradelineMaster not configured' }, 503);
+    }
+    const placed = await submitTradelineOrder(c.env, tradelineId, clientPayload);
+    tlmStatus = placed.result?.Status ?? null;
+    tlmOrderId = placed.result?.OrderId || null;
+    tlmMessage = placed.result?.Message || placed.error || null;
+    if (placed.result?.Status === 1) status = 'approved';
+    else if (placed.result?.Status === 3) status = 'declined';
+    else if (placed.result?.Status === 2) status = 'invalid';
+    else status = 'submitted';
+  }
+
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO tradeline_master_orders (
+        id, org_id, client_id, created_by, tradeline_id, lender, credit_limit,
+        wholesale_price, retail_price, cycles, status, tlm_order_id, tlm_status, tlm_message,
+        client_json, credit_portal_json, impact_json, notes, payment_email_sent, placed_at, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, datetime('now'), datetime('now'))`,
+    ).bind(
+      orderId, user.org_id, clientId, user.id, tradelineId, tradeline.lender, tradeline.creditLimit,
+      tradeline.wholesalePrice, tradeline.retailPrice, tradeline.cycles, status, tlmOrderId, tlmStatus, tlmMessage,
+      JSON.stringify(clientPayload),
+      JSON.stringify({
+        url: clientPayload.CreditReportAgencyURL || null,
+        username: clientPayload.CreditReportAgencyUsername || null,
+        // password stored encrypted-ish only in order row for staff fulfillment — never returned to client list
+        password: clientPayload.CreditReportAgencyPassword || null,
+      }),
+      JSON.stringify(impact),
+      body.notes || null,
+      placeLive ? new Date().toISOString() : null,
+    ).run();
+  } catch (e: any) {
+    if (String(e?.message || '').includes('no such table')) {
+      return c.json({ error: 'Database migration 0019 required — apply migrations then retry' }, 503);
+    }
+    throw e;
+  }
+
+  let emailResult: any = null;
+  try {
+    emailResult = await sendTradelineOrderEmails(c.env, {
+      orderId,
+      tradeline,
+      client: clientPayload,
+      status,
+      tlmOrderId,
+      tlmMessage,
+      placeLive,
+    });
+    if (emailResult?.ops?.sent) {
+      await c.env.DB.prepare(
+        `UPDATE tradeline_master_orders SET payment_email_sent = 1, updated_at = datetime('now') WHERE id = ?`,
+      ).bind(orderId).run();
+    }
+  } catch (e: any) {
+    emailResult = { error: e?.message || 'email_failed' };
+  }
+
+  try {
+    await c.env.DB.prepare(
+      'INSERT INTO activity_log (id, org_id, client_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).bind(
+      generateId(), user.org_id, clientId, user.id, 'tradeline_order_created',
+      `Tradeline ${tradeline.lender} $${tradeline.creditLimit} · ${status}`,
+      JSON.stringify({ orderId, tradelineId, retailPrice: tradeline.retailPrice, placeLive, tlmOrderId }),
+    ).run();
+  } catch { /* soft */ }
+
+  return c.json({
+    ok: true,
+    orderId,
+    status,
+    tlmOrderId,
+    tlmStatus,
+    tlmMessage,
+    retailPrice: tradeline.retailPrice,
+    wholesalePrice: user.role === 'client' ? undefined : tradeline.wholesalePrice,
+    tradeline: {
+      id: tradeline.id,
+      lender: tradeline.lender,
+      creditLimit: tradeline.creditLimit,
+      statementLabel: tradeline.statementLabel,
+      postingWindowLabel: tradeline.postingWindowLabel,
+      accountAgeLabel: tradeline.accountAgeLabel,
+      cycles: tradeline.cycles,
+      retailPrice: tradeline.retailPrice,
+    },
+    opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT,
+    email: emailResult,
+    message: placeLive
+      ? (status === 'approved'
+        ? 'Order approved at TradelineMaster.'
+        : `API returned status ${tlmStatus}: ${tlmMessage || status}. Payment/ops notified at tradelines@smartfcra.com.`)
+      : `Quote saved. Email tradelines@smartfcra.com to pay ${tradeline.retailPrice.toFixed(2)} and place this line.`,
+  }, 201);
+});
+
+app.post('/api/tradelines/orders/:id/place', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  if (!tradelineMasterConfigured(c.env)) return c.json({ error: 'TradelineMaster not configured' }, 503);
+  const id = c.req.param('id');
+  const row = await c.env.DB.prepare(
+    `SELECT * FROM tradeline_master_orders WHERE id = ? AND org_id = ?`,
+  ).bind(id, user.org_id).first() as any;
+  if (!row) return c.json({ error: 'Order not found' }, 404);
+  if (row.tlm_order_id && row.status === 'approved') {
+    return c.json({ ok: true, alreadyPlaced: true, tlmOrderId: row.tlm_order_id });
+  }
+  const clientPayload = JSON.parse(row.client_json || '{}');
+  const portal = JSON.parse(row.credit_portal_json || '{}');
+  if (portal.password && !clientPayload.CreditReportAgencyPassword) {
+    clientPayload.CreditReportAgencyPassword = portal.password;
+  }
+  if (portal.url) clientPayload.CreditReportAgencyURL = portal.url;
+  if (portal.username) clientPayload.CreditReportAgencyUsername = portal.username;
+
+  const placed = await submitTradelineOrder(c.env, Number(row.tradeline_id), clientPayload);
+  let status = row.status;
+  if (placed.result?.Status === 1) status = 'approved';
+  else if (placed.result?.Status === 3) status = 'declined';
+  else if (placed.result?.Status === 2) status = 'invalid';
+  else status = 'submitted';
+
+  await c.env.DB.prepare(
+    `UPDATE tradeline_master_orders SET status = ?, tlm_order_id = ?, tlm_status = ?, tlm_message = ?, placed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
+  ).bind(status, placed.result?.OrderId || null, placed.result?.Status ?? null, placed.result?.Message || placed.error || null, id).run();
+
+  return c.json({
+    ok: placed.ok,
+    status,
+    tlmOrderId: placed.result?.OrderId || null,
+    tlmStatus: placed.result?.Status ?? null,
+    message: placed.result?.Message || placed.error || null,
+  }, placed.ok ? 200 : 502);
+});
+
+/** Cron: refresh TradelineMaster inventory daily */
+app.post('/api/cron/tradelines-refresh', async (c) => {
+  const secret = c.env.JOURNEY_CRON_SECRET || c.env.MAILING_WEBHOOK_SECRET;
+  const auth = c.req.header('Authorization') || '';
+  const cronHeader = c.req.header('X-Cron-Secret') || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : cronHeader;
+  if (!secret || token !== secret) return c.json({ error: 'Unauthorized' }, 401);
+  if (!tradelineMasterConfigured(c.env)) return c.json({ error: 'not_configured' }, 503);
+  const sync = await syncTradelineInventory(c.env);
+  return c.json({ ok: !!sync.ok, ...sync }, sync.ok ? 200 : 502);
 });
 
 // ── Portal uploads (docs, creditor replies, bank statements) ──
@@ -5769,6 +6301,7 @@ app.get('/api/health/ready', async (c) => {
     click2mail: !!(c.env.CLICK2MAIL_USERNAME && c.env.CLICK2MAIL_AUTH_BASIC),
     twilioSms: !!(c.env.TWILIO_ACCOUNT_SID && c.env.TWILIO_AUTH_TOKEN && c.env.TWILIO_PHONE_NUMBER),
     ghl: ghlConfigured(c.env),
+    tradelineMaster: tradelineMasterConfigured(c.env),
     aiProvidersConfigured: providers.filter(p => p.configured && p.free).length,
     letterBranding: true,
     letterStrategy: true,

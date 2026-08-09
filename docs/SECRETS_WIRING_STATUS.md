@@ -45,6 +45,20 @@ PBKDF2 iterations are **100,000** (Cloudflare Workers Web Crypto hard cap).
 
 Agent runbook: `docs/agents/mfsn-partner/AGENT_ACCESS.md` · helper: `node scripts/mfsn-login.mjs`
 
+## TradelineMaster (wired)
+
+| Secret | Purpose |
+|--------|---------|
+| `TRADELINEMASTER_USER_KEY` | API User Key (Basic auth) |
+| `TRADELINEMASTER_PASS_KEY` | API Pass Key |
+| `TRADELINEMASTER_API_URL` | `https://www.tradelinemaster.com/api` |
+| `TRADELINE_MARKUP_RATE` | `0.125` (12.5% RJ Business Solutions markup) |
+| `TRADELINE_OPS_EMAIL` | `tradelines@smartfcra.com` (payment / placement) |
+| `TRADELINE_FROM_EMAIL` | `welcome@tradelines.smartfcra.com` |
+| `CLOUDFLARE_EMAIL_API_TOKEN` | Cloudflare Email Sending token (`cfut_…`) |
+
+**Staff / client nav → Tradelines** — live inventory, filters, smart match agent, order form, education, daily cron refresh (`tradeline_inventory_refresh` in ops daily pack + `POST /api/cron/tradelines-refresh`).
+
 ## GoHighLevel (wired)
 
 | Secret | Purpose |

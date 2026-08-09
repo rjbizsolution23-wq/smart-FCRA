@@ -9,6 +9,8 @@ import { runEnterpriseCommsCron } from './email-workflows';
 import { dispatchDailyMotivationBatch } from './portal-journey';
 import { buildSecurityPosture } from './security-compliance';
 import { seedKnowledgeBase, retrieveKnowledge } from './knowledge-base';
+import { syncTradelineInventory } from './tradeline-sync';
+import { tradelineMasterConfigured } from './tradelinemaster-client';
 
 export type OpsEnv = {
   DB: any;
@@ -36,7 +38,8 @@ export type OpsJobName =
   | 'kb_health'
   | 'weekly_owner_report'
   | 'monthly_compliance_snapshot'
-  | 'backup_snapshot';
+  | 'backup_snapshot'
+  | 'tradeline_inventory_refresh';
 
 export const OPS_PACKS: Record<string, OpsJobName[]> = {
   hourly: ['housekeeping', 'email_health', 'ron_video_cleanup'],
@@ -48,6 +51,7 @@ export const OPS_PACKS: Record<string, OpsJobName[]> = {
     'bureau_followup',
     'privacy_sla',
     'email_health',
+    'tradeline_inventory_refresh',
   ],
   weekly: ['fundability_refresh', 'newsletter_weekly', 'weekly_owner_report', 'kb_health', 'backup_snapshot'],
   monthly: ['monthly_compliance_snapshot', 'housekeeping'],
@@ -970,6 +974,20 @@ export async function jobBackupSnapshot(env: OpsEnv, opts?: { orgId?: string }) 
 
 type JobFn = (env: OpsEnv, opts?: { orgId?: string; limit?: number }) => Promise<any>;
 
+async function jobTradelineInventoryRefresh(env: OpsEnv) {
+  if (!tradelineMasterConfigured(env)) {
+    return { skipped: true, reason: 'tradeline_not_configured' };
+  }
+  const sync = await syncTradelineInventory(env as any);
+  return {
+    ok: !!sync.ok,
+    count: sync.count,
+    fetchedAt: sync.fetchedAt,
+    balance: sync.balance,
+    error: sync.error || null,
+  };
+}
+
 const JOB_MAP: Record<OpsJobName, JobFn> = {
   housekeeping: jobHousekeeping,
   email_health: jobEmailHealth,
@@ -986,6 +1004,7 @@ const JOB_MAP: Record<OpsJobName, JobFn> = {
   weekly_owner_report: jobWeeklyOwnerReport,
   monthly_compliance_snapshot: jobMonthlyComplianceSnapshot,
   backup_snapshot: jobBackupSnapshot,
+  tradeline_inventory_refresh: jobTradelineInventoryRefresh,
 };
 
 export async function runOpsJob(

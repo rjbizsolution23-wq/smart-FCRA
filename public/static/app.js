@@ -1053,6 +1053,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'client-uploads', icon: 'fa-cloud-upload-alt', label: t('nav.vault') },
         { id: 'client-fundability', icon: 'fa-chart-line', label: t('nav.fundability') },
         { id: 'client-tradelines', icon: 'fa-handshake', label: t('nav.boostTools') },
+        { id: 'tradelines', icon: 'fa-layer-group', label: 'AU Tradelines' },
         { id: 'client-tutor', icon: 'fa-user-graduate', label: t('nav.tutor') },
         { id: 'client-documents', icon: 'fa-file-signature', label: t('nav.documents') },
         { id: 'client-legal', icon: 'fa-balance-scale', label: 'Legal & Notary' },
@@ -1080,6 +1081,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'mailing-campaigns', icon: 'fa-mail-bulk', label: 'Mailing Campaigns' },
         { id: 'founder-os', icon: 'fa-briefcase', label: 'Founder OS' },
         { id: 'sales-tools', icon: 'fa-chart-pie', label: 'Sales Tools' },
+        { id: 'tradelines', icon: 'fa-layer-group', label: 'Tradelines' },
         { id: 'roi-calculator', icon: 'fa-calculator', label: 'ROI Calculator' },
         { id: 'team', icon: 'fa-user-friends', label: 'Team' },
         { id: 'settings', icon: 'fa-cog', label: 'Settings' },
@@ -1187,6 +1189,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'mailing-campaigns': await pgMailingCampaigns(el); break;
         case 'founder-os': await pgFounderOS(el); break;
         case 'sales-tools': await pgSalesTools(el); break;
+        case 'tradelines': await pgTradelines(el); break;
         case 'roi-calculator': await pgROICalculator(el); break;
         case 'team': await pgTeam(el); break;
         case 'settings': await pgSettings(el); break;
@@ -8317,6 +8320,328 @@ async function pgAdminConsole(el) {
     }
   }
 
+  async function pgTradelines(el) {
+    const isClient = state.user?.role === 'client' || !!state.impersonateClientId;
+    const money = (n) => '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const moneyInt = (n) => '$' + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    let meta = { citizenship: [], genders: [], maritalStatuses: [], education: [], opsEmail: 'tradelines@smartfcra.com', markupRate: 0.125 };
+    let clients = [];
+    let filters = { lender: '', statementDay: '', minAgeYears: '', maxPrice: '', minLimit: '', cycles: '', q: '', pageSize: 25, page: 1, sort: 'statement' };
+    let selected = null;
+    let inventory = { tradelines: [], summary: {}, filteredCount: 0, totalPages: 1, lastFetchedAt: null };
+    let matches = null;
+    let orders = [];
+    let tab = 'inventory';
+
+    const loadMeta = async () => {
+      meta = await api('/tradelines/meta');
+      if (!isClient) {
+        try {
+          const cr = await api('/clients?limit=200');
+          clients = cr.clients || cr.results || [];
+        } catch { clients = []; }
+      }
+    };
+    const loadInventory = async (refresh = false) => {
+      const qs = new URLSearchParams();
+      qs.set('page', String(filters.page));
+      qs.set('pageSize', String(filters.pageSize));
+      qs.set('sort', filters.sort);
+      if (refresh) qs.set('refresh', '1');
+      ['lender', 'statementDay', 'minAgeYears', 'maxPrice', 'minLimit', 'cycles', 'q'].forEach((k) => {
+        if (filters[k] !== '' && filters[k] != null) qs.set(k, filters[k]);
+      });
+      inventory = await api('/tradelines/inventory?' + qs.toString());
+    };
+    const loadOrders = async () => {
+      try { const d = await api('/tradelines/orders'); orders = d.orders || []; } catch { orders = []; }
+    };
+    const loadMatch = async (clientId) => {
+      if (!clientId) { matches = null; return; }
+      matches = await api('/tradelines/match/' + encodeURIComponent(clientId) + '?goal=mortgage');
+    };
+
+    const paint = () => {
+      const lenders = inventory.summary?.lenders || [];
+      const rows = inventory.tradelines || [];
+      const edu = meta.education || [];
+      const ops = meta.opsEmail || 'tradelines@smartfcra.com';
+      const markupPct = Math.round(Number(meta.markupRate || 0.125) * 1000) / 10;
+
+      el.innerHTML = `<div class="fade-in space-y-5">
+        <div class="relative overflow-hidden rounded-2xl border border-sky-500/25 bg-gradient-to-br from-slate-950 via-[#0b1f33] to-slate-950 p-6">
+          <div class="absolute inset-0 opacity-30 pointer-events-none" style="background:radial-gradient(ellipse at 20% 0%,rgba(56,189,248,.25),transparent 50%),radial-gradient(ellipse at 80% 100%,rgba(14,116,144,.2),transparent 45%)"></div>
+          <div class="relative flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+            <div>
+              <div class="text-[10px] uppercase tracking-[0.2em] text-sky-300/80 font-bold mb-1">RJ Business Solutions · Smart FCRA</div>
+              <h1 class="text-2xl font-bold text-white tracking-tight">Authorized User Tradelines</h1>
+              <p class="text-sm text-slate-300/90 mt-1 max-w-2xl">Live TradelineMaster inventory with <strong class="text-sky-300">${markupPct}%</strong> RJ markup. Filter, smart-match to credit profiles, and request placement — payment via <a class="text-sky-300 underline" href="mailto:${escapeHtml(ops)}">${escapeHtml(ops)}</a>.</p>
+            </div>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <div class="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200"><span class="text-slate-500">Lines</span> <strong class="text-white ml-1">${inventory.summary?.count ?? '—'}</strong></div>
+              <div class="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200"><span class="text-slate-500">Spots</span> <strong class="text-white ml-1">${inventory.summary?.totalSpots ?? '—'}</strong></div>
+              <div class="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200"><span class="text-slate-500">Updated</span> <strong class="text-white ml-1">${inventory.lastFetchedAt ? escapeHtml(new Date(inventory.lastFetchedAt).toLocaleString()) : '—'}</strong></div>
+              ${!isClient ? `<button type="button" id="tl-refresh" class="px-3 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold"><i class="fas fa-sync-alt mr-1"></i>Refresh Live</button>` : ''}
+            </div>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-2 text-xs">
+          ${[['inventory','Inventory'],['match','Smart Match Agent'],['order','Order / Client Info'],['education','Education'],['orders','My Requests']].map(([id,label]) =>
+            `<button type="button" data-tab="${id}" class="tl-tab px-3 py-2 rounded-lg border ${tab===id?'bg-sky-600/20 border-sky-500/40 text-sky-200':'border-gray-700 text-gray-400 hover:border-gray-500'} font-semibold">${label}</button>`
+          ).join('')}
+        </div>
+
+        <div id="tl-panel"></div>
+      </div>`;
+
+      const panel = document.getElementById('tl-panel');
+      if (tab === 'inventory') {
+        panel.innerHTML = `
+          <div class="glass rounded-xl border border-gray-800 p-4 space-y-4">
+            <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2 text-xs">
+              <label class="block">Lender<select id="f-lender" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-2 py-2 text-white"><option value="">All lenders</option>${lenders.map(l=>`<option value="${escapeHtml(l)}" ${filters.lender===l?'selected':''}>${escapeHtml(l)}</option>`).join('')}</select></label>
+              <label class="block">Min limit<select id="f-minLimit" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-2 py-2 text-white"><option value="">Any limit</option>${[5000,10000,15000,20000,30000,50000].map(n=>`<option value="${n}" ${String(filters.minLimit)===String(n)?'selected':''}>${moneyInt(n)}+</option>`).join('')}</select></label>
+              <label class="block">Statement day<select id="f-statementDay" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-2 py-2 text-white"><option value="">Any day</option>${Array.from({length:28},(_,i)=>i+1).map(d=>`<option value="${d}" ${String(filters.statementDay)===String(d)?'selected':''}>${d}</option>`).join('')}</select></label>
+              <label class="block">Account age<select id="f-minAgeYears" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-2 py-2 text-white"><option value="">Any age</option>${[1,2,3,5,7,10,15].map(n=>`<option value="${n}" ${String(filters.minAgeYears)===String(n)?'selected':''}>${n}+ yrs</option>`).join('')}</select></label>
+              <label class="block">Max price<select id="f-maxPrice" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-2 py-2 text-white"><option value="">Any price</option>${[400,500,600,700,800,1000,1200].map(n=>`<option value="${n}" ${String(filters.maxPrice)===String(n)?'selected':''}>Under ${money(n)}</option>`).join('')}</select></label>
+              <label class="block">Cycles<select id="f-cycles" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-2 py-2 text-white"><option value="">Any cycles</option>${[1,2,3,4].map(n=>`<option value="${n}" ${String(filters.cycles)===String(n)?'selected':''}>${n}</option>`).join('')}</select></label>
+              <label class="block">Show<select id="f-pageSize" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-2 py-2 text-white">${[10,25,50,100].map(n=>`<option value="${n}" ${Number(filters.pageSize)===n?'selected':''}>${n} entries</option>`).join('')}</select></label>
+              <label class="block">Search<input id="f-q" value="${escapeHtml(filters.q||'')}" placeholder="Search…" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-2 py-2 text-white"></label>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-400">
+              <span>Showing <strong class="text-white">${rows.length}</strong> of <strong class="text-white">${inventory.filteredCount||0}</strong> filtered lines</span>
+              <div class="flex gap-2">
+                <button type="button" id="f-apply" class="bg-sky-700 hover:bg-sky-600 text-white px-3 py-1.5 rounded-lg font-semibold">Apply filters</button>
+                <button type="button" id="f-reset" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg">Reset</button>
+              </div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-sm">
+                <thead><tr class="text-[10px] uppercase tracking-wider text-gray-500 border-b border-gray-800">
+                  <th class="py-2 pr-3">Lender</th><th class="py-2 pr-3">Spots</th><th class="py-2 pr-3">Limit</th>
+                  <th class="py-2 pr-3">Statement</th><th class="py-2 pr-3">Posting</th><th class="py-2 pr-3">Age</th>
+                  <th class="py-2 pr-3">Price</th><th class="py-2 pr-3">Cycles</th><th class="py-2">Action</th>
+                </tr></thead>
+                <tbody>
+                  ${rows.map(t => `<tr class="border-b border-gray-800/70 hover:bg-sky-950/20">
+                    <td class="py-3 pr-3 font-bold text-sky-200">${escapeHtml(t.lender)}</td>
+                    <td class="py-3 pr-3 text-gray-300">${t.spotsAvailable} spot${t.spotsAvailable===1?'':'s'}</td>
+                    <td class="py-3 pr-3 text-white font-semibold">${moneyInt(t.creditLimit)}</td>
+                    <td class="py-3 pr-3 text-gray-300">${escapeHtml(t.statementLabel||'—')}</td>
+                    <td class="py-3 pr-3 text-gray-400 text-xs">${escapeHtml(t.postingWindowLabel||'—')}</td>
+                    <td class="py-3 pr-3 text-gray-300">${escapeHtml(t.accountAgeLabel||'—')}</td>
+                    <td class="py-3 pr-3"><div class="text-emerald-300 font-bold">${money(t.retailPrice)}</div>${!isClient && t.wholesalePrice!=null?`<div class="text-[10px] text-gray-500">Cost ${money(t.wholesalePrice)}</div>`:''}</td>
+                    <td class="py-3 pr-3 text-gray-300">${t.cycles}</td>
+                    <td class="py-3"><button type="button" data-id="${t.id}" class="tl-select bg-orange-700 hover:bg-orange-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg">Select</button></td>
+                  </tr>`).join('') || `<tr><td colspan="9" class="py-8 text-center text-gray-500">No tradelines match these filters.</td></tr>`}
+                </tbody>
+              </table>
+            </div>
+            <div class="flex items-center justify-between text-xs text-gray-400">
+              <button type="button" id="tl-prev" class="px-3 py-1.5 rounded border border-gray-700 ${filters.page<=1?'opacity-40':''}">Prev</button>
+              <span>Page ${filters.page} / ${inventory.totalPages||1}</span>
+              <button type="button" id="tl-next" class="px-3 py-1.5 rounded border border-gray-700 ${filters.page>=(inventory.totalPages||1)?'opacity-40':''}">Next</button>
+            </div>
+          </div>`;
+      } else if (tab === 'match') {
+        const mrows = matches?.matches || [];
+        panel.innerHTML = `
+          <div class="glass rounded-xl border border-violet-900/40 p-5 space-y-4">
+            <h2 class="text-sm font-bold text-white"><i class="fas fa-brain text-violet-400 mr-2"></i>Intelligent Tradeline Agent</h2>
+            <p class="text-xs text-gray-400">Ranks live inventory against the client's scores, thin-file status, and goals — then explains utilization, age, mix, and timing impact.</p>
+            ${!isClient ? `<label class="block text-xs text-gray-400">Saved client<select id="match-client" class="mt-1 w-full md:w-96 bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"><option value="">— Select client —</option>${clients.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml((c.first_name||'')+' '+(c.last_name||'')+' · '+(c.email||''))}</option>`).join('')}</select></label>` : `<button type="button" id="match-me" class="bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold px-3 py-2 rounded-lg">Match my profile</button>`}
+            ${matches?.agentBrief ? `<div class="text-sm text-violet-100 bg-violet-950/40 border border-violet-500/20 rounded-xl p-4">${escapeHtml(matches.agentBrief)}</div>` : ''}
+            ${matches?.profileSummary ? `<div class="text-[11px] text-gray-400">Avg score <strong class="text-white">${matches.profileSummary.avgScore||'—'}</strong> · Thin file: <strong class="text-white">${matches.profileSummary.thinFile?'Yes':'No'}</strong> · Focus: ${(matches.profileSummary.focus||[]).map(f=>escapeHtml(f)).join(' · ')}</div>` : ''}
+            <div class="space-y-3">
+              ${mrows.map((m,i)=>`
+                <div class="border border-gray-800 rounded-xl p-4 ${m.tier==='best'?'bg-emerald-950/20 border-emerald-500/30':''}">
+                  <div class="flex flex-wrap justify-between gap-2">
+                    <div>
+                      <div class="text-[10px] uppercase tracking-wider ${m.tier==='best'?'text-emerald-300':'text-gray-500'}">#${i+1} · ${escapeHtml(m.tier)} match · score ${m.matchScore}</div>
+                      <div class="text-lg font-bold text-white">${escapeHtml(m.tradeline.lender)} · ${moneyInt(m.tradeline.creditLimit)}</div>
+                      <div class="text-xs text-gray-400">${escapeHtml(m.tradeline.accountAgeLabel)} · Stmt ${escapeHtml(m.tradeline.statementLabel)} · ${escapeHtml(m.tradeline.postingWindowLabel)} · ${money(m.tradeline.retailPrice)}</div>
+                    </div>
+                    <button type="button" data-id="${m.tradeline.id}" class="tl-select self-start bg-orange-700 hover:bg-orange-600 text-white text-xs font-bold px-3 py-2 rounded-lg">Select this line</button>
+                  </div>
+                  <ul class="mt-2 text-xs text-sky-200/90 list-disc pl-4">${(m.reasons||[]).map(r=>`<li>${escapeHtml(r)}</li>`).join('')}</ul>
+                  <p class="mt-2 text-xs text-gray-300">${escapeHtml(m.impact?.estimatedScoreBand||'')}</p>
+                  <p class="mt-1 text-[11px] text-gray-500">${escapeHtml(m.impact?.utilizationHelp||'')} ${escapeHtml(m.impact?.timingHelp||'')}</p>
+                </div>`).join('') || '<p class="text-sm text-gray-500">Select a client (or match your profile) to see ranked tradelines.</p>'}
+            </div>
+          </div>`;
+      } else if (tab === 'order') {
+        const t = selected;
+        const citizenship = meta.citizenship || [];
+        panel.innerHTML = `
+          <div class="glass rounded-xl border border-orange-900/40 p-5 space-y-4">
+            <h2 class="text-sm font-bold text-white"><i class="fas fa-file-signature text-orange-400 mr-2"></i>Client Information & Order</h2>
+            ${t ? `<div class="text-xs text-gray-300 bg-slate-950/60 border border-gray-800 rounded-lg p-3">Selected: <strong class="text-sky-300">${escapeHtml(t.lender)}</strong> ${moneyInt(t.creditLimit)} · ${escapeHtml(t.accountAgeLabel)} · Stmt ${escapeHtml(t.statementLabel)} · <strong class="text-emerald-300">${money(t.retailPrice)}</strong> (#${t.id})</div>` : `<div class="text-xs text-amber-300">Select a tradeline from Inventory or Smart Match first.</div>`}
+            <form id="tl-order-form" class="grid md:grid-cols-2 gap-3 text-xs">
+              ${!isClient ? `<div class="md:col-span-2"><label class="text-gray-400">Saved Client</label><select name="clientId" id="order-client" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white"><option value="">— New Client / add later link —</option>${clients.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml((c.first_name||'')+' '+(c.last_name||''))}</option>`).join('')}</select></div>` : ''}
+              <div><label class="text-gray-400">First Name</label><input name="firstName" required class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white"></div>
+              <div><label class="text-gray-400">Middle Name</label><input name="middleName" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white"></div>
+              <div><label class="text-gray-400">Last Name</label><input name="lastName" required class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white"></div>
+              <div><label class="text-gray-400">Suffix</label><input name="suffix" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white"></div>
+              <div><label class="text-gray-400">Gender</label><select name="genderId" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white">${(meta.genders||[]).map(g=>`<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('')}</select></div>
+              <div><label class="text-gray-400">Marital Status</label><select name="maritalStatusId" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white">${(meta.maritalStatuses||[]).map(g=>`<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('')}</select></div>
+              <div class="md:col-span-2"><label class="text-gray-400">Citizenship</label><select name="citizenshipStatusId" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white">${citizenship.map(g=>`<option value="${g.id}" ${g.id===1?'selected':''}>${escapeHtml(g.name)}</option>`).join('')}</select></div>
+              <div><label class="text-gray-400">Date of Birth</label><input name="dob" type="date" required class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white"></div>
+              <div><label class="text-gray-400">Social Security Number</label><input name="ssn" required placeholder="XXX-XX-XXXX" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white"></div>
+              <div><label class="text-gray-400">Phone</label><input name="phone" placeholder="(XXX) XXX-XXXX" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white"></div>
+              <div><label class="text-gray-400">Email</label><input name="email" type="email" required class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white"></div>
+              <div class="md:col-span-2"><label class="text-gray-400">Physical Address</label><input name="physicalAddress" required class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white"></div>
+              <div><label class="text-gray-400">City</label><input name="city" required class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white"></div>
+              <div class="grid grid-cols-2 gap-2"><div><label class="text-gray-400">State</label><input name="stateCode" maxlength="2" required class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white"></div><div><label class="text-gray-400">Zip Code</label><input name="zipCode" required class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white"></div></div>
+              <div class="md:col-span-2 pt-2 border-t border-gray-800"><div class="text-[10px] uppercase tracking-wider text-orange-300/80 font-bold mb-2">Credit Report Agency</div></div>
+              <div class="md:col-span-2"><label class="text-gray-400">Credit Report Agency URL</label><input name="creditReportAgencyURL" placeholder="https://..." class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white"></div>
+              <div><label class="text-gray-400">Credit Report Agency Username</label><input name="creditReportAgencyUsername" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white"></div>
+              <div><label class="text-gray-400">Credit Report Agency Password</label><input name="creditReportAgencyPassword" type="password" class="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white"></div>
+              <div class="md:col-span-2 text-[11px] text-gray-500">Submitting creates a quote and emails <strong class="text-sky-300">${escapeHtml(ops)}</strong> with payment instructions. Staff can place live to TradelineMaster after funds clear.</div>
+              <div class="md:col-span-2 flex flex-wrap gap-2">
+                <button type="submit" class="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-bold" ${t?'':'disabled'}>Request Tradeline · Email Payment Info</button>
+                ${!isClient ? `<label class="flex items-center gap-2 text-xs text-amber-200 cursor-pointer"><input type="checkbox" name="placeLive" value="1" class="rounded border-gray-600"> Also place live on TradelineMaster now (requires ledger balance)</label>` : ''}
+              </div>
+            </form>
+          </div>`;
+      } else if (tab === 'education') {
+        panel.innerHTML = `<div class="space-y-3">${edu.map(e=>`
+          <div class="glass rounded-xl border border-gray-800 p-5">
+            <h3 class="text-sm font-bold text-white">${escapeHtml(e.title)}</h3>
+            <p class="text-xs text-sky-300/80 mt-1">${escapeHtml(e.summary)}</p>
+            <p class="text-sm text-gray-300 mt-3 leading-relaxed">${escapeHtml(e.body)}</p>
+            <ul class="mt-3 text-xs text-gray-400 list-disc pl-5 space-y-1">${(e.bullets||[]).map(b=>`<li>${escapeHtml(b)}</li>`).join('')}</ul>
+          </div>`).join('')}</div>`;
+      } else if (tab === 'orders') {
+        panel.innerHTML = `<div class="glass rounded-xl border border-gray-800 p-4 overflow-x-auto">
+          <table class="w-full text-sm text-left">
+            <thead><tr class="text-[10px] uppercase text-gray-500 border-b border-gray-800">
+              <th class="py-2 pr-3">When</th><th class="py-2 pr-3">Lender</th><th class="py-2 pr-3">Limit</th><th class="py-2 pr-3">Price</th><th class="py-2 pr-3">Status</th><th class="py-2">TLM #</th>
+            </tr></thead>
+            <tbody>${(orders||[]).map(o=>`<tr class="border-b border-gray-800/60">
+              <td class="py-2 pr-3 text-xs text-gray-400">${escapeHtml(o.created_at||'')}</td>
+              <td class="py-2 pr-3 text-sky-200 font-semibold">${escapeHtml(o.lender||'')}</td>
+              <td class="py-2 pr-3">${moneyInt(o.credit_limit)}</td>
+              <td class="py-2 pr-3 text-emerald-300">${money(o.retail_price)}</td>
+              <td class="py-2 pr-3 uppercase text-[10px] font-bold text-amber-200">${escapeHtml(o.status||'')}</td>
+              <td class="py-2 font-mono text-xs text-gray-400">${o.tlm_order_id||'—'}</td>
+            </tr>`).join('') || `<tr><td colspan="6" class="py-6 text-center text-gray-500">No tradeline requests yet.</td></tr>`}</tbody>
+          </table>
+          <p class="text-[11px] text-gray-500 mt-3">Questions or payment: <a class="text-sky-400" href="mailto:${escapeHtml(ops)}">${escapeHtml(ops)}</a></p>
+        </div>`;
+      }
+
+      document.querySelectorAll('.tl-tab').forEach((btn) => {
+        btn.onclick = () => { tab = btn.getAttribute('data-tab'); paint(); };
+      });
+      const bindFilters = () => {
+        const apply = async () => {
+          filters.lender = $('#f-lender')?.value || '';
+          filters.minLimit = $('#f-minLimit')?.value || '';
+          filters.statementDay = $('#f-statementDay')?.value || '';
+          filters.minAgeYears = $('#f-minAgeYears')?.value || '';
+          filters.maxPrice = $('#f-maxPrice')?.value || '';
+          filters.cycles = $('#f-cycles')?.value || '';
+          filters.pageSize = Number($('#f-pageSize')?.value || 25);
+          filters.q = $('#f-q')?.value || '';
+          filters.page = 1;
+          await loadInventory();
+          paint();
+        };
+        const fa = $('#f-apply'); if (fa) fa.onclick = apply;
+        const fr = $('#f-reset'); if (fr) fr.onclick = async () => { filters = { lender:'', statementDay:'', minAgeYears:'', maxPrice:'', minLimit:'', cycles:'', q:'', pageSize:25, page:1, sort:'statement' }; await loadInventory(); paint(); };
+        const prev = $('#tl-prev'); if (prev) prev.onclick = async () => { if (filters.page>1){ filters.page--; await loadInventory(); paint(); } };
+        const next = $('#tl-next'); if (next) next.onclick = async () => { if (filters.page < (inventory.totalPages||1)){ filters.page++; await loadInventory(); paint(); } };
+      };
+      if (tab === 'inventory') bindFilters();
+
+      document.querySelectorAll('.tl-select').forEach((btn) => {
+        btn.onclick = async () => {
+          const id = Number(btn.getAttribute('data-id'));
+          try {
+            const d = await api('/tradelines/item/' + id);
+            selected = d.tradeline;
+            tab = 'order';
+            paint();
+            toast('Tradeline selected — complete client info', 'success');
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      });
+
+      const refreshBtn = $('#tl-refresh');
+      if (refreshBtn) refreshBtn.onclick = async () => {
+        refreshBtn.disabled = true;
+        try {
+          await api('/tradelines/refresh', { method: 'POST', body: '{}' });
+          await loadInventory(true);
+          toast('Inventory refreshed from TradelineMaster', 'success');
+          paint();
+        } catch (err) { toast(err.message, 'error'); }
+        finally { refreshBtn.disabled = false; }
+      };
+
+      const matchSel = $('#match-client');
+      if (matchSel) matchSel.onchange = async () => {
+        try { await loadMatch(matchSel.value); paint(); if (matchSel.value) matchSel.value = matchSel.value; } catch (err) { toast(err.message, 'error'); }
+      };
+      const matchMe = $('#match-me');
+      if (matchMe) matchMe.onclick = async () => {
+        try {
+          const me = await api('/client-portal/me' + portalClientQs()).catch(() => null);
+          const cid = me?.client?.id || state.impersonateClientId;
+          if (!cid) { toast('No client profile linked', 'error'); return; }
+          await loadMatch(cid);
+          paint();
+        } catch (err) { toast(err.message, 'error'); }
+      };
+
+      const form = $('#tl-order-form');
+      if (form) form.onsubmit = async (e) => {
+        e.preventDefault();
+        if (!selected) { toast('Select a tradeline first', 'error'); return; }
+        const fd = new FormData(form);
+        const body = Object.fromEntries(fd.entries());
+        body.tradelineId = selected.id;
+        body.placeLive = !!fd.get('placeLive');
+        body.genderId = Number(body.genderId);
+        body.maritalStatusId = Number(body.maritalStatusId);
+        body.citizenshipStatusId = Number(body.citizenshipStatusId);
+        try {
+          const res = await api('/tradelines/order', { method: 'POST', body: JSON.stringify(body) });
+          toast(res.message || 'Tradeline request submitted', 'success');
+          await loadOrders();
+          tab = 'orders';
+          paint();
+        } catch (err) { toast(err.message, 'error'); }
+      };
+
+      // Prefill from saved client on staff order tab
+      const orderClient = $('#order-client');
+      if (orderClient) orderClient.onchange = () => {
+        const c = clients.find((x) => x.id === orderClient.value);
+        if (!c || !form) return;
+        form.firstName.value = c.first_name || '';
+        form.lastName.value = c.last_name || '';
+        form.email.value = c.email || '';
+        form.phone.value = c.phone || c.phone_e164 || '';
+        form.physicalAddress.value = c.address_line1 || '';
+        form.city.value = c.city || '';
+        form.stateCode.value = c.state || '';
+        form.zipCode.value = c.zip || '';
+        if (c.dob) form.dob.value = String(c.dob).slice(0, 10);
+      };
+    };
+
+    try {
+      el.innerHTML = '<div class="flex justify-center py-16"><i class="fas fa-spinner fa-spin text-sky-400 text-xl"></i></div>';
+      await loadMeta();
+      await Promise.all([loadInventory(true), loadOrders()]);
+      paint();
+    } catch (err) {
+      el.innerHTML = `<div class="glass rounded-xl p-8 border border-red-500/30"><h3 class="text-white font-bold mb-2">Tradelines unavailable</h3><p class="text-sm text-gray-400">${escapeHtml(err.message)}</p><p class="text-xs text-gray-500 mt-2">Email tradelines@smartfcra.com for help.</p></div>`;
+    }
+  }
+
   async function pgClientTradelines(el) {
     try {
       const goal = 'mortgage';
@@ -8327,8 +8652,13 @@ async function pgAdminConsole(el) {
       el.innerHTML = `
         <div class="fade-in space-y-4">
           <div class="bg-gradient-to-r from-slate-950 via-teal-950/30 to-slate-950 border border-teal-500/20 rounded-2xl p-5">
-            <h1 class="text-xl font-bold text-white"><i class="fas fa-handshake text-teal-400 mr-2"></i>Intelligent Boost Tools</h1>
-            <p class="text-sm text-slate-400 mt-1">Profile-ranked rent reporters & builders — checkout securely with Stripe on-platform.</p>
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h1 class="text-xl font-bold text-white"><i class="fas fa-handshake text-teal-400 mr-2"></i>Intelligent Boost Tools</h1>
+                <p class="text-sm text-slate-400 mt-1">Profile-ranked rent reporters & builders — plus live AU tradelines from RJ Business Solutions.</p>
+              </div>
+              <button type="button" onclick="window._nav('tradelines')" class="bg-sky-700 hover:bg-sky-600 text-white text-xs font-bold px-3 py-2 rounded-lg"><i class="fas fa-layer-group mr-1"></i>Open AU Tradeline Market</button>
+            </div>
           </div>
           <div class="grid md:grid-cols-2 gap-4">
             ${recs.map(t => `
