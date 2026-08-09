@@ -682,13 +682,13 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
                 <div class="text-xs font-semibold text-cyan-200">Step 1 — Enroll under our affiliate</div>
                 <p class="text-[11px] text-gray-400 leading-relaxed">If you are not already a MyFreeScoreNow member through RJ Business Solutions, open one of these links and complete enrollment first.</p>
                 <div id="mfsn-affiliate-offers" class="space-y-1.5 max-h-48 overflow-y-auto pr-1"></div>
-                <label class="block text-xs font-medium text-gray-400 mt-2 mb-1.5">Which offer did you use?</label>
-                <select name="affiliateOfferCode" id="mfsn-offer-select" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500">
-                  <option value="">Select your enroll offer…</option>
+                <label class="block text-xs font-medium text-gray-400 mt-2 mb-1.5">Which offer did you use? <span class="text-gray-600">(defaults to recommended)</span></label>
+                <select name="affiliateOfferCode" id="mfsn-offer-select" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500">
+                  <option value="B01A8289">B01A8289 — $29.90 · 7-day trial</option>
                 </select>
                 <label class="flex gap-2 items-start cursor-pointer text-[11px] text-cyan-100/90 mt-2">
-                  <input type="checkbox" name="enrolledUnderAffiliate" required class="mt-0.5">
-                  I created / use a MyFreeScoreNow account enrolled through the RJ Business Solutions affiliate link selected above.
+                  <input type="checkbox" name="enrolledUnderAffiliate" checked class="mt-0.5">
+                  I am a MyFreeScoreNow member under RJ Business Solutions (affiliate A8289).
                 </label>
               </div>
               <div>
@@ -696,12 +696,12 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
                 <input name="mfsnUsername" type="email" required autocomplete="username" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500" placeholder="your@email.com">
               </div>
               <div>
-                <label class="block text-xs font-medium text-gray-400 mb-1.5">MyFreeScoreNow Password <span class="text-gray-600">(and/or token below)</span></label>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">MyFreeScoreNow Password <span class="text-gray-600">(optional)</span></label>
                 <input type="password" name="mfsnPassword" autocomplete="current-password" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500" placeholder="••••••••">
               </div>
               <div>
-                <label class="block text-xs font-medium text-gray-400 mb-1.5">Client Token <span class="text-gray-600">(and/or password above)</span></label>
-                <input name="mfsnToken" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500" placeholder="Optional if you use your password + our partner pull">
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Client Token <span class="text-cyan-500/80">(required — starts with MAPIK#)</span></label>
+                <input name="mfsnToken" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500" placeholder="MAPIK#…">
               </div>
               <div>
                 <label class="block text-xs font-medium text-gray-400 mb-1.5">Portal Email (where we send login)</label>
@@ -872,11 +872,11 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           }).join('') || '<p class="text-[11px] text-amber-200">Affiliate offers unavailable — refresh or contact support.</p>';
         }
         if (offerSelect) {
-          const cur = offerSelect.value;
-          offerSelect.innerHTML = '<option value="">Select your enroll offer…</option>' + list.map((o) =>
+          const cur = offerSelect.value || 'B01A8289';
+          offerSelect.innerHTML = list.map((o) =>
             `<option value="${escapeHtml(o.code)}">${escapeHtml(o.code)} — ${escapeHtml(o.label)}</option>`
           ).join('');
-          if (cur) offerSelect.value = cur;
+          offerSelect.value = list.some((o) => o.code === cur) ? cur : (list.find((o) => o.recommended)?.code || list[0]?.code || 'B01A8289');
         }
       };
       // Fallback catalog if meta is slow/offline (must match server allow-list)
@@ -898,17 +898,9 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         const memberEmail = String(fd.get('mfsnUsername') || '').trim();
         const memberPassword = String(fd.get('mfsnPassword') || '').trim();
         const memberToken = String(fd.get('mfsnToken') || '').trim();
-        const affiliateOfferCode = String(fd.get('affiliateOfferCode') || '').trim();
-        if (!affiliateOfferCode) {
-          toast('Select which affiliate enroll offer you used', 'error');
-          return;
-        }
-        if (!fd.get('enrolledUnderAffiliate')) {
-          toast('Confirm you enrolled through our affiliate link', 'error');
-          return;
-        }
-        if (!memberPassword && !memberToken) {
-          toast('Enter your MyFreeScoreNow password and/or client token', 'error');
+        const affiliateOfferCode = String(fd.get('affiliateOfferCode') || 'B01A8289').trim() || 'B01A8289';
+        if (!memberToken) {
+          toast('Enter your MyFreeScoreNow client token (MAPIK#…)', 'error');
           return;
         }
         const btn = document.getElementById('mfsn-signup-btn');
