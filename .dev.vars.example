@@ -23,5 +23,13 @@ FREE_AI_ONLY=true
 # GoHighLevel CRM sync
 # GHL_PIT_TOKEN=pit-xxxxxxxx
 # GHL_LOCATION_ID=
+# TradelineMaster (RJ Business Solutions — 12.5% markup)
+# TRADELINEMASTER_USER_KEY=
+# TRADELINEMASTER_PASS_KEY=
+# TRADELINEMASTER_API_URL=https://www.tradelinemaster.com/api
+# TRADELINE_MARKUP_RATE=0.125
+# TRADELINE_OPS_EMAIL=tradelines@smartfcra.com
+# TRADELINE_FROM_EMAIL=welcome@tradelines.smartfcra.com
+# CLOUDFLARE_EMAIL_API_TOKEN=cfut_xxxxxxxx
 # STRIPE_API_KEY=
 # JOURNEY_CRON_SECRET=
