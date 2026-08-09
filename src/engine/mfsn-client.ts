@@ -295,14 +295,56 @@ export class MFSNClient {
   }
 }
 
-/** Resolve credentials: request body overrides env secrets. */
+export type MfsnEnv = {
+  MFSN_EMAIL?: string;
+  MFSN_PASSWORD?: string;
+  MFSN_CLIENT_TOKEN?: string;
+  MFSN_API_URL?: string;
+};
+
+/** Partner API credentials from env only (never from client form). */
+export function resolvePartnerMfsnCredentials(env: MfsnEnv): MFSNClientConfig | null {
+  const email = String(env.MFSN_EMAIL || '').trim();
+  const password = String(env.MFSN_PASSWORD || '').trim();
+  const clientToken = String(env.MFSN_CLIENT_TOKEN || '').trim();
+  if (!email || !password || !clientToken) return null;
+  return { apiUrl: env.MFSN_API_URL, email, password, clientToken };
+}
+
+/**
+ * Resolve credentials for staff/import flows.
+ * Body can override partner fields for advanced use; public signup must use resolvePartnerMfsnCredentials.
+ */
 export function resolveMfsnCredentials(
   body: { username?: string; password?: string; secretWord?: string; clientToken?: string },
-  env: { MFSN_EMAIL?: string; MFSN_PASSWORD?: string; MFSN_CLIENT_TOKEN?: string; MFSN_API_URL?: string },
+  env: MfsnEnv,
 ): MFSNClientConfig | null {
   const email = (body.username || env.MFSN_EMAIL || '').trim();
   const password = (body.password || env.MFSN_PASSWORD || '').trim();
   const clientToken = (body.secretWord || body.clientToken || env.MFSN_CLIENT_TOKEN || '').trim();
   if (!email || !password || !clientToken) return null;
   return { apiUrl: env.MFSN_API_URL, email, password, clientToken };
+}
+
+/**
+ * Public signup: authenticate as the partner account from env.
+ * Client may supply their own client_token; otherwise the partner token is used.
+ * Member report is fetched by memberEmail (not the partner login email).
+ */
+export function resolvePublicSignupMfsnCredentials(
+  env: MfsnEnv,
+  clientTokenOverride?: string,
+): MFSNClientConfig | null {
+  const partner = resolvePartnerMfsnCredentials(env);
+  if (!partner) {
+    // Allow partner email/password without env token when the client supplies a token.
+    const email = String(env.MFSN_EMAIL || '').trim();
+    const password = String(env.MFSN_PASSWORD || '').trim();
+    const clientToken = String(clientTokenOverride || '').trim();
+    if (!email || !password || !clientToken) return null;
+    return { apiUrl: env.MFSN_API_URL, email, password, clientToken };
+  }
+  const override = String(clientTokenOverride || '').trim();
+  if (override) return { ...partner, clientToken: override };
+  return partner;
 }

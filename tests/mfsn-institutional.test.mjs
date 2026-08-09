@@ -14,7 +14,13 @@ function assert(cond, msg) {
   if (!cond) throw new Error(msg);
 }
 
-const { MFSNClient, resolveMfsnCredentials, MFSNError } = await import(
+const {
+  MFSNClient,
+  resolveMfsnCredentials,
+  resolvePartnerMfsnCredentials,
+  resolvePublicSignupMfsnCredentials,
+  MFSNError,
+} = await import(
   pathToFileURL(path.join(root, 'src/engine/mfsn-client.ts')).href
 );
 
@@ -60,6 +66,32 @@ const bodyWins = resolveMfsnCredentials(
 );
 assert(bodyWins?.email === 'body@x.com', 'body overrides email');
 assert(bodyWins?.clientToken === 'bodytok', 'secretWord maps to clientToken');
+
+const partnerOnly = resolvePartnerMfsnCredentials({
+  MFSN_EMAIL: 'partner@x.com',
+  MFSN_PASSWORD: 'pp',
+  MFSN_CLIENT_TOKEN: 'ptok',
+});
+assert(partnerOnly?.email === 'partner@x.com', 'partner email from env');
+assert(resolvePartnerMfsnCredentials({ MFSN_EMAIL: 'a', MFSN_PASSWORD: 'b' }) === null, 'partner needs token');
+
+const publicSignup = resolvePublicSignupMfsnCredentials(
+  { MFSN_EMAIL: 'partner@x.com', MFSN_PASSWORD: 'pp', MFSN_CLIENT_TOKEN: 'ptok' },
+  'client-override-tok',
+);
+assert(publicSignup?.email === 'partner@x.com', 'public signup keeps partner login');
+assert(publicSignup?.clientToken === 'client-override-tok', 'client token can override');
+assert(
+  resolvePublicSignupMfsnCredentials(
+    { MFSN_EMAIL: 'partner@x.com', MFSN_PASSWORD: 'pp' },
+    'only-client-tok',
+  )?.clientToken === 'only-client-tok',
+  'client token alone + partner auth works',
+);
+assert(
+  resolvePublicSignupMfsnCredentials({ MFSN_EMAIL: 'partner@x.com', MFSN_PASSWORD: 'pp' }) === null,
+  'public signup needs a token from env or client',
+);
 
 let threw = false;
 try {

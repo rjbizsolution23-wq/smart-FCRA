@@ -37,7 +37,13 @@ import { ESIGN_DISCLOSURE_TEXT, ESIGN_DISCLOSURE_VERSION, type ContractType, doc
 import { createVideoRoom, issueRoomToken, completeVideoSession, videoConfigured } from './lib/twilio-video';
 import { seedRonStateRules, createRonSession, submitRonIdentityChecklist, completeRonSession, handleRonWebhook, getRonStateRule, DEFAULT_RON_STATE_RULES, resolveVendor } from './lib/ron-service';
 import { mapMfsnToInternal } from './engine/mfsn-mapper';
-import { MFSNClient, MFSNError, resolveMfsnCredentials } from './engine/mfsn-client';
+import {
+  MFSNClient,
+  MFSNError,
+  resolveMfsnCredentials,
+  resolvePartnerMfsnCredentials,
+  resolvePublicSignupMfsnCredentials,
+} from './engine/mfsn-client';
 import { mapSmartCreditToInternal } from './engine/smartcredit-mapper';
 import { LenderMatchingEngine } from './data/funding/institutional-matching';
 import { MASTER_LENDERS_DATABASE } from './data/funding/lenders-database';
@@ -813,12 +819,16 @@ app.get('/api/public/mfsn-signup/meta', async (c) => {
   const orgId = resolvePublicSignupOrgId(c.env);
   const org = await c.env.DB.prepare('SELECT id, name FROM organizations WHERE id = ?').bind(orgId).first() as any;
   const brand = await loadOrgBrand(c.env, orgId);
+  const partner = resolvePartnerMfsnCredentials(c.env);
+  const partnerAuthConfigured = !!(String(c.env.MFSN_EMAIL || '').trim() && String(c.env.MFSN_PASSWORD || '').trim());
   const partnerTokenConfigured = !!String(c.env.MFSN_CLIENT_TOKEN || '').trim();
   return c.json({
     ok: true,
     orgId,
     orgName: org?.name || brand.name,
     brandName: brand.name,
+    partnerConfigured: !!partner,
+    partnerAuthConfigured,
     partnerTokenConfigured,
     twilioConfigured: !!(c.env.TWILIO_ACCOUNT_SID && c.env.TWILIO_AUTH_TOKEN && c.env.TWILIO_PHONE_NUMBER),
     ghlConfigured: ghlConfigured(c.env),
@@ -828,7 +838,7 @@ app.get('/api/public/mfsn-signup/meta', async (c) => {
 
 app.post('/api/public/mfsn-signup', async (c) => {
   const body = await c.req.json().catch(() => ({}));
-  const mfsnUsername = String(body.mfsnUsername || body.username || '').trim();
+  const mfsnUsername = String(body.mfsnUsername || body.username || body.memberEmail || '').trim();
   const mfsnPassword = String(body.mfsnPassword || body.password || '').trim();
   const mfsnToken = String(body.mfsnToken || body.secretWord || body.clientToken || '').trim();
   const portalEmail = String(body.email || body.portalEmail || (isEmailShaped(mfsnUsername) ? mfsnUsername : '')).trim().toLowerCase();
@@ -837,8 +847,15 @@ app.post('/api/public/mfsn-signup', async (c) => {
   const croa = body.croaContractAgreed === true;
   const tsr = body.tsrAdvanceFeeWaived === true;
 
-  if (!mfsnUsername || !mfsnPassword) {
-    return c.json({ error: 'MyFreeScoreNow username and password are required' }, 400);
+  if (!mfsnUsername || !isEmailShaped(mfsnUsername)) {
+    return c.json({ error: 'Your MyFreeScoreNow member email is required' }, 400);
+  }
+  // Client proves membership with password and/or their client token.
+  if (!mfsnPassword && !mfsnToken) {
+    return c.json({
+      error: 'Enter your MyFreeScoreNow password and/or client token so we can pull your report.',
+      code: 'MEMBER_AUTH_REQUIRED',
+    }, 400);
   }
   if (!portalEmail || !isEmailShaped(portalEmail)) {
     return c.json({ error: 'A valid email is required for portal access (use your MFSN email or enter one)' }, 400);
@@ -866,14 +883,13 @@ app.post('/api/public/mfsn-signup', async (c) => {
     }, 409);
   }
 
-  const creds = resolveMfsnCredentials(
-    { username: mfsnUsername, password: mfsnPassword, secretWord: mfsnToken || undefined, clientToken: mfsnToken || undefined },
-    c.env,
-  );
+  // Partner API auth always from platform secrets — never the client's password.
+  const creds = resolvePublicSignupMfsnCredentials(c.env, mfsnToken || undefined);
   if (!creds) {
     return c.json({
-      error: 'MFSN credentials incomplete. Enter username, password, and secret/token — or ensure the platform partner token is configured.',
-    }, 400);
+      error: 'MyFreeScoreNow partner API is not configured. Enter your client token, or contact support.',
+      code: 'PARTNER_NOT_CONFIGURED',
+    }, 503);
   }
 
   let mfsnReportData: any;
@@ -886,7 +902,7 @@ app.post('/api/public/mfsn-signup', async (c) => {
   } catch (e: any) {
     const status = e instanceof MFSNError ? (e.statusCode >= 400 && e.statusCode < 600 ? e.statusCode : 502) : 502;
     return c.json({
-      error: e?.message || 'Failed to pull MyFreeScoreNow report. Check username/password and try again.',
+      error: e?.message || 'Failed to pull MyFreeScoreNow report. Check your member email, password, and/or token.',
       code: e instanceof MFSNError ? e.code : 'MFSN_PULL_FAILED',
     }, status as any);
   }
@@ -5412,7 +5428,7 @@ app.get('/api/health/ready', async (c) => {
     nvidia: !!c.env.NVIDIA_API_KEY,
     freeAiOnly: String(c.env.FREE_AI_ONLY || 'true').toLowerCase() !== 'false',
     smartcredit: !!(c.env.SMARTCREDIT_CLIENT_KEY && c.env.SMARTCREDIT_CLIENT_SECRET),
-    mfsn: !!resolveMfsnCredentials({}, c.env as any),
+    mfsn: !!resolvePartnerMfsnCredentials(c.env as any),
     click2mail: !!(c.env.CLICK2MAIL_USERNAME && c.env.CLICK2MAIL_AUTH_BASIC),
     twilioSms: !!(c.env.TWILIO_ACCOUNT_SID && c.env.TWILIO_AUTH_TOKEN && c.env.TWILIO_PHONE_NUMBER),
     ghl: ghlConfigured(c.env),
@@ -8799,7 +8815,7 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/app.js?v=20260809-ghl-twilio"></script>
+  <script src="/static/app.js?v=20260809-mfsn-partner"></script>
 </body>
 </html>`;
 }

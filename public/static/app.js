@@ -674,25 +674,25 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           <div class="text-center mb-6">
             <div class="inline-flex items-center justify-center mb-4"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-16 w-auto rounded-2xl border border-cyan-500/30 object-cover shadow-[0_0_20px_rgba(6,182,212,0.25)]" alt="RJ Business Solutions"></div>
             <h1 class="text-2xl font-bold text-white">Start with MyFreeScoreNow</h1>
-            <p class="text-gray-400 mt-1 text-sm">Enter your MFSN login — we pull your report, build your portal, and email your access.</p>
+            <p class="text-gray-400 mt-1 text-sm">Enter your MFSN member email plus password and/or token — we pull your report, build your portal, and email your access.</p>
           </div>
           <div class="glass rounded-2xl p-6 border border-cyan-500/20">
             <form id="mfsn-signup-form" class="space-y-3.5">
               <div>
-                <label class="block text-xs font-medium text-gray-400 mb-1.5">MyFreeScoreNow Username / Email</label>
-                <input name="mfsnUsername" required autocomplete="username" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500" placeholder="your@email.com">
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">MyFreeScoreNow Member Email</label>
+                <input name="mfsnUsername" type="email" required autocomplete="username" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500" placeholder="your@email.com">
               </div>
               <div>
-                <label class="block text-xs font-medium text-gray-400 mb-1.5">MyFreeScoreNow Password</label>
-                <input type="password" name="mfsnPassword" required autocomplete="current-password" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500" placeholder="••••••••">
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">MyFreeScoreNow Password <span class="text-gray-600">(and/or token below)</span></label>
+                <input type="password" name="mfsnPassword" autocomplete="current-password" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500" placeholder="••••••••">
               </div>
               <div>
-                <label class="block text-xs font-medium text-gray-400 mb-1.5">Secret Word / Client Token <span class="text-gray-600">(if required)</span></label>
-                <input name="mfsnToken" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500" placeholder="Optional if platform partner token is set">
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Client Token <span class="text-gray-600">(and/or password above)</span></label>
+                <input name="mfsnToken" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500" placeholder="Optional if you use your password + our partner pull">
               </div>
               <div>
                 <label class="block text-xs font-medium text-gray-400 mb-1.5">Portal Email (where we send login)</label>
-                <input type="email" name="email" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500" placeholder="Defaults to MFSN username if it's an email">
+                <input type="email" name="email" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500" placeholder="Defaults to your MFSN member email">
               </div>
               <div>
                 <label class="block text-xs font-medium text-gray-400 mb-1.5">Phone <span class="text-gray-600">(optional)</span></label>
@@ -847,6 +847,13 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       mfsnSignup.onsubmit = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
+        const memberEmail = String(fd.get('mfsnUsername') || '').trim();
+        const memberPassword = String(fd.get('mfsnPassword') || '').trim();
+        const memberToken = String(fd.get('mfsnToken') || '').trim();
+        if (!memberPassword && !memberToken) {
+          toast('Enter your MyFreeScoreNow password and/or client token', 'error');
+          return;
+        }
         const btn = document.getElementById('mfsn-signup-btn');
         const resultBox = document.getElementById('mfsn-signup-result');
         if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Pulling report & building portal…'; }
@@ -854,9 +861,9 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           const d = await api('/public/mfsn-signup', {
             method: 'POST',
             body: JSON.stringify({
-              mfsnUsername: fd.get('mfsnUsername'),
-              mfsnPassword: fd.get('mfsnPassword'),
-              mfsnToken: fd.get('mfsnToken') || undefined,
+              mfsnUsername: memberEmail,
+              mfsnPassword: memberPassword || undefined,
+              mfsnToken: memberToken || undefined,
               email: fd.get('email') || undefined,
               phone: fd.get('phone') || undefined,
               permissiblePurposeConsent: !!fd.get('pp'),
