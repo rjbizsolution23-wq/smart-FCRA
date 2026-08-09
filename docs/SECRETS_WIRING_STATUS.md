@@ -45,6 +45,16 @@ PBKDF2 iterations are **100,000** (Cloudflare Workers Web Crypto hard cap).
 
 Agent runbook: `docs/agents/mfsn-partner/AGENT_ACCESS.md` · helper: `node scripts/mfsn-login.mjs`
 
+## RJ Brand Library (wired)
+
+Static hub: **https://smart-fcra-v2.pages.dev/brand** · short form URLs: `/forms/credit-qualify`, `/forms/funding-qualify`, etc.
+
+Interactive forms POST to `POST /api/public/lead/:formId` → D1 `brand_leads` + ops email + GHL tag `RJ Lead`.
+
+Staff nav → **Brand Library** lists forms, tokens, and recent leads. Assets live under `public/static/brand/` (forms, marketing, legal, ops, founder).
+
+Design tokens: RJ Blue `#2563eb`, Sky `#0ea5e9`, Space Grotesk + Inter (`public/static/brand/brand.css`).
+
 ## TradelineMaster (wired)
 
 | Secret | Purpose |
