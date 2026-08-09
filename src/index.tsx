@@ -977,12 +977,19 @@ app.get('/api/brand/leads', authMiddleware, async (c) => {
   const user = c.get('user');
   if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
   try {
-    const rows = await c.env.DB.prepare(
-      `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, created_at
-       FROM brand_leads WHERE org_id = ? OR org_id IS NULL
-       ORDER BY created_at DESC LIMIT 200`,
-    ).bind(user.org_id).all();
-    return c.json({ ok: true, leads: rows.results || [] });
+    const publicOrg = resolvePublicSignupOrgId(c.env);
+    const rows = (user.role === 'admin' || user.role === 'super_admin')
+      ? await c.env.DB.prepare(
+          `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, created_at
+           FROM brand_leads ORDER BY created_at DESC LIMIT 200`,
+        ).all()
+      : await c.env.DB.prepare(
+          `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, created_at
+           FROM brand_leads
+           WHERE org_id = ? OR org_id = ? OR org_id IS NULL
+           ORDER BY created_at DESC LIMIT 200`,
+        ).bind(user.org_id, publicOrg).all();
+    return c.json({ ok: true, leads: rows.results || [], publicOrgId: publicOrg });
   } catch (e: any) {
     if (String(e?.message || '').includes('no such table')) {
       return c.json({ ok: true, leads: [], warning: 'Migration 0020 required' });
@@ -1001,7 +1008,7 @@ app.get('/api/brand/catalog', authMiddleware, async (c) => {
       { id: 'universal-funnel', title: 'Universal Funnel', url: '/forms/universal-funnel' },
       { id: 'service-intake', title: 'Service Intake', url: '/forms/service-intake' },
       { id: 'growth-audit', title: 'Growth Audit', url: '/forms/growth-audit' },
-      { id: 'whitelabel-app', title: 'Whitelabel Application', url: '/forms/whitelabel-application' },
+      { id: 'whitelabel-app', title: 'Whitelabel Application', url: '/forms/whitelabel' },
       { id: 'partnership', title: 'Partnership Application', url: '/forms/partnership' },
       { id: 'podcast-guest', title: 'Podcast Guest', url: '/forms/podcast-guest' },
     ],
