@@ -5488,6 +5488,8 @@ app.get('/api/health/ready', async (c) => {
     freeAiOnly: String(c.env.FREE_AI_ONLY || 'true').toLowerCase() !== 'false',
     smartcredit: !!(c.env.SMARTCREDIT_CLIENT_KEY && c.env.SMARTCREDIT_CLIENT_SECRET),
     mfsn: !!resolvePartnerMfsnCredentials(c.env as any),
+        mfsnAffiliateOffers: listPublicAffiliateOffers().length,
+        mfsnAffiliateId: MFSN_AFFILIATE_ID,
     click2mail: !!(c.env.CLICK2MAIL_USERNAME && c.env.CLICK2MAIL_AUTH_BASIC),
     twilioSms: !!(c.env.TWILIO_ACCOUNT_SID && c.env.TWILIO_AUTH_TOKEN && c.env.TWILIO_PHONE_NUMBER),
     ghl: ghlConfigured(c.env),
