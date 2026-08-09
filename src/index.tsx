@@ -61,6 +61,8 @@ import {
   resolvePublicSignupOrgId,
   isEmailShaped,
 } from './lib/mfsn-signup';
+import { syncClientToGhl, ghlConfigured, verifyGhlConnection, toE164Phone } from './lib/ghl-client';
+import { sendSms } from './lib/alerts';
 import sampleMfsnReport from './data/sample-mfsn-report.json';
 import { spaAppSource } from './generated/spa-source';
 
@@ -427,6 +429,10 @@ type Bindings = {
   /** Org that receives public MFSN consumer signups (default org_platform_master). */
   PUBLIC_SIGNUP_ORG_ID?: string;
   DEFAULT_SIGNUP_ORG_ID?: string;
+  GHL_PIT_TOKEN?: string;
+  GHL_API_KEY?: string;
+  GHL_LOCATION_ID?: string;
+  GHL_API_BASE?: string;
   RATE_LIMIT_KV?: any;
   DOCS?: R2Bucket;
   TWILIO_ACCOUNT_SID?: string;
@@ -814,6 +820,8 @@ app.get('/api/public/mfsn-signup/meta', async (c) => {
     orgName: org?.name || brand.name,
     brandName: brand.name,
     partnerTokenConfigured,
+    twilioConfigured: !!(c.env.TWILIO_ACCOUNT_SID && c.env.TWILIO_AUTH_TOKEN && c.env.TWILIO_PHONE_NUMBER),
+    ghlConfigured: ghlConfigured(c.env),
     loginUrl: `${portalBaseUrl(c.env, c.req.url)}/`,
   });
 });
@@ -1004,6 +1012,22 @@ app.post('/api/public/mfsn-signup', async (c) => {
 
   await backpopulateClientInfo(c, clientId, personal, orgId);
 
+  const phoneE164 = toE164Phone(phone);
+  if (phoneE164) {
+    try {
+      await c.env.DB.prepare(
+        `UPDATE clients SET phone = COALESCE(phone, ?), phone_e164 = ?, notify_sms = 1, updated_at = datetime('now') WHERE id = ? AND org_id = ?`
+      ).bind(phone, phoneE164, clientId, orgId).run();
+    } catch {
+      try {
+        await c.env.DB.prepare(
+          `UPDATE clients SET phone = COALESCE(phone, ?), notify_sms = 1, updated_at = datetime('now') WHERE id = ? AND org_id = ?`
+        ).bind(phone, clientId, orgId).run();
+      } catch { /* soft */ }
+    }
+  }
+
+  const loginUrl = `${portalBaseUrl(c.env, c.req.url)}/`;
   const mail = await sendPortalWelcomeEmail(c.env, {
     to: portalEmail,
     clientName,
@@ -1019,6 +1043,44 @@ app.post('/api/public/mfsn-signup', async (c) => {
     ).bind(clientId, orgId).run();
   } catch { /* soft */ }
 
+  // Welcome SMS via Twilio when phone provided
+  let smsResult: any = null;
+  if (phoneE164) {
+    smsResult = await sendSms(
+      c.env,
+      phoneE164,
+      `Smart FCRA: Your portal is ready. Login: ${portalEmail} Temp password: ${tempPassword} ${loginUrl} — Analysis unlocks after payment confirmation.`,
+    );
+  }
+
+  // Sync contact + scores into GoHighLevel CRM
+  let ghlResult: any = null;
+  try {
+    const clientRow = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ?').bind(clientId).first() as any;
+    ghlResult = await syncClientToGhl(c.env, clientRow || {
+      id: clientId, email: portalEmail, phone: phoneE164 || phone,
+      first_name: firstName, last_name: lastName,
+      address_line1: addr.addressLine1, city: addr.city, state: addr.state, zip: addr.zip,
+      case_status: 'ONBOARDING', payment_status: 'pending', signup_source: 'mfsn_public_signup',
+      mfsn_member_email: mfsnUsername, portal_analysis_unlocked: 0,
+      eq_score: null, ex_score: null, tu_score: null,
+    }, {
+      portalUrl: loginUrl,
+      violationCount: importResult?.totalViolations || 0,
+      analysisUnlocked: false,
+      tags: ['Smart FCRA', 'MFSN Signup', 'Portal Pending Unlock'],
+    });
+    if (ghlResult.ok && ghlResult.contactId) {
+      try {
+        await c.env.DB.prepare(
+          `UPDATE clients SET ghl_contact_id = ?, ghl_synced_at = datetime('now') WHERE id = ? AND org_id = ?`
+        ).bind(ghlResult.contactId, clientId, orgId).run();
+      } catch { /* migration pending */ }
+    }
+  } catch (e: any) {
+    ghlResult = { ok: false, error: e?.message || 'ghl_sync_failed' };
+  }
+
   await c.env.DB.prepare(
     'INSERT INTO activity_log (id, org_id, client_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)'
   ).bind(
@@ -1028,6 +1090,9 @@ app.post('/api/public/mfsn-signup', async (c) => {
       email: portalEmail,
       mailOk: mail.ok,
       simulated: mail.simulated,
+      sms: smsResult?.sent ? 'sent' : (smsResult?.error || null),
+      ghlContactId: ghlResult?.contactId || null,
+      ghlOk: !!ghlResult?.ok,
       violationsFound: importResult?.totalViolations ?? null,
       analysisLocked: true,
     }),
@@ -1040,13 +1105,16 @@ app.post('/api/public/mfsn-signup', async (c) => {
     clientName,
     orgName: org.name,
     temporaryPassword: tempPassword,
-    loginUrl: mail.loginUrl || `${portalBaseUrl(c.env, c.req.url)}/`,
+    loginUrl: mail.loginUrl || loginUrl,
     emailSent: !!mail.ok,
     emailSimulated: !!mail.simulated,
+    smsSent: !!smsResult?.sent,
+    ghlSynced: !!ghlResult?.ok,
+    ghlContactId: ghlResult?.contactId || null,
     reportsImported: importResult?.results?.length || 0,
     violationsFound: importResult?.totalViolations || 0,
     analysisLocked: true,
-    message: 'Your portal is ready. Sign in with the email and temporary password below (also sent by email). Your credit analysis stays private until our team unlocks it after payment.',
+    message: 'Your portal is ready. Sign in with the email and temporary password below (also sent by email/SMS when available). Your credit analysis stays private until our team unlocks it after payment.',
   });
 });
 
@@ -2131,6 +2199,10 @@ app.post('/api/client-portal/messages', authMiddleware, async (c) => {
   if (isStaff) {
     try {
       // In-app + optional SMS only — email already sent via staff_message template when requested
+      const wantSms =
+        body.sendSms === true ||
+        body.channel === 'sms' ||
+        (body.sendSms !== false && !!(client.phone_e164 || client.phone) && client.notify_sms !== 0);
       alertResult = await dispatchClientAlert(c.env, {
         orgId: user.org_id,
         clientId: client.id,
@@ -2140,7 +2212,7 @@ app.post('/api/client-portal/messages', authMiddleware, async (c) => {
         email: client.email,
         phone: client.phone_e164 || client.phone,
         notifyEmail: false,
-        notifySms: client.notify_sms === 1 && !(body.sendEmail === true || body.channel === 'email'),
+        notifySms: wantSms,
       });
     } catch (e: any) {
       alertResult = { error: e.message };
@@ -2299,7 +2371,9 @@ app.post('/api/clients/:id/unlock-analysis', authMiddleware, async (c) => {
     JSON.stringify({ paymentStatus, note: body.note || null }),
   ).run();
 
-  // Now safe to notify client that analysis is ready
+  // Now safe to notify client that analysis is ready (+ SMS + GHL sync)
+  let ghlSync: any = null;
+  let smsUnlock: any = null;
   try {
     const refreshed = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ?').bind(clientId).first() as any;
     const vCount = await c.env.DB.prepare(
@@ -2316,6 +2390,27 @@ app.post('/api/clients/:id/unlock-analysis', authMiddleware, async (c) => {
         reasoningSummary: 'Your case analysis has been unlocked by your credit advocacy team.',
       },
     });
+    const phone = toE164Phone(refreshed?.phone_e164 || refreshed?.phone);
+    if (phone) {
+      smsUnlock = await sendSms(
+        c.env,
+        phone,
+        `Smart FCRA: Your case analysis is unlocked. Sign in to review FCRA findings and dispute letters: ${portalBaseUrl(c.env)}/`,
+      );
+    }
+    ghlSync = await syncClientToGhl(c.env, refreshed, {
+      portalUrl: `${portalBaseUrl(c.env)}/`,
+      violationCount: Number(vCount?.c || 0),
+      analysisUnlocked: true,
+      tags: ['Smart FCRA', 'Analysis Unlocked', 'Paid Client'],
+    });
+    if (ghlSync?.contactId) {
+      try {
+        await c.env.DB.prepare(
+          `UPDATE clients SET ghl_contact_id = ?, ghl_synced_at = datetime('now') WHERE id = ? AND org_id = ?`
+        ).bind(ghlSync.contactId, clientId, user.org_id).run();
+      } catch { /* soft */ }
+    }
   } catch { /* soft */ }
 
   return c.json({
@@ -2323,6 +2418,9 @@ app.post('/api/clients/:id/unlock-analysis', authMiddleware, async (c) => {
     clientId,
     portal_analysis_unlocked: 1,
     payment_status: paymentStatus,
+    smsSent: !!smsUnlock?.sent,
+    ghlSynced: !!ghlSync?.ok,
+    ghlContactId: ghlSync?.contactId || null,
     message: 'Client can now see analysis, violations, and dispute letters in their portal.',
   });
 });
@@ -2344,6 +2442,65 @@ app.post('/api/clients/:id/lock-analysis', authMiddleware, async (c) => {
     throw e;
   }
   return c.json({ ok: true, portal_analysis_unlocked: 0 });
+});
+
+/** Staff: text client via Twilio from CRM */
+app.post('/api/clients/:id/sms', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  const clientId = c.req.param('id');
+  const body = await c.req.json().catch(() => ({}));
+  const message = String(body.message || body.body || '').trim();
+  if (!message) return c.json({ error: 'Message required' }, 400);
+  const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first() as any;
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const phone = toE164Phone(body.phone || client.phone_e164 || client.phone);
+  if (!phone) return c.json({ error: 'Client has no phone number on file' }, 400);
+
+  const sms = await sendSms(c.env, phone, message);
+  await c.env.DB.prepare(
+    'INSERT INTO activity_log (id, org_id, client_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    generateId(), user.org_id, clientId, user.id, 'sms_sent',
+    sms.sent ? `SMS sent to ${phone}` : `SMS failed: ${sms.error || 'unknown'}`,
+    JSON.stringify({ phone, sid: sms.sid || null, error: sms.error || null, preview: message.slice(0, 160) }),
+  ).run();
+
+  if (sms.sent) {
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO portal_messages (id, org_id, client_id, sender_user_id, sender_role, channel, subject, body, created_at)
+         VALUES (?, ?, ?, ?, 'staff', 'sms', ?, ?, datetime('now'))`
+      ).bind(generateId(), user.org_id, clientId, user.id, 'SMS', message.slice(0, 1500)).run();
+    } catch { /* soft */ }
+  }
+
+  return c.json({ ok: !!sms.sent, sid: sms.sid, error: sms.error, phone, simulated: sms.simulated });
+});
+
+/** Staff: push / refresh client into GoHighLevel */
+app.post('/api/clients/:id/sync-ghl', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  const clientId = c.req.param('id');
+  const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first() as any;
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const vCount = await c.env.DB.prepare(
+    'SELECT COUNT(*) as c FROM violations WHERE client_id = ? AND org_id = ?'
+  ).bind(clientId, user.org_id).first() as any;
+  const result = await syncClientToGhl(c.env, client, {
+    portalUrl: `${portalBaseUrl(c.env)}/`,
+    violationCount: Number(vCount?.c || 0),
+    analysisUnlocked: isPortalAnalysisUnlocked(client),
+  });
+  if (result.ok && result.contactId) {
+    try {
+      await c.env.DB.prepare(
+        `UPDATE clients SET ghl_contact_id = ?, ghl_synced_at = datetime('now') WHERE id = ? AND org_id = ?`
+      ).bind(result.contactId, clientId, user.org_id).run();
+    } catch { /* soft */ }
+  }
+  return c.json(result, result.ok ? 200 : 502);
 });
 
 // ── Portal uploads (docs, creditor replies, bank statements) ──
@@ -5257,11 +5414,13 @@ app.get('/api/health/ready', async (c) => {
     smartcredit: !!(c.env.SMARTCREDIT_CLIENT_KEY && c.env.SMARTCREDIT_CLIENT_SECRET),
     mfsn: !!resolveMfsnCredentials({}, c.env as any),
     click2mail: !!(c.env.CLICK2MAIL_USERNAME && c.env.CLICK2MAIL_AUTH_BASIC),
-    twilioSms: !!(c.env.TWILIO_ACCOUNT_SID && c.env.TWILIO_AUTH_TOKEN),
+    twilioSms: !!(c.env.TWILIO_ACCOUNT_SID && c.env.TWILIO_AUTH_TOKEN && c.env.TWILIO_PHONE_NUMBER),
+    ghl: ghlConfigured(c.env),
     aiProvidersConfigured: providers.filter(p => p.configured && p.free).length,
     letterBranding: true,
     letterStrategy: true,
     bureauReplyIntel: true,
+    mfsnSignup: true,
     environment: c.env.ENVIRONMENT || 'development',
   };
   try {
@@ -8640,7 +8799,7 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/app.js?v=20260809-mfsn-signup"></script>
+  <script src="/static/app.js?v=20260809-ghl-twilio"></script>
 </body>
 </html>`;
 }

@@ -1320,6 +1320,8 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           <button onclick="window._startImpersonating('${c.id}', '${escapeHtml(c.first_name + ' ' + c.last_name)}')" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 border border-amber-500/20 shadow-[0_0_15px_rgba(217,119,6,0.15)]"><i class="fas fa-user-shield"></i>Preview Portal</button>
           <button id="btn-email-client" class="bg-cyan-700 hover:bg-cyan-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-envelope"></i>Message / Email</button>
           <button id="btn-portal-invite" class="bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-key"></i>Portal Invite</button>
+          <button id="btn-sms-client" class="bg-teal-700 hover:bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-sms"></i>Text SMS</button>
+          <button id="btn-sync-ghl" class="bg-orange-700 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5" title="${c.ghl_contact_id ? 'GHL linked: ' + c.ghl_contact_id : 'Push to GoHighLevel'}"><i class="fas fa-cloud-upload-alt"></i>Sync GHL</button>
           ${(c.portal_analysis_unlocked === 0 || c.portal_analysis_unlocked === '0')
             ? `<button id="btn-unlock-analysis" class="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 border border-amber-400/30"><i class="fas fa-unlock"></i>Unlock After Payment</button>`
             : `<button id="btn-lock-analysis" class="bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-2 rounded-lg text-xs font-medium transition border border-gray-700" title="Re-lock client analysis"><i class="fas fa-lock"></i></button>`}
@@ -1481,8 +1483,8 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     if (btnUnlock) btnUnlock.onclick = async () => {
       if (!confirm('Unlock analysis, FCRA violations, and dispute letters for this client? Confirm payment was received.')) return;
       try {
-        await api('/clients/' + c.id + '/unlock-analysis', { method: 'POST', body: JSON.stringify({ paymentStatus: 'paid' }) });
-        toast('Portal analysis unlocked — client can now see their case', 'success');
+        const r = await api('/clients/' + c.id + '/unlock-analysis', { method: 'POST', body: JSON.stringify({ paymentStatus: 'paid' }) });
+        toast(`Unlocked${r.ghlSynced ? ' · GHL synced' : ''}${r.smsSent ? ' · SMS sent' : ''}`, 'success');
         await pgClientDetail(el, data);
       } catch (err) { toast(err.message, 'error'); }
     };
@@ -1493,6 +1495,23 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         await api('/clients/' + c.id + '/lock-analysis', { method: 'POST', body: '{}' });
         toast('Analysis locked for client portal', 'success');
         await pgClientDetail(el, data);
+      } catch (err) { toast(err.message, 'error'); }
+    };
+    const btnSms = document.getElementById('btn-sms-client');
+    if (btnSms) btnSms.onclick = async () => {
+      const message = prompt('SMS message to client', 'Hi — this is your Smart FCRA credit team. Please check your portal for updates.');
+      if (!message) return;
+      try {
+        const r = await api('/clients/' + c.id + '/sms', { method: 'POST', body: JSON.stringify({ message }) });
+        toast(r.ok ? `SMS sent to ${r.phone}` : (r.error || 'SMS failed'), r.ok ? 'success' : 'error');
+      } catch (err) { toast(err.message, 'error'); }
+    };
+    const btnGhl = document.getElementById('btn-sync-ghl');
+    if (btnGhl) btnGhl.onclick = async () => {
+      try {
+        const r = await api('/clients/' + c.id + '/sync-ghl', { method: 'POST', body: '{}' });
+        toast(r.ok ? `Synced to GHL (${r.contactId || 'ok'})` : (r.error || 'GHL sync failed'), r.ok ? 'success' : 'error');
+        if (r.ok) await pgClientDetail(el, data);
       } catch (err) { toast(err.message, 'error'); }
     };
     const modal = document.getElementById('edit-client-modal');
