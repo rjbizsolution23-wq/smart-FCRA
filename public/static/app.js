@@ -1936,7 +1936,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           <div><label class="block text-xs text-gray-400 mb-1.5">Client Email</label>
           <input type="text" name="clientEmail" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="david_webber2@gmail.com"></div>
           <div><label class="block text-xs text-gray-400 mb-1.5">Client Token</label>
-          <input type="text" name="secretWord" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="MAPIK#FIecvELvhBslHkKzxBKPaABghn"></div>
+          <input type="text" name="secretWord" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="Partner client token (or leave blank to use server secret)"></div>
         </div>
         <div class="flex gap-3">
           <button type="submit" id="mfsn-btn" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition shadow-lg"><i class="fas fa-cloud-download-alt mr-2"></i>Authenticate & Import Report</button>
