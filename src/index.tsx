@@ -52,6 +52,15 @@ import { captureSentryException } from './lib/sentry';
 import { importBureauReportsBatch } from './lib/bureau-import';
 import { loadClientJourney, checkInJourney, generateAndDispatchDailyMotivation, dispatchDailyMotivationBatch } from './lib/portal-journey';
 import { loadTutorCompanion, tutorChatSystemBlock, buildTutorFallbackReply } from './lib/portal-tutor';
+import {
+  parsePersonNameFromReport,
+  parseAddressFromReport,
+  extractSsnLast4,
+  isPortalAnalysisUnlocked,
+  generatePortalTempPassword,
+  resolvePublicSignupOrgId,
+  isEmailShaped,
+} from './lib/mfsn-signup';
 import sampleMfsnReport from './data/sample-mfsn-report.json';
 import { spaAppSource } from './generated/spa-source';
 
@@ -243,6 +252,8 @@ async function notifyClientAnalysisReady(
       'SELECT * FROM clients WHERE id = ? AND org_id = ?'
     ).bind(opts.clientId, opts.orgId).first();
     if (!client) return null;
+    // Do not email analysis/violation details until staff unlocks after payment
+    if (!isPortalAnalysisUnlocked(client)) return null;
     const email =
       client.email && !String(client.email).includes('.noreply@') && !String(client.email).endsWith('@smartfcra.local')
         ? client.email
@@ -413,6 +424,9 @@ type Bindings = {
   MFSN_EMAIL?: string;
   MFSN_PASSWORD?: string;
   MFSN_CLIENT_TOKEN?: string;
+  /** Org that receives public MFSN consumer signups (default org_platform_master). */
+  PUBLIC_SIGNUP_ORG_ID?: string;
+  DEFAULT_SIGNUP_ORG_ID?: string;
   RATE_LIMIT_KV?: any;
   DOCS?: R2Bucket;
   TWILIO_ACCOUNT_SID?: string;
@@ -524,6 +538,7 @@ async function rateLimiter(c: any, next: any) {
 
 app.use('/api/auth/login', rateLimiter);
 app.use('/api/auth/register', rateLimiter);
+app.use('/api/public/mfsn-signup', rateLimiter);
 app.use('/api/auth/forgot-password', rateLimiter);
 app.use('/api/auth/change-password', rateLimiter);
 app.use('/api/auth/mfa/setup', rateLimiter);
@@ -782,6 +797,257 @@ app.get('/api/docs', (c) => {
   const origin = new URL(c.req.url).origin;
   const html = buildSwaggerUiHtml(`${origin}/api/openapi.json`);
   return c.html(html);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// PUBLIC MFSN SIGNUP — consumer enters MFSN credentials → portal
+// Analysis runs for staff but stays locked until payment approval
+// ═══════════════════════════════════════════════════════════════
+app.get('/api/public/mfsn-signup/meta', async (c) => {
+  const orgId = resolvePublicSignupOrgId(c.env);
+  const org = await c.env.DB.prepare('SELECT id, name FROM organizations WHERE id = ?').bind(orgId).first() as any;
+  const brand = await loadOrgBrand(c.env, orgId);
+  const partnerTokenConfigured = !!String(c.env.MFSN_CLIENT_TOKEN || '').trim();
+  return c.json({
+    ok: true,
+    orgId,
+    orgName: org?.name || brand.name,
+    brandName: brand.name,
+    partnerTokenConfigured,
+    loginUrl: `${portalBaseUrl(c.env, c.req.url)}/`,
+  });
+});
+
+app.post('/api/public/mfsn-signup', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const mfsnUsername = String(body.mfsnUsername || body.username || '').trim();
+  const mfsnPassword = String(body.mfsnPassword || body.password || '').trim();
+  const mfsnToken = String(body.mfsnToken || body.secretWord || body.clientToken || '').trim();
+  const portalEmail = String(body.email || body.portalEmail || (isEmailShaped(mfsnUsername) ? mfsnUsername : '')).trim().toLowerCase();
+  const phone = String(body.phone || '').trim();
+  const pp = body.permissiblePurposeConsent === true;
+  const croa = body.croaContractAgreed === true;
+  const tsr = body.tsrAdvanceFeeWaived === true;
+
+  if (!mfsnUsername || !mfsnPassword) {
+    return c.json({ error: 'MyFreeScoreNow username and password are required' }, 400);
+  }
+  if (!portalEmail || !isEmailShaped(portalEmail)) {
+    return c.json({ error: 'A valid email is required for portal access (use your MFSN email or enter one)' }, 400);
+  }
+  if (!pp || !croa || !tsr) {
+    return c.json({
+      error: 'Consent required',
+      complianceRequired: true,
+      message: 'You must agree to FCRA permissible purpose, CROA disclosure, and TSR advance-fee waiver to continue.',
+    }, 403);
+  }
+
+  const orgId = resolvePublicSignupOrgId(c.env);
+  const org = await c.env.DB.prepare('SELECT id, name FROM organizations WHERE id = ?').bind(orgId).first() as any;
+  if (!org) {
+    return c.json({ error: 'Signup organization is not configured. Contact support.' }, 503);
+  }
+
+  const existingUser = await c.env.DB.prepare('SELECT id, role, org_id FROM users WHERE lower(email) = ?').bind(portalEmail).first() as any;
+  if (existingUser) {
+    return c.json({
+      error: 'An account with this email already exists. Please sign in to your portal.',
+      code: 'EMAIL_EXISTS',
+      loginUrl: `${portalBaseUrl(c.env, c.req.url)}/`,
+    }, 409);
+  }
+
+  const creds = resolveMfsnCredentials(
+    { username: mfsnUsername, password: mfsnPassword, secretWord: mfsnToken || undefined, clientToken: mfsnToken || undefined },
+    c.env,
+  );
+  if (!creds) {
+    return c.json({
+      error: 'MFSN credentials incomplete. Enter username, password, and secret/token — or ensure the platform partner token is configured.',
+    }, 400);
+  }
+
+  let mfsnReportData: any;
+  let normalized: any;
+  try {
+    const mfsn = new MFSNClient(creds);
+    const pulled = await mfsn.fetchAndNormalize(mfsnUsername);
+    mfsnReportData = pulled.raw;
+    normalized = pulled.normalized;
+  } catch (e: any) {
+    const status = e instanceof MFSNError ? (e.statusCode >= 400 && e.statusCode < 600 ? e.statusCode : 502) : 502;
+    return c.json({
+      error: e?.message || 'Failed to pull MyFreeScoreNow report. Check username/password and try again.',
+      code: e instanceof MFSNError ? e.code : 'MFSN_PULL_FAILED',
+    }, status as any);
+  }
+
+  const bureauReports = mapMfsnToInternal(mfsnReportData);
+  if (!bureauReports.length) {
+    return c.json({ error: 'No bureau data found in the MyFreeScoreNow response' }, 404);
+  }
+
+  const personal = bureauReports[0].personalInfo || {};
+  const { firstName, lastName } = parsePersonNameFromReport(personal);
+  const addr = parseAddressFromReport(personal);
+  const ssnLast4 = extractSsnLast4(personal);
+  const dob = String(personal.dobs?.[0] || '').trim() || null;
+
+  const clientId = generateId();
+  const userId = generateId();
+  const tempPassword = generatePortalTempPassword();
+  const passwordHash = await hashPassword(tempPassword);
+  const clientName = `${firstName} ${lastName}`.trim();
+
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO clients (
+        id, org_id, created_by, first_name, last_name, email, phone,
+        address_line1, city, state, zip, dob, ssn_last4, notes, status,
+        permissible_purpose_consent, croa_contract_agreed, tsr_advance_fee_waived, consent_timestamp,
+        case_status, portal_analysis_unlocked, payment_status, signup_source, mfsn_member_email
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 1, 1, 1, datetime('now'),
+        'ONBOARDING', 0, 'pending', 'mfsn_public_signup', ?)`
+    ).bind(
+      clientId, orgId, userId, firstName, lastName, portalEmail, phone || null,
+      addr.addressLine1 || null, addr.city || null, addr.state || null, addr.zip || null,
+      dob, ssnLast4 || null,
+      'Created via public MyFreeScoreNow signup — analysis locked until payment approval',
+      mfsnUsername,
+    ).run();
+  } catch (e: any) {
+    // Soft fallback if migration 0016 not applied yet
+    if (String(e?.message || '').includes('no such column')) {
+      await c.env.DB.prepare(
+        `INSERT INTO clients (
+          id, org_id, created_by, first_name, last_name, email, phone,
+          address_line1, city, state, zip, dob, ssn_last4, notes, status,
+          permissible_purpose_consent, croa_contract_agreed, tsr_advance_fee_waived, consent_timestamp, case_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 1, 1, 1, datetime('now'), 'ONBOARDING')`
+      ).bind(
+        clientId, orgId, userId, firstName, lastName, portalEmail, phone || null,
+        addr.addressLine1 || null, addr.city || null, addr.state || null, addr.zip || null,
+        dob, ssnLast4 || null,
+        'Created via public MyFreeScoreNow signup — analysis locked until payment approval',
+      ).run();
+      try {
+        await c.env.DB.prepare(
+          `UPDATE clients SET portal_analysis_unlocked = 0, payment_status = 'pending', signup_source = 'mfsn_public_signup', mfsn_member_email = ? WHERE id = ?`
+        ).bind(mfsnUsername, clientId).run();
+      } catch { /* columns missing until migrate */ }
+    } else {
+      console.error('[mfsn-signup] client insert failed', e);
+      return c.json({ error: 'Failed to create client profile' }, 500);
+    }
+  }
+
+  await c.env.DB.prepare(
+    'INSERT INTO users (id, org_id, email, name, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)'
+  ).bind(userId, orgId, portalEmail, clientName, passwordHash, 'client').run();
+
+  // Import + full analysis (staff-visible; client-gated)
+  let importResult: any = null;
+  try {
+    importResult = await importBureauReportsBatch(
+      c,
+      {
+        generateId,
+        encryptPII,
+        backpopulateClientInfo,
+        saveViolationsForReport,
+        persistBureauScores,
+        markPriorBureauReportsStale,
+        refreshBureauPackStatus,
+        computeAndStoreFundability,
+      },
+      {
+        clientId,
+        bureauReports,
+        rawPayload: mfsnReportData,
+        sourceProvider: 'MyFreeScoreNow',
+        sourcePayloadType: 'json',
+        fileNamePrefix: `mfsn-signup_${mfsnUsername.replace(/[^a-z0-9@._-]/gi, '_').slice(0, 40)}`,
+        activityAction: 'mfsn_public_signup',
+        activityDescription: `Public MFSN signup: pulled ${bureauReports.length} bureau report(s); analysis locked pending payment`,
+        actingUser: { id: userId, org_id: orgId },
+      },
+    );
+  } catch (e: any) {
+    console.error('[mfsn-signup] import failed', e);
+    // Client + user already created — still send portal access; staff can re-pull
+    await c.env.DB.prepare(
+      'INSERT INTO activity_log (id, org_id, client_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      generateId(), orgId, clientId, userId, 'mfsn_signup_import_error',
+      `MFSN signup created portal but report import failed: ${e?.message || 'unknown'}`,
+      JSON.stringify({ error: e?.message || String(e) }),
+    ).run();
+  }
+
+  // Scores from normalized payload
+  try {
+    let eq: number | null = null;
+    let ex: number | null = null;
+    let tu: number | null = null;
+    for (const s of normalized?.scores || []) {
+      if (s.provider === 'EFX') eq = s.score;
+      if (s.provider === 'EXP') ex = s.score;
+      if (s.provider === 'TU') tu = s.score;
+    }
+    if (eq || ex || tu) {
+      await c.env.DB.prepare(
+        `UPDATE clients SET eq_score = COALESCE(?, eq_score), ex_score = COALESCE(?, ex_score), tu_score = COALESCE(?, tu_score), updated_at = datetime('now') WHERE id = ? AND org_id = ?`
+      ).bind(eq, ex, tu, clientId, orgId).run();
+    }
+  } catch { /* soft */ }
+
+  await backpopulateClientInfo(c, clientId, personal, orgId);
+
+  const mail = await sendPortalWelcomeEmail(c.env, {
+    to: portalEmail,
+    clientName,
+    email: portalEmail,
+    temporaryPassword: tempPassword,
+    requestUrl: c.req.url,
+    orgId,
+    clientId,
+  });
+  try {
+    await c.env.DB.prepare(
+      `UPDATE clients SET portal_welcome_sent_at = datetime('now') WHERE id = ? AND org_id = ?`
+    ).bind(clientId, orgId).run();
+  } catch { /* soft */ }
+
+  await c.env.DB.prepare(
+    'INSERT INTO activity_log (id, org_id, client_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    generateId(), orgId, clientId, userId, 'portal_credentials_sent',
+    `Portal welcome ${mail.ok ? 'sent' : 'queued/failed'} for MFSN signup`,
+    JSON.stringify({
+      email: portalEmail,
+      mailOk: mail.ok,
+      simulated: mail.simulated,
+      violationsFound: importResult?.totalViolations ?? null,
+      analysisLocked: true,
+    }),
+  ).run();
+
+  return c.json({
+    ok: true,
+    clientId,
+    email: portalEmail,
+    clientName,
+    orgName: org.name,
+    temporaryPassword: tempPassword,
+    loginUrl: mail.loginUrl || `${portalBaseUrl(c.env, c.req.url)}/`,
+    emailSent: !!mail.ok,
+    emailSimulated: !!mail.simulated,
+    reportsImported: importResult?.results?.length || 0,
+    violationsFound: importResult?.totalViolations || 0,
+    analysisLocked: true,
+    message: 'Your portal is ready. Sign in with the email and temporary password below (also sent by email). Your credit analysis stays private until our team unlocks it after payment.',
+  });
 });
 
 // AUTH ROUTES
@@ -1525,33 +1791,68 @@ app.get('/api/client-portal/dashboard', authMiddleware, async (c) => {
     return c.json({ error: 'Client profile not found. Onboarding may be incomplete.' }, 404);
   }
 
+  const analysisUnlocked = isPortalAnalysisUnlocked(client);
+  const isClientViewer = user.role === 'client';
+  const gateAnalysis = isClientViewer && !analysisUnlocked;
+
   const reports = await c.env.DB.prepare('SELECT id, bureau, report_date, file_name, created_at, status, total_accounts, total_collections, total_inquiries FROM credit_reports WHERE client_id = ? AND org_id = ? ORDER BY report_date DESC').bind(client.id, user.org_id).all();
-  const violations = await c.env.DB.prepare(
-    `SELECT v.*, cr.bureau FROM violations v
-     LEFT JOIN credit_reports cr ON v.report_id = cr.id
-     WHERE v.client_id = ? AND v.org_id = ? ORDER BY v.created_at DESC`
-  ).bind(client.id, user.org_id).all();
-  const documents = await c.env.DB.prepare('SELECT id, doc_type, title, status, created_at, signature_timestamp FROM documents WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC').bind(client.id, user.org_id).all();
+  const violations = gateAnalysis
+    ? { results: [] as any[] }
+    : await c.env.DB.prepare(
+      `SELECT v.*, cr.bureau FROM violations v
+       LEFT JOIN credit_reports cr ON v.report_id = cr.id
+       WHERE v.client_id = ? AND v.org_id = ? ORDER BY v.created_at DESC`
+    ).bind(client.id, user.org_id).all();
+  const documents = gateAnalysis
+    ? { results: [] as any[] }
+    : await c.env.DB.prepare('SELECT id, doc_type, title, status, created_at, signature_timestamp FROM documents WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC').bind(client.id, user.org_id).all();
   const activity = await c.env.DB.prepare('SELECT * FROM activity_log WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 30').bind(client.id, user.org_id).all();
 
   const scores = [client.eq_score, client.ex_score, client.tu_score].filter((n: any) => typeof n === 'number') as number[];
   const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 600;
   const violationList = (violations?.results || []) as any[];
-  const scoreLifts = violationList.map((v) => ({
+  const scoreLifts = gateAnalysis ? [] : violationList.map((v) => ({
     id: v.id,
     severity: v.severity,
     bureau: v.bureau,
     lift: estimateViolationScoreLift(avgScore, v.severity || 'medium'),
   }));
 
+  // Strip sensitive analysis fields from client payload when locked
+  const clientOut = gateAnalysis
+    ? {
+        ...client,
+        lvs_score: null,
+        estimated_recovery: null,
+        portal_analysis_unlocked: 0,
+        analysis_locked: true,
+      }
+    : { ...client, portal_analysis_unlocked: analysisUnlocked ? 1 : 0, analysis_locked: !analysisUnlocked };
+
   return c.json({
-    client,
-    reports: reports?.results || [],
+    client: clientOut,
+    reports: gateAnalysis
+      ? (reports?.results || []).map((r: any) => ({
+          id: r.id,
+          bureau: r.bureau,
+          report_date: r.report_date,
+          created_at: r.created_at,
+          status: 'pending_review',
+        }))
+      : (reports?.results || []),
     violations: violationList,
     documents: documents?.results || [],
-    activity: activity?.results || [],
+    activity: gateAnalysis
+      ? (activity?.results || []).filter((a: any) => !/violation|dispute|litigation|analysis|workflow/i.test(String(a.action || '') + String(a.description || '')))
+      : (activity?.results || []),
     needsOnboarding: !(reports?.results?.length),
-    scoreProjection: { avgScore, lifts: scoreLifts },
+    analysisUnlocked,
+    analysisLocked: gateAnalysis,
+    paymentStatus: client.payment_status || (gateAnalysis ? 'pending' : 'active'),
+    lockMessage: gateAnalysis
+      ? 'Your credit report is in our system and our team is preparing your case. Analysis, FCRA violations, and dispute letters unlock after payment is confirmed.'
+      : null,
+    scoreProjection: gateAnalysis ? { avgScore: null, lifts: [] } : { avgScore, lifts: scoreLifts },
   });
 });
 
@@ -1960,6 +2261,89 @@ app.post('/api/clients/:id/portal-invite', authMiddleware, async (c) => {
       : `failed:${mail.error || 'send'}`,
     temporaryPassword: password,
   });
+});
+
+/** Staff: unlock portal analysis/disputes after payment confirmation */
+app.post('/api/clients/:id/unlock-analysis', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  const clientId = c.req.param('id');
+  const body = await c.req.json().catch(() => ({}));
+  const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first() as any;
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+
+  const paymentStatus = String(body.paymentStatus || 'paid').slice(0, 40);
+  try {
+    await c.env.DB.prepare(
+      `UPDATE clients SET
+         portal_analysis_unlocked = 1,
+         portal_analysis_unlocked_at = datetime('now'),
+         portal_analysis_unlocked_by = ?,
+         payment_status = ?,
+         case_status = CASE WHEN case_status = 'ONBOARDING' THEN 'DISPUTING' ELSE case_status END,
+         updated_at = datetime('now')
+       WHERE id = ? AND org_id = ?`
+    ).bind(user.id, paymentStatus, clientId, user.org_id).run();
+  } catch (e: any) {
+    if (String(e?.message || '').includes('no such column')) {
+      return c.json({ error: 'Database migration 0016 required — apply migrations then retry' }, 503);
+    }
+    throw e;
+  }
+
+  await c.env.DB.prepare(
+    'INSERT INTO activity_log (id, org_id, client_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    generateId(), user.org_id, clientId, user.id, 'portal_analysis_unlocked',
+    `Staff unlocked portal analysis after payment (${paymentStatus})`,
+    JSON.stringify({ paymentStatus, note: body.note || null }),
+  ).run();
+
+  // Now safe to notify client that analysis is ready
+  try {
+    const refreshed = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ?').bind(clientId).first() as any;
+    const vCount = await c.env.DB.prepare(
+      'SELECT COUNT(*) as c FROM violations WHERE client_id = ? AND org_id = ?'
+    ).bind(clientId, user.org_id).first() as any;
+    await notifyClientAnalysisReady(c, {
+      orgId: user.org_id,
+      clientId,
+      client: refreshed,
+      bureau: 'MyFreeScoreNow',
+      analysis: {
+        violations: Array(Number(vCount?.c || 0)).fill({}),
+        rawCount: Number(vCount?.c || 0),
+        reasoningSummary: 'Your case analysis has been unlocked by your credit advocacy team.',
+      },
+    });
+  } catch { /* soft */ }
+
+  return c.json({
+    ok: true,
+    clientId,
+    portal_analysis_unlocked: 1,
+    payment_status: paymentStatus,
+    message: 'Client can now see analysis, violations, and dispute letters in their portal.',
+  });
+});
+
+app.post('/api/clients/:id/lock-analysis', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  const clientId = c.req.param('id');
+  const client = await c.env.DB.prepare('SELECT id FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first();
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  try {
+    await c.env.DB.prepare(
+      `UPDATE clients SET portal_analysis_unlocked = 0, payment_status = 'pending', updated_at = datetime('now') WHERE id = ? AND org_id = ?`
+    ).bind(clientId, user.org_id).run();
+  } catch (e: any) {
+    if (String(e?.message || '').includes('no such column')) {
+      return c.json({ error: 'Database migration 0016 required' }, 503);
+    }
+    throw e;
+  }
+  return c.json({ ok: true, portal_analysis_unlocked: 0 });
 });
 
 // ── Portal uploads (docs, creditor replies, bank statements) ──
@@ -2376,6 +2760,13 @@ app.get('/api/client-portal/fundability', authMiddleware, async (c) => {
   const user = c.get('user');
   const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
   if (!client) return c.json({ error: 'Client not found' }, 404);
+  if (user.role === 'client' && !isPortalAnalysisUnlocked(client)) {
+    return c.json({
+      analysisLocked: true,
+      lockMessage: 'Fundability insights unlock with your case analysis after payment approval.',
+      fundability: null,
+    });
+  }
   const goal = c.req.query('goal') || undefined;
   const report = await c.env.DB.prepare(
     `SELECT id, total_accounts, total_collections, total_inquiries, parsed_data FROM credit_reports
@@ -6044,6 +6435,17 @@ app.get('/api/violations/export', authMiddleware, async (c) => {
 // ═══════════════════════════════════════════════════════════════
 app.get('/api/documents', authMiddleware, async (c) => {
   const user = c.get('user');
+  if (user.role === 'client') {
+    const client = await c.env.DB.prepare('SELECT * FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
+    if (!client) return c.json({ documents: [] });
+    if (!isPortalAnalysisUnlocked(client)) {
+      return c.json({ documents: [], analysisLocked: true, lockMessage: 'Dispute letters unlock after payment approval.' });
+    }
+    const result = await c.env.DB.prepare(
+      'SELECT d.*, c.first_name, c.last_name FROM documents d JOIN clients c ON d.client_id = c.id WHERE d.org_id = ? AND d.client_id = ? ORDER BY d.created_at DESC'
+    ).bind(user.org_id, client.id).all();
+    return c.json({ documents: result?.results || [] });
+  }
   const result = await c.env.DB.prepare('SELECT d.*, c.first_name, c.last_name FROM documents d JOIN clients c ON d.client_id = c.id WHERE d.org_id = ? ORDER BY d.created_at DESC').bind(user.org_id).all();
   return c.json({ documents: result?.results || [] });
 });
@@ -8238,7 +8640,7 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/app.js?v=20260808-cro-ready"></script>
+  <script src="/static/app.js?v=20260809-mfsn-signup"></script>
 </body>
 </html>`;
 }

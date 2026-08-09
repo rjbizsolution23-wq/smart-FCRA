@@ -667,6 +667,51 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     const params = new URLSearchParams(location.search);
     const resetToken = params.get('resetToken');
     const verifyEmail = params.get('verifyEmail');
+    const signupMode = params.get('signup');
+    if (signupMode === 'mfsn' || signupMode === 'portal') {
+      return `<div class="min-h-screen flex items-center justify-center p-4">
+        <div class="w-full max-w-lg">
+          <div class="text-center mb-6">
+            <div class="inline-flex items-center justify-center mb-4"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-16 w-auto rounded-2xl border border-cyan-500/30 object-cover shadow-[0_0_20px_rgba(6,182,212,0.25)]" alt="RJ Business Solutions"></div>
+            <h1 class="text-2xl font-bold text-white">Start with MyFreeScoreNow</h1>
+            <p class="text-gray-400 mt-1 text-sm">Enter your MFSN login — we pull your report, build your portal, and email your access.</p>
+          </div>
+          <div class="glass rounded-2xl p-6 border border-cyan-500/20">
+            <form id="mfsn-signup-form" class="space-y-3.5">
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">MyFreeScoreNow Username / Email</label>
+                <input name="mfsnUsername" required autocomplete="username" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500" placeholder="your@email.com">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">MyFreeScoreNow Password</label>
+                <input type="password" name="mfsnPassword" required autocomplete="current-password" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500" placeholder="••••••••">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Secret Word / Client Token <span class="text-gray-600">(if required)</span></label>
+                <input name="mfsnToken" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500" placeholder="Optional if platform partner token is set">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Portal Email (where we send login)</label>
+                <input type="email" name="email" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500" placeholder="Defaults to MFSN username if it's an email">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Phone <span class="text-gray-600">(optional)</span></label>
+                <input name="phone" type="tel" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none focus:border-cyan-500" placeholder="(555) 555-5555">
+              </div>
+              <div class="rounded-xl border border-amber-600/30 bg-amber-950/20 p-3 space-y-2 text-[11px] text-amber-100/90">
+                <label class="flex gap-2 items-start cursor-pointer"><input type="checkbox" name="pp" required class="mt-0.5"> I authorize credit report retrieval for FCRA permissible purpose / dispute preparation.</label>
+                <label class="flex gap-2 items-start cursor-pointer"><input type="checkbox" name="croa" required class="mt-0.5"> I acknowledge CROA disclosures (not a government agency; results not guaranteed).</label>
+                <label class="flex gap-2 items-start cursor-pointer"><input type="checkbox" name="tsr" required class="mt-0.5"> I acknowledge TSR advance-fee waiver terms for credit services.</label>
+              </div>
+              <p class="text-[10px] text-gray-500 leading-relaxed">Your full FCRA analysis runs on our side after signup, but stays hidden in your portal until our team confirms payment and unlocks your case.</p>
+              <button type="submit" id="mfsn-signup-btn" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-3 rounded-lg text-sm"><i class="fas fa-bolt mr-2"></i>Pull Report & Create My Portal</button>
+            </form>
+            <div id="mfsn-signup-result" class="hidden mt-4 rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-4 text-sm text-emerald-100 space-y-2"></div>
+            <p class="text-center text-xs text-gray-500 mt-4">Already have access? <a href="/" class="text-cyan-400 hover:text-cyan-300">Sign in</a></p>
+          </div>
+        </div>
+      </div>`;
+    }
     if (resetToken) {
       return `<div class="min-h-screen flex items-center justify-center p-4"><div class="w-full max-w-md glass rounded-2xl p-6">
         <h1 class="text-xl font-bold text-white mb-2">Reset Password</h1>
@@ -732,6 +777,9 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
             </div>
             <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition text-sm">Sign In</button>
           </form>
+            <a href="/?signup=mfsn" class="mt-3 flex items-center justify-center gap-2 w-full rounded-lg border border-cyan-500/40 bg-cyan-950/30 hover:bg-cyan-900/40 text-cyan-200 text-sm font-semibold py-2.5 transition">
+              <i class="fas fa-bolt text-cyan-400"></i> New client? Sign up with MyFreeScoreNow
+            </a>
             <div class="mt-4 rounded-xl border border-cyan-500/25 bg-gradient-to-br from-slate-950 via-cyan-950/20 to-slate-950 p-3.5 space-y-2.5">
               <div class="flex items-center justify-between gap-2">
                 <p class="text-[11px] font-bold uppercase tracking-wider text-cyan-300"><i class="fas fa-flask mr-1.5"></i>Live demo logins</p>
@@ -792,6 +840,52 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       api('/auth/verify-email', { method:'POST', body: JSON.stringify({ token: verifyEmail }) })
         .then(() => { toast('Email verified — you can sign in now', 'success'); history.replaceState({}, '', '/'); })
         .catch(err => toast(err.message, 'error'));
+    }
+
+    const mfsnSignup = document.getElementById('mfsn-signup-form');
+    if (mfsnSignup) {
+      mfsnSignup.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const btn = document.getElementById('mfsn-signup-btn');
+        const resultBox = document.getElementById('mfsn-signup-result');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Pulling report & building portal…'; }
+        try {
+          const d = await api('/public/mfsn-signup', {
+            method: 'POST',
+            body: JSON.stringify({
+              mfsnUsername: fd.get('mfsnUsername'),
+              mfsnPassword: fd.get('mfsnPassword'),
+              mfsnToken: fd.get('mfsnToken') || undefined,
+              email: fd.get('email') || undefined,
+              phone: fd.get('phone') || undefined,
+              permissiblePurposeConsent: !!fd.get('pp'),
+              croaContractAgreed: !!fd.get('croa'),
+              tsrAdvanceFeeWaived: !!fd.get('tsr'),
+            }),
+          });
+          if (resultBox) {
+            resultBox.classList.remove('hidden');
+            resultBox.innerHTML = `
+              <div class="font-bold text-emerald-300"><i class="fas fa-check-circle mr-1.5"></i>Portal created for ${escapeHtml(d.clientName || '')}</div>
+              <p class="text-xs text-emerald-100/80">${escapeHtml(d.message || '')}</p>
+              <div class="mt-2 rounded-lg bg-black/30 border border-emerald-500/20 p-3 font-mono text-xs space-y-1">
+                <div>Email: <span class="text-white">${escapeHtml(d.email || '')}</span></div>
+                <div>Temp password: <span class="text-amber-200">${escapeHtml(d.temporaryPassword || '')}</span></div>
+                <div>Reports: ${d.reportsImported || 0} · Findings prepared (locked): ${d.violationsFound || 0}</div>
+              </div>
+              <p class="text-[11px] text-emerald-200/70">Check your email for the same login. Analysis stays locked until our team confirms payment.</p>
+              <a href="/" class="inline-flex mt-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg">Go to Sign In</a>`;
+          }
+          toast('Portal ready — check your email', 'success');
+          e.target.classList.add('opacity-60', 'pointer-events-none');
+        } catch (err) {
+          toast(err.message || 'Signup failed', 'error');
+        } finally {
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-bolt mr-2"></i>Pull Report & Create My Portal'; }
+        }
+      };
+      return; // signup page only
     }
 
     const lf = $('#login-form'), rf = $('#register-form'), mf = $('#mfa-form'), ff = $('#forgot-form'), rsf = $('#reset-form');
@@ -1226,6 +1320,9 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           <button onclick="window._startImpersonating('${c.id}', '${escapeHtml(c.first_name + ' ' + c.last_name)}')" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 border border-amber-500/20 shadow-[0_0_15px_rgba(217,119,6,0.15)]"><i class="fas fa-user-shield"></i>Preview Portal</button>
           <button id="btn-email-client" class="bg-cyan-700 hover:bg-cyan-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-envelope"></i>Message / Email</button>
           <button id="btn-portal-invite" class="bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-key"></i>Portal Invite</button>
+          ${(c.portal_analysis_unlocked === 0 || c.portal_analysis_unlocked === '0')
+            ? `<button id="btn-unlock-analysis" class="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 border border-amber-400/30"><i class="fas fa-unlock"></i>Unlock After Payment</button>`
+            : `<button id="btn-lock-analysis" class="bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-2 rounded-lg text-xs font-medium transition border border-gray-700" title="Re-lock client analysis"><i class="fas fa-lock"></i></button>`}
           <button id="btn-edit-client" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 border border-gray-700"><i class="fas fa-edit"></i>Edit Profile</button>
           <button onclick="window._nav('upload-report',{clientId:'${c.id}',clientName:'${c.first_name} ${c.last_name}'})" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-upload"></i>Upload Report</button>
           <button onclick="window._nav('generate-doc',{clientId:'${c.id}',clientName:'${c.first_name} ${c.last_name}'})" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-file-contract"></i>Generate Docs</button>
@@ -1378,6 +1475,24 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         const r = await api('/clients/' + c.id + '/portal-invite', { method: 'POST', body: JSON.stringify({ email }) });
         toast('Invite ' + (r.emailStatus || 'sent') + (r.temporaryPassword ? ' · temp pass copied to console' : ''), 'success');
         if (r.temporaryPassword) console.info('[portal-invite]', r.loginUrl, r.temporaryPassword);
+      } catch (err) { toast(err.message, 'error'); }
+    };
+    const btnUnlock = document.getElementById('btn-unlock-analysis');
+    if (btnUnlock) btnUnlock.onclick = async () => {
+      if (!confirm('Unlock analysis, FCRA violations, and dispute letters for this client? Confirm payment was received.')) return;
+      try {
+        await api('/clients/' + c.id + '/unlock-analysis', { method: 'POST', body: JSON.stringify({ paymentStatus: 'paid' }) });
+        toast('Portal analysis unlocked — client can now see their case', 'success');
+        await pgClientDetail(el, data);
+      } catch (err) { toast(err.message, 'error'); }
+    };
+    const btnLock = document.getElementById('btn-lock-analysis');
+    if (btnLock) btnLock.onclick = async () => {
+      if (!confirm('Re-lock analysis for this client portal?')) return;
+      try {
+        await api('/clients/' + c.id + '/lock-analysis', { method: 'POST', body: '{}' });
+        toast('Analysis locked for client portal', 'success');
+        await pgClientDetail(el, data);
       } catch (err) { toast(err.message, 'error'); }
     };
     const modal = document.getElementById('edit-client-modal');
@@ -8459,6 +8574,43 @@ async function pgAdminConsole(el) {
       const documents = d.documents || [];
       const reports = d.reports || [];
 
+      if (d.analysisLocked) {
+        el.innerHTML = `
+          <div class="fade-in space-y-6 max-w-3xl mx-auto">
+            <div class="relative overflow-hidden bg-gradient-to-r from-gray-950 via-amber-950/30 to-gray-950 border border-amber-500/25 rounded-2xl p-6">
+              <h1 class="text-2xl font-bold text-white mb-1">Welcome, ${escapeHtml(client.first_name || 'there')}!</h1>
+              <p class="text-sm text-gray-400">Your client portal is active. Case ID: <span class="font-mono text-amber-200/90">${escapeHtml(client.id || '')}</span></p>
+            </div>
+            <div class="glass rounded-2xl border border-amber-500/30 bg-amber-950/15 p-6 space-y-3">
+              <div class="flex items-start gap-3">
+                <div class="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0"><i class="fas fa-lock text-amber-300 text-xl"></i></div>
+                <div>
+                  <h2 class="text-lg font-bold text-white">Case preparation in progress</h2>
+                  <p class="text-sm text-amber-100/80 mt-1">${escapeHtml(d.lockMessage || 'Your credit report is on file. Analysis, FCRA violations, and dispute letters unlock after payment is confirmed by our team.')}</p>
+                </div>
+              </div>
+              <div class="grid sm:grid-cols-3 gap-3 mt-2 text-center">
+                <div class="rounded-xl bg-black/30 border border-gray-800 p-3"><div class="text-[10px] uppercase text-gray-500">Profile</div><div class="text-sm font-bold text-emerald-400 mt-1">Ready</div></div>
+                <div class="rounded-xl bg-black/30 border border-gray-800 p-3"><div class="text-[10px] uppercase text-gray-500">Report on file</div><div class="text-sm font-bold text-emerald-400 mt-1">${(reports || []).length ? 'Yes' : 'Pending'}</div></div>
+                <div class="rounded-xl bg-black/30 border border-gray-800 p-3"><div class="text-[10px] uppercase text-gray-500">Analysis</div><div class="text-sm font-bold text-amber-300 mt-1">Locked</div></div>
+              </div>
+              <p class="text-xs text-gray-400">Payment status: <span class="text-amber-200 font-semibold">${escapeHtml(d.paymentStatus || 'pending')}</span>. You can message your advisor, upload ID/utility bills, and update security settings while you wait.</p>
+              <div class="flex flex-wrap gap-2 pt-1">
+                <button onclick="window._nav('client-messages')" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-4 py-2 rounded-lg">Messages</button>
+                <button onclick="window._nav('client-uploads')" class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-2 rounded-lg">Upload Docs</button>
+                <button onclick="window._nav('client-settings')" class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold px-4 py-2 rounded-lg">Security</button>
+              </div>
+            </div>
+            <div class="glass rounded-xl border border-gray-800 p-4 text-sm text-gray-300">
+              <div class="font-semibold text-white mb-1">On file</div>
+              <div>${escapeHtml(client.first_name || '')} ${escapeHtml(client.last_name || '')}</div>
+              <div class="text-xs text-gray-500 mt-1">${escapeHtml(client.email || '')}${client.phone ? ' · ' + escapeHtml(client.phone) : ''}</div>
+              ${client.address_line1 ? `<div class="text-xs text-gray-500 mt-1">${escapeHtml(client.address_line1)}${client.city ? ', ' + escapeHtml(client.city) : ''} ${escapeHtml(client.state || '')} ${escapeHtml(client.zip || '')}</div>` : ''}
+            </div>
+          </div>`;
+        return;
+      }
+
       if (d.needsOnboarding && !state.impersonateClientId) {
         el.innerHTML = `
           <div class="fade-in max-w-2xl mx-auto text-center py-16 space-y-4">
@@ -9246,6 +9398,16 @@ async function pgAdminConsole(el) {
   async function pgClientDocuments(el) {
     try {
       const d = await api('/client-portal/dashboard' + (state.impersonateClientId ? `?clientId=${state.impersonateClientId}` : ''));
+      if (d.analysisLocked) {
+        el.innerHTML = `
+          <div class="fade-in text-center py-12 glass rounded-2xl border border-amber-500/30 bg-amber-950/10 p-8 max-w-xl mx-auto">
+            <i class="fas fa-lock text-5xl text-amber-400/80 mb-4"></i>
+            <h3 class="text-lg font-bold text-white mb-2">Dispute Letters Locked</h3>
+            <p class="text-sm text-gray-400 max-w-md mx-auto">${escapeHtml(d.lockMessage || 'Letters unlock after our team confirms payment.')}</p>
+            <button onclick="window._nav('client-cockpit')" class="mt-5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold px-5 py-2.5 rounded-lg">Back to Portal Home</button>
+          </div>`;
+        return;
+      }
       const documents = (d.documents || []).filter(doc => doc.status === 'draft' || doc.status === 'signed');
       
       if (!documents.length) {

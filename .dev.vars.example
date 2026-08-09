@@ -7,7 +7,8 @@ FREE_AI_ONLY=true
 # Optional partner integrations (leave blank for sandbox demos):
 # MFSN_EMAIL=
 # MFSN_PASSWORD=
-# MFSN_CLIENT_TOKEN=
-# MFSN_API_URL=https://api.myfreescorenow.com
+# MFSN_CLIENT_TOKEN=          # partner token — enables public /?signup=mfsn (consumers supply username/password)
+# MFSN_API_URL=
+# PUBLIC_SIGNUP_ORG_ID=org_platform_masterhttps://api.myfreescorenow.com
 # STRIPE_API_KEY=
 # JOURNEY_CRON_SECRET=

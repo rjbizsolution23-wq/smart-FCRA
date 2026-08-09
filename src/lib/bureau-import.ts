@@ -40,6 +40,8 @@ export async function importBureauReportsBatch(
     fileNamePrefix: string;
     activityAction?: string;
     activityDescription?: string;
+    /** Public signup / system imports — overrides session user */
+    actingUser?: { id: string; org_id: string };
   },
 ): Promise<{
   results: BureauImportResult[];
@@ -47,7 +49,8 @@ export async function importBureauReportsBatch(
   bureauPack: any;
   fundability: any;
 }> {
-  const user = c.get('user');
+  const user = opts.actingUser || c.get('user');
+  if (!user?.org_id) throw new Error('bureau-import requires authenticated or acting user');
   const { clientId, bureauReports, rawPayload, sourceProvider, sourcePayloadType, fileNamePrefix } = opts;
 
   if (bureauReports.length > 0) {
