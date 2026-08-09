@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Systems Worksheets</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;flex-direction:column;gap:24px;align-items:center}
+  .page{width:794px;min-height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden;page-break-after:always;position:relative}
+
+  .top{background:var(--grad-dark);color:#fff;padding:28px 56px 20px;position:relative;overflow:hidden}
+  .top::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .top .row{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1;margin-bottom:10px}
+  .top .brand{display:flex;align-items:center;gap:10px}
+  .top .brand img{width:34px;height:34px;border-radius:8px}
+  .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:13px}
+  .top .brand .t{font-family:var(--font-mono);font-size:9px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:2px;font-weight:600}
+  .top .ws-num{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);text-align:right;font-weight:600}
+  .top .ws-num b{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:block;margin-top:2px}
+  .top h1{font-family:var(--font-head);font-size:32px;font-weight:600;letter-spacing:-0.02em;margin:0;position:relative;z-index:1;line-height:1}
+  .top h1 span{color:var(--rj-sky)}
+  .top .sub{font-family:var(--font-head);color:#cbd5e1;font-size:12px;margin-top:4px;position:relative;z-index:1;font-weight:500}
+  .thin{height:3px;background:var(--grad-primary)}
+
+  .body{padding:28px 48px;flex:1;display:flex;flex-direction:column;gap:16px}
+
+  .instruction{background:var(--rj-light);border-left:3px solid var(--rj-blue);padding:10px 14px;border-radius:0 8px 8px 0;font-family:var(--font-head);font-size:11px;line-height:1.5;color:var(--rj-navy);font-weight:500}
+  .instruction b{color:var(--rj-blue);font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;display:block;margin-bottom:3px;font-weight:600}
+
+  .section-num{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600}
+  h2{font-family:var(--font-head);font-size:20px;font-weight:600;color:var(--rj-navy);margin:0 0 4px 0;letter-spacing:-0.01em;line-height:1.1}
+
+  /* Fill-in field */
+  .field{margin:6px 0}
+  .field .lbl-f{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:4px}
+  .field .line{border-bottom:1.5px solid var(--rj-line);min-height:26px;padding:2px 0;font-family:'Space Grotesk',serif;font-style:italic;color:var(--rj-muted-text);font-size:11px}
+  .field .box{border:1.5px solid var(--rj-line);border-radius:6px;min-height:60px;padding:8px 10px;background:#fafbfc;font-family:'Space Grotesk',serif;font-style:italic;color:var(--rj-muted-text);font-size:11px;line-height:1.5}
+
+  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .field-row.three{grid-template-columns:1fr 1fr 1fr}
+
+  /* Rating scale */
+  .rating{display:flex;gap:8px;align-items:center;margin-top:6px}
+  .rating .cell{width:32px;height:32px;border:1.5px solid var(--rj-line);border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:600;font-size:12px;color:var(--rj-muted-text)}
+  .rating .cell.active{background:var(--grad-primary);border-color:transparent;color:#fff;box-shadow:0 4px 10px rgba(37,99,235,0.35)}
+
+  /* Priority matrix */
+  .matrix{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .matrix-cell{border:2px dashed var(--rj-border);border-radius:10px;padding:14px;min-height:110px;position:relative}
+  .matrix-cell .quad{position:absolute;top:8px;right:12px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600}
+  .matrix-cell h5{font-family:var(--font-head);font-size:12px;font-weight:600;color:var(--rj-navy);margin:0 0 8px 0;letter-spacing:-0.01em}
+  .matrix-cell .space{font-family:'Space Grotesk',serif;font-style:italic;color:var(--rj-muted-text);font-size:10px;line-height:1.6}
+
+  /* Checklist */
+  .checklist{display:flex;flex-direction:column;gap:6px}
+  .ck{display:flex;gap:10px;align-items:flex-start;padding:8px 12px;background:#fafbfc;border:1px solid var(--rj-line);border-radius:8px}
+  .ck .box{width:18px;height:18px;border:1.5px solid var(--rj-border);border-radius:4px;flex-shrink:0;margin-top:1px}
+  .ck .txt{font-size:11px;line-height:1.5;color:var(--rj-text)}
+  .ck .txt b{font-family:var(--font-head);color:var(--rj-navy);font-weight:600;display:block;margin-bottom:2px;font-size:12px}
+
+  /* Progress bar */
+  .progress-block{background:linear-gradient(180deg,#fff,var(--rj-light));border:1px solid var(--rj-border);border-radius:10px;padding:14px 16px}
+  .progress-block h5{font-family:var(--font-head);font-size:12px;font-weight:600;color:var(--rj-navy);margin:0 0 8px 0;letter-spacing:-0.01em}
+  .progress-bar{height:20px;background:#fff;border:1px solid var(--rj-line);border-radius:6px;overflow:hidden;display:flex}
+  .progress-bar .fill{height:100%;background:var(--grad-primary);width:0}
+  .progress-bar .fill.f60{width:60%}
+  .progress-marks{display:flex;justify-content:space-between;margin-top:4px;font-family:var(--font-mono);font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+
+  /* Signature strip */
+  .signoff{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:auto;padding-top:20px;border-top:1px solid var(--rj-line)}
+  .signoff .sig-line{border-bottom:1.5px solid var(--rj-navy);padding-bottom:4px;font-family:'Space Grotesk',serif;font-style:italic;font-size:18px;color:var(--rj-blue);font-weight:500;min-height:28px}
+  .signoff .sig-meta{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);margin-top:4px;font-weight:600}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:12px 48px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+
+  @media print{body{background:#fff;padding:0;gap:0}.page{box-shadow:none}}
+</style>
+</head>
+<body>
+
+<!-- WORKSHEET 01 · CURRENT STATE AUDIT -->
+<div class="page">
+  <div class="top">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">Rick's Systems</div><div class="t">Client Workbook · v1</div></div></div>
+      <div class="ws-num">Worksheet<b>01 · The Audit</b></div>
+    </div>
+    <h1>Current State <span>Audit.</span></h1>
+    <div class="sub">Fill this out honestly. It's the map before we build.</div>
+  </div>
+  <div class="thin"></div>
+
+  <div class="body">
+    <div class="instruction"><b>How to use</b>Answer every field. Where you don't know, write "unknown." Blank spots are more informative than guesses. Time: ~15 minutes.</div>
+
+    <div class="section-num">§ 1 · The Business</div>
+    <h2>Basics.</h2>
+    <div class="field-row">
+      <div class="field"><div class="lbl-f">Company Name</div><div class="line"></div></div>
+      <div class="field"><div class="lbl-f">Founder / Primary Contact</div><div class="line"></div></div>
+    </div>
+    <div class="field-row three">
+      <div class="field"><div class="lbl-f">Industry / Vertical</div><div class="line"></div></div>
+      <div class="field"><div class="lbl-f">Team Size</div><div class="line"></div></div>
+      <div class="field"><div class="lbl-f">Years Operating</div><div class="line"></div></div>
+    </div>
+
+    <div class="section-num">§ 2 · Traffic &amp; Leads</div>
+    <h2>Where do leads come from?</h2>
+    <div class="field-row">
+      <div class="field"><div class="lbl-f">Primary Lead Source</div><div class="line"></div></div>
+      <div class="field"><div class="lbl-f">Secondary Lead Source</div><div class="line"></div></div>
+    </div>
+    <div class="field-row three">
+      <div class="field"><div class="lbl-f">DMs / Week</div><div class="line"></div></div>
+      <div class="field"><div class="lbl-f">Form Fills / Week</div><div class="line"></div></div>
+      <div class="field"><div class="lbl-f">Booked Calls / Week</div><div class="line"></div></div>
+    </div>
+
+    <div class="section-num">§ 3 · Where Leads Die</div>
+    <h2>Be brutally honest.</h2>
+    <div class="field"><div class="lbl-f">What's the biggest reason a lead ghosts you? (1–3 sentences)</div><div class="box"></div></div>
+    <div class="field"><div class="lbl-f">Average response time to a new DM · Rate current speed</div>
+      <div class="rating"><div class="cell">1</div><div class="cell active">2</div><div class="cell">3</div><div class="cell">4</div><div class="cell">5</div><span style="font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--rj-muted-text);margin-left:8px;font-weight:600">1 = slow · 5 = &lt;90s</span></div>
+    </div>
+
+    <div class="section-num">§ 4 · Current Tools</div>
+    <h2>What are you already paying for?</h2>
+    <div class="field"><div class="lbl-f">CRM · CMS · DM Tool · Payment Processor · Other</div><div class="box"></div></div>
+
+    <div class="signoff">
+      <div><div class="sig-line">[Client Signature]</div><div class="sig-meta">Completed by</div></div>
+      <div><div class="sig-line">Date</div><div class="sig-meta">Filed</div></div>
+    </div>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Worksheet 01 · Current State Audit</div></div>
+</div>
+
+<!-- WORKSHEET 02 · PRIORITY MATRIX -->
+<div class="page">
+  <div class="top">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">Rick's Systems</div><div class="t">Client Workbook · v1</div></div></div>
+      <div class="ws-num">Worksheet<b>02 · The Matrix</b></div>
+    </div>
+    <h1>Priority <span>Matrix.</span></h1>
+    <div class="sub">Impact × Effort. Everything you want to build lands in one of four quadrants.</div>
+  </div>
+  <div class="thin"></div>
+
+  <div class="body">
+    <div class="instruction"><b>How to use</b>List every growth initiative you're considering. Place each in the quadrant where it truly fits. Then focus on the top-right first, always.</div>
+
+    <div class="matrix">
+      <div class="matrix-cell">
+        <div class="quad">Q1</div>
+        <h5>High Impact · Low Effort</h5>
+        <div class="space">DO FIRST · Fill with your quick wins →</div>
+      </div>
+      <div class="matrix-cell" style="border-color:var(--rj-blue);border-style:solid;background:linear-gradient(135deg,#fff,var(--rj-light))">
+        <div class="quad">Q2 ★</div>
+        <h5>High Impact · High Effort</h5>
+        <div class="space">STRATEGIC · Fill with your big bets →</div>
+      </div>
+      <div class="matrix-cell">
+        <div class="quad">Q3</div>
+        <h5>Low Impact · Low Effort</h5>
+        <div class="space">FILL-INS · Fill with your maybe-laters →</div>
+      </div>
+      <div class="matrix-cell">
+        <div class="quad">Q4</div>
+        <h5>Low Impact · High Effort</h5>
+        <div class="space">DON'T DO · Fill with the traps →</div>
+      </div>
+    </div>
+
+    <div class="section-num">§ 1 · Your Top 3 Q1 Wins</div>
+    <h2>Ship these <span style="color:var(--rj-blue)">this month.</span></h2>
+    <div class="field"><div class="lbl-f">Win 01</div><div class="line"></div></div>
+    <div class="field"><div class="lbl-f">Win 02</div><div class="line"></div></div>
+    <div class="field"><div class="lbl-f">Win 03</div><div class="line"></div></div>
+
+    <div class="section-num">§ 2 · Your Q2 Strategic Bet</div>
+    <h2>The one big thing worth the effort.</h2>
+    <div class="field"><div class="lbl-f">Bet</div><div class="box"></div></div>
+
+    <div class="signoff">
+      <div><div class="sig-line">[Client Signature]</div><div class="sig-meta">Owner</div></div>
+      <div><div class="sig-line">Date</div><div class="sig-meta">Committed</div></div>
+    </div>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Worksheet 02 · Priority Matrix</div></div>
+</div>
+
+<!-- WORKSHEET 03 · 30-DAY PLAN -->
+<div class="page">
+  <div class="top">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">Rick's Systems</div><div class="t">Client Workbook · v1</div></div></div>
+      <div class="ws-num">Worksheet<b>03 · The Plan</b></div>
+    </div>
+    <h1>30-Day <span>Action Plan.</span></h1>
+    <div class="sub">Weekly milestones. Real dates. Signed commitments.</div>
+  </div>
+  <div class="thin"></div>
+
+  <div class="body">
+    <div class="instruction"><b>How to use</b>Break the next 30 days into 4 sprints. Every sprint has one shipped outcome. Track progress at the bottom.</div>
+
+    <div class="section-num">§ Week 1 · Foundation</div>
+    <div class="field"><div class="lbl-f">Sprint Goal · What ships by Friday</div><div class="line"></div></div>
+    <div class="checklist">
+      <div class="ck"><div class="box"></div><div class="txt"><b>Task 01</b>_________________________________________________________</div></div>
+      <div class="ck"><div class="box"></div><div class="txt"><b>Task 02</b>_________________________________________________________</div></div>
+    </div>
+
+    <div class="section-num">§ Week 2 · Build</div>
+    <div class="field"><div class="lbl-f">Sprint Goal</div><div class="line"></div></div>
+    <div class="checklist">
+      <div class="ck"><div class="box"></div><div class="txt"><b>Task 01</b>_________________________________________________________</div></div>
+      <div class="ck"><div class="box"></div><div class="txt"><b>Task 02</b>_________________________________________________________</div></div>
+    </div>
+
+    <div class="section-num">§ Week 3 · Launch</div>
+    <div class="field"><div class="lbl-f">Sprint Goal</div><div class="line"></div></div>
+    <div class="checklist">
+      <div class="ck"><div class="box"></div><div class="txt"><b>Task 01</b>_________________________________________________________</div></div>
+      <div class="ck"><div class="box"></div><div class="txt"><b>Task 02</b>_________________________________________________________</div></div>
+    </div>
+
+    <div class="section-num">§ Week 4 · Measure &amp; Iterate</div>
+    <div class="field"><div class="lbl-f">Sprint Goal</div><div class="line"></div></div>
+
+    <div class="progress-block">
+      <h5>Progress · Fill as you go</h5>
+      <div class="progress-bar"><div class="fill f60"></div></div>
+      <div class="progress-marks"><span>Wk 1</span><span>Wk 2</span><span>Wk 3</span><span>Wk 4</span></div>
+    </div>
+
+    <div class="signoff">
+      <div><div class="sig-line">[Client Signature]</div><div class="sig-meta">Owner of plan</div></div>
+      <div><div class="sig-line">Rick Jefferson</div><div class="sig-meta">Accountability partner</div></div>
+    </div>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Worksheet 03 · 30-Day Action Plan</div></div>
+</div>
+
+<!-- WORKSHEET 04 · METRICS SCORECARD -->
+<div class="page">
+  <div class="top">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">Rick's Systems</div><div class="t">Client Workbook · v1</div></div></div>
+      <div class="ws-num">Worksheet<b>04 · The Scorecard</b></div>
+    </div>
+    <h1>Metrics <span>Scorecard.</span></h1>
+    <div class="sub">The 4 numbers that predict scale. Track weekly. Never miss one.</div>
+  </div>
+  <div class="thin"></div>
+
+  <div class="body">
+    <div class="instruction"><b>How to use</b>Fill in your baseline this week. Then update at the end of every week for the next 12. Trends matter more than any single value.</div>
+
+    <div class="section-num">§ The Four Metrics That Matter</div>
+    <h2>Response · Qualification · Booking · Recovery.</h2>
+
+    <div class="field-row">
+      <div class="progress-block">
+        <h5>01 · Response Time (target &lt; 90s)</h5>
+        <div class="field-row three" style="margin-top:6px">
+          <div class="field"><div class="lbl-f">Week 1</div><div class="line"></div></div>
+          <div class="field"><div class="lbl-f">Week 4</div><div class="line"></div></div>
+          <div class="field"><div class="lbl-f">Week 12</div><div class="line"></div></div>
+        </div>
+      </div>
+      <div class="progress-block">
+        <h5>02 · Qualification Rate (target &gt; 30%)</h5>
+        <div class="field-row three" style="margin-top:6px">
+          <div class="field"><div class="lbl-f">Week 1</div><div class="line"></div></div>
+          <div class="field"><div class="lbl-f">Week 4</div><div class="line"></div></div>
+          <div class="field"><div class="lbl-f">Week 12</div><div class="line"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="progress-block">
+        <h5>03 · Booking Ratio (target &gt; 2×)</h5>
+        <div class="field-row three" style="margin-top:6px">
+          <div class="field"><div class="lbl-f">Week 1</div><div class="line"></div></div>
+          <div class="field"><div class="lbl-f">Week 4</div><div class="line"></div></div>
+          <div class="field"><div class="lbl-f">Week 12</div><div class="line"></div></div>
+        </div>
+      </div>
+      <div class="progress-block">
+        <h5>04 · No-Show Recovery (target &gt; 60%)</h5>
+        <div class="field-row three" style="margin-top:6px">
+          <div class="field"><div class="lbl-f">Week 1</div><div class="line"></div></div>
+          <div class="field"><div class="lbl-f">Week 4</div><div class="line"></div></div>
+          <div class="field"><div class="lbl-f">Week 12</div><div class="line"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-num">§ Weekly Reflection</div>
+    <div class="field"><div class="lbl-f">What moved · what didn't · what's next</div><div class="box"></div></div>
+
+    <div class="signoff">
+      <div><div class="sig-line">[Client Signature]</div><div class="sig-meta">Reviewed weekly</div></div>
+      <div><div class="sig-line">Rick Jefferson</div><div class="sig-meta">Reviewed monthly</div></div>
+    </div>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Worksheet 04 · Metrics Scorecard</div></div>
+</div>
+
+</body>
+</html>

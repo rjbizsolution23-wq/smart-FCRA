@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — Valuation Summary</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;justify-content:center}
+  .sheet{width:794px;min-height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden}
+  .top{background:var(--grad-dark);color:#fff;padding:28px 48px 22px;position:relative;overflow:hidden}
+  .top::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .top .row{display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1;margin-bottom:12px}
+  .top .brand{display:flex;align-items:center;gap:12px}
+  .top .brand img{width:36px;height:36px;border-radius:8px}
+  .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:14px}
+  .top .brand .t{font-family:var(--font-mono);font-size:9px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:2px;font-weight:600}
+  .top .doc{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);text-align:right;font-weight:600}
+  .top .doc b{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:block;margin-top:2px}
+  .top h1{font-family:var(--font-head);font-size:32px;font-weight:600;letter-spacing:-0.02em;margin:0;position:relative;z-index:1;line-height:1}
+  .top h1 span{color:var(--rj-sky)}
+  .top .sub{font-family:var(--font-head);color:#cbd5e1;font-size:12px;margin-top:6px;position:relative;z-index:1}
+  .thin{height:3px;background:var(--grad-primary)}
+
+  .body{padding:26px 48px;flex:1;display:flex;flex-direction:column;gap:18px;font-family:var(--font-body);font-size:12px;line-height:1.7;color:var(--rj-text)}
+  h3{font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--rj-navy);margin:0 0 8px 0;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+  h3::before{content:"";width:3px;height:16px;background:var(--rj-blue);border-radius:2px}
+
+  .hero-val{background:var(--grad-dark);color:#fff;padding:22px 26px;border-radius:14px;position:relative;overflow:hidden;text-align:center}
+  .hero-val::after{content:"";position:absolute;right:-60px;top:-60px;width:200px;height:200px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(30px)}
+  .hero-val .lbl{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600;position:relative;z-index:1;margin-bottom:6px}
+  .hero-val .big{font-family:var(--font-head);font-size:56px;font-weight:700;letter-spacing:-0.03em;line-height:1;background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent;position:relative;z-index:1}
+  .hero-val .range{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;margin-top:6px;position:relative;z-index:1;font-weight:600}
+
+  .methods{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .method{background:linear-gradient(180deg,#fff,var(--rj-light));border:1px solid var(--rj-border);border-radius:12px;padding:16px 18px}
+  .method .lbl{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:6px}
+  .method h4{font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--rj-navy);margin:0 0 6px 0;letter-spacing:-0.01em}
+  .method .v{font-family:var(--font-head);font-weight:700;font-size:22px;color:var(--rj-blue);letter-spacing:-0.02em;line-height:1;margin:8px 0 4px}
+  .method .d{font-size:10px;color:var(--rj-muted-text);line-height:1.5}
+  .method .weight{margin-top:8px;padding-top:8px;border-top:1px solid var(--rj-line);font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+  .method .weight b{color:var(--rj-navy);font-family:var(--font-head);font-weight:600}
+
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--rj-line);border-radius:10px;overflow:hidden;font-size:11px}
+  th{background:var(--rj-navy);color:#fff;padding:9px 12px;text-align:left;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+  th.r{text-align:right}
+  td{padding:9px 12px;border-bottom:1px solid var(--rj-line)}
+  td.r{text-align:right;font-family:ui-monospace,Menlo,monospace;font-weight:600;color:var(--rj-navy)}
+  tr.total td{background:var(--rj-light);font-family:var(--font-head);font-weight:700;color:var(--rj-navy);font-size:12px;border:none}
+
+  .assumptions{background:#f8fafc;border-left:3px solid var(--rj-muted-text);padding:10px 14px;border-radius:0 8px 8px 0;font-size:10px;line-height:1.6;color:var(--rj-muted-text)}
+  .assumptions b{color:var(--rj-navy);font-family:var(--font-head);font-weight:600}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:10px 48px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600;margin-top:auto}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+  @media print{body{background:#fff;padding:0}.sheet{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="top">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Founder Docs · Valuation Summary</div></div></div>
+      <div class="doc">Doc<b>VS-2026-v1</b></div>
+    </div>
+    <h1>Valuation <span>Summary.</span></h1>
+    <div class="sub">Three-method blend · Revenue multiple + DCF + Comparable transactions · As of Aug 7, 2026</div>
+  </div>
+  <div class="thin"></div>
+
+  <div class="body">
+    <div class="hero-val">
+      <div class="lbl">Blended Enterprise Valuation</div>
+      <div class="big">$3.2M – $4.8M</div>
+      <div class="range">Point estimate: $3.8M · Midpoint of blended range</div>
+    </div>
+
+    <h3>Three Valuation Methods</h3>
+    <div class="methods">
+      <div class="method"><div class="lbl">Method 01</div><h4>Revenue Multiple</h4><div class="v">$3.7M</div><div class="d">$742K ARR × 5.0× SaaS-services multiple (industry avg 4–6× for early-stage recurring revenue).</div><div class="weight">Weight <b>40%</b></div></div>
+      <div class="method"><div class="lbl">Method 02</div><h4>DCF · 5-Year</h4><div class="v">$4.2M</div><div class="d">3-yr forecast at 60% YoY growth, 15% discount rate, 3% terminal, 25% EBITDA margin at scale.</div><div class="weight">Weight <b>30%</b></div></div>
+      <div class="method"><div class="lbl">Method 03</div><h4>Comparable Deals</h4><div class="v">$3.5M</div><div class="d">Recent AI-services + credit-tech acquisitions at 3.5–5× revenue in similar stage/vertical.</div><div class="weight">Weight <b>30%</b></div></div>
+    </div>
+
+    <h3>Blended Calculation</h3>
+    <table>
+      <thead><tr><th>Method</th><th class="r">Valuation</th><th class="r">Weight</th><th class="r">Contribution</th></tr></thead>
+      <tbody>
+        <tr><td>Revenue Multiple</td><td class="r">$3,700,000</td><td class="r">40%</td><td class="r">$1,480,000</td></tr>
+        <tr><td>DCF (5-year)</td><td class="r">$4,200,000</td><td class="r">30%</td><td class="r">$1,260,000</td></tr>
+        <tr><td>Comparable Transactions</td><td class="r">$3,500,000</td><td class="r">30%</td><td class="r">$1,050,000</td></tr>
+        <tr class="total"><td>Blended Enterprise Valuation</td><td class="r">—</td><td class="r">100%</td><td class="r">$3,790,000</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Key Financial Inputs · TTM</h3>
+    <table>
+      <tbody>
+        <tr><td>Revenue (Trailing 12 Months)</td><td class="r">$742,000</td></tr>
+        <tr><td>Monthly Recurring Revenue (MRR)</td><td class="r">$85,000</td></tr>
+        <tr><td>Gross Margin</td><td class="r">72%</td></tr>
+        <tr><td>YoY Revenue Growth</td><td class="r">— (Y1)</td></tr>
+        <tr><td>Client Retention · Monthly</td><td class="r">98%</td></tr>
+        <tr><td>Customer Count · Active</td><td class="r">142</td></tr>
+        <tr><td>Average Contract Value</td><td class="r">$16,940</td></tr>
+      </tbody>
+    </table>
+
+    <div class="assumptions">
+      <b>Assumptions &amp; Caveats:</b> Valuation prepared for internal / seed-round reference only, not a formal § 409A. DCF assumes 60% Y1→Y2 growth (verified by client pipeline), tapering to 30% by Y5. Revenue multiple reflects premium for AI-native + compliance-aware infrastructure. Comparables sourced from public deal announcements in credit-tech / vertical SaaS at $500K–$5M revenue stage. Range reflects ±20% sensitivity on growth rate + discount rate. Not investment advice.
+    </div>
+  </div>
+
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>VS-2026-v1 · Confidential · Prepared by Rick Jefferson · Aug 7, 2026</div></div>
+</div>
+</body>
+</html>

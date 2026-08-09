@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Swag Box</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:60px 40px;display:flex;flex-direction:column;gap:56px;align-items:center}
+  .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:16px;text-align:center}
+
+  /* BOX OUTSIDE · isometric-ish top view */
+  .box-out{width:600px;height:600px;background:var(--grad-dark);color:#fff;border-radius:12px;box-shadow:0 40px 80px rgba(15,23,42,0.35);position:relative;overflow:hidden;padding:60px 50px;display:flex;flex-direction:column;justify-content:space-between}
+  .box-out::after{content:"";position:absolute;right:-150px;top:-150px;width:500px;height:500px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(60px)}
+  .box-out::before{content:"";position:absolute;left:-100px;bottom:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(37,99,235,0.35) 0%,transparent 60%);filter:blur(50px)}
+
+  /* Fake tape strip */
+  .tape{position:absolute;top:50%;left:-20px;right:-20px;transform:translateY(-50%) rotate(-2deg);height:36px;background:linear-gradient(90deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02),rgba(255,255,255,0.06));border-top:1px dashed rgba(255,255,255,0.15);border-bottom:1px dashed rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:11px;letter-spacing:0.4em;text-transform:uppercase;color:rgba(14,165,233,0.5);font-weight:600;z-index:2}
+
+  .box-out .brand{display:flex;align-items:center;gap:14px;position:relative;z-index:1}
+  .box-out .brand img{width:52px;height:52px;border-radius:12px}
+  .box-out .brand .n{font-family:var(--font-head);font-weight:600;font-size:18px;letter-spacing:-0.01em}
+  .box-out .brand .t{font-family:var(--font-mono);font-size:10px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:3px;font-weight:600}
+
+  .box-out .middle{position:relative;z-index:1;text-align:center;margin-top:auto;margin-bottom:auto}
+  .box-out .kicker{display:inline-block;padding:6px 14px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);border-radius:999px;font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-bottom:24px;font-weight:600}
+  .box-out h1{font-family:var(--font-head);font-size:76px;font-weight:700;letter-spacing:-0.04em;line-height:0.9;margin:0}
+  .box-out h1 span{background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+  .box-out .foot-line{position:relative;z-index:1;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;padding-top:24px;border-top:1px solid rgba(255,255,255,0.15);font-weight:600}
+  .box-out .foot-line b{color:#fff;font-family:var(--font-head);font-size:12px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:block;margin-top:2px}
+
+  /* INSIDE · overhead view of contents */
+  .box-in{width:800px;height:600px;background:linear-gradient(135deg,#f8fafc 0%,#e2e8f0 100%);border-radius:12px;box-shadow:inset 0 0 0 6px #cbd5e1,0 40px 80px rgba(15,23,42,0.25);position:relative;overflow:hidden;padding:40px}
+
+  .box-in .paper{position:absolute;inset:20px;background:repeating-linear-gradient(-45deg,#fff 0,#fff 12px,#f1f5f9 12px,#f1f5f9 24px);border-radius:8px;padding:24px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:16px}
+
+  .item{background:#fff;border-radius:10px;padding:14px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 10px 20px rgba(15,23,42,0.12);position:relative;overflow:hidden}
+  .item .lbl-i{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600}
+  .item .n-i{font-family:var(--font-head);font-weight:600;font-size:14px;color:var(--rj-navy);letter-spacing:-0.01em;margin-top:4px}
+  .item .desc{font-size:10px;color:var(--rj-muted-text);margin-top:4px;line-height:1.3}
+  .item .visual{margin-top:8px;height:60px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--font-head);font-weight:700;font-size:14px}
+
+  .v-note{background:var(--grad-dark);color:#fff}
+  .v-note::after{content:"NOTE";font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;font-weight:700;color:var(--rj-sky)}
+  .v-tee{background:var(--rj-navy);color:#fff;position:relative}
+  .v-tee::after{content:"RJ";font-family:var(--font-head);font-weight:700;font-size:20px;letter-spacing:-0.03em}
+  .v-hat{background:linear-gradient(180deg,var(--rj-navy) 50%,transparent 50%);position:relative}
+  .v-hat::before{content:"";position:absolute;top:8px;left:50%;transform:translateX(-50%);width:36px;height:20px;background:#fff;border-radius:4px}
+  .v-hat::after{content:"RJ";position:absolute;top:12px;left:50%;transform:translateX(-50%);font-family:var(--font-head);font-weight:700;font-size:11px;color:var(--rj-navy)}
+  .v-mug{background:#fff;border:2px solid var(--rj-blue);color:var(--rj-blue);font-family:var(--font-head);font-weight:700;font-size:18px}
+  .v-stickers{background:linear-gradient(135deg,#dbeafe,#eff6ff);position:relative}
+  .v-stickers::before{content:"◉  ◐  ★  ⬢";font-size:16px;color:var(--rj-blue);letter-spacing:6px}
+  .v-book{background:var(--grad-primary);color:#fff}
+  .v-book::after{content:"THE GROWTH\APLAYBOOK";white-space:pre;font-family:var(--font-head);font-weight:700;font-size:10px;line-height:1.2;text-align:center}
+
+  /* UNBOXING CARD */
+  .unbox{width:600px;height:400px;border-radius:14px;overflow:hidden;box-shadow:0 30px 60px rgba(15,23,42,0.25);position:relative;background:var(--grad-dark);color:#fff;padding:40px}
+  .unbox::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(50px)}
+  .unbox .brand{display:flex;align-items:center;gap:12px;position:relative;z-index:1;margin-bottom:24px}
+  .unbox .brand img{width:44px;height:44px;border-radius:10px}
+  .unbox .brand .n{font-family:var(--font-head);font-weight:600;font-size:16px}
+  .unbox .middle{position:relative;z-index:1}
+  .unbox .greeting{font-family:'Space Grotesk',serif;font-style:italic;font-size:28px;color:var(--rj-sky);letter-spacing:-0.01em;margin-bottom:12px}
+  .unbox h2{font-family:var(--font-head);font-size:36px;font-weight:700;letter-spacing:-0.02em;line-height:1;margin:0}
+  .unbox h2 span{color:var(--rj-sky)}
+  .unbox .msg{font-family:var(--font-head);color:#cbd5e1;font-size:14px;margin-top:14px;line-height:1.5;max-width:440px}
+  .unbox .sign{position:absolute;bottom:36px;right:40px;text-align:right;z-index:1}
+  .unbox .sign .from{font-family:'Space Grotesk',serif;font-style:italic;font-size:32px;color:var(--rj-sky);font-weight:500}
+  .unbox .sign .role{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;margin-top:4px;font-weight:600}
+</style>
+</head>
+<body>
+
+<div>
+  <div class="lbl">Swag Box · Outside Top · 12" × 12" mailer</div>
+  <div class="box-out">
+    <div class="tape">RJ Business Solutions · Do Not Bend · Handle With Care · RJ Business Solutions</div>
+    <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Client Welcome Kit</div></div></div>
+    <div class="middle">
+      <div class="kicker">● Welcome to the System</div>
+      <h1>Open me.<br/><span>Then go build.</span></h1>
+    </div>
+    <div class="foot-line">
+      <div><span>To</span><b>[Client First Name]</b></div>
+      <div><span>Kit №</span><b>RJ-KIT-2026-0142</b></div>
+      <div><span>From</span><b>Rick · Tijeras NM</b></div>
+    </div>
+  </div>
+</div>
+
+<div>
+  <div class="lbl">Swag Box · Inside · Overhead view of contents on tissue paper</div>
+  <div class="box-in">
+    <div class="paper">
+      <div class="item"><div class="lbl-i">01 · Note</div><div class="n-i">Handwritten Welcome</div><div class="desc">From Rick, to you.</div><div class="visual v-note"></div></div>
+      <div class="item"><div class="lbl-i">02 · Apparel</div><div class="n-i">RJ Tee · Navy</div><div class="desc">Built the Backbone</div><div class="visual v-tee"></div></div>
+      <div class="item"><div class="lbl-i">03 · Apparel</div><div class="n-i">Dad Cap · RJ Patch</div><div class="desc">Adjustable · Structured</div><div class="visual v-hat"></div></div>
+      <div class="item"><div class="lbl-i">04 · Drinkware</div><div class="n-i">Ceramic Mug</div><div class="desc">Growth is infrastructure.</div><div class="visual v-mug"></div></div>
+      <div class="item"><div class="lbl-i">05 · Stickers</div><div class="n-i">Die-Cut Sheet</div><div class="desc">10 stickers · Laptop safe</div><div class="visual v-stickers"></div></div>
+      <div class="item"><div class="lbl-i">06 · Book</div><div class="n-i">The Growth Playbook</div><div class="desc">Printed edition · 8 pages</div><div class="visual v-book"></div></div>
+    </div>
+  </div>
+</div>
+
+<div>
+  <div class="lbl">Handwritten Welcome Card · Inside the box, on top of tissue</div>
+  <div class="unbox">
+    <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+    <div class="middle">
+      <div class="greeting">Hey [First Name] —</div>
+      <h2>Welcome to<br/>the <span>system.</span></h2>
+      <div class="msg">You just signed on to build real infrastructure. This box is a small thanks. Wear it. Drink from it. Stick the RJ sticker on your laptop. Then let's go make you money.</div>
+    </div>
+    <div class="sign">
+      <div class="from">Rick.</div>
+      <div class="role">Founder · Tijeras NM</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

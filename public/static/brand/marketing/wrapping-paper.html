@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Wrapping Paper Patterns</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:60px 40px;display:grid;grid-template-columns:1fr 1fr;gap:32px}
+  .card{background:#fff;border-radius:16px;padding:24px;box-shadow:0 20px 40px rgba(15,23,42,0.1)}
+  .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:12px}
+
+  .sheet{width:100%;aspect-ratio:1/1.35;border-radius:8px;overflow:hidden;position:relative;box-shadow:0 20px 40px rgba(15,23,42,0.15)}
+
+  /* PATTERN 1 · RJ monogram repeat */
+  .p1{background:var(--grad-dark)}
+  .p1::after{content:"RJ RJ RJ RJ RJ RJ\ARJ RJ RJ RJ RJ RJ\ARJ RJ RJ RJ RJ RJ\ARJ RJ RJ RJ RJ RJ\ARJ RJ RJ RJ RJ RJ\ARJ RJ RJ RJ RJ RJ\ARJ RJ RJ RJ RJ RJ\ARJ RJ RJ RJ RJ RJ\ARJ RJ RJ RJ RJ RJ";
+    white-space:pre;
+    position:absolute;inset:20px;
+    color:rgba(14,165,233,0.25);
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:72px;
+    letter-spacing:16px;
+    line-height:1.5;
+    text-align:center;
+    transform:rotate(-15deg) scale(1.4);
+    transform-origin:center;
+  }
+  .p1::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 30% 30%,rgba(14,165,233,0.3) 0%,transparent 50%),radial-gradient(circle at 70% 70%,rgba(37,99,235,0.3) 0%,transparent 50%);z-index:1}
+
+  /* PATTERN 2 · Grid + logo dots */
+  .p2{background:#0f172a;background-image:linear-gradient(rgba(37,99,235,0.15) 1px,transparent 1px),linear-gradient(90deg,rgba(37,99,235,0.15) 1px,transparent 1px);background-size:40px 40px;position:relative}
+  .p2 .dots{position:absolute;inset:0;display:grid;grid-template-columns:repeat(6,1fr);grid-template-rows:repeat(8,1fr);align-items:center;justify-items:center}
+  .p2 .dot{width:20px;height:20px;border-radius:6px;background:var(--grad-primary);box-shadow:0 4px 12px rgba(37,99,235,0.5)}
+  .p2 .dot.alt{background:transparent;border:1px solid rgba(14,165,233,0.4)}
+
+  /* PATTERN 3 · Diagonal stripes with brand text */
+  .p3{background:repeating-linear-gradient(45deg,#2563eb 0px,#2563eb 60px,#0ea5e9 60px,#0ea5e9 120px)}
+  .p3::after{content:"RJ · RJ · RJ · RJ · RJ · RJ · RJ · RJ · RJ · RJ · RJ · RJ · RJ · RJ · RJ · RJ · RJ · RJ · RJ · RJ · RJ";
+    position:absolute;inset:0;
+    color:rgba(255,255,255,0.35);
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:22px;
+    letter-spacing:6px;
+    line-height:2.4;
+    text-align:center;
+    transform:rotate(45deg) scale(1.6);
+    transform-origin:center;
+    word-spacing:20px;
+  }
+
+  /* PATTERN 4 · Tissue paper (light) */
+  .p4{background:#eff6ff;background-image:radial-gradient(circle,rgba(37,99,235,0.4) 1.5px,transparent 1.5px),radial-gradient(circle,rgba(14,165,233,0.3) 2px,transparent 2px);background-size:32px 32px,48px 48px;background-position:0 0,16px 16px}
+  .p4::after{content:"";position:absolute;inset:0;background:linear-gradient(135deg,transparent,rgba(37,99,235,0.08),transparent)}
+
+  /* PATTERN 5 · Confetti */
+  .p5{background:#fff;position:relative}
+  .p5 svg{position:absolute;inset:0;width:100%;height:100%}
+
+  /* PATTERN 6 · Bold quote repeat */
+  .p6{background:var(--grad-primary);position:relative}
+  .p6::after{content:"BUILT · SYSTEMS · BUILT · SYSTEMS · BUILT · SYSTEMS · BUILT · SYSTEMS · BUILT · SYSTEMS · BUILT · SYSTEMS · BUILT · SYSTEMS · BUILT · SYSTEMS · BUILT · SYSTEMS · BUILT · SYSTEMS · BUILT · SYSTEMS · BUILT · SYSTEMS";
+    position:absolute;inset:-20px;
+    color:rgba(255,255,255,0.28);
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:28px;
+    letter-spacing:4px;
+    line-height:2.2;
+    text-align:center;
+    transform:rotate(-8deg);
+    word-spacing:12px;
+  }
+  .p6::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 70% 30%,rgba(255,255,255,0.15) 0%,transparent 55%)}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="lbl">Wrapping Paper 01 · RJ Monogram Repeat · Navy</div>
+  <div class="sheet p1"></div>
+</div>
+
+<div class="card">
+  <div class="lbl">Wrapping Paper 02 · Grid + Brand Dots · Blueprint</div>
+  <div class="sheet p2">
+    <div class="dots">
+      <div class="dot"></div><div class="dot alt"></div><div class="dot"></div><div class="dot alt"></div><div class="dot"></div><div class="dot alt"></div>
+      <div class="dot alt"></div><div class="dot"></div><div class="dot alt"></div><div class="dot"></div><div class="dot alt"></div><div class="dot"></div>
+      <div class="dot"></div><div class="dot alt"></div><div class="dot"></div><div class="dot alt"></div><div class="dot"></div><div class="dot alt"></div>
+      <div class="dot alt"></div><div class="dot"></div><div class="dot alt"></div><div class="dot"></div><div class="dot alt"></div><div class="dot"></div>
+      <div class="dot"></div><div class="dot alt"></div><div class="dot"></div><div class="dot alt"></div><div class="dot"></div><div class="dot alt"></div>
+      <div class="dot alt"></div><div class="dot"></div><div class="dot alt"></div><div class="dot"></div><div class="dot alt"></div><div class="dot"></div>
+      <div class="dot"></div><div class="dot alt"></div><div class="dot"></div><div class="dot alt"></div><div class="dot"></div><div class="dot alt"></div>
+      <div class="dot alt"></div><div class="dot"></div><div class="dot alt"></div><div class="dot"></div><div class="dot alt"></div><div class="dot"></div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Wrapping Paper 03 · Diagonal Stripes + Brand · Bold</div>
+  <div class="sheet p3"></div>
+</div>
+
+<div class="card">
+  <div class="lbl">Wrapping Paper 04 · Tissue Paper · Light Dots</div>
+  <div class="sheet p4"></div>
+</div>
+
+<div class="card">
+  <div class="lbl">Wrapping Paper 05 · Confetti · Client celebration wrap</div>
+  <div class="sheet p5">
+    <svg viewBox="0 0 400 540" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <pattern id="confetti" x="0" y="0" width="120" height="120" patternUnits="userSpaceOnUse">
+          <rect x="8" y="12" width="16" height="4" fill="#2563eb" transform="rotate(20 16 14)"/>
+          <rect x="40" y="30" width="16" height="4" fill="#0ea5e9" transform="rotate(-35 48 32)"/>
+          <circle cx="72" cy="20" r="3" fill="#1e3a8a"/>
+          <rect x="90" y="60" width="14" height="4" fill="#2563eb" transform="rotate(60 97 62)"/>
+          <circle cx="20" cy="70" r="4" fill="#0ea5e9"/>
+          <rect x="55" y="88" width="16" height="4" fill="#1e3a8a" transform="rotate(-15 63 90)"/>
+          <circle cx="100" cy="100" r="3" fill="#2563eb"/>
+          <rect x="10" y="105" width="14" height="4" fill="#0ea5e9" transform="rotate(45 17 107)"/>
+        </pattern>
+      </defs>
+      <rect x="0" y="0" width="400" height="540" fill="url(#confetti)"/>
+    </svg>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Wrapping Paper 06 · Brand Quote · Blue Gradient</div>
+  <div class="sheet p6"></div>
+</div>
+
+</body>
+</html>

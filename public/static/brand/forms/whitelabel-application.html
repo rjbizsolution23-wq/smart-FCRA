@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>White-Label Fleet Application — RJ Business Solutions</title>
+<link rel="stylesheet" href="../brand.css">
+<link rel="stylesheet" href="forms.css">
+</head>
+<body class="forms-page">
+
+<div class="form-shell" id="app">
+  <div class="form-header">
+    <div class="brand">
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+      <div><div class="n">RJ Business Solutions</div><div class="t">White-Label Fleet Application</div></div>
+    </div>
+    <div class="save-tag">Auto-saving</div>
+  </div>
+
+  <div class="form-title-block">
+    <div class="kicker">● Enterprise · Application-Only · $10K+/mo</div>
+    <h1>Ship the RJ system<br/><span>under your brand.</span></h1>
+    <div class="sub">This is our top-tier program. Selective. We only accept operators who can deploy at scale. Application review takes 5 business days.</div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-steps">
+      <div class="fill-line" id="fill-line" style="width:0%"></div>
+      <div class="pstep active" data-step="1"><div class="circ">1</div><div class="lbl">Company</div></div>
+      <div class="pstep" data-step="2"><div class="circ">2</div><div class="lbl">Vertical</div></div>
+      <div class="pstep" data-step="3"><div class="circ">3</div><div class="lbl">Distribution</div></div>
+      <div class="pstep" data-step="4"><div class="circ">4</div><div class="lbl">Investment</div></div>
+      <div class="pstep" data-step="5"><div class="circ">5</div><div class="lbl">Contact</div></div>
+    </div>
+  </div>
+
+  <form onsubmit="return false">
+
+    <div class="step-panel active" data-panel="1">
+      <h2><span class="step-of">Step 01 of 05</span>Your company</h2>
+      <div class="step-sub">Who are we potentially fleet-partnering with?</div>
+      <div class="field-row">
+        <div class="field"><label>Company Legal Name <span class="req">*</span></label><input type="text" name="companyName" required/><div class="error">Required</div></div>
+        <div class="field"><label>DBA / Brand Name</label><input type="text" name="brand"/></div>
+      </div>
+      <div class="field-row three">
+        <div class="field"><label>Entity Type</label><select name="entity"><option value="">Select…</option><option>LLC</option><option>S-Corp</option><option>C-Corp</option><option>Partnership</option></select></div>
+        <div class="field"><label>Years Operating <span class="req">*</span></label><select name="years" required><option value="">Select…</option><option>0–1</option><option>1–3</option><option>3–5</option><option>5–10</option><option>10+</option></select><div class="error">Required</div></div>
+        <div class="field"><label>Team Size</label><select name="teamSize"><option value="">Select…</option><option>Solo</option><option>2–5</option><option>6–15</option><option>16–50</option><option>50+</option></select></div>
+      </div>
+      <div class="field"><label>Website / Existing Brand URL</label><input type="text" name="website" placeholder="https://"/></div>
+    </div>
+
+    <div class="step-panel" data-panel="2">
+      <h2><span class="step-of">Step 02 of 05</span>Vertical &amp; positioning</h2>
+      <div class="step-sub">Where you'd deploy the white-label system.</div>
+      <div class="field">
+        <label>Primary vertical <span class="req">*</span></label>
+        <div class="tile-select">
+          <div class="tile-opt" data-single="vertical" data-val="credit"><div class="icon">V 01</div><div class="t">Credit Repair</div><div class="d">Consumer credit services</div></div>
+          <div class="tile-opt" data-single="vertical" data-val="fintech"><div class="icon">V 02</div><div class="t">FinTech / Lending</div><div class="d">Business or consumer lending</div></div>
+          <div class="tile-opt" data-single="vertical" data-val="agency"><div class="icon">V 03</div><div class="t">Marketing Agency</div><div class="d">Service resellers</div></div>
+          <div class="tile-opt" data-single="vertical" data-val="coaching"><div class="icon">V 04</div><div class="t">Coaching / Consulting</div><div class="d">Client management</div></div>
+          <div class="tile-opt" data-single="vertical" data-val="realestate"><div class="icon">V 05</div><div class="t">Real Estate</div><div class="d">Broker / brokerage tech</div></div>
+          <div class="tile-opt" data-single="vertical" data-val="other"><div class="icon">V 06</div><div class="t">Other</div><div class="d">Tell us more below</div></div>
+        </div>
+      </div>
+      <div class="field"><label>Existing client base size</label>
+        <div class="chip-group" data-single="clients">
+          <div class="chip" data-val="0-50">0–50</div>
+          <div class="chip" data-val="50-200">50–200</div>
+          <div class="chip" data-val="200-500">200–500</div>
+          <div class="chip" data-val="500-1500">500–1500</div>
+          <div class="chip" data-val="1500-plus">1500+</div>
+        </div>
+      </div>
+      <div class="field"><label>Positioning statement · what makes you different?</label><textarea name="positioning" placeholder="One paragraph · who your customers are + why they pick you."></textarea></div>
+    </div>
+
+    <div class="step-panel" data-panel="3">
+      <h2><span class="step-of">Step 03 of 05</span>Distribution &amp; capacity</h2>
+      <div class="step-sub">How fast could you onboard new users into a white-label platform?</div>
+      <div class="field-row">
+        <div class="field"><label>New clients / month (current)</label><select name="newClients"><option value="">Select…</option><option>0–10</option><option>10–30</option><option>30–75</option><option>75–200</option><option>200+</option></select></div>
+        <div class="field"><label>Monthly ad + marketing spend</label><select name="adSpend"><option value="">Select…</option><option>Under $5K</option><option>$5K–$25K</option><option>$25K–$75K</option><option>$75K–$200K</option><option>$200K+</option></select></div>
+      </div>
+      <div class="field"><label>Distribution channels (multi)</label>
+        <div class="chip-group" data-multi="channels">
+          <div class="chip" data-val="meta">Meta / IG ads</div>
+          <div class="chip" data-val="google">Google ads</div>
+          <div class="chip" data-val="youtube">YouTube</div>
+          <div class="chip" data-val="tiktok">TikTok organic</div>
+          <div class="chip" data-val="affiliates">Affiliate network</div>
+          <div class="chip" data-val="referral">Referral partners</div>
+          <div class="chip" data-val="events">Events / speaking</div>
+          <div class="chip" data-val="sms">SMS lists</div>
+        </div>
+      </div>
+      <div class="field"><label>Ready-to-onboard existing users into a new platform?</label>
+        <div class="chip-group" data-single="migration">
+          <div class="chip" data-val="all">Yes · migrate all existing</div>
+          <div class="chip" data-val="new">New users only</div>
+          <div class="chip" data-val="hybrid">Hybrid rollout</div>
+          <div class="chip" data-val="unsure">Not sure yet</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-panel" data-panel="4">
+      <h2><span class="step-of">Step 04 of 05</span>Investment &amp; timeline</h2>
+      <div class="step-sub">White-label starts at $10K/mo + rev share. Setup fee based on scope.</div>
+      <div class="field">
+        <label>Setup budget available</label>
+        <div class="tile-select three">
+          <div class="tile-opt" data-single="setup" data-val="under-25k"><div class="icon">Setup 01</div><div class="t">Under $25K</div><div class="d">Standard fleet template</div></div>
+          <div class="tile-opt" data-single="setup" data-val="25-75k"><div class="icon">Setup 02</div><div class="t">$25K–$75K</div><div class="d">Custom brand + integrations</div></div>
+          <div class="tile-opt" data-single="setup" data-val="75-plus"><div class="icon">Setup 03</div><div class="t">$75K+</div><div class="d">Full custom deployment</div></div>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Monthly commitment comfort</label><select name="monthly"><option value="">Select…</option><option>$10K/mo</option><option>$15K–$25K/mo</option><option>$25K–$50K/mo</option><option>$50K+/mo</option></select></div>
+        <div class="field"><label>Target launch date</label><select name="launchDate"><option value="">Select…</option><option>Next 30 days</option><option>Next quarter</option><option>Next 6 months</option><option>Just exploring</option></select></div>
+      </div>
+      <div class="field"><label>Anything else · deal-shaping context</label><textarea name="dealNotes" placeholder="Revenue share expectations · exclusivity · integrations required · existing tech stack…"></textarea></div>
+    </div>
+
+    <div class="step-panel" data-panel="5">
+      <h2><span class="step-of">Step 05 of 05</span>Contact + submit</h2>
+      <div class="step-sub">Rick reviews every white-label application personally.</div>
+      <div class="field-row">
+        <div class="field"><label>Your Name <span class="req">*</span></label><input type="text" name="fullName" required/><div class="error">Required</div></div>
+        <div class="field"><label>Your Role <span class="req">*</span></label><input type="text" name="role" required placeholder="Founder · CEO · Ops Lead"/><div class="error">Required</div></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Email <span class="req">*</span></label><input type="email" name="email" required/><div class="error">Valid email required</div></div>
+        <div class="field"><label>Phone <span class="req">*</span></label><input type="tel" name="phone" required/><div class="error">Required</div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:6px">
+        <label class="cb-row"><input type="checkbox" name="nda" required/><div class="cb-t"><b>Mutual NDA consent (required)</b> · I understand information shared during this evaluation is confidential per RJ's standard Mutual NDA. Both parties bound for 3 years.</div></label>
+        <label class="cb-row"><input type="checkbox" name="tcpa"/><div class="cb-t">Contact consent · call / text / email regarding this application.</div></label>
+      </div>
+      <div class="turnstile-placeholder"><b>Cloudflare Turnstile</b> · Silent check on submit.</div>
+    </div>
+
+    <div class="success-state" id="success">
+      <div class="check">◆</div>
+      <h2>Application <span>received.</span></h2>
+      <p>Rick reviews every white-label application personally. Expect a response within <b>5 business days</b> — yes with next-steps, or a straight no with why.</p>
+      <div class="next-steps">
+        <h4>● Evaluation Process</h4>
+        <ol>
+          <li>Application review by Rick + operations lead</li>
+          <li>If shortlisted · 45-min strategic call</li>
+          <li>Custom scope + LOI (Letter of Intent) drafted</li>
+          <li>Setup begins within 10 business days of signed LOI</li>
+        </ol>
+      </div>
+      <p style="font-size:12px;color:var(--rj-muted-text)">Reference № <b id="refnum" style="color:var(--rj-navy);font-family:ui-monospace,Menlo,monospace">—</b></p>
+    </div>
+
+    <div class="form-actions" id="actions">
+      <button type="button" class="btn ghost" id="backBtn" style="visibility:hidden">← Back</button>
+      <button type="button" class="btn primary" id="nextBtn">Next Step →</button>
+    </div>
+  </form>
+
+  <div class="backend-note"><b>// Backend</b> · POST /api/lead/whitelabel → D1 <code>enterprise_applications</code> + Slack ping to Rick + auto-schedules review call.</div>
+</div>
+
+<script>
+(() => {
+  const FORM_ID='whitelabel-app'; const TOTAL=5; let step=1;
+  const state={form:FORM_ID,channels:[]};
+  try{Object.assign(state,JSON.parse(localStorage.getItem('rj-'+FORM_ID)||'{}'));}catch(e){}
+  const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
+  const save=()=>localStorage.setItem('rj-'+FORM_ID,JSON.stringify(state));
+  function goStep(n){
+    step=Math.max(1,Math.min(TOTAL,n));
+    $$('.step-panel').forEach(p=>p.classList.toggle('active',+p.dataset.panel===step));
+    $$('.pstep').forEach(ps=>{const s=+ps.dataset.step;ps.classList.toggle('active',s===step);ps.classList.toggle('done',s<step);});
+    $('#fill-line').style.width=((step-1)/(TOTAL-1))*100+'%';
+    $('#backBtn').style.visibility=step===1?'hidden':'visible';
+    $('#nextBtn').textContent=step===TOTAL?'Submit Application →':'Next Step →';
+  }
+  function validate(){
+    let ok=true;
+    const panel=document.querySelector(`.step-panel[data-panel="${step}"]`);
+    panel.querySelectorAll('input[required],select[required]').forEach(el=>{
+      const f=el.closest('.field'); if(!el.value?.trim()||(el.type==='email'&&!/^\S+@\S+\.\S+$/.test(el.value))){f?.classList.add('err');ok=false;}else f?.classList.remove('err');
+    });
+    if(step===2&&!state.vertical)ok=false;
+    if(step===4&&!state.setup)ok=false;
+    if(step===TOTAL&&!panel.querySelector('input[name="nda"]').checked)ok=false;
+    return ok;
+  }
+  $('#nextBtn').onclick=()=>{
+    const panel=document.querySelector(`.step-panel[data-panel="${step}"]`);
+    panel.querySelectorAll('input,select,textarea').forEach(el=>{if(el.type==='checkbox')state[el.name]=el.checked;else if(el.name)state[el.name]=el.value;});
+    save(); if(!validate())return;
+    if(step===TOTAL)submit(); else goStep(step+1);
+  };
+  $('#backBtn').onclick=()=>goStep(step-1);
+  document.addEventListener('click',e=>{
+    const chip=e.target.closest('.chip'); if(chip){
+      const group=chip.closest('[data-multi]')||chip.closest('[data-single]'); if(!group)return;
+      const key=group.dataset.multi||group.dataset.single;
+      if(group.dataset.multi){chip.classList.toggle('selected');state[key]=[...group.querySelectorAll('.chip.selected')].map(c=>c.dataset.val);}
+      else {group.querySelectorAll('.chip').forEach(c=>c.classList.toggle('selected',c===chip));state[key]=chip.dataset.val;}
+      save();
+    }
+    const tile=e.target.closest('.tile-opt'); if(tile){
+      const key=tile.dataset.single;
+      tile.parentElement.querySelectorAll('.tile-opt').forEach(t=>t.classList.toggle('selected',t===tile));
+      state[key]=tile.dataset.val; save();
+    }
+  });
+  function submit(){
+    const ref='RJ-WL-'+Date.now().toString(36).toUpperCase();
+    state.ref = ref; state.submittedAt = new Date().toISOString(); save();
+    try { fetch('/api/public/lead/' + FORM_ID, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(state) }).catch(()=>{}); } catch(e){}
+    console.log('[RJ WHITELABEL APP]',state);
+    $('#refnum').textContent=ref;
+    $('#success').classList.add('active');
+    document.querySelectorAll('.step-panel').forEach(p=>p.classList.remove('active'));
+    $('#actions').style.display='none';
+    document.querySelector('.progress-wrap').style.display='none';
+  }
+  document.querySelectorAll('input[name],select[name],textarea[name]').forEach(el=>{if(state[el.name]!==undefined){if(el.type==='checkbox')el.checked=!!state[el.name];else el.value=state[el.name];}});
+  document.querySelectorAll('[data-multi]').forEach(g=>{const key=g.dataset.multi;if(Array.isArray(state[key]))g.querySelectorAll('.chip').forEach(c=>c.classList.toggle('selected',state[key].includes(c.dataset.val)));});
+  document.querySelectorAll('[data-single]').forEach(g=>{const key=g.dataset.single;if(state[key])g.querySelectorAll('.chip, .tile-opt').forEach(c=>c.classList.toggle('selected',c.dataset.val===state[key]));});
+  goStep(step);
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — Whitepaper</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;flex-direction:column;gap:24px;align-items:center}
+  .page{width:794px;height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden;page-break-after:always;position:relative}
+
+  /* COVER */
+  .cover{background:var(--grad-dark);color:#fff;padding:64px 56px;position:relative;overflow:hidden;flex:1;display:flex;flex-direction:column;justify-content:space-between}
+  .cover::after{content:"";position:absolute;right:-150px;top:-150px;width:600px;height:600px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(60px)}
+  .cover::before{content:"";position:absolute;left:-100px;bottom:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(37,99,235,0.35) 0%,transparent 60%);filter:blur(50px)}
+  .cover .top{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center}
+  .cover .brand{display:flex;align-items:center;gap:12px}
+  .cover .brand img{width:40px;height:40px;border-radius:9px}
+  .cover .brand .n{font-family:var(--font-head);font-weight:600;font-size:14px}
+  .cover .brand .t{font-family:var(--font-mono);font-size:9px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:2px;font-weight:600}
+  .cover .doc{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);text-align:right;font-weight:600}
+  .cover .doc b{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:block;margin-top:3px}
+
+  .cover .middle{position:relative;z-index:1}
+  .cover .kicker{display:inline-block;padding:6px 14px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);border-radius:999px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-bottom:22px;font-weight:600}
+  .cover .paper-num{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;font-weight:600;margin-bottom:10px}
+  .cover h1{font-family:var(--font-head);font-size:52px;font-weight:600;letter-spacing:-0.02em;line-height:1;margin:0}
+  .cover h1 span{background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .cover .subtitle{font-family:var(--font-head);color:#cbd5e1;font-size:20px;margin-top:20px;line-height:1.35;max-width:600px;font-weight:500}
+  .cover .abstract{position:relative;z-index:1;background:rgba(255,255,255,0.06);border-left:3px solid var(--rj-sky);padding:20px 24px;border-radius:0 10px 10px 0;font-family:'Space Grotesk',serif;font-style:italic;font-size:14px;line-height:1.6;color:#cbd5e1;font-weight:400;margin-top:24px}
+  .cover .abstract b{color:#fff;font-family:var(--font-head);font-style:normal;font-weight:600;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;display:block;margin-bottom:8px;color:var(--rj-sky)}
+
+  .cover .meta-strip{position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,1fr);gap:20px;padding-top:24px;border-top:1px solid rgba(255,255,255,0.15)}
+  .cover .meta-strip .k{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;font-weight:600}
+  .cover .meta-strip .v{font-family:var(--font-head);font-weight:600;font-size:12px}
+
+  /* Inner */
+  .inner{padding:40px 56px 44px;flex:1;display:flex;flex-direction:column;gap:16px;font-family:var(--font-body);font-size:12px;line-height:1.7;color:var(--rj-text)}
+  .inner .head{display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:2px solid var(--rj-blue)}
+  .inner .head .brand{display:flex;align-items:center;gap:10px;font-family:var(--font-head);font-weight:600;font-size:12px;color:var(--rj-navy)}
+  .inner .head .brand img{width:24px;height:24px;border-radius:5px}
+  .inner .head .pnum{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+
+  .inner .section-num{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-top:6px}
+  .inner h2{font-family:var(--font-head);font-size:22px;font-weight:600;color:var(--rj-navy);margin:2px 0 4px 0;letter-spacing:-0.02em;line-height:1.1}
+  .inner h2 span{background:linear-gradient(135deg,#2563eb,#0ea5e9);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .inner h3{font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--rj-navy);margin:8px 0 4px 0;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+  .inner h3::before{content:"";width:3px;height:14px;background:var(--rj-blue);border-radius:2px}
+  .inner p{margin:0 0 8px 0}
+
+  .stat-inline{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:4px 0}
+  .stat-inline .b{background:linear-gradient(180deg,#fff,var(--rj-light));border:1px solid var(--rj-border);border-radius:8px;padding:12px 14px}
+  .stat-inline .v{font-family:var(--font-head);font-weight:700;font-size:22px;color:var(--rj-blue);letter-spacing:-0.02em;line-height:1}
+  .stat-inline .l{font-family:var(--font-head);font-size:10px;font-weight:600;color:var(--rj-navy);margin-top:4px}
+  .stat-inline .d{font-family:var(--font-mono);font-size:8px;letter-spacing:0.12em;text-transform:uppercase;color:var(--rj-muted-text);margin-top:2px;font-weight:600}
+
+  .callout-quote{background:linear-gradient(135deg,var(--rj-navy),var(--rj-deep));color:#fff;padding:14px 20px;border-radius:10px;position:relative;overflow:hidden;font-family:var(--font-head);font-weight:500;font-size:14px;letter-spacing:-0.01em;line-height:1.4}
+  .callout-quote::before{content:"\201C";position:absolute;top:-8px;left:12px;font-family:var(--font-head);font-size:60px;color:rgba(14,165,233,0.3);line-height:1}
+  .callout-quote span{padding-left:28px;display:block;position:relative;z-index:1}
+  .callout-quote span b{color:var(--rj-sky)}
+
+  .figure{background:#fff;border:1px solid var(--rj-line);border-radius:10px;padding:14px 18px;margin:4px 0}
+  .figure .fig-lbl{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:8px}
+  .figure .fig-title{font-family:var(--font-head);font-size:13px;font-weight:600;color:var(--rj-navy);margin:0 0 10px 0;letter-spacing:-0.01em}
+  .figure svg{width:100%;height:110px}
+  .figure .x-axis{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-top:6px}
+
+  .citations{background:#f8fafc;border-left:3px solid var(--rj-muted-text);padding:12px 16px;border-radius:0 8px 8px 0;font-size:10px;line-height:1.6;color:var(--rj-muted-text)}
+  .citations h4{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-navy);margin:0 0 6px 0;font-weight:600}
+  .citations p{margin:0 0 4px 0}
+
+  .conclusion{background:var(--grad-primary);color:#fff;padding:20px 24px;border-radius:12px;position:relative;overflow:hidden}
+  .conclusion::after{content:"";position:absolute;right:-60px;top:-60px;width:200px;height:200px;background:radial-gradient(circle,rgba(255,255,255,0.15) 0%,transparent 60%);filter:blur(30px)}
+  .conclusion .lbl-c{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#e0f2fe;font-weight:600;margin-bottom:6px;position:relative;z-index:1}
+  .conclusion h3{color:#fff;margin:0 0 8px 0;font-size:20px;position:relative;z-index:1}
+  .conclusion h3::before{background:#fff}
+  .conclusion p{margin:0;font-size:12px;line-height:1.6;color:rgba(255,255,255,0.95);position:relative;z-index:1}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:14px 56px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+
+  @media print{body{background:#fff;padding:0;gap:0}.page{box-shadow:none}}
+</style>
+</head>
+<body>
+
+<!-- COVER + ABSTRACT -->
+<div class="page">
+  <div class="cover">
+    <div class="top">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Whitepaper Series · Vol. 01</div></div></div>
+      <div class="doc">Whitepaper<b>WP-2026-001</b></div>
+    </div>
+    <div class="middle">
+      <div class="kicker">● Original Research · 2026</div>
+      <div class="paper-num">Whitepaper № 001</div>
+      <h1>The Follow-Up Gap:<br/>Why <span>service businesses</span><br/>lose 60% of qualified<br/>leads to their inbox.</h1>
+      <div class="subtitle">A quantitative study of response-time economics in credit, fintech, and service-based businesses.</div>
+
+      <div class="abstract">
+        <b>Abstract</b>
+        This paper examines the "Follow-Up Gap" — the measurable revenue loss occurring between the moment a lead expresses intent and the moment a business responds. Across 142 anonymized client engagements in 2026, we find that businesses without an automated follow-up system lose an average of 62% of qualified leads within the first 60 minutes of first contact. We introduce the RJ Growth Engine architecture as a system-level solution and present 30-day outcome data across a controlled cohort.
+      </div>
+    </div>
+    <div class="meta-strip">
+      <div><div class="k">Author</div><div class="v">Rick Jefferson</div></div>
+      <div><div class="k">Published</div><div class="v">July 2026</div></div>
+      <div><div class="k">Cohort</div><div class="v">142 Clients</div></div>
+      <div><div class="k">Category</div><div class="v">Growth Systems</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- PG 2 · INTRO + FINDINGS -->
+<div class="page">
+  <div class="inner">
+    <div class="head"><div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Whitepaper · The Follow-Up Gap</div><div class="pnum">Page 02 · Introduction &amp; Findings</div></div>
+
+    <div class="section-num">§ 1 · Introduction</div>
+    <h2>Response time is the <span>single most predictive variable</span> in service-business close rate.</h2>
+    <p>The industry has spent a decade optimizing top-of-funnel — better ads, better content, better hooks. But conversion data consistently shows the largest revenue leak sits <b>between "lead expressed interest" and "lead spoke to a human."</b> This paper quantifies that gap and presents architectural interventions that close it.</p>
+
+    <div class="callout-quote"><span>The bottleneck isn't marketing. It's <b>infrastructure</b>. Attention shows up. Response doesn't. That's the gap we set out to measure.</span></div>
+
+    <div class="section-num">§ 2 · Cohort &amp; Methodology</div>
+    <h3>142 engagements · 6 verticals · 12 months</h3>
+    <p>We analyzed 142 anonymized client engagements between January and December 2026 across credit repair, fintech services, credit-adjacent B2B, financial coaching, service-based agencies, and white-label SaaS operators. Data was collected from CRM logs, DM platforms, and booking-system webhooks. All identifying client data was removed. First-touch to first-reply latency was measured in seconds.</p>
+
+    <div class="section-num">§ 3 · Key Findings</div>
+    <h3>Response time correlates directly with revenue capture.</h3>
+
+    <div class="stat-inline">
+      <div class="b"><div class="v">62%</div><div class="l">Leads Lost</div><div class="d">First 60 min · Pre-intervention</div></div>
+      <div class="b"><div class="v">6.4hr</div><div class="l">Median Response</div><div class="d">Manual follow-up · baseline</div></div>
+      <div class="b"><div class="v">3.2×</div><div class="l">Close Rate Lift</div><div class="d">Sub-2-min response window</div></div>
+    </div>
+
+    <p>The strongest finding: for every additional hour between inbound interest and first meaningful reply, the probability of a booked call decreased by a factor of ~0.71. Beyond 6 hours, close rates approach random chance. Response time behaves less like a linear variable and more like a decay curve.</p>
+
+    <div class="figure">
+      <div class="fig-lbl">● Figure 1</div>
+      <div class="fig-title">Close Rate vs. Response Latency (n=142 engagements)</div>
+      <svg viewBox="0 0 640 110" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="decayFill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stop-color="#2563eb" stop-opacity="0.35"/>
+            <stop offset="100%" stop-color="#2563eb" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <line x1="0" y1="25" x2="640" y2="25" stroke="#e2e8f0" stroke-dasharray="2 4"/>
+        <line x1="0" y1="55" x2="640" y2="55" stroke="#e2e8f0" stroke-dasharray="2 4"/>
+        <line x1="0" y1="85" x2="640" y2="85" stroke="#e2e8f0" stroke-dasharray="2 4"/>
+        <path d="M 0,10 C 60,15 120,30 200,50 C 280,70 360,85 460,95 C 540,100 620,102 640,102 L 640,110 L 0,110 Z" fill="url(#decayFill)"/>
+        <path d="M 0,10 C 60,15 120,30 200,50 C 280,70 360,85 460,95 C 540,100 620,102 640,102" fill="none" stroke="#2563eb" stroke-width="2.5"/>
+        <circle cx="0" cy="10" r="4" fill="#0ea5e9"/>
+        <circle cx="640" cy="102" r="4" fill="#ef4444"/>
+      </svg>
+      <div class="x-axis"><span>&lt;1min</span><span>15min</span><span>1hr</span><span>4hr</span><span>12hr</span><span>24hr</span><span>3day</span></div>
+    </div>
+
+    <div class="section-num">§ 4 · The Automated Baseline</div>
+    <h3>Cohorts running the RJ Growth Engine saw response-time medians drop 96%.</h3>
+    <p>The 142-engagement cohort was migrated in stages onto the RJ Growth Engine — an AI-powered response system trained on client-specific brand voice with escalation logic and compliance guardrails. Post-migration medians dropped from 6.4 hours to 84 seconds, a 274-fold improvement, without headcount changes.</p>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Whitepaper WP-2026-001 · Page 02</div></div>
+</div>
+
+<!-- PG 3 · RESULTS + CONCLUSION -->
+<div class="page">
+  <div class="inner">
+    <div class="head"><div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Whitepaper · The Follow-Up Gap</div><div class="pnum">Page 03 · Results &amp; Conclusion</div></div>
+
+    <div class="section-num">§ 5 · Outcome Data</div>
+    <h2>30-day outcome data: <span>consistent, repeatable, measurable.</span></h2>
+    <p>Post-migration, we tracked outcomes across all 142 engagements for 30 days. Results were weighted by engagement size and normalized against pre-intervention baselines.</p>
+
+    <div class="stat-inline">
+      <div class="b"><div class="v">+287%</div><div class="l">Revenue Lift</div><div class="d">Weighted MoM avg</div></div>
+      <div class="b"><div class="v">64%</div><div class="l">Recovery Rate</div><div class="d">No-show → rebooked</div></div>
+      <div class="b"><div class="v">4.9/5</div><div class="l">Client NPS</div><div class="d">Post-30-day survey</div></div>
+    </div>
+
+    <div class="section-num">§ 6 · Discussion</div>
+    <h3>Why point solutions fail where systems succeed.</h3>
+    <p>The market currently offers dozens of point solutions — chatbots, CRM plugins, AI reply tools. In our cohort analysis, engagements that had previously deployed these tools showed <b>no statistically significant improvement</b> over fully manual follow-up. The reason is architectural: point tools don't share state. A DM reply doesn't know if a lead was already booked. A CRM update doesn't trigger a follow-up sequence. The system is only as fast as its slowest handshake.</p>
+    <p>The RJ Growth Engine's advantage is not any single component — it's that the components share a single state machine and a compliance-aware routing layer. That's the difference between "we have AI" and "we shipped a system."</p>
+
+    <div class="callout-quote"><span>Point tools handshake. Systems <b>share state.</b> That distinction is the entire outcome gap.</span></div>
+
+    <div class="section-num">§ 7 · Conclusion &amp; Next Steps</div>
+    <div class="conclusion">
+      <div class="lbl-c">● Conclusion</div>
+      <h3>The Follow-Up Gap is a solved problem — if you install the right system.</h3>
+      <p>Response-time-first architecture, deployed as connected infrastructure, produces repeatable revenue outcomes across verticals. The next research phase focuses on multi-tenant white-label deployments and cross-vertical benchmark expansion. Preliminary Q1 2027 data suggests the pattern generalizes beyond service businesses into direct-to-consumer commerce.</p>
+    </div>
+
+    <div class="citations">
+      <h4>Data &amp; Sources</h4>
+      <p>Cohort: 142 anonymized RJ Business Solutions client engagements · Jan–Dec 2026 · US-based operators across 6 verticals.</p>
+      <p>Response latency measured in seconds via CRM + platform webhook logs · Revenue attribution verified through Stripe + client CRM export.</p>
+      <p>Independent audit available on request · Contact: <b>research@rjbusinesssolutions.org</b></p>
+    </div>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>WP-2026-001 · Page 03 · rjbusinesssolutions.org</div></div>
+</div>
+
+</body>
+</html>

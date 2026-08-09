@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — NDA</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;justify-content:center}
+  .sheet{width:794px;min-height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden;position:relative}
+
+  .top{background:var(--grad-dark);color:#fff;padding:32px 56px 24px;position:relative;overflow:hidden}
+  .top::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .top .row{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1;margin-bottom:12px}
+  .top .brand{display:flex;align-items:center;gap:12px}
+  .top .brand img{width:40px;height:40px;border-radius:9px}
+  .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:15px}
+  .top .brand .t{font-family:var(--font-mono);font-size:9px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:2px;font-weight:600}
+  .top .doc{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);text-align:right;font-weight:600}
+  .top .doc b{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:block;margin-top:2px}
+  .top h1{font-family:var(--font-head);font-size:36px;font-weight:600;letter-spacing:-0.02em;margin:0;position:relative;z-index:1;line-height:1}
+  .top h1 span{color:var(--rj-sky)}
+  .top .sub{font-family:var(--font-head);color:#cbd5e1;font-size:13px;margin-top:6px;position:relative;z-index:1}
+  .thin{height:3px;background:var(--grad-primary)}
+
+  .confidential{position:absolute;top:100px;right:24px;background:var(--rj-danger);color:#fff;padding:6px 16px 6px 22px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;transform:rotate(4deg);border-radius:4px;z-index:2}
+  .confidential::before{content:"● ";color:#fff}
+
+  .body{padding:32px 56px;flex:1;display:flex;flex-direction:column;gap:14px;font-family:var(--font-body);font-size:11px;line-height:1.65;color:var(--rj-text)}
+
+  .meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;background:var(--rj-light);border-radius:10px;padding:12px 16px}
+  .meta .k{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:3px}
+  .meta .v{font-family:var(--font-head);font-weight:600;font-size:12px;color:var(--rj-navy)}
+
+  .party{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .party-c{background:#fff;border:1px solid var(--rj-line);border-left:3px solid var(--rj-blue);border-radius:8px;padding:12px 16px}
+  .party-c .lbl-p{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:5px}
+  .party-c .n{font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy);letter-spacing:-0.01em}
+  .party-c .a{font-size:10px;color:var(--rj-muted-text);margin-top:2px;line-height:1.5}
+
+  h3{font-family:var(--font-head);font-size:13px;font-weight:600;color:var(--rj-navy);margin:4px 0 4px 0;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+  h3::before{content:"";width:3px;height:14px;background:var(--rj-blue);border-radius:2px}
+
+  p{margin:0 0 6px 0}
+  p b{color:var(--rj-navy);font-family:var(--font-head);font-weight:600}
+
+  .sig-block{margin-top:auto;padding-top:16px;border-top:1px solid var(--rj-line);display:grid;grid-template-columns:1fr 1fr;gap:28px}
+  .sig-line{border-bottom:1.5px solid var(--rj-navy);padding-bottom:5px;font-family:'Space Grotesk',serif;font-style:italic;font-size:20px;color:var(--rj-blue);font-weight:500;min-height:32px}
+  .sig-meta{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);margin-top:5px;font-weight:600}
+  .sig-meta b{color:var(--rj-navy);display:block;margin-top:2px;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:600}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:12px 56px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+
+  @media print{body{background:#fff;padding:0}.sheet{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="top">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Mutual Non-Disclosure Agreement</div></div></div>
+      <div class="doc">Doc<b>NDA-2026-0217</b></div>
+    </div>
+    <h1>Non-Disclosure <span>Agreement.</span></h1>
+    <div class="sub">Mutual confidentiality · effective as of the Execution Date</div>
+  </div>
+  <div class="thin"></div>
+  <div class="confidential">Confidential</div>
+
+  <div class="body">
+    <div class="meta">
+      <div><div class="k">Effective Date</div><div class="v">August 7, 2026</div></div>
+      <div><div class="k">Term</div><div class="v">3 Years</div></div>
+      <div><div class="k">Governing Law</div><div class="v">New Mexico, USA</div></div>
+    </div>
+
+    <div class="party">
+      <div class="party-c">
+        <div class="lbl-p">● Party A</div>
+        <div class="n">RJ Business Solutions</div>
+        <div class="a">1342 NM 333, Tijeras NM 87059</div>
+      </div>
+      <div class="party-c">
+        <div class="lbl-p">● Party B</div>
+        <div class="n">[Counterparty Legal Name]</div>
+        <div class="a">[Counterparty Address]</div>
+      </div>
+    </div>
+
+    <div>
+      <h3>1. Purpose</h3>
+      <p>The Parties intend to explore a potential business relationship (the "Purpose") and, in doing so, may exchange confidential information. This Agreement governs that exchange.</p>
+    </div>
+
+    <div>
+      <h3>2. Confidential Information</h3>
+      <p><b>"Confidential Information"</b> means any non-public information disclosed by one Party ("Disclosing Party") to the other ("Receiving Party"), whether oral, written, or digital — including business plans, client data, financial information, source code, system architectures, proprietary workflows, credit-adjacent data, pricing, and any material marked confidential or that a reasonable person would understand to be confidential.</p>
+    </div>
+
+    <div>
+      <h3>3. Obligations of Receiving Party</h3>
+      <p>Receiving Party shall: (a) hold Confidential Information in strict confidence; (b) not disclose to any third party without prior written consent; (c) use Confidential Information solely for the Purpose; (d) apply protections no less rigorous than those used for its own comparable information (minimum: reasonable care).</p>
+    </div>
+
+    <div>
+      <h3>4. Exclusions</h3>
+      <p>Confidential Information does not include information that: (a) is or becomes public through no breach of this Agreement; (b) was known prior to disclosure without confidentiality obligation; (c) is independently developed without reference to Confidential Information; or (d) is required to be disclosed by law, provided prompt notice is given to the Disclosing Party.</p>
+    </div>
+
+    <div>
+      <h3>5. Term &amp; Return</h3>
+      <p>Obligations survive for <b>three (3) years</b> from the Effective Date. Trade secrets remain protected indefinitely. Upon written request, Receiving Party shall return or destroy all Confidential Information within 15 business days.</p>
+    </div>
+
+    <div>
+      <h3>6. General</h3>
+      <p>This Agreement is governed by the laws of the State of New Mexico. Any dispute shall be resolved by binding arbitration in Bernalillo County, NM. This Agreement is the entire understanding of the Parties regarding confidentiality and supersedes all prior communications on this subject.</p>
+    </div>
+
+    <div class="sig-block">
+      <div>
+        <div class="sig-line">Signature</div>
+        <div class="sig-meta">Party B<b>[Full Name · Title · Date]</b></div>
+      </div>
+      <div>
+        <div class="sig-line">Rick Jefferson</div>
+        <div class="sig-meta">RJ Business Solutions<b>Rick Jefferson · Founder · August 7, 2026</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>NDA-2026-0217 · Single-page · support@rjbusinesssolutions.org</div></div>
+</div>
+</body>
+</html>

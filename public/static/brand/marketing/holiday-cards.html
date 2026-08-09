@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Holiday + Birthday Cards</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:60px 40px;display:grid;grid-template-columns:1fr 1fr;gap:48px}
+  .card-wrap{}
+  .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:16px;text-align:center}
+
+  /* A2 folded card ratio (4.25 x 5.5 opened flat is 8.5x5.5) — showing front */
+  .greet{width:520px;height:680px;border-radius:16px;overflow:hidden;position:relative;box-shadow:0 30px 60px rgba(15,23,42,0.25);padding:60px 44px;display:flex;flex-direction:column;justify-content:space-between}
+
+  /* Fake fold-line hint */
+  .greet::after{content:"FOLD";position:absolute;left:50%;top:-14px;transform:translateX(-50%);font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.24em;color:#94a3b8;background:#fff;padding:0 8px;font-weight:600}
+
+  .brand-c{display:flex;align-items:center;gap:10px;position:relative;z-index:2}
+  .brand-c img{width:36px;height:36px;border-radius:8px}
+  .brand-c .n{font-family:var(--font-head);font-weight:600;font-size:13px;letter-spacing:-0.01em}
+  .brand-c .t{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;margin-top:2px;font-weight:600}
+
+  .greeting-block{position:relative;z-index:2;text-align:center}
+  .kicker-g{display:inline-block;padding:5px 12px;border-radius:999px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;margin-bottom:24px}
+  .greet h1{font-family:var(--font-head);font-size:64px;font-weight:700;letter-spacing:-0.04em;line-height:0.9;margin:0}
+
+  .sign-c{position:relative;z-index:2;text-align:center;padding-top:20px;border-top:1px solid rgba(255,255,255,0.15)}
+  .sign-c .from{font-family:'Space Grotesk',serif;font-style:italic;font-size:26px;font-weight:500;letter-spacing:-0.01em}
+  .sign-c .role{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;margin-top:4px;font-weight:600}
+
+  /* CARD 1 · HAPPY BIRTHDAY */
+  .bday{background:var(--grad-dark);color:#fff}
+  .bday::before{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(50px)}
+  .bday .confetti{position:absolute;inset:0;overflow:hidden;z-index:1}
+  .bday .confetti::before{content:"◉  ✦  ●  ◆  ◉  ✦  ●  ◆\A◆  ◉  ✦  ●  ◆  ◉  ✦  ●\A●  ◆  ◉  ✦  ●  ◆  ◉  ✦";white-space:pre;position:absolute;top:80px;left:0;right:0;text-align:center;color:rgba(14,165,233,0.3);font-size:24px;letter-spacing:24px;line-height:80px}
+  .bday .brand-c .t{color:var(--rj-sky)}
+  .bday .kicker-g{background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);color:var(--rj-sky)}
+  .bday h1 span{background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .bday .sign-c .from{color:var(--rj-sky)}
+  .bday .sign-c .role{color:#94a3b8}
+
+  /* CARD 2 · HAPPY NEW YEAR */
+  .nyr{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0f172a 100%);color:#fff}
+  .nyr::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at center top,rgba(14,165,233,0.35) 0%,transparent 55%),radial-gradient(circle at 30% 80%,rgba(37,99,235,0.3) 0%,transparent 55%);z-index:1}
+  .nyr .brand-c .t{color:var(--rj-sky)}
+  .nyr .kicker-g{background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);color:var(--rj-sky)}
+  .nyr .year-mark{position:absolute;top:220px;left:0;right:0;text-align:center;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:180px;letter-spacing:-0.05em;color:rgba(14,165,233,0.15);z-index:1;line-height:1}
+  .nyr h1 span{background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .nyr .sign-c .from{color:var(--rj-sky)}
+  .nyr .sign-c .role{color:#94a3b8}
+
+  /* CARD 3 · THANK YOU (holiday season) */
+  .thx{background:#fff;color:var(--rj-navy);border:1px solid var(--rj-line)}
+  .thx::before{content:"";position:absolute;top:0;left:0;right:0;height:8px;background:var(--grad-primary)}
+  .thx .brand-c .n{color:var(--rj-navy)}
+  .thx .brand-c .t{color:var(--rj-blue)}
+  .thx .kicker-g{background:var(--rj-light);border:1px solid var(--rj-border);color:var(--rj-blue)}
+  .thx h1 span{background:linear-gradient(135deg,#2563eb,#0ea5e9);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .thx::after{content:"FOLD";color:#94a3b8}
+  .thx .accent-mark{position:absolute;top:170px;left:50%;transform:translateX(-50%);width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#0ea5e9);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Space Grotesk',serif;font-style:italic;font-size:64px;font-weight:500;box-shadow:0 20px 40px rgba(37,99,235,0.4);z-index:2}
+  .thx .sign-c{border-top-color:var(--rj-line)}
+  .thx .sign-c .from{color:var(--rj-blue)}
+  .thx .sign-c .role{color:var(--rj-muted-text)}
+
+  /* CARD 4 · CONGRATULATIONS (client win) */
+  .cng{background:var(--grad-primary);color:#fff}
+  .cng::before{content:"";position:absolute;left:-100px;bottom:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(255,255,255,0.2) 0%,transparent 60%);filter:blur(50px)}
+  .cng::after{content:"FOLD";color:rgba(255,255,255,0.4)}
+  .cng .brand-c img{background:#fff;padding:3px}
+  .cng .brand-c .t{color:#e0f2fe}
+  .cng .kicker-g{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff}
+  .cng .sparkle{position:absolute;top:180px;left:0;right:0;text-align:center;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:120px;color:rgba(255,255,255,0.2);letter-spacing:-0.03em;z-index:1}
+  .cng h1 span{color:#fff;text-decoration:underline;text-decoration-thickness:4px;text-underline-offset:6px}
+  .cng .sign-c{border-top-color:rgba(255,255,255,0.2)}
+  .cng .sign-c .from{color:#fff}
+  .cng .sign-c .role{color:#e0f2fe}
+</style>
+</head>
+<body>
+
+<div class="card-wrap">
+  <div class="lbl">Card 01 · Happy Birthday · Client birthday sends</div>
+  <div class="greet bday">
+    <div class="confetti"></div>
+    <div class="brand-c"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">From the Team</div></div></div>
+    <div class="greeting-block">
+      <div class="kicker-g">● Cheers to Another One</div>
+      <h1>Happy<br/><span>Birthday.</span></h1>
+    </div>
+    <div class="sign-c">
+      <div class="from">— Rick &amp; the RJ Team</div>
+      <div class="role">Tijeras · NM · 2026</div>
+    </div>
+  </div>
+</div>
+
+<div class="card-wrap">
+  <div class="lbl">Card 02 · Happy New Year · Q1 send</div>
+  <div class="greet nyr">
+    <div class="brand-c"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Year in Review</div></div></div>
+    <div class="year-mark">2027</div>
+    <div class="greeting-block" style="position:relative;z-index:2">
+      <div class="kicker-g">● Here's to the Build</div>
+      <h1>Happy<br/>New <span>Year.</span></h1>
+    </div>
+    <div class="sign-c">
+      <div class="from">— Rick Jefferson</div>
+      <div class="role">Founder · RJ Business Solutions</div>
+    </div>
+  </div>
+</div>
+
+<div class="card-wrap">
+  <div class="lbl">Card 03 · Thank You · Holiday season · Warm relationship</div>
+  <div class="greet thx">
+    <div class="brand-c"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Client Appreciation</div></div></div>
+    <div class="accent-mark">♥</div>
+    <div class="greeting-block" style="margin-top:120px">
+      <div class="kicker-g">● Season of Gratitude</div>
+      <h1>Simply<br/><span>Thank You.</span></h1>
+    </div>
+    <div class="sign-c">
+      <div class="from">— Rick &amp; the RJ Team</div>
+      <div class="role">For trusting us with the build · 2026</div>
+    </div>
+  </div>
+</div>
+
+<div class="card-wrap">
+  <div class="lbl">Card 04 · Congratulations · Client milestone / win</div>
+  <div class="greet cng">
+    <div class="sparkle">✦ ★ ✦</div>
+    <div class="brand-c"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Client Win</div></div></div>
+    <div class="greeting-block" style="position:relative;z-index:2">
+      <div class="kicker-g">● Milestone Unlocked</div>
+      <h1>You just<br/><span>did that.</span></h1>
+    </div>
+    <div class="sign-c">
+      <div class="from">— Rick.</div>
+      <div class="role">Proud of the numbers · Let's keep going</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

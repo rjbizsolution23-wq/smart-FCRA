@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Credit Qualification — RJ Business Solutions</title>
+<link rel="stylesheet" href="../brand.css">
+<link rel="stylesheet" href="forms.css">
+</head>
+<body class="forms-page">
+
+<div class="form-shell" id="app">
+
+  <div class="form-header">
+    <div class="brand">
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+      <div><div class="n">RJ Business Solutions</div><div class="t">Credit Repair Qualifier</div></div>
+    </div>
+    <div class="save-tag">Auto-saving</div>
+  </div>
+
+  <div class="form-title-block">
+    <div class="kicker">● Free Assessment · 90 Seconds</div>
+    <h1>See if you <span>qualify</span> for credit repair.</h1>
+    <div class="sub">Four short steps. Real answers. Zero credit hit — we only pull with your explicit consent later.</div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-steps">
+      <div class="fill-line" id="fill-line" style="width:0%"></div>
+      <div class="pstep active" data-step="1"><div class="circ">1</div><div class="lbl">Your Info</div></div>
+      <div class="pstep" data-step="2"><div class="circ">2</div><div class="lbl">Credit Goals</div></div>
+      <div class="pstep" data-step="3"><div class="circ">3</div><div class="lbl">Situation</div></div>
+      <div class="pstep" data-step="4"><div class="circ">4</div><div class="lbl">Consent</div></div>
+    </div>
+  </div>
+
+  <form id="rjForm" onsubmit="return submitForm(event)">
+
+    <!-- STEP 1 -->
+    <div class="step-panel active" data-panel="1">
+      <h2><span class="step-of">Step 01 of 04</span>Let's get to know you</h2>
+      <div class="step-sub">The basics. No credit pull. No commitment.</div>
+
+      <div class="field-row">
+        <div class="field"><label>First Name <span class="req">*</span></label><input type="text" name="firstName" required/><div class="error">Required</div></div>
+        <div class="field"><label>Last Name <span class="req">*</span></label><input type="text" name="lastName" required/><div class="error">Required</div></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Email <span class="req">*</span></label><input type="email" name="email" required placeholder="you@email.com"/><div class="error">Valid email required</div></div>
+        <div class="field"><label>Phone <span class="req">*</span></label><input type="tel" name="phone" required placeholder="(555) 555-5555"/><div class="error">Required</div></div>
+      </div>
+      <div class="field-row three">
+        <div class="field"><label>State <span class="req">*</span></label>
+          <select name="state" required>
+            <option value="">Select…</option><option>AL</option><option>AK</option><option>AZ</option><option>AR</option><option>CA</option><option>CO</option><option>CT</option><option>DE</option><option>FL</option><option>GA</option><option>HI</option><option>ID</option><option>IL</option><option>IN</option><option>IA</option><option>KS</option><option>KY</option><option>LA</option><option>ME</option><option>MD</option><option>MA</option><option>MI</option><option>MN</option><option>MS</option><option>MO</option><option>MT</option><option>NE</option><option>NV</option><option>NH</option><option>NJ</option><option>NM</option><option>NY</option><option>NC</option><option>ND</option><option>OH</option><option>OK</option><option>OR</option><option>PA</option><option>RI</option><option>SC</option><option>SD</option><option>TN</option><option>TX</option><option>UT</option><option>VT</option><option>VA</option><option>WA</option><option>WV</option><option>WI</option><option>WY</option>
+          </select>
+          <div class="error">Required</div>
+        </div>
+        <div class="field"><label>ZIP</label><input type="text" name="zip" maxlength="5" placeholder="87059"/></div>
+        <div class="field"><label>Age Range</label>
+          <select name="age"><option value="">Select…</option><option>18–25</option><option>26–35</option><option>36–45</option><option>46–55</option><option>56–65</option><option>65+</option></select>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="step-panel" data-panel="2">
+      <h2><span class="step-of">Step 02 of 04</span>What are you trying to fix?</h2>
+      <div class="step-sub">Select all that apply. This shapes the plan we build.</div>
+
+      <div class="field">
+        <label>Credit Issues (multi-select)</label>
+        <div class="chip-group" data-multi="issues">
+          <div class="chip" data-val="late-payments">Late Payments</div>
+          <div class="chip" data-val="collections">Collections</div>
+          <div class="chip" data-val="charge-offs">Charge-Offs</div>
+          <div class="chip" data-val="repos">Repos</div>
+          <div class="chip" data-val="bankruptcy">Bankruptcy</div>
+          <div class="chip" data-val="foreclosure">Foreclosure</div>
+          <div class="chip" data-val="tax-lien">Tax Lien</div>
+          <div class="chip" data-val="student-loans">Student Loans</div>
+          <div class="chip" data-val="medical">Medical Debt</div>
+          <div class="chip" data-val="identity-theft">Identity Theft</div>
+          <div class="chip" data-val="inquiries">Too Many Inquiries</div>
+          <div class="chip" data-val="no-credit">Thin / No Credit</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Estimated Current Credit Score <span class="req">*</span></label>
+        <div class="tile-select three">
+          <div class="tile-opt" data-single="score" data-val="below-500"><div class="icon">Range 01</div><div class="t">Below 500</div><div class="d">Building from bottom</div></div>
+          <div class="tile-opt" data-single="score" data-val="500-579"><div class="icon">Range 02</div><div class="t">500–579</div><div class="d">Poor · Repair-ready</div></div>
+          <div class="tile-opt" data-single="score" data-val="580-669"><div class="icon">Range 03</div><div class="t">580–669</div><div class="d">Fair · Optimization</div></div>
+          <div class="tile-opt" data-single="score" data-val="670-739"><div class="icon">Range 04</div><div class="t">670–739</div><div class="d">Good · Push to great</div></div>
+          <div class="tile-opt" data-single="score" data-val="740-plus"><div class="icon">Range 05</div><div class="t">740+</div><div class="d">Great · Maintenance</div></div>
+          <div class="tile-opt" data-single="score" data-val="unknown"><div class="icon">Range 06</div><div class="t">I don't know</div><div class="d">We'll help you pull it</div></div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Primary Goal <span class="req">*</span></label>
+        <div class="tile-select">
+          <div class="tile-opt" data-single="goal" data-val="home"><div class="icon">Goal 01</div><div class="t">Buy a Home</div><div class="d">Mortgage-ready in 90 days</div></div>
+          <div class="tile-opt" data-single="goal" data-val="auto"><div class="icon">Goal 02</div><div class="t">Buy a Car</div><div class="d">Better auto financing</div></div>
+          <div class="tile-opt" data-single="goal" data-val="business"><div class="icon">Goal 03</div><div class="t">Business Funding</div><div class="d">Personal credit → business capital</div></div>
+          <div class="tile-opt" data-single="goal" data-val="general"><div class="icon">Goal 04</div><div class="t">General Score Boost</div><div class="d">Just get to great</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="step-panel" data-panel="3">
+      <h2><span class="step-of">Step 03 of 04</span>Situation snapshot</h2>
+      <div class="step-sub">Ballpark is fine — we just need to plan the right path.</div>
+
+      <div class="field-row">
+        <div class="field"><label>Household Income Range</label>
+          <select name="income"><option value="">Select…</option><option>Under $35K</option><option>$35K–$50K</option><option>$50K–$75K</option><option>$75K–$100K</option><option>$100K–$150K</option><option>$150K+</option></select>
+        </div>
+        <div class="field"><label>Employment Status</label>
+          <select name="employment"><option value="">Select…</option><option>Full-Time W-2</option><option>Self-Employed</option><option>1099 / Contract</option><option>Part-Time</option><option>Retired</option><option>Unemployed</option></select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Timeline to Achieve Goal</label>
+        <div class="chip-group" data-single="timeline">
+          <div class="chip" data-val="asap">ASAP</div>
+          <div class="chip" data-val="30-60">30–60 Days</div>
+          <div class="chip" data-val="60-90">60–90 Days</div>
+          <div class="chip" data-val="3-6mo">3–6 Months</div>
+          <div class="chip" data-val="6-12mo">6–12 Months</div>
+          <div class="chip" data-val="flexible">Flexible</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Anything else we should know? (optional)</label>
+        <textarea name="notes" placeholder="Recent disputes, pending judgments, identity theft, spousal credit combining, etc."></textarea>
+        <div class="hint">Stays private. Only your assigned specialist sees this.</div>
+      </div>
+    </div>
+
+    <!-- STEP 4 -->
+    <div class="step-panel" data-panel="4">
+      <h2><span class="step-of">Step 04 of 04</span>Consent &amp; contact preference</h2>
+      <div class="step-sub">Standard FCRA/TCPA acknowledgments. Nothing scary.</div>
+
+      <div class="field">
+        <label>Best way to reach you</label>
+        <div class="chip-group" data-single="contactPref">
+          <div class="chip" data-val="phone">Phone Call</div>
+          <div class="chip" data-val="text">Text Message</div>
+          <div class="chip" data-val="email">Email</div>
+          <div class="chip" data-val="any">Any of the above</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Best time to reach you</label>
+        <div class="chip-group" data-single="contactTime">
+          <div class="chip" data-val="morning">Morning</div>
+          <div class="chip" data-val="afternoon">Afternoon</div>
+          <div class="chip" data-val="evening">Evening</div>
+          <div class="chip" data-val="anytime">Anytime</div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px">
+        <label class="cb-row"><input type="checkbox" name="fcra" required/><div class="cb-t"><b>FCRA Consent (required)</b> · I authorize RJ Business Solutions to review my credit information and act as my authorized representative under the Fair Credit Reporting Act (15 U.S.C. § 1681) if we move forward together.</div></label>
+        <label class="cb-row"><input type="checkbox" name="tcpa"/><div class="cb-t"><b>Communication opt-in (optional)</b> · I agree to receive calls, texts, and emails at the number/address provided. Message &amp; data rates may apply. Reply STOP to opt out. <a href="#">Privacy Policy</a></div></label>
+        <label class="cb-row"><input type="checkbox" name="marketing"/><div class="cb-t">Send me the weekly Systems Brief newsletter with credit tips + client wins.</div></label>
+      </div>
+
+      <div class="turnstile-placeholder" style="margin-top:14px"><b>Cloudflare Turnstile</b> · Bot check runs here at submit — invisible for real users.</div>
+    </div>
+
+    <!-- SUCCESS -->
+    <div class="success-state" id="success">
+      <div class="check">✓</div>
+      <h2>You're <span>in.</span></h2>
+      <p>Your qualification is submitted. A credit specialist will reach out within <b>4 business hours</b> with your personalized plan.</p>
+      <div class="next-steps">
+        <h4>● What Happens Next</h4>
+        <ol>
+          <li>You'll get a confirmation email + text right now.</li>
+          <li>Specialist calls within 4 business hours.</li>
+          <li>15-minute walk-through of your plan (no pull yet).</li>
+          <li>If it's a fit, we start disputes within 48 hours.</li>
+        </ol>
+      </div>
+      <p style="font-size:12px;color:var(--rj-muted-text)">Reference № <b id="refnum" style="color:var(--rj-navy);font-family:ui-monospace,Menlo,monospace">—</b></p>
+    </div>
+
+    <div class="form-actions" id="actions">
+      <button type="button" class="btn ghost" id="backBtn" style="visibility:hidden">← Back</button>
+      <button type="button" class="btn primary" id="nextBtn">Next Step →</button>
+    </div>
+
+  </form>
+
+  <div class="backend-note">
+    <b>// Backend</b> · POST /api/lead/credit-qualify → Cloudflare Worker → D1 <code>leads</code> table + KV rate-limit + email/SMS drip trigger. See <code>docs/CLOUDFLARE-BACKEND.md</code>.
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const FORM_ID = 'credit-qualify';
+  const TOTAL_STEPS = 4;
+  let step = 1;
+  const state = { form: FORM_ID, issues: [], score: '', goal: '', timeline: '', contactPref: '', contactTime: '' };
+
+  // Restore from localStorage
+  try {
+    const saved = JSON.parse(localStorage.getItem('rj-' + FORM_ID) || '{}');
+    Object.assign(state, saved);
+  } catch (e) {}
+
+  const $ = sel => document.querySelector(sel);
+  const $$ = sel => document.querySelectorAll(sel);
+
+  function save() { localStorage.setItem('rj-' + FORM_ID, JSON.stringify(state)); }
+
+  function goStep(n) {
+    step = Math.max(1, Math.min(TOTAL_STEPS, n));
+    $$('.step-panel').forEach(p => p.classList.toggle('active', +p.dataset.panel === step));
+    $$('.pstep').forEach(ps => {
+      const s = +ps.dataset.step;
+      ps.classList.toggle('active', s === step);
+      ps.classList.toggle('done', s < step);
+    });
+    const pct = ((step - 1) / (TOTAL_STEPS - 1)) * 100;
+    $('#fill-line').style.width = pct + '%';
+    $('#backBtn').style.visibility = step === 1 ? 'hidden' : 'visible';
+    $('#nextBtn').textContent = step === TOTAL_STEPS ? 'Submit →' : 'Next Step →';
+  }
+
+  function validateStep() {
+    let ok = true;
+    const panel = document.querySelector(`.step-panel[data-panel="${step}"]`);
+    panel.querySelectorAll('input[required], select[required]').forEach(el => {
+      const f = el.closest('.field');
+      if (!el.value.trim() || (el.type === 'email' && !/^\S+@\S+\.\S+$/.test(el.value))) {
+        f.classList.add('err'); ok = false;
+      } else f.classList.remove('err');
+    });
+    if (step === 2 && !state.score) ok = false;
+    if (step === 2 && !state.goal) ok = false;
+    if (step === 4 && !panel.querySelector('input[name="fcra"]').checked) ok = false;
+    return ok;
+  }
+
+  $('#nextBtn').onclick = () => {
+    // capture inputs
+    const panel = document.querySelector(`.step-panel[data-panel="${step}"]`);
+    panel.querySelectorAll('input, select, textarea').forEach(el => {
+      if (el.type === 'checkbox') state[el.name] = el.checked;
+      else if (el.name) state[el.name] = el.value;
+    });
+    save();
+    if (!validateStep()) return;
+    if (step === TOTAL_STEPS) submitLead();
+    else goStep(step + 1);
+  };
+  $('#backBtn').onclick = () => goStep(step - 1);
+
+  // Chip / tile handlers
+  document.addEventListener('click', e => {
+    const chip = e.target.closest('.chip'); if (chip) {
+      const group = chip.closest('[data-multi]') || chip.closest('[data-single]');
+      if (!group) return;
+      const key = group.dataset.multi || group.dataset.single;
+      if (group.dataset.multi) {
+        chip.classList.toggle('selected');
+        state[key] = [...group.querySelectorAll('.chip.selected')].map(c => c.dataset.val);
+      } else {
+        group.querySelectorAll('.chip').forEach(c => c.classList.toggle('selected', c === chip));
+        state[key] = chip.dataset.val;
+      }
+      save();
+    }
+    const tile = e.target.closest('.tile-opt'); if (tile) {
+      const key = tile.dataset.single;
+      tile.parentElement.querySelectorAll('.tile-opt').forEach(t => t.classList.toggle('selected', t === tile));
+      state[key] = tile.dataset.val;
+      save();
+    }
+  });
+
+  async function submitLead() {
+    // Live Smart FCRA lead capture
+    const ref = 'RJ-CR-' + Date.now().toString(36).toUpperCase();
+    state.ref = ref;
+    state.submittedAt = new Date().toISOString();
+    save();
+    // Real integration would POST to /api/lead/credit-qualify
+    try {
+      await fetch('/api/public/lead/' + FORM_ID, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(state) });
+      console.log('[RJ FORM SUBMIT]', state);
+    } catch (e) {}
+    $('#refnum').textContent = ref;
+    $('#success').classList.add('active');
+    document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+    $('#actions').style.display = 'none';
+    document.querySelector('.progress-wrap').style.display = 'none';
+  }
+
+  // Restore field values
+  document.querySelectorAll('input[name], select[name], textarea[name]').forEach(el => {
+    if (state[el.name] !== undefined) {
+      if (el.type === 'checkbox') el.checked = !!state[el.name];
+      else el.value = state[el.name];
+    }
+  });
+  // Restore chips
+  document.querySelectorAll('[data-multi]').forEach(g => {
+    const key = g.dataset.multi;
+    if (Array.isArray(state[key])) g.querySelectorAll('.chip').forEach(c => c.classList.toggle('selected', state[key].includes(c.dataset.val)));
+  });
+  document.querySelectorAll('[data-single]').forEach(g => {
+    const key = g.dataset.single;
+    if (state[key]) g.querySelectorAll('.chip, .tile-opt').forEach(c => c.classList.toggle('selected', c.dataset.val === state[key]));
+  });
+
+  goStep(step);
+})();
+</script>
+
+</body>
+</html>

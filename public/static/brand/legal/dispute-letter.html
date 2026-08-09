@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — Dispute Letter</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;justify-content:center}
+  .sheet{width:794px;min-height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden;position:relative}
+
+  .letter-head{background:var(--grad-dark);color:#fff;padding:32px 56px 24px;position:relative;overflow:hidden}
+  .letter-head::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .letter-head .row{display:flex;align-items:center;gap:14px;position:relative;z-index:1}
+  .letter-head .row img{width:44px;height:44px;border-radius:10px}
+  .letter-head .row .n{font-family:var(--font-head);font-weight:600;font-size:16px}
+  .letter-head .row .t{font-family:var(--font-mono);font-size:10px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:3px;font-weight:600}
+  .thin{height:3px;background:var(--grad-primary)}
+
+  .body{padding:36px 64px;flex:1;display:flex;flex-direction:column;gap:20px;font-family:var(--font-body);font-size:13px;line-height:1.7;color:var(--rj-text)}
+
+  .doc-meta{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:1px solid var(--rj-line)}
+  .doc-meta .k{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:4px}
+  .doc-meta .v{font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy)}
+
+  .party{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  .party .lbl{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:6px}
+  .party .block{font-family:var(--font-body);font-size:12px;line-height:1.7;color:var(--rj-text)}
+  .party .block b{font-family:var(--font-head);font-weight:600;color:var(--rj-navy);font-size:13px;display:block;margin-bottom:2px}
+
+  .subject{background:var(--rj-light);border-left:4px solid var(--rj-blue);padding:14px 18px;border-radius:6px;font-family:var(--font-head);font-weight:600;color:var(--rj-navy);font-size:14px;letter-spacing:-0.01em}
+  .subject small{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;display:block;margin-bottom:4px}
+
+  .letter-body p{margin:0 0 12px 0}
+  .letter-body p:first-child{font-family:var(--font-head);font-weight:500;color:var(--rj-navy);font-size:14px}
+
+  .items{border:1px solid var(--rj-line);border-radius:10px;overflow:hidden;margin:6px 0}
+  .items table{width:100%;border-collapse:collapse}
+  .items th{background:var(--rj-navy);color:#fff;padding:10px 14px;text-align:left;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+  .items td{padding:12px 14px;font-size:12px;border-bottom:1px solid var(--rj-line);vertical-align:top}
+  .items tr:last-child td{border:none}
+  .items td .n{font-family:var(--font-head);font-weight:600;color:var(--rj-navy);font-size:13px;margin-bottom:3px}
+  .items td .d{font-size:11px;color:var(--rj-muted-text)}
+  .items td .reason{font-family:var(--font-mono);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;padding:3px 8px;background:var(--rj-light);border-radius:4px;display:inline-block}
+
+  .fcra-cite{background:#f8fafc;border-left:3px solid var(--rj-muted-text);padding:10px 14px;font-size:11px;line-height:1.6;color:var(--rj-muted-text);font-style:italic}
+  .fcra-cite b{color:var(--rj-navy);font-family:var(--font-head);font-style:normal;font-weight:600}
+
+  .enclosures{background:var(--rj-light);border-radius:8px;padding:14px 18px}
+  .enclosures h4{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);margin:0 0 8px 0;font-weight:600}
+  .enclosures ul{margin:0;padding-left:18px;font-size:12px;line-height:1.7;color:var(--rj-text)}
+
+  .sig-block{margin-top:12px;padding-top:20px;border-top:1px solid var(--rj-line)}
+  .sig-line{font-family:'Space Grotesk',serif;font-style:italic;font-size:26px;color:var(--rj-navy);border-bottom:1.5px solid var(--rj-navy);padding-bottom:6px;max-width:280px}
+  .sig-meta{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);margin-top:6px;font-weight:600}
+  .sig-meta b{color:var(--rj-navy);display:block;margin-top:2px;font-family:var(--font-head);font-size:12px;letter-spacing:0.02em;text-transform:none;font-weight:600}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:14px 64px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600;margin-top:auto}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+
+  .certified-badge{position:absolute;top:100px;right:24px;background:var(--rj-danger);color:#fff;padding:8px 16px 8px 22px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;transform:rotate(4deg);border-radius:6px;box-shadow:0 8px 20px rgba(239,68,68,0.4);z-index:2}
+  .certified-badge::before{content:"●";margin-right:6px;color:#fff}
+
+  @media print{body{background:#fff;padding:0}.sheet{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="letter-head">
+    <div class="row">
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+      <div><div class="n">RJ Business Solutions</div><div class="t">Credit Dispute · FCRA § 611 Formal Request</div></div>
+    </div>
+  </div>
+  <div class="thin"></div>
+  <div class="certified-badge">Send Certified Mail</div>
+
+  <div class="body">
+    <div class="doc-meta">
+      <div><div class="k">Reference №</div><div class="v">RJ-DSP-2026-0217</div></div>
+      <div><div class="k">Date</div><div class="v">July 17, 2026</div></div>
+      <div><div class="k">Method</div><div class="v">USPS Certified · Return Receipt</div></div>
+    </div>
+
+    <div class="party">
+      <div>
+        <div class="lbl">From (Consumer)</div>
+        <div class="block">
+          <b>[Client Full Legal Name]</b>
+          [Street Address]<br/>
+          [City, State ZIP]<br/>
+          SSN: XXX-XX-[last 4]<br/>
+          DOB: [MM/DD/YYYY]
+        </div>
+      </div>
+      <div>
+        <div class="lbl">To (Credit Bureau)</div>
+        <div class="block">
+          <b>Experian Consumer Disputes</b>
+          P.O. Box 4500<br/>
+          Allen, TX 75013<br/>
+          United States
+        </div>
+      </div>
+    </div>
+
+    <div class="subject">
+      <small>Re</small>
+      Formal Dispute of Inaccurate Information Pursuant to FCRA § 611 (15 U.S.C. § 1681i)
+    </div>
+
+    <div class="letter-body">
+      <p>To Whom It May Concern,</p>
+
+      <p>I am writing to formally dispute the following item(s) currently reported on my credit file. Under Section 611 of the Fair Credit Reporting Act (FCRA), I am requesting that you investigate and correct or remove the following inaccurate information within the 30-day statutory investigation window.</p>
+
+      <div class="items">
+        <table>
+          <thead>
+            <tr><th style="width:40%">Item in Question</th><th style="width:20%">Account / Ref</th><th>Reason for Dispute</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <div class="n">Verizon Wireless</div>
+                <div class="d">Late payment marker reported May 2023</div>
+              </td>
+              <td>
+                <div class="n">Acct ••7218</div>
+                <div class="d">Bureau ID: EX-2023-05-7218</div>
+              </td>
+              <td><span class="reason">Not Mine / Never Late</span></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="n">Capital One Bank</div>
+                <div class="d">Hard inquiry dated August 12, 2024</div>
+              </td>
+              <td>
+                <div class="n">Inq ••4491</div>
+                <div class="d">Bureau ID: EX-INQ-2024-08</div>
+              </td>
+              <td><span class="reason">No Consent Given</span></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="n">Midland Credit Mgmt</div>
+                <div class="d">Collection account · balance $1,247</div>
+              </td>
+              <td>
+                <div class="n">Acct ••0083</div>
+                <div class="d">Bureau ID: EX-COL-2024-11</div>
+              </td>
+              <td><span class="reason">Beyond Reporting Period</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>I request that Experian conduct a reasonable investigation as required by 15 U.S.C. § 1681i(a)(1)(A). If the information cannot be verified with the original furnisher within the statutory timeframe, please delete the disputed item(s) from my consumer file and provide me with written confirmation of the results, along with an updated free copy of my report as required by 15 U.S.C. § 1681i(a)(6)(B).</p>
+
+      <div class="fcra-cite">
+        <b>Cited Authority:</b> Fair Credit Reporting Act § 611 (15 U.S.C. § 1681i) — Requires consumer reporting agencies to conduct a reasonable reinvestigation within 30 days of receiving a dispute notice. FCRA § 623 (15 U.S.C. § 1681s-2) also obligates furnishers to investigate and correct inaccurate information reported to bureaus.
+      </div>
+
+      <div class="enclosures">
+        <h4>Enclosures Included</h4>
+        <ul>
+          <li>Copy of government-issued photo ID</li>
+          <li>Proof of current address (utility bill dated within 90 days)</li>
+          <li>Supporting documentation for each disputed item (see attached)</li>
+          <li>Original credit report with disputed items circled</li>
+        </ul>
+      </div>
+
+      <p>Please send all correspondence regarding this matter to the address above. If additional documentation is needed to complete this investigation, contact me in writing prior to closing the case.</p>
+
+      <p>Thank you for your prompt attention.</p>
+
+      <div class="sig-block">
+        <div class="sig-line">[Client Signature]</div>
+        <div class="sig-meta">Consumer Signature<b>[Client Printed Full Legal Name] · Date: July 17, 2026</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="brand">RJ Business Solutions · Credit Technology Support</div>
+    <div>Template RJ-DSP-2026 · Not legal advice · Client is responsible for filing</div>
+  </div>
+</div>
+</body>
+</html>

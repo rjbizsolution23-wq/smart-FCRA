@@ -609,6 +609,7 @@ async function rateLimiter(c: any, next: any) {
 app.use('/api/auth/login', rateLimiter);
 app.use('/api/auth/register', rateLimiter);
 app.use('/api/public/mfsn-signup', rateLimiter);
+app.use('/api/public/lead/*', rateLimiter);
 app.use('/api/auth/forgot-password', rateLimiter);
 app.use('/api/auth/change-password', rateLimiter);
 app.use('/api/auth/mfa/setup', rateLimiter);
@@ -873,6 +874,172 @@ app.get('/api/docs', (c) => {
 // PUBLIC MFSN SIGNUP — consumer enters MFSN credentials → portal
 // Analysis runs for staff but stays locked until payment approval
 // ═══════════════════════════════════════════════════════════════
+const BRAND_FORM_IDS = new Set([
+  'credit-qualify',
+  'funding-qualify',
+  'universal-funnel',
+  'universal',
+  'service-intake',
+  'growth-audit',
+  'whitelabel-app',
+  'whitelabel',
+  'partnership',
+  'podcast-guest',
+]);
+
+/** Public RJ brand lead capture (interactive forms). */
+app.post('/api/public/lead/:formId', async (c) => {
+  const formId = String(c.req.param('formId') || '').trim().toLowerCase();
+  if (!formId || formId.length > 64) return c.json({ error: 'Invalid form' }, 400);
+  const body = await c.req.json().catch(() => ({}));
+  const email = String(body.email || body.Email || '').trim().toLowerCase();
+  const phone = String(body.phone || body.Phone || '').trim();
+  const firstName = String(body.firstName || body.FirstName || body.first_name || '').trim();
+  const lastName = String(body.lastName || body.LastName || body.last_name || '').trim();
+  if (!email && !phone) return c.json({ error: 'Email or phone required' }, 400);
+
+  const orgId = resolvePublicSignupOrgId(c.env);
+  const leadId = generateId();
+  const payload = { ...body, form: body.form || formId };
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO brand_leads (id, org_id, form_id, email, phone, first_name, last_name, payload_json, source_url, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', datetime('now'), datetime('now'))`,
+    ).bind(
+      leadId, orgId, formId, email || null, phone || null, firstName || null, lastName || null,
+      JSON.stringify(payload), c.req.header('Referer') || null,
+    ).run();
+  } catch (e: any) {
+    if (String(e?.message || '').includes('no such table')) {
+      return c.json({ error: 'Migration 0020 required', code: 'MIGRATION_REQUIRED' }, 503);
+    }
+    throw e;
+  }
+
+  // Soft: email ops + sync GHL contact
+  const opsEmail = c.env.TRADELINE_OPS_EMAIL || c.env.COMPANY_EMAIL || 'support@rjbusinesssolutions.org';
+  let emailResult: any = null;
+  try {
+    emailResult = await sendAppEmail(c.env, {
+      to: opsEmail,
+      from: c.env.CLOUDFLARE_EMAIL_FROM_ONBOARDING || c.env.CLOUDFLARE_EMAIL_FROM_NOREPLY || 'welcome@onboarding.smartfcra.com',
+      fromName: 'RJ Business Solutions',
+      subject: `[RJ Lead] ${formId} — ${firstName} ${lastName}`.trim(),
+      html: `<div style="font-family:Space Grotesk,Inter,sans-serif;max-width:640px">
+        <h2 style="color:#0f172a">New ${formId} lead</h2>
+        <p><b>${firstName} ${lastName}</b><br/>${email}<br/>${phone}</p>
+        <pre style="background:#f8fafc;padding:12px;border-radius:8px;font-size:12px;overflow:auto">${JSON.stringify(payload, null, 2).slice(0, 4000)}</pre>
+        <p style="font-size:12px;color:#475569">Lead ID ${leadId} · Smart FCRA Brand Forms</p>
+      </div>`,
+      text: `New ${formId} lead ${firstName} ${lastName} ${email} ${phone}`,
+      purpose: 'onboarding',
+    });
+  } catch (e: any) {
+    emailResult = { error: e?.message };
+  }
+
+  let ghl: any = null;
+  try {
+    if (ghlConfigured(c.env) && (email || phone)) {
+      ghl = await syncClientToGhl(c.env, {
+        id: leadId,
+        email,
+        phone,
+        first_name: firstName,
+        last_name: lastName,
+        case_status: 'LEAD',
+        payment_status: 'lead',
+        signup_source: `brand_form_${formId}`,
+      }, {
+        orgName: 'RJ Business Solutions',
+        analysisUnlocked: false,
+        tags: ['RJ Lead', 'Brand Form', formId, 'Smart FCRA'],
+      });
+      if (ghl?.contactId) {
+        await c.env.DB.prepare(`UPDATE brand_leads SET ghl_contact_id = ?, updated_at = datetime('now') WHERE id = ?`)
+          .bind(ghl.contactId, leadId).run().catch(() => {});
+      }
+    }
+  } catch { /* soft */ }
+
+  return c.json({
+    ok: true,
+    leadId,
+    formId,
+    knownForm: BRAND_FORM_IDS.has(formId),
+    emailSent: !!emailResult?.sent,
+    ghlContactId: ghl?.contactId || null,
+    message: 'Thanks — a specialist will follow up shortly.',
+  }, 201);
+});
+
+app.get('/api/brand/leads', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  try {
+    const rows = await c.env.DB.prepare(
+      `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, created_at
+       FROM brand_leads WHERE org_id = ? OR org_id IS NULL
+       ORDER BY created_at DESC LIMIT 200`,
+    ).bind(user.org_id).all();
+    return c.json({ ok: true, leads: rows.results || [] });
+  } catch (e: any) {
+    if (String(e?.message || '').includes('no such table')) {
+      return c.json({ ok: true, leads: [], warning: 'Migration 0020 required' });
+    }
+    throw e;
+  }
+});
+
+app.get('/api/brand/catalog', authMiddleware, async (c) => {
+  return c.json({
+    ok: true,
+    hubUrl: '/static/brand/',
+    forms: [
+      { id: 'credit-qualify', title: 'Credit Qualify', url: '/static/brand/forms/credit-qualify.html' },
+      { id: 'funding-qualify', title: 'Funding Qualify', url: '/static/brand/forms/funding-qualify.html' },
+      { id: 'universal-funnel', title: 'Universal Funnel', url: '/static/brand/forms/universal-funnel.html' },
+      { id: 'service-intake', title: 'Service Intake', url: '/static/brand/forms/service-intake.html' },
+      { id: 'growth-audit', title: 'Growth Audit', url: '/static/brand/forms/growth-audit.html' },
+      { id: 'whitelabel-app', title: 'Whitelabel Application', url: '/static/brand/forms/whitelabel-application.html' },
+      { id: 'partnership', title: 'Partnership Application', url: '/static/brand/forms/partnership-application.html' },
+      { id: 'podcast-guest', title: 'Podcast Guest', url: '/static/brand/forms/podcast-guest.html' },
+    ],
+    brand: {
+      name: 'RJ Business Solutions',
+      tagline: 'Empowering Generational Wealth',
+      colors: { blue: '#2563eb', sky: '#0ea5e9', deep: '#1e3a8a', navy: '#0f172a' },
+      fonts: { head: 'Space Grotesk', body: 'Inter' },
+      logo: 'https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg',
+      web: 'https://rjbusinesssolutions.org',
+      email: 'support@rjbusinesssolutions.org',
+    },
+  });
+});
+
+/** Friendly short URLs into the brand library */
+app.get('/brand', (c) => c.redirect('/static/brand/', 302));
+app.get('/brand/', (c) => c.redirect('/static/brand/', 302));
+app.get('/forms', (c) => c.redirect('/static/brand/#forms', 302));
+app.get('/forms/:slug', (c) => {
+  const slug = c.req.param('slug');
+  const map: Record<string, string> = {
+    'credit-qualify': 'credit-qualify.html',
+    'funding-qualify': 'funding-qualify.html',
+    'universal-funnel': 'universal-funnel.html',
+    'universal': 'universal-funnel.html',
+    'service-intake': 'service-intake.html',
+    'growth-audit': 'growth-audit.html',
+    'whitelabel': 'whitelabel-application.html',
+    'whitelabel-application': 'whitelabel-application.html',
+    'partnership': 'partnership-application.html',
+    'podcast-guest': 'podcast-guest.html',
+  };
+  const file = map[slug];
+  if (!file) return c.redirect('/static/brand/', 302);
+  return c.redirect(`/static/brand/forms/${file}`, 302);
+});
+
 app.get('/api/public/mfsn-signup/meta', async (c) => {
   const orgId = resolvePublicSignupOrgId(c.env);
   const org = await c.env.DB.prepare('SELECT id, name FROM organizations WHERE id = ?').bind(orgId).first() as any;
@@ -9604,7 +9771,11 @@ function getAppHtml(): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FCRA Supreme Violation Detector</title>
+  <title>Smart FCRA · RJ Business Solutions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/brand/brand.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" rel="stylesheet">
   <script>
@@ -9614,32 +9785,43 @@ function getAppHtml(): string {
         extend: {
           colors: {
             brand: { 50:'#eff6ff',100:'#dbeafe',200:'#bfdbfe',300:'#93c5fd',400:'#60a5fa',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8',800:'#1e40af',900:'#1e3a8a' },
+            rj: { blue:'#2563eb', sky:'#0ea5e9', deep:'#1e3a8a', navy:'#0f172a' },
             danger: { 500:'#ef4444',600:'#dc2626' },
             success: { 500:'#22c55e',600:'#16a34a' },
             warn: { 500:'#f59e0b',600:'#d97706' },
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Space Grotesk', 'system-ui', 'sans-serif'],
           }
         }
       }
     }
   </script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
-    
+    :root {
+      --rj-blue: #2563eb; --rj-sky: #0ea5e9; --rj-deep: #1e3a8a; --rj-navy: #0f172a;
+      --font-head: "Space Grotesk", system-ui, sans-serif;
+      --font-body: "Inter", system-ui, sans-serif;
+      --grad-primary: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%);
+      --grad-dark: linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #2563eb 100%);
+    }
     * { 
-      font-family: 'Plus Jakarta Sans', system-ui, sans-serif; 
+      font-family: var(--font-body); 
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
     }
     
-    h1, h2, h3, .font-title {
-      font-family: 'Space Grotesk', system-ui, sans-serif;
+    h1, h2, h3, .font-title, .font-display {
+      font-family: var(--font-head);
+      letter-spacing: -0.02em;
     }
 
     .glass { 
-      background: rgba(10, 15, 30, 0.6); 
+      background: rgba(15, 23, 42, 0.72); 
       backdrop-filter: blur(24px) saturate(180%); 
       -webkit-backdrop-filter: blur(24px) saturate(180%); 
-      border: 1px solid rgba(255, 255, 255, 0.08); 
+      border: 1px solid rgba(191, 219, 254, 0.12); 
       box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
     }
 
@@ -9652,8 +9834,17 @@ function getAppHtml(): string {
     }
 
     .gradient-bg { 
-      background: radial-gradient(circle at 50% 0%, #172554 0%, #0f172a 60%, #020617 100%); 
+      background:
+        radial-gradient(ellipse at 20% 0%, rgba(37,99,235,0.28) 0%, transparent 45%),
+        radial-gradient(ellipse at 80% 10%, rgba(14,165,233,0.18) 0%, transparent 40%),
+        radial-gradient(circle at 50% 0%, #172554 0%, #0f172a 55%, #020617 100%); 
     }
+    .btn-rj {
+      background: var(--grad-primary);
+      color: #fff;
+      box-shadow: 0 8px 18px rgba(37,99,235,.28);
+    }
+    .btn-rj:hover { filter: brightness(1.05); transform: translateY(-1px); }
 
     .card-hover { 
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
@@ -9711,7 +9902,7 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/app.js?v=20260809-mfsn-signup-fix"></script>
+  <script src="/static/app.js?v=20260809-rj-brand-library"></script>
 </body>
 </html>`;
 }

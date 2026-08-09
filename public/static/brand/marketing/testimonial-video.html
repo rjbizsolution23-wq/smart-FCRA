@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Testimonial Video Cards</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px;display:flex;flex-direction:column;gap:32px;align-items:center}
+  .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:12px}
+  .card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 20px 40px rgba(15,23,42,0.1)}
+
+  /* 16:9 video frame 1280x720 */
+  .frame{width:1280px;height:720px;border-radius:12px;overflow:hidden;position:relative;box-shadow:0 20px 40px rgba(15,23,42,0.2);background:#000}
+
+  /* Fake video "person" background */
+  .person-bg{position:absolute;inset:0;background:radial-gradient(circle at center bottom,#334155 0%,#0f172a 50%,#020617 100%)}
+  .person-bg::before{content:"";position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:420px;height:520px;background:radial-gradient(ellipse at top,rgba(148,163,184,0.35) 0%,transparent 65%);border-radius:50% 50% 0 0}
+  /* Head circle */
+  .person-bg::after{content:"";position:absolute;left:50%;bottom:280px;transform:translateX(-50%);width:180px;height:180px;background:radial-gradient(circle,rgba(203,213,225,0.4) 0%,rgba(148,163,184,0.15) 60%,transparent 80%);border-radius:50%}
+
+  /* CARD 1 · TITLE OVERLAY (opening) */
+  .title-overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(15,23,42,0.85) 0%,rgba(15,23,42,0.3) 50%,rgba(15,23,42,0.9) 100%);display:flex;flex-direction:column;justify-content:space-between;padding:60px 80px;z-index:2}
+  .title-overlay .top{display:flex;align-items:center;gap:12px}
+  .title-overlay .top img{width:44px;height:44px;border-radius:10px}
+  .title-overlay .top .n{font-family:var(--font-head);font-weight:600;font-size:16px;color:#fff}
+  .title-overlay .top .t{font-family:var(--font-mono);font-size:10px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:3px;font-weight:600}
+  .title-overlay .middle{}
+  .title-overlay .kicker{display:inline-block;padding:6px 14px;background:rgba(14,165,233,0.2);border:1px solid rgba(14,165,233,0.4);border-radius:999px;font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-bottom:20px;font-weight:600}
+  .title-overlay h1{font-family:var(--font-head);font-size:72px;font-weight:700;letter-spacing:-0.03em;line-height:0.95;margin:0;color:#fff;max-width:900px}
+  .title-overlay h1 span{background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title-overlay .sub{font-family:var(--font-head);color:#cbd5e1;font-size:20px;margin-top:20px;font-weight:500;max-width:700px;line-height:1.35}
+  .title-overlay .foot{display:flex;justify-content:space-between;align-items:flex-end}
+  .title-overlay .foot .url{font-family:var(--font-mono);font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600}
+  .title-overlay .foot .lbl-r{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;font-weight:600;text-align:right}
+  .title-overlay .foot .lbl-r b{color:#fff;font-family:var(--font-head);font-size:13px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:block;margin-top:2px}
+
+  /* CARD 2 · LOWER-THIRD (name banner over video) */
+  .lower{position:absolute;bottom:60px;left:60px;right:60px;display:flex;align-items:center;gap:20px;background:linear-gradient(90deg,rgba(15,23,42,0.95) 0%,rgba(15,23,42,0.85) 60%,rgba(15,23,42,0.7) 100%);border-radius:14px;padding:20px 28px;backdrop-filter:blur(10px);border-left:5px solid var(--rj-sky);z-index:2}
+  .lower .av{width:64px;height:64px;border-radius:14px;background:var(--grad-primary);color:#fff;font-family:var(--font-head);font-weight:700;font-size:24px;display:flex;align-items:center;justify-content:center;letter-spacing:-0.02em;flex-shrink:0;box-shadow:0 6px 16px rgba(37,99,235,0.4)}
+  .lower .info{flex:1}
+  .lower .name{font-family:var(--font-head);font-weight:600;font-size:26px;color:#fff;letter-spacing:-0.02em;line-height:1}
+  .lower .role{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-top:6px;font-weight:600}
+  .lower .brand-r{display:flex;align-items:center;gap:8px}
+  .lower .brand-r img{width:28px;height:28px;border-radius:6px}
+  .lower .brand-r .n{font-family:var(--font-head);font-weight:600;font-size:12px;color:#fff}
+  .lower .brand-r .h{font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-top:2px;font-weight:600}
+
+  /* Top left tag */
+  .live-tag{position:absolute;top:32px;left:32px;background:var(--rj-danger);color:#fff;padding:5px 12px 5px 22px;border-radius:6px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;z-index:2}
+  .live-tag::before{content:"●";position:absolute;left:8px;top:6px;color:#fff;animation:pulse-dot 1.5s ease-in-out infinite}
+  @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:0.4}}
+
+  /* CARD 3 · PULL QUOTE OVERLAY (mid-video callout) */
+  .quote-overlay{position:absolute;inset:0;background:linear-gradient(135deg,rgba(15,23,42,0.85) 0%,rgba(30,58,138,0.85) 100%);display:flex;align-items:center;justify-content:center;padding:60px 100px;z-index:2}
+  .quote-overlay::after{content:"";position:absolute;right:-100px;top:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(50px)}
+  .quote-overlay .content{position:relative;z-index:1;text-align:center;max-width:900px}
+  .quote-overlay .marks{font-family:var(--font-head);font-size:120px;color:rgba(14,165,233,0.4);line-height:1;margin-bottom:12px}
+  .quote-overlay .q{font-family:var(--font-head);font-size:48px;font-weight:600;letter-spacing:-0.02em;line-height:1.15;color:#fff;margin:0}
+  .quote-overlay .q span{background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .quote-overlay .who{margin-top:28px;font-family:var(--font-mono);font-size:14px;letter-spacing:0.16em;text-transform:uppercase;color:var(--rj-sky);font-weight:600}
+  .quote-overlay .who b{color:#fff;font-family:var(--font-head);text-transform:none;font-size:18px;letter-spacing:-0.01em;font-weight:600;display:block;margin-top:4px}
+
+  /* CARD 4 · END CARD (subscribe / CTA) */
+  .end-card{position:absolute;inset:0;background:var(--grad-dark);display:grid;grid-template-columns:1fr 1fr;padding:80px;gap:60px;align-items:center;z-index:2}
+  .end-card::after{content:"";position:absolute;left:-100px;bottom:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(37,99,235,0.4) 0%,transparent 60%);filter:blur(60px)}
+  .end-card .left{position:relative;z-index:1;color:#fff}
+  .end-card .brand{display:flex;align-items:center;gap:12px;margin-bottom:32px}
+  .end-card .brand img{width:52px;height:52px;border-radius:12px}
+  .end-card .brand .n{font-family:var(--font-head);font-weight:600;font-size:18px}
+  .end-card .kicker{display:inline-block;padding:6px 14px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);border-radius:999px;font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-bottom:20px;font-weight:600}
+  .end-card h1{font-family:var(--font-head);font-size:56px;font-weight:700;letter-spacing:-0.03em;line-height:0.95;margin:0}
+  .end-card h1 span{background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .end-card .sub{font-family:var(--font-head);color:#cbd5e1;font-size:16px;margin-top:16px;line-height:1.4}
+  .end-card .right{position:relative;z-index:1;display:flex;flex-direction:column;gap:14px}
+  .end-card .btn{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;padding:20px 28px;border-radius:14px;display:flex;align-items:center;gap:16px;backdrop-filter:blur(10px);transition:transform .2s}
+  .end-card .btn:hover{transform:translateY(-2px)}
+  .end-card .btn.primary{background:var(--grad-primary);border-color:transparent;box-shadow:0 10px 30px rgba(37,99,235,0.4)}
+  .end-card .btn .ic{width:44px;height:44px;background:rgba(255,255,255,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:700;font-size:16px;flex-shrink:0}
+  .end-card .btn .info .t{font-family:var(--font-head);font-weight:600;font-size:15px;letter-spacing:-0.01em}
+  .end-card .btn .info .d{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.75);margin-top:3px;font-weight:600}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="lbl">Video 01 · Title / Intro Overlay · 1280 × 720</div>
+  <div class="frame">
+    <div class="person-bg"></div>
+    <div class="title-overlay">
+      <div class="top"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Client Wins · Video Series</div></div></div>
+      <div class="middle">
+        <div class="kicker">● Verified Client Story · 2026</div>
+        <h1>From dead DMs to<br/><span>47 booked calls</span><br/>in 30 days.</h1>
+        <div class="sub">Marcus Johnson · Founder · Apex Credit Solutions</div>
+      </div>
+      <div class="foot">
+        <div class="url">rjbusinesssolutions.org</div>
+        <div class="lbl-r">Runtime<b>2 min · Full Story</b></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Video 02 · Lower-Third Name Banner · Recording overlay</div>
+  <div class="frame">
+    <div class="person-bg"></div>
+    <div class="live-tag">Recording</div>
+    <div class="lower">
+      <div class="av">MJ</div>
+      <div class="info">
+        <div class="name">Marcus Johnson</div>
+        <div class="role">Founder · Apex Credit Solutions</div>
+      </div>
+      <div class="brand-r">
+        <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+        <div><div class="n">RJ Business Solutions</div><div class="h">Client Story</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Video 03 · Pull-Quote Overlay · Mid-video highlight moment</div>
+  <div class="frame">
+    <div class="person-bg"></div>
+    <div class="quote-overlay">
+      <div class="content">
+        <div class="marks">"</div>
+        <p class="q">Our DMs used to be a graveyard.<br/>Now they're the <span>biggest revenue<br/>channel we have.</span></p>
+        <div class="who">Full Story<b>Marcus Johnson · Apex Credit Solutions</b></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Video 04 · End Card · Subscribe + CTA + Book Call</div>
+  <div class="frame">
+    <div class="end-card">
+      <div class="left">
+        <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+        <div class="kicker">● Want the same system?</div>
+        <h1>Turn your DMs<br/>into <span>booked calls.</span></h1>
+        <div class="sub">Built by Rick Jefferson · Founder, RJ Business Solutions · Tijeras NM</div>
+      </div>
+      <div class="right">
+        <div class="btn primary">
+          <div class="ic">→</div>
+          <div class="info"><div class="t">Book a Free Growth Call</div><div class="d">15 min · Real audit · Real plan</div></div>
+        </div>
+        <div class="btn">
+          <div class="ic">▶</div>
+          <div class="info"><div class="t">Watch Next Story</div><div class="d">Sarah Davis · Davis Financial</div></div>
+        </div>
+        <div class="btn">
+          <div class="ic">+</div>
+          <div class="info"><div class="t">Subscribe · Systems Brief</div><div class="d">New client wins weekly</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

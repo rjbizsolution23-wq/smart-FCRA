@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — Operating Agreement</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;justify-content:center}
+  .sheet{width:794px;min-height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden;position:relative}
+  .top{background:var(--grad-dark);color:#fff;padding:32px 56px 26px;position:relative;overflow:hidden}
+  .top::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .top .row{display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1;margin-bottom:14px}
+  .top .brand{display:flex;align-items:center;gap:12px}
+  .top .brand img{width:40px;height:40px;border-radius:9px}
+  .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:15px}
+  .top .brand .t{font-family:var(--font-mono);font-size:9px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:2px;font-weight:600}
+  .top .doc{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);text-align:right;font-weight:600}
+  .top .doc b{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:block;margin-top:2px}
+  .top h1{font-family:var(--font-head);font-size:36px;font-weight:600;letter-spacing:-0.02em;margin:0;position:relative;z-index:1;line-height:1}
+  .top h1 span{color:var(--rj-sky)}
+  .top .sub{font-family:var(--font-head);color:#cbd5e1;font-size:13px;margin-top:6px;position:relative;z-index:1}
+  .thin{height:3px;background:var(--grad-primary)}
+  .confidential{position:absolute;top:100px;right:24px;background:var(--rj-danger);color:#fff;padding:6px 16px 6px 22px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;transform:rotate(4deg);border-radius:4px;z-index:2}
+  .confidential::before{content:"● ";color:#fff}
+
+  .body{padding:28px 56px;flex:1;display:flex;flex-direction:column;gap:16px;font-family:var(--font-body);font-size:11px;line-height:1.65;color:var(--rj-text)}
+  h3{font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--rj-navy);margin:0 0 6px 0;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+  h3::before{content:"";width:3px;height:16px;background:var(--rj-blue);border-radius:2px}
+
+  .parties{background:var(--rj-light);padding:16px 20px;border-radius:10px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+  .parties .k{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:4px}
+  .parties .v{font-family:var(--font-head);font-weight:600;font-size:12px;color:var(--rj-navy);letter-spacing:-0.01em}
+
+  .articles{display:flex;flex-direction:column;gap:8px}
+  .article{background:#fff;border:1px solid var(--rj-line);border-left:3px solid var(--rj-blue);border-radius:8px;padding:12px 16px}
+  .article .num{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:3px}
+  .article h4{font-family:var(--font-head);font-size:12px;font-weight:600;color:var(--rj-navy);margin:0 0 4px 0;letter-spacing:-0.01em}
+  .article p{font-size:10.5px;line-height:1.55;color:var(--rj-text);margin:0}
+
+  .disclosure{background:#f8fafc;border-left:3px solid var(--rj-muted-text);padding:10px 14px;border-radius:0 8px 8px 0;font-size:10px;line-height:1.55;color:var(--rj-muted-text)}
+  .disclosure b{color:var(--rj-navy);font-family:var(--font-head);font-weight:600}
+
+  .sig-block{margin-top:auto;padding-top:16px;border-top:1px solid var(--rj-line);display:grid;grid-template-columns:1fr 1fr;gap:28px}
+  .sig-line{border-bottom:1.5px solid var(--rj-navy);padding-bottom:5px;font-family:'Space Grotesk',serif;font-style:italic;font-size:20px;color:var(--rj-blue);font-weight:500;min-height:32px}
+  .sig-meta{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);margin-top:5px;font-weight:600}
+  .sig-meta b{color:var(--rj-navy);display:block;margin-top:2px;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:600}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:12px 56px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+  @media print{body{background:#fff;padding:0}.sheet{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="top">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">LLC Operating Agreement</div></div></div>
+      <div class="doc">Doc<b>OA-2026-v1</b></div>
+    </div>
+    <h1>Operating <span>Agreement.</span></h1>
+    <div class="sub">Governing document for RJ Business Solutions, LLC · New Mexico · Effective August 7, 2026</div>
+  </div>
+  <div class="thin"></div>
+  <div class="confidential">Confidential</div>
+
+  <div class="body">
+
+    <div class="parties">
+      <div><div class="k">Company</div><div class="v">RJ Business Solutions, LLC</div></div>
+      <div><div class="k">State of Formation</div><div class="v">New Mexico</div></div>
+      <div><div class="k">Effective Date</div><div class="v">August 7, 2026</div></div>
+      <div><div class="k">Sole Member</div><div class="v">Rick Jefferson</div></div>
+      <div><div class="k">Management</div><div class="v">Member-Managed</div></div>
+      <div><div class="k">Tax Election</div><div class="v">Disregarded Entity / S-Corp</div></div>
+    </div>
+
+    <h3>Article Summary · 12 Articles Referenced</h3>
+    <div class="articles">
+      <div class="article"><div class="num">Article I</div><h4>Formation &amp; Purpose</h4><p>Formation under NM Revised Statutes Chapter 53 Article 19. Purpose: any lawful business, primarily AI-powered automation, credit technology, and business systems consulting.</p></div>
+      <div class="article"><div class="num">Article II</div><h4>Members &amp; Capital Contributions</h4><p>Initial capital contribution from Rick Jefferson: $10,000. Additional contributions optional; no member obligated beyond initial commitment.</p></div>
+      <div class="article"><div class="num">Article III</div><h4>Membership Interests &amp; Voting</h4><p>Membership interests represented as percentage ownership. Voting on major decisions requires majority (or supermajority for enumerated items).</p></div>
+      <div class="article"><div class="num">Article IV</div><h4>Management &amp; Officers</h4><p>Member-managed. Rick Jefferson serves as Managing Member with day-to-day authority. Officers may be appointed as company grows.</p></div>
+      <div class="article"><div class="num">Article V</div><h4>Allocations &amp; Distributions</h4><p>Profits/losses allocated in proportion to ownership. Distributions at discretion of Managing Member, subject to tax distribution requirements.</p></div>
+      <div class="article"><div class="num">Article VI</div><h4>Transfers &amp; Assignments</h4><p>Membership interests non-transferable without written consent. Right of first refusal to Company then remaining Members.</p></div>
+      <div class="article"><div class="num">Article VII</div><h4>Books &amp; Records</h4><p>Company maintains accounting records at principal office. Members may inspect on reasonable notice. Annual K-1 provided by March 15.</p></div>
+      <div class="article"><div class="num">Article VIII</div><h4>Dissolution</h4><p>Dissolution on unanimous member consent, judicial decree, or specified triggering events. Assets distributed per NM statute + this Agreement.</p></div>
+      <div class="article"><div class="num">Article IX</div><h4>Indemnification</h4><p>Company indemnifies Members and Officers to fullest extent permitted by NM law for actions taken in good faith on behalf of Company.</p></div>
+      <div class="article"><div class="num">Article X</div><h4>Amendment</h4><p>Amendments require written consent of Members holding majority interest (supermajority for enumerated protective provisions).</p></div>
+      <div class="article"><div class="num">Article XI</div><h4>Dispute Resolution</h4><p>Disputes resolved by binding arbitration in Bernalillo County, NM, under AAA Commercial Rules. Prevailing party recovers reasonable fees.</p></div>
+      <div class="article"><div class="num">Article XII</div><h4>Miscellaneous</h4><p>Entire Agreement clause · Severability · Governing law: New Mexico · Notice provisions · Successors and assigns.</p></div>
+    </div>
+
+    <div class="disclosure">
+      <b>NOTE:</b> This document is an Operating Agreement summary/cover sheet. The full agreement is a separate document containing complete legal provisions. Both must be executed. Consult qualified legal counsel before signing. Not legal advice.
+    </div>
+
+    <div class="sig-block">
+      <div>
+        <div class="sig-line">Rick Jefferson</div>
+        <div class="sig-meta">Sole Member &amp; Managing Member<b>Rick Jefferson · Aug 7, 2026</b></div>
+      </div>
+      <div>
+        <div class="sig-line">Witness</div>
+        <div class="sig-meta">Witness / Notary<b>[Full Name · Date · Seal]</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>OA-2026-v1 · Operating Agreement Summary · Confidential</div></div>
+</div>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — Investor Summary</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;justify-content:center}
+  .sheet{width:794px;min-height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden;position:relative}
+
+  .top{background:var(--grad-dark);color:#fff;padding:32px 48px 24px;position:relative;overflow:hidden}
+  .top::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .top .row{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1;margin-bottom:14px}
+  .top .brand{display:flex;align-items:center;gap:12px}
+  .top .brand img{width:36px;height:36px;border-radius:8px}
+  .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:14px}
+  .top .brand .t{font-family:var(--font-mono);font-size:9px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:2px;font-weight:600}
+  .top .doc{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);text-align:right;font-weight:600}
+  .top .doc b{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:block;margin-top:2px}
+  .top h1{font-family:var(--font-head);font-size:36px;font-weight:600;letter-spacing:-0.02em;margin:0;position:relative;z-index:1;line-height:1}
+  .top h1 span{color:var(--rj-sky)}
+  .top .sub{font-family:var(--font-head);color:#cbd5e1;font-size:13px;margin-top:6px;position:relative;z-index:1}
+  .thin{height:3px;background:var(--grad-primary)}
+
+  .body{padding:24px 48px;flex:1;display:flex;flex-direction:column;gap:16px;font-family:var(--font-body);font-size:12px;line-height:1.6;color:var(--rj-text)}
+
+  .section h3{font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--rj-navy);margin:0 0 8px 0;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+  .section h3::before{content:"";width:3px;height:16px;background:var(--rj-blue);border-radius:2px}
+
+  /* Split hero */
+  .hero-split{display:grid;grid-template-columns:1.4fr 1fr;gap:14px}
+  .hero-l{background:var(--grad-primary);color:#fff;border-radius:12px;padding:20px 22px;position:relative;overflow:hidden}
+  .hero-l::after{content:"";position:absolute;right:-60px;top:-60px;width:200px;height:200px;background:radial-gradient(circle,rgba(255,255,255,0.2) 0%,transparent 60%);filter:blur(30px)}
+  .hero-l .kicker{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#e0f2fe;font-weight:600;position:relative;z-index:1;margin-bottom:8px}
+  .hero-l h2{font-family:var(--font-head);font-size:22px;font-weight:700;letter-spacing:-0.02em;line-height:1.1;margin:0;position:relative;z-index:1}
+  .hero-r{background:var(--rj-navy);color:#fff;border-radius:12px;padding:20px 22px;text-align:center;position:relative;overflow:hidden}
+  .hero-r::after{content:"";position:absolute;right:-40px;bottom:-40px;width:150px;height:150px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(20px)}
+  .hero-r .lbl-r{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600;position:relative;z-index:1;margin-bottom:6px}
+  .hero-r .v{font-family:var(--font-head);font-weight:700;font-size:32px;letter-spacing:-0.03em;position:relative;z-index:1;line-height:1;background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero-r .d{font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-top:4px;font-weight:600;position:relative;z-index:1}
+
+  /* KPI strip */
+  .kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .k-block{background:linear-gradient(180deg,#fff,var(--rj-light));border:1px solid var(--rj-border);border-radius:10px;padding:14px 12px;text-align:center}
+  .k-block .v{font-family:var(--font-head);font-size:26px;font-weight:700;color:var(--rj-blue);letter-spacing:-0.02em;line-height:1}
+  .k-block .l{font-family:var(--font-head);font-size:10px;color:var(--rj-navy);font-weight:600;margin-top:4px;letter-spacing:-0.01em}
+  .k-block .d{font-family:var(--font-mono);font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);margin-top:3px;font-weight:600}
+
+  /* 2-col info */
+  .two-info{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .info-card{background:#fff;border:1px solid var(--rj-line);border-radius:10px;padding:14px 16px}
+  .info-card .lbl{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:6px}
+  .info-card p{margin:0;font-size:11px;line-height:1.6;color:var(--rj-muted-text)}
+  .info-card p b{color:var(--rj-navy);font-family:var(--font-head);font-weight:600}
+  .info-card ul{padding-left:16px;margin:0;font-size:11px;line-height:1.7}
+  .info-card li{color:var(--rj-text);padding:2px 0}
+  .info-card li b{color:var(--rj-navy);font-family:var(--font-head);font-weight:600}
+
+  /* Team card */
+  .team-card{background:linear-gradient(135deg,#0f172a,#1e3a8a);color:#fff;border-radius:12px;padding:18px 22px;display:flex;gap:16px;align-items:center;position:relative;overflow:hidden}
+  .team-card::after{content:"";position:absolute;right:-60px;top:-60px;width:180px;height:180px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(25px)}
+  .team-card .av{width:70px;height:70px;border-radius:14px;background:var(--grad-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--font-head);font-weight:700;font-size:26px;letter-spacing:-0.03em;flex-shrink:0;box-shadow:0 8px 20px rgba(37,99,235,0.4);position:relative;z-index:1}
+  .team-card .info{position:relative;z-index:1;flex:1}
+  .team-card .n{font-family:var(--font-head);font-weight:600;font-size:18px;letter-spacing:-0.01em}
+  .team-card .role{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-top:3px;font-weight:600}
+  .team-card .bio{font-family:var(--font-head);font-size:11px;color:#cbd5e1;line-height:1.4;margin-top:6px;font-weight:500}
+
+  /* Ask */
+  .ask{background:var(--grad-dark);color:#fff;border-radius:12px;padding:20px 24px;position:relative;overflow:hidden}
+  .ask::after{content:"";position:absolute;right:-80px;bottom:-80px;width:250px;height:250px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(30px)}
+  .ask .top-a{display:flex;justify-content:space-between;align-items:baseline;position:relative;z-index:1;margin-bottom:10px}
+  .ask h3{font-family:var(--font-head);font-size:15px;font-weight:600;letter-spacing:-0.01em;margin:0;color:#fff}
+  .ask h3::before{background:var(--rj-sky)}
+  .ask .amt{font-family:var(--font-head);font-weight:700;font-size:28px;letter-spacing:-0.02em;background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1}
+  .ask .use-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;position:relative;z-index:1}
+  .ask .use-grid .u{background:rgba(255,255,255,0.08);border:1px solid rgba(14,165,233,0.3);border-radius:8px;padding:10px 12px}
+  .ask .use-grid .u .pct{font-family:var(--font-head);font-weight:700;font-size:18px;color:var(--rj-sky);letter-spacing:-0.01em;line-height:1}
+  .ask .use-grid .u .t{font-family:var(--font-head);font-weight:600;font-size:10px;margin-top:4px;letter-spacing:-0.01em}
+  .ask .use-grid .u .d{font-family:var(--font-mono);font-size:8px;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-top:2px;font-weight:600}
+
+  .cta-row{background:var(--grad-primary);color:#fff;padding:14px 20px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 8px 20px rgba(37,99,235,0.3)}
+  .cta-row .t{font-family:var(--font-head);font-weight:600;font-size:14px;letter-spacing:-0.01em}
+  .cta-row .s{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#e0f2fe;margin-top:2px;font-weight:600}
+  .cta-row .btn{background:#fff;color:var(--rj-blue);padding:10px 16px;border-radius:8px;font-family:var(--font-head);font-weight:600;font-size:12px}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:12px 48px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600;margin-top:auto}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+
+  @media print{body{background:#fff;padding:0}.sheet{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="top">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Investor Summary · Confidential</div></div></div>
+      <div class="doc">Doc<b>IS-2026-v1</b></div>
+    </div>
+    <h1>Investor <span>Summary.</span></h1>
+    <div class="sub">One page. Everything you need to decide.</div>
+  </div>
+  <div class="thin"></div>
+
+  <div class="body">
+    <div class="hero-split">
+      <div class="hero-l">
+        <div class="kicker">● The Company</div>
+        <h2>We build the<br/>automation backbone<br/>behind scalable<br/>businesses.</h2>
+      </div>
+      <div class="hero-r">
+        <div class="lbl-r">2026 ARR</div>
+        <div class="v">$1.02M</div>
+        <div class="d">Run rate · Verified</div>
+      </div>
+    </div>
+
+    <div class="kpi-strip">
+      <div class="k-block"><div class="v">142</div><div class="l">Clients</div><div class="d">Year 1</div></div>
+      <div class="k-block"><div class="v">98%</div><div class="l">Retention</div><div class="d">Monthly</div></div>
+      <div class="k-block"><div class="v">$742K</div><div class="l">Revenue</div><div class="d">FY2026</div></div>
+      <div class="k-block"><div class="v">4.9/5</div><div class="l">NPS</div><div class="d">Verified</div></div>
+    </div>
+
+    <div class="two-info">
+      <div class="info-card">
+        <div class="lbl">● The Problem</div>
+        <p><b>Businesses lose more leads to bad follow-up than to bad marketing.</b> DMs die in silence. CRM handoffs break. No-shows go unrecovered. Every hour of manual work is compounding revenue loss — and the tools available today are point solutions, not systems.</p>
+      </div>
+      <div class="info-card">
+        <div class="lbl">● The Solution</div>
+        <p><b>Connected AI-powered infrastructure.</b> RJ ships content, DMs, CRM, credit tech, payments, and follow-up as one working system. 7-day launches. Compliance-aware by default. Every client gets the same disciplined architecture, deployed on their brand.</p>
+      </div>
+    </div>
+
+    <div class="two-info">
+      <div class="info-card">
+        <div class="lbl">● Market</div>
+        <ul>
+          <li><b>$4.4B</b> — US credit repair industry</li>
+          <li><b>$100B+</b> — SMB automation spend</li>
+          <li><b>30M+</b> — US service businesses in TAM</li>
+        </ul>
+      </div>
+      <div class="info-card">
+        <div class="lbl">● Business Model</div>
+        <ul>
+          <li><b>$1,997</b> setup + <b>$997/mo</b> recurring</li>
+          <li>Enterprise white-label at custom pricing</li>
+          <li>À la carte services · portals · APIs</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="team-card">
+      <div class="av">RJ</div>
+      <div class="info">
+        <div class="n">Rick Jefferson</div>
+        <div class="role">Founder · CEO · Credit Tech Architect</div>
+        <div class="bio">Credit technology architect, AI systems builder, and business automation strategist. Sits at the intersection of credit expertise, fintech infrastructure, and enterprise software execution.</div>
+      </div>
+    </div>
+
+    <div class="ask">
+      <div class="top-a">
+        <h3>The Ask</h3>
+        <div class="amt">$500K</div>
+      </div>
+      <div class="use-grid">
+        <div class="u"><div class="pct">50%</div><div class="t">Product</div><div class="d">Credit tech platform buildout</div></div>
+        <div class="u"><div class="pct">30%</div><div class="t">GTM</div><div class="d">Fleet expansion · partnerships</div></div>
+        <div class="u"><div class="pct">20%</div><div class="t">Team</div><div class="d">Senior engineering hires</div></div>
+      </div>
+    </div>
+
+    <div class="cta-row">
+      <div><div class="t">Ready to talk?</div><div class="s">15-min intro · Real numbers · Zero pitch deck</div></div>
+      <div class="btn">Book Intro Call →</div>
+    </div>
+  </div>
+
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Confidential · Not a securities offering · rjbusinesssolutions.org</div></div>
+</div>
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — Founder Vesting Agreement</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;justify-content:center}
+  .sheet{width:794px;min-height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden;position:relative}
+  .top{background:var(--grad-dark);color:#fff;padding:28px 48px 22px;position:relative;overflow:hidden}
+  .top::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .top .row{display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1;margin-bottom:12px}
+  .top .brand{display:flex;align-items:center;gap:12px}
+  .top .brand img{width:36px;height:36px;border-radius:8px}
+  .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:14px}
+  .top .brand .t{font-family:var(--font-mono);font-size:9px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:2px;font-weight:600}
+  .top .doc{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);text-align:right;font-weight:600}
+  .top .doc b{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:block;margin-top:2px}
+  .top h1{font-family:var(--font-head);font-size:30px;font-weight:600;letter-spacing:-0.02em;margin:0;position:relative;z-index:1;line-height:1}
+  .top h1 span{color:var(--rj-sky)}
+  .top .sub{font-family:var(--font-head);color:#cbd5e1;font-size:12px;margin-top:4px;position:relative;z-index:1}
+  .thin{height:3px;background:var(--grad-primary)}
+  .conf{position:absolute;top:96px;right:24px;background:var(--rj-danger);color:#fff;padding:5px 14px 5px 20px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;transform:rotate(3deg);border-radius:4px;z-index:2}
+  .conf::before{content:"● "}
+
+  .body{padding:24px 48px;flex:1;display:flex;flex-direction:column;gap:14px;font-family:var(--font-body);font-size:11px;line-height:1.65;color:var(--rj-text)}
+  h3{font-family:var(--font-head);font-size:13px;font-weight:600;color:var(--rj-navy);margin:0 0 6px 0;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+  h3::before{content:"";width:3px;height:14px;background:var(--rj-blue);border-radius:2px}
+
+  .meta{background:var(--rj-light);padding:14px 18px;border-radius:10px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .meta .k{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:3px}
+  .meta .v{font-family:var(--font-head);font-weight:600;font-size:12px;color:var(--rj-navy);letter-spacing:-0.01em}
+
+  /* Vesting timeline */
+  .vest-timeline{background:linear-gradient(180deg,#fff,var(--rj-light));border:1px solid var(--rj-border);border-radius:12px;padding:16px 18px}
+  .vest-track{position:relative;height:36px;background:var(--rj-light);border-radius:8px;overflow:hidden;margin:14px 0 10px}
+  .vest-track .cliff-zone{position:absolute;left:0;top:0;bottom:0;width:25%;background:rgba(239,68,68,0.15);border-right:2px dashed var(--rj-danger)}
+  .vest-track .vested{position:absolute;left:25%;top:0;bottom:0;width:25%;background:var(--grad-primary);display:flex;align-items:center;padding:0 12px;color:#fff;font-family:ui-monospace,Menlo,monospace;font-size:10px;font-weight:700}
+  .vest-track .unvested{position:absolute;left:50%;top:0;bottom:0;width:50%;background:repeating-linear-gradient(45deg,rgba(14,165,233,0.15),rgba(14,165,233,0.15) 6px,transparent 6px,transparent 12px);border-left:1px dashed var(--rj-blue)}
+  .vest-labels{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--rj-line);border-radius:10px;overflow:hidden;font-size:11px}
+  th{background:var(--rj-navy);color:#fff;padding:9px 12px;text-align:left;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+  th.r{text-align:right}
+  td{padding:8px 12px;border-bottom:1px solid var(--rj-line)}
+  td.r{text-align:right;font-family:ui-monospace,Menlo,monospace;font-weight:600;color:var(--rj-navy)}
+  td .n{font-family:var(--font-head);font-weight:600;color:var(--rj-navy)}
+  tr:last-child td{border:none}
+  tr.done td{background:#f0fdf4}
+  tr.pending td{background:#fef3c7}
+
+  .clauses{display:flex;flex-direction:column;gap:8px}
+  .clause{background:#fff;border:1px solid var(--rj-line);border-left:3px solid var(--rj-blue);border-radius:8px;padding:10px 14px}
+  .clause .num{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:3px}
+  .clause h4{font-family:var(--font-head);font-size:12px;font-weight:600;color:var(--rj-navy);margin:0 0 3px 0;letter-spacing:-0.01em}
+  .clause p{font-size:10.5px;line-height:1.55;color:var(--rj-text);margin:0}
+  .clause p b{color:var(--rj-navy);font-family:var(--font-head);font-weight:600}
+
+  .sig-block{margin-top:auto;padding-top:14px;border-top:1px solid var(--rj-line);display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  .sig-line{border-bottom:1.5px solid var(--rj-navy);padding-bottom:5px;font-family:'Space Grotesk',serif;font-style:italic;font-size:20px;color:var(--rj-blue);font-weight:500;min-height:32px}
+  .sig-meta{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);margin-top:5px;font-weight:600}
+  .sig-meta b{color:var(--rj-navy);display:block;margin-top:2px;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:600}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:10px 48px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+  @media print{body{background:#fff;padding:0}.sheet{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="top">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Founder Vesting Agreement</div></div></div>
+      <div class="doc">Doc<b>FV-2026-v1</b></div>
+    </div>
+    <h1>Founder Stock <span>Vesting Agreement.</span></h1>
+    <div class="sub">4-year vesting · 1-year cliff · Monthly thereafter · Double-trigger acceleration</div>
+  </div>
+  <div class="thin"></div>
+  <div class="conf">Confidential</div>
+
+  <div class="body">
+    <div class="meta">
+      <div><div class="k">Founder</div><div class="v">Rick Jefferson</div></div>
+      <div><div class="k">Total Shares Subject</div><div class="v">6,560,000</div></div>
+      <div><div class="k">Grant Date</div><div class="v">Jan 15, 2026</div></div>
+      <div><div class="k">Vesting Start</div><div class="v">Jan 15, 2026</div></div>
+      <div><div class="k">Cliff Date</div><div class="v">Jan 15, 2027</div></div>
+      <div><div class="k">Full Vest Date</div><div class="v">Jan 15, 2030</div></div>
+    </div>
+
+    <h3>Vesting Timeline · Visual</h3>
+    <div class="vest-timeline">
+      <div class="vest-track">
+        <div class="cliff-zone" title="1-year cliff"></div>
+        <div class="vested">Vested · 2,050,000</div>
+        <div class="unvested"></div>
+      </div>
+      <div class="vest-labels">
+        <span>Start · Jan 2026</span>
+        <span>Cliff · Jan 2027</span>
+        <span>Today · Aug 7, 2026</span>
+        <span>Full · Jan 2030</span>
+      </div>
+    </div>
+
+    <h3>Vesting Schedule · By Year</h3>
+    <table>
+      <thead><tr><th>Period</th><th class="r">Shares Vesting</th><th class="r">Cumulative Vested</th><th class="r">% Complete</th></tr></thead>
+      <tbody>
+        <tr class="pending"><td><div class="n">Cliff · Y1 (Jan 15, 2027)</div></td><td class="r">1,640,000</td><td class="r">1,640,000</td><td class="r">25.0%</td></tr>
+        <tr><td><div class="n">Year 2 (monthly)</div></td><td class="r">1,640,000</td><td class="r">3,280,000</td><td class="r">50.0%</td></tr>
+        <tr><td><div class="n">Year 3 (monthly)</div></td><td class="r">1,640,000</td><td class="r">4,920,000</td><td class="r">75.0%</td></tr>
+        <tr><td><div class="n">Year 4 (monthly)</div></td><td class="r">1,640,000</td><td class="r">6,560,000</td><td class="r">100.0%</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Key Clauses</h3>
+    <div class="clauses">
+      <div class="clause"><div class="num">Clause 1 · Cliff</div><h4>One-Year Cliff</h4><p>No shares vest during the first 12 months. On the <b>first anniversary</b> of vesting start (Jan 15, 2027), 25% of total shares (1,640,000) vest in a single event.</p></div>
+      <div class="clause"><div class="num">Clause 2 · Monthly Thereafter</div><h4>Monthly Vesting Post-Cliff</h4><p>After the cliff, remaining 75% (4,920,000 shares) vest in <b>36 equal monthly installments</b> of 136,667 shares each, on the 15th of every month.</p></div>
+      <div class="clause"><div class="num">Clause 3 · Repurchase Right</div><h4>Company Repurchase on Termination</h4><p>If Founder is terminated (voluntary or for cause) before full vest, Company has <b>90-day option</b> to repurchase all unvested shares at original issuance price ($0.001/share).</p></div>
+      <div class="clause"><div class="num">Clause 4 · Double-Trigger Acceleration</div><h4>Change of Control Acceleration</h4><p>Upon a <b>Change of Control</b> (acquisition, merger, IPO) followed by <b>involuntary termination without cause within 12 months</b>, 100% of unvested shares immediately accelerate to fully vested.</p></div>
+      <div class="clause"><div class="num">Clause 5 · Section 83(b) Election</div><h4>Tax Election Filed</h4><p>Founder confirms filing of <b>Section 83(b) election</b> with the IRS within 30 days of grant. Election on file · Reference № 83B-2026-RJ. Copy attached as Exhibit A.</p></div>
+      <div class="clause"><div class="num">Clause 6 · Transfer Restrictions</div><h4>No Transfers Before Vest</h4><p>Unvested shares are <b>non-transferable</b>. Vested shares subject to Company + Investor ROFR under Investor Rights Agreement.</p></div>
+    </div>
+
+    <div class="sig-block">
+      <div>
+        <div class="sig-line">Rick Jefferson</div>
+        <div class="sig-meta">Founder<b>Rick Jefferson · Aug 7, 2026</b></div>
+      </div>
+      <div>
+        <div class="sig-line">Company</div>
+        <div class="sig-meta">RJ Business Solutions, LLC<b>Rick Jefferson · Managing Member · Aug 7, 2026</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>FV-2026-v1 · Confidential · Consult counsel before signing</div></div>
+</div>
+</body>
+</html>

@@ -1,1 +1,21 @@
-h1 { font-family: Arial, Helvetica, sans-serif; }
+/* Smart FCRA · RJ Business Solutions app skin */
+@import url('/static/brand/brand.css');
+
+:root {
+  --rj-blue: #2563eb;
+  --rj-sky: #0ea5e9;
+  --rj-deep: #1e3a8a;
+  --rj-navy: #0f172a;
+  --font-head: "Space Grotesk", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --grad-primary: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%);
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-head);
+  letter-spacing: -0.02em;
+}
+
+body {
+  font-family: var(--font-body);
+}

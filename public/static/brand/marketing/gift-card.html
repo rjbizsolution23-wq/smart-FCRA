@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Gift Card</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:60px 40px;display:flex;flex-direction:column;gap:40px;align-items:center}
+  .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:16px;text-align:center}
+
+  .stage{display:flex;gap:40px;justify-content:center;flex-wrap:wrap}
+
+  /* 3.375 x 2.125 in @ 200dpi = 675 x 425 */
+  .gc{width:520px;height:328px;border-radius:20px;overflow:hidden;position:relative;box-shadow:0 30px 60px rgba(15,23,42,0.3)}
+
+  /* FRONT · Navy premium */
+  .gc-front{background:var(--grad-dark);color:#fff;padding:36px 40px;display:flex;flex-direction:column;justify-content:space-between}
+  .gc-front::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.5) 0%,transparent 60%);filter:blur(50px)}
+  .gc-front::before{content:"";position:absolute;left:-80px;bottom:-80px;width:300px;height:300px;background:radial-gradient(circle,rgba(37,99,235,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .gc-front .top{display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1}
+  .gc-front .top .brand{display:flex;align-items:center;gap:10px}
+  .gc-front .top .brand img{width:40px;height:40px;border-radius:9px}
+  .gc-front .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:13px}
+  .gc-front .top .brand .t{font-family:var(--font-mono);font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600;margin-top:2px}
+  .gc-front .top .badge{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);padding:5px 10px;border-radius:6px}
+
+  .gc-front .middle{position:relative;z-index:1}
+  .gc-front .middle .type{font-family:var(--font-mono);font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#94a3b8;font-weight:600;margin-bottom:6px}
+  .gc-front .middle .amount{font-family:var(--font-head);font-size:88px;font-weight:700;letter-spacing:-0.05em;line-height:0.9;background:linear-gradient(135deg,#0ea5e9 0%,#60a5fa 100%);-webkit-background-clip:text;background-clip:text;color:transparent;display:inline-block}
+  .gc-front .middle .amount .sml{font-size:36px;color:#94a3b8;background:none;-webkit-text-fill-color:#94a3b8;font-weight:500;letter-spacing:0}
+
+  .gc-front .bot{display:flex;justify-content:space-between;align-items:flex-end;position:relative;z-index:1}
+  .gc-front .bot .code{font-family:ui-monospace,Menlo,monospace;font-size:14px;color:#fff;letter-spacing:0.15em;font-weight:500}
+  .gc-front .bot .code .k{font-family:var(--font-mono);font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;font-weight:600}
+  .gc-front .bot .chip{width:40px;height:32px;background:linear-gradient(135deg,#facc15,#ca8a04);border-radius:4px;position:relative}
+  .gc-front .bot .chip::before{content:"";position:absolute;inset:4px;border:1px solid rgba(0,0,0,0.3);border-radius:2px}
+
+  /* FRONT · Blue promo variant */
+  .gc-front-b{background:var(--grad-primary);color:#fff}
+  .gc-front-b::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(255,255,255,0.25) 0%,transparent 60%);filter:blur(50px)}
+  .gc-front-b .top .badge{background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);color:#fff}
+  .gc-front-b .top .brand .t{color:#e0f2fe}
+  .gc-front-b .middle .type{color:rgba(255,255,255,0.85)}
+  .gc-front-b .middle .amount{background:linear-gradient(135deg,#fff,#e0f2fe);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .gc-front-b .middle .amount .sml{color:rgba(255,255,255,0.7);-webkit-text-fill-color:rgba(255,255,255,0.7)}
+  .gc-front-b .bot .code .k{color:rgba(255,255,255,0.75)}
+
+  /* BACK */
+  .gc-back{background:#fff;padding:0;display:flex;flex-direction:column;position:relative}
+  .gc-back .magstripe{background:#0f172a;height:56px;margin-top:28px}
+  .gc-back .body{padding:20px 32px;flex:1;display:flex;flex-direction:column;gap:12px}
+  .gc-back .sign-block{margin-top:12px;display:flex;gap:16px;align-items:center}
+  .gc-back .sign-line{flex:1;background:linear-gradient(135deg,#f8fafc 0%,#e2e8f0 100%);height:40px;border-radius:4px;padding:0 16px;display:flex;align-items:center;font-family:'Space Grotesk',serif;font-style:italic;font-size:16px;color:var(--rj-muted-text)}
+  .gc-back .cvv{background:var(--rj-light);border:1px solid var(--rj-border);border-radius:4px;padding:10px 16px;font-family:ui-monospace,Menlo,monospace;font-weight:600;font-size:14px;color:var(--rj-navy);letter-spacing:0.1em}
+  .gc-back .fine{font-size:9px;color:var(--rj-muted-text);line-height:1.5;margin-top:auto}
+  .gc-back .foot-strip{background:var(--rj-navy);color:#94a3b8;padding:10px 32px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+  .gc-back .foot-strip .brand{color:#fff;font-family:var(--font-head);text-transform:none;letter-spacing:0.02em;font-size:11px;display:flex;align-items:center;gap:6px}
+  .gc-back .foot-strip .brand img{width:16px;height:16px;border-radius:3px}
+</style>
+</head>
+<body>
+
+<div>
+  <div class="lbl">Gift Card · Front · 3.375" × 2.125" · Navy Premium</div>
+  <div class="stage">
+    <div class="gc gc-front">
+      <div class="top">
+        <div class="brand">
+          <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+          <div><div class="n">RJ Business Solutions</div><div class="t">Growth Systems Credit</div></div>
+        </div>
+        <div class="badge">● Premium</div>
+      </div>
+      <div class="middle">
+        <div class="type">Growth Credit · Redeemable</div>
+        <div class="amount">$500<span class="sml">.00</span></div>
+      </div>
+      <div class="bot">
+        <div class="code">
+          <div class="k">Card Number</div>
+          RJ26 · 4291 · 8072 · 0500
+        </div>
+        <div class="chip"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div>
+  <div class="lbl">Gift Card · Front · Blue Gradient Promo Variant</div>
+  <div class="stage">
+    <div class="gc gc-front gc-front-b">
+      <div class="top">
+        <div class="brand">
+          <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="" style="background:#fff;padding:3px"/>
+          <div><div class="n">RJ Business Solutions</div><div class="t">Launch Credit</div></div>
+        </div>
+        <div class="badge">● 7-Day Launch</div>
+      </div>
+      <div class="middle">
+        <div class="type">Applies to any Launch Package</div>
+        <div class="amount">$1,000<span class="sml">.00</span></div>
+      </div>
+      <div class="bot">
+        <div class="code">
+          <div class="k">Redeem Code</div>
+          LAUNCH · 26RJ · 7DAY · 1000
+        </div>
+        <div class="chip"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div>
+  <div class="lbl">Gift Card · Back · Signature + CVV + Terms</div>
+  <div class="stage">
+    <div class="gc gc-back">
+      <div class="magstripe"></div>
+      <div class="body">
+        <div class="sign-block">
+          <div class="sign-line">Recipient Signature</div>
+          <div class="cvv">CVV 3847</div>
+        </div>
+        <div class="fine">Redeemable at rjbusinesssolutions.org against any active service package. Non-transferable to cash. Expires 12 months from issue date. Report lost/stolen cards to support@rjbusinesssolutions.org. Not valid with other promotional offers unless specified.</div>
+      </div>
+      <div class="foot-strip">
+        <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Business Solutions</div>
+        <div>Card № RJ26-4291-8072-0500</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Employee Handbook</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;flex-direction:column;gap:24px;align-items:center}
+  .page{width:794px;height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden;page-break-after:always;position:relative}
+
+  /* COVER */
+  .cover{background:var(--grad-dark);color:#fff;padding:72px 60px;position:relative;overflow:hidden;flex:1;display:flex;flex-direction:column;justify-content:space-between}
+  .cover::after{content:"";position:absolute;right:-150px;top:-150px;width:600px;height:600px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(60px)}
+  .cover::before{content:"";position:absolute;left:-100px;bottom:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(37,99,235,0.35) 0%,transparent 60%);filter:blur(50px)}
+  .cover .top{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:flex-start}
+  .cover .top .brand{display:flex;align-items:center;gap:12px}
+  .cover .top .brand img{width:44px;height:44px;border-radius:10px}
+  .cover .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:16px}
+  .cover .top .brand .t{font-family:var(--font-mono);font-size:10px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:3px;font-weight:600}
+  .cover .top .doc{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);text-align:right;font-weight:600}
+  .cover .top .doc b{color:#fff;font-family:var(--font-head);font-size:12px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:block;margin-top:3px}
+  .cover .middle{position:relative;z-index:1}
+  .cover .kicker{display:inline-block;padding:8px 16px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);border-radius:999px;font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-bottom:24px;font-weight:600}
+  .cover h1{font-family:var(--font-head);font-size:88px;font-weight:700;letter-spacing:-0.04em;line-height:0.9;margin:0}
+  .cover h1 span{background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .cover .subtitle{font-family:var(--font-head);color:#cbd5e1;font-size:20px;margin-top:24px;line-height:1.35;max-width:520px;font-weight:500}
+  .cover .foot-strip{position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,1fr);gap:24px;padding-top:32px;border-top:1px solid rgba(255,255,255,0.15)}
+  .cover .foot-strip .k{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;font-weight:600}
+  .cover .foot-strip .v{font-family:var(--font-head);font-weight:600;font-size:14px}
+
+  /* Inner pages */
+  .inner{padding:44px 60px;flex:1;display:flex;flex-direction:column;gap:20px}
+  .inner .head{display:flex;justify-content:space-between;align-items:center;padding-bottom:14px;border-bottom:2px solid var(--rj-blue)}
+  .inner .head .brand{display:flex;align-items:center;gap:10px;font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy)}
+  .inner .head .brand img{width:28px;height:28px;border-radius:6px}
+  .inner .head .pnum{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+
+  .inner h2{font-family:var(--font-head);font-size:36px;font-weight:600;color:var(--rj-navy);margin:0 0 12px 0;letter-spacing:-0.02em;line-height:1}
+  .inner h2 span{background:linear-gradient(135deg,#2563eb,#0ea5e9);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .inner .lead{font-family:var(--font-head);color:var(--rj-muted-text);font-size:15px;line-height:1.4;font-weight:500;margin-bottom:8px}
+
+  .chapter-badge{display:inline-block;padding:5px 12px;background:var(--rj-light);color:var(--rj-blue);border-radius:999px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;margin-bottom:8px}
+
+  /* TOC */
+  .toc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;margin-top:12px}
+  .toc-item{padding:14px 16px;background:linear-gradient(135deg,#fff 0%,var(--rj-light) 100%);border:1px solid var(--rj-border);border-radius:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .toc-item .num{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:4px}
+  .toc-item .title{font-family:var(--font-head);font-weight:600;font-size:14px;color:var(--rj-navy);letter-spacing:-0.01em}
+  .toc-item .desc{font-size:11px;color:var(--rj-muted-text);margin-top:3px;line-height:1.4}
+  .toc-item .p{font-family:var(--font-mono);font-size:11px;color:var(--rj-blue);font-weight:600;letter-spacing:0.06em;white-space:nowrap;padding-top:2px}
+
+  /* Manifesto page */
+  .manifesto{position:relative;z-index:1}
+  .principle{background:linear-gradient(135deg,#fff 0%,var(--rj-light) 100%);border-left:4px solid var(--rj-blue);border-radius:12px;padding:16px 20px;margin-bottom:12px;display:grid;grid-template-columns:44px 1fr;gap:16px;align-items:center}
+  .principle .num{width:44px;height:44px;background:var(--grad-primary);border-radius:10px;color:#fff;font-family:var(--font-head);font-weight:700;font-size:18px;display:flex;align-items:center;justify-content:center;letter-spacing:-0.02em;box-shadow:0 6px 14px rgba(37,99,235,0.35)}
+  .principle h4{font-family:var(--font-head);font-size:15px;font-weight:600;color:var(--rj-navy);margin:0 0 4px 0;letter-spacing:-0.01em}
+  .principle p{font-size:12px;line-height:1.55;color:var(--rj-muted-text);margin:0}
+
+  .pull-quote{background:var(--grad-dark);color:#fff;padding:22px 28px;border-radius:14px;position:relative;overflow:hidden;margin:6px 0}
+  .pull-quote::before{content:"\201C";position:absolute;top:0;left:16px;font-family:var(--font-head);font-size:100px;color:rgba(14,165,233,0.3);line-height:1}
+  .pull-quote p{font-family:var(--font-head);font-size:18px;font-weight:500;letter-spacing:-0.01em;line-height:1.35;margin:0 0 8px 0;padding-left:36px;position:relative;z-index:1}
+  .pull-quote p span{color:var(--rj-sky)}
+  .pull-quote .attrib{padding-left:36px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);position:relative;z-index:1;font-weight:600}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:14px 60px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+
+  @media print{body{background:#fff;padding:0;gap:0}.page{box-shadow:none}}
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="page">
+  <div class="cover">
+    <div class="top">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Team Handbook · 2026 Edition</div></div></div>
+      <div class="doc">Document<b>HB-2026-v1</b></div>
+    </div>
+    <div class="middle">
+      <div class="kicker">● For the Team</div>
+      <h1>The Team<br/><span>Handbook.</span></h1>
+      <div class="subtitle">How we work. What we ship. Why it matters. The system inside the system.</div>
+    </div>
+    <div class="foot-strip">
+      <div><div class="k">Effective</div><div class="v">July 2026</div></div>
+      <div><div class="k">Owner</div><div class="v">Rick Jefferson</div></div>
+      <div><div class="k">Chapters</div><div class="v">10 Sections</div></div>
+      <div><div class="k">HQ</div><div class="v">Tijeras, NM</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- TOC -->
+<div class="page">
+  <div class="inner">
+    <div class="head"><div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Team Handbook</div><div class="pnum">Contents · Page 02</div></div>
+    <div class="chapter-badge">● Table of Contents</div>
+    <h2>What's <span>inside.</span></h2>
+    <p class="lead">Ten chapters. One playbook for how RJ Business Solutions operates day to day.</p>
+
+    <div class="toc-grid">
+      <div class="toc-item"><div><div class="num">Chapter 01</div><div class="title">Culture Manifesto</div><div class="desc">Who we are · what we ship</div></div><div class="p">p. 03</div></div>
+      <div class="toc-item"><div><div class="num">Chapter 02</div><div class="title">Operating Principles</div><div class="desc">7 rules of the road</div></div><div class="p">p. 04</div></div>
+      <div class="toc-item"><div><div class="num">Chapter 03</div><div class="title">Communication Norms</div><div class="desc">Slack · async · meetings</div></div><div class="p">p. 05</div></div>
+      <div class="toc-item"><div><div class="num">Chapter 04</div><div class="title">Client Standards</div><div class="desc">Response time · quality bar</div></div><div class="p">p. 06</div></div>
+      <div class="toc-item"><div><div class="num">Chapter 05</div><div class="title">Security &amp; Access</div><div class="desc">Delegated access · secrets</div></div><div class="p">p. 07</div></div>
+      <div class="toc-item"><div><div class="num">Chapter 06</div><div class="title">Compliance Guardrails</div><div class="desc">FCRA · FDCPA · TCPA</div></div><div class="p">p. 08</div></div>
+      <div class="toc-item"><div><div class="num">Chapter 07</div><div class="title">Comp &amp; Benefits</div><div class="desc">Pay · PTO · equipment</div></div><div class="p">p. 09</div></div>
+      <div class="toc-item"><div><div class="num">Chapter 08</div><div class="title">Growth &amp; Feedback</div><div class="desc">Reviews · promotions · L&amp;D</div></div><div class="p">p. 10</div></div>
+      <div class="toc-item"><div><div class="num">Chapter 09</div><div class="title">Time Off &amp; Remote</div><div class="desc">Async-first · take the time</div></div><div class="p">p. 11</div></div>
+      <div class="toc-item"><div><div class="num">Chapter 10</div><div class="title">Legal &amp; Policy</div><div class="desc">Boilerplate you should know</div></div><div class="p">p. 12</div></div>
+    </div>
+
+    <div class="pull-quote">
+      <p>We're not a company. We're a <span>system that ships systems.</span> This handbook exists so we all know how the machine runs.</p>
+      <div class="attrib">— Rick Jefferson · Founder</div>
+    </div>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Handbook v1 · 2026 · Page 02</div></div>
+</div>
+
+<!-- CULTURE MANIFESTO -->
+<div class="page">
+  <div class="inner">
+    <div class="head"><div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Team Handbook</div><div class="pnum">Chapter 01 · Page 03</div></div>
+    <div class="chapter-badge">● Chapter 01</div>
+    <h2>The <span>Culture Manifesto.</span></h2>
+    <p class="lead">Seven principles. Non-negotiable. If you're on the team, this is how we think.</p>
+
+    <div class="manifesto">
+      <div class="principle">
+        <div class="num">1</div>
+        <div>
+          <h4>Systems &gt; Slogans</h4>
+          <p>We don't sell templates. We build systems. Every deliverable ships as infrastructure — not a slide, not a slogan, not a promise.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="num">2</div>
+        <div>
+          <h4>Build for the Founder Who Can't Sleep</h4>
+          <p>Every system we ship should let a founder rest at night. If our work doesn't reduce someone's stress, we're not done yet.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="num">3</div>
+        <div>
+          <h4>Response Time is a Feature</h4>
+          <p>Client Slack: 4 business hours. Internal Slack: same-day. Nobody waits alone. Silence is a bug we treat as high-priority.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="num">4</div>
+        <div>
+          <h4>Compliance is the Foundation</h4>
+          <p>Automation without guardrails is a lawsuit. Every system we build ships with FCRA, FDCPA, and TCPA-informed workflows by default.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="num">5</div>
+        <div>
+          <h4>Delegated Access Only</h4>
+          <p>We never ask a client for passwords, 2FA codes, or recovery phrases. Ever. Role-based permissions or password-manager sharing, always.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="num">6</div>
+        <div>
+          <h4>Ship > Perfect</h4>
+          <p>7-day launches are our default because "shipped and iterating" beats "perfect and unlaunched" every time. Momentum compounds.</p>
+        </div>
+      </div>
+      <div class="principle">
+        <div class="num">7</div>
+        <div>
+          <h4>Write it Down</h4>
+          <p>If it's not in a doc, it didn't happen. Every decision, every client agreement, every system change goes into writing. Memory doesn't scale.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Chapter 01 · Culture Manifesto · Page 03</div></div>
+</div>
+
+</body>
+</html>

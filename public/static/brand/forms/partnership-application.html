@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Partner Application — RJ Business Solutions</title>
+<link rel="stylesheet" href="../brand.css">
+<link rel="stylesheet" href="forms.css">
+</head>
+<body class="forms-page">
+
+<div class="form-shell" id="app">
+  <div class="form-header">
+    <div class="brand">
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+      <div><div class="n">RJ Business Solutions</div><div class="t">Partnership · Affiliate Program</div></div>
+    </div>
+    <div class="save-tag">Auto-saving</div>
+  </div>
+
+  <div class="form-title-block">
+    <div class="kicker">● Referral Program · 15–35% Recurring</div>
+    <h1>Refer clients.<br/><span>Earn recurring.</span></h1>
+    <div class="sub">Standard commission: 25% of first-year revenue, paid monthly. Top-tier partners earn 35% + strategic profit-share. Approval in 3 business days.</div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-steps">
+      <div class="fill-line" id="fill-line" style="width:0%"></div>
+      <div class="pstep active" data-step="1"><div class="circ">1</div><div class="lbl">About You</div></div>
+      <div class="pstep" data-step="2"><div class="circ">2</div><div class="lbl">Audience</div></div>
+      <div class="pstep" data-step="3"><div class="circ">3</div><div class="lbl">Promotion</div></div>
+      <div class="pstep" data-step="4"><div class="circ">4</div><div class="lbl">Agreement</div></div>
+    </div>
+  </div>
+
+  <form onsubmit="return false">
+
+    <div class="step-panel active" data-panel="1">
+      <h2><span class="step-of">Step 01 of 04</span>About you</h2>
+      <div class="step-sub">Basics + which RJ services you'd promote.</div>
+      <div class="field-row">
+        <div class="field"><label>Full Name <span class="req">*</span></label><input type="text" name="fullName" required/><div class="error">Required</div></div>
+        <div class="field"><label>Business / Brand Name</label><input type="text" name="brand"/></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Email <span class="req">*</span></label><input type="email" name="email" required/><div class="error">Valid email required</div></div>
+        <div class="field"><label>Phone</label><input type="tel" name="phone"/></div>
+      </div>
+      <div class="field">
+        <label>Partner type <span class="req">*</span></label>
+        <div class="tile-select three">
+          <div class="tile-opt" data-single="type" data-val="creator"><div class="icon">Type 01</div><div class="t">Content Creator</div><div class="d">IG · TikTok · YouTube</div></div>
+          <div class="tile-opt" data-single="type" data-val="agency"><div class="icon">Type 02</div><div class="t">Agency / Consultant</div><div class="d">Refer to clients</div></div>
+          <div class="tile-opt" data-single="type" data-val="broker"><div class="icon">Type 03</div><div class="t">Loan Broker / FinTech</div><div class="d">Credit + funding referrals</div></div>
+          <div class="tile-opt" data-single="type" data-val="coach"><div class="icon">Type 04</div><div class="t">Business Coach</div><div class="d">Systems tools for students</div></div>
+          <div class="tile-opt" data-single="type" data-val="community"><div class="icon">Type 05</div><div class="t">Community Leader</div><div class="d">Mastermind / group host</div></div>
+          <div class="tile-opt" data-single="type" data-val="other"><div class="icon">Type 06</div><div class="t">Other</div><div class="d">Tell us more below</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-panel" data-panel="2">
+      <h2><span class="step-of">Step 02 of 04</span>Your audience</h2>
+      <div class="step-sub">Who trusts you today — that's who we'd serve together.</div>
+      <div class="field">
+        <label>Primary audience size</label>
+        <div class="chip-group" data-single="audienceSize">
+          <div class="chip" data-val="under-1k">&lt; 1K</div>
+          <div class="chip" data-val="1-10k">1K–10K</div>
+          <div class="chip" data-val="10-50k">10K–50K</div>
+          <div class="chip" data-val="50-250k">50K–250K</div>
+          <div class="chip" data-val="250k-1m">250K–1M</div>
+          <div class="chip" data-val="1m-plus">1M+</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Where's your audience? (multi)</label>
+        <div class="chip-group" data-multi="channels">
+          <div class="chip" data-val="ig">Instagram</div>
+          <div class="chip" data-val="tt">TikTok</div>
+          <div class="chip" data-val="yt">YouTube</div>
+          <div class="chip" data-val="x">X / Twitter</div>
+          <div class="chip" data-val="li">LinkedIn</div>
+          <div class="chip" data-val="email">Email list</div>
+          <div class="chip" data-val="pod">Podcast</div>
+          <div class="chip" data-val="mastermind">Mastermind / Community</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Audience demographic (multi)</label>
+        <div class="chip-group" data-multi="demographic">
+          <div class="chip" data-val="entrepreneurs">Entrepreneurs</div>
+          <div class="chip" data-val="agencies">Agencies</div>
+          <div class="chip" data-val="creators">Creators</div>
+          <div class="chip" data-val="credit-clients">Credit-repair clients</div>
+          <div class="chip" data-val="realestate">Real estate</div>
+          <div class="chip" data-val="coaches">Coaches / Consultants</div>
+          <div class="chip" data-val="fintech">FinTech operators</div>
+          <div class="chip" data-val="general">General consumer</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-panel" data-panel="3">
+      <h2><span class="step-of">Step 03 of 04</span>How you'd promote</h2>
+      <div class="step-sub">Realistic — what fits your existing content pattern.</div>
+      <div class="field">
+        <label>Services you'd promote (multi)</label>
+        <div class="chip-group" data-multi="services">
+          <div class="chip" data-val="credit">Credit Repair</div>
+          <div class="chip" data-val="funding">Business Funding</div>
+          <div class="chip" data-val="growth">Growth Engine</div>
+          <div class="chip" data-val="automation">AI Automation</div>
+          <div class="chip" data-val="portal">Client Portals</div>
+          <div class="chip" data-val="whitelabel">White-Label Fleet</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Promotion methods (multi)</label>
+        <div class="chip-group" data-multi="methods">
+          <div class="chip" data-val="organic">Organic posts</div>
+          <div class="chip" data-val="paid">Paid ads</div>
+          <div class="chip" data-val="email">Email newsletter</div>
+          <div class="chip" data-val="podcast">Podcast mentions</div>
+          <div class="chip" data-val="1on1">1-on-1 client recs</div>
+          <div class="chip" data-val="webinar">Webinars / lives</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Expected referrals · monthly</label>
+        <div class="chip-group" data-single="expected">
+          <div class="chip" data-val="1-3">1–3</div>
+          <div class="chip" data-val="4-10">4–10</div>
+          <div class="chip" data-val="10-25">10–25</div>
+          <div class="chip" data-val="25-plus">25+</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Past partnership experience (optional)</label>
+        <textarea name="pastExp" placeholder="Any past affiliate or partner deals · results · learnings."></textarea>
+      </div>
+    </div>
+
+    <div class="step-panel" data-panel="4">
+      <h2><span class="step-of">Step 04 of 04</span>Agreement &amp; submit</h2>
+      <div class="step-sub">Standard partner terms. Full agreement drafted after approval.</div>
+      <div style="background:var(--rj-light);border-left:3px solid var(--rj-blue);padding:14px 18px;border-radius:0 10px 10px 0;font-size:12px;line-height:1.6;color:var(--rj-text);margin-bottom:14px">
+        <b style="font-family:var(--font-head);color:var(--rj-navy)">Standard Terms</b><br/>
+        <ul style="margin:6px 0 0 18px;padding:0">
+          <li>25% commission on collected revenue · first 12 months per referred client</li>
+          <li>Payments monthly · Net-15 · Stripe or ACH · $100 minimum payout</li>
+          <li>Non-exclusive · both parties free to work with others</li>
+          <li>30-day cancellation · earned commissions continue their 12-month window</li>
+          <li>Promo materials + tracking link + dashboard access provided at approval</li>
+        </ul>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:6px">
+        <label class="cb-row"><input type="checkbox" name="agree" required/><div class="cb-t"><b>Agree to standard partner terms (required)</b> · I understand full agreement will be sent after application approval and I must sign before earning commissions.</div></label>
+        <label class="cb-row"><input type="checkbox" name="tcpa"/><div class="cb-t">Contact consent · call / text / email regarding this application.</div></label>
+        <label class="cb-row"><input type="checkbox" name="newsletter"/><div class="cb-t">Send me partner-only updates + monthly performance benchmarks.</div></label>
+      </div>
+      <div class="turnstile-placeholder"><b>Cloudflare Turnstile</b> · Silent check on submit.</div>
+    </div>
+
+    <div class="success-state" id="success">
+      <div class="check">$</div>
+      <h2>Application <span>received.</span></h2>
+      <p>Partner team reviews every application within <b>3 business days</b>. Approved partners get an email with dashboard access, tracking link, and promo materials pack.</p>
+      <div class="next-steps">
+        <h4>● Approval Process</h4>
+        <ol>
+          <li>Application reviewed by partner team</li>
+          <li>Approval / decline within 3 business days</li>
+          <li>Signed partner agreement · DocuSign</li>
+          <li>Dashboard access + promo pack + tracking link · instant</li>
+        </ol>
+      </div>
+      <p style="font-size:12px;color:var(--rj-muted-text)">Reference № <b id="refnum" style="color:var(--rj-navy);font-family:ui-monospace,Menlo,monospace">—</b></p>
+    </div>
+
+    <div class="form-actions" id="actions">
+      <button type="button" class="btn ghost" id="backBtn" style="visibility:hidden">← Back</button>
+      <button type="button" class="btn primary" id="nextBtn">Next Step →</button>
+    </div>
+  </form>
+
+  <div class="backend-note"><b>// Backend</b> · POST /api/lead/partnership → D1 <code>partner_applications</code> + auto-generates tracking link on approval + fires Referral Partner Agreement via DocuSign.</div>
+</div>
+
+<script>
+(() => {
+  const FORM_ID='partnership'; const TOTAL=4; let step=1;
+  const state={form:FORM_ID,channels:[],demographic:[],services:[],methods:[]};
+  try{Object.assign(state,JSON.parse(localStorage.getItem('rj-'+FORM_ID)||'{}'));}catch(e){}
+  const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
+  const save=()=>localStorage.setItem('rj-'+FORM_ID,JSON.stringify(state));
+  function goStep(n){
+    step=Math.max(1,Math.min(TOTAL,n));
+    $$('.step-panel').forEach(p=>p.classList.toggle('active',+p.dataset.panel===step));
+    $$('.pstep').forEach(ps=>{const s=+ps.dataset.step;ps.classList.toggle('active',s===step);ps.classList.toggle('done',s<step);});
+    $('#fill-line').style.width=((step-1)/(TOTAL-1))*100+'%';
+    $('#backBtn').style.visibility=step===1?'hidden':'visible';
+    $('#nextBtn').textContent=step===TOTAL?'Submit Application →':'Next Step →';
+  }
+  function validate(){
+    let ok=true;
+    const panel=document.querySelector(`.step-panel[data-panel="${step}"]`);
+    panel.querySelectorAll('input[required]').forEach(el=>{
+      const f=el.closest('.field')||el.closest('.cb-row');
+      if(el.type==='checkbox'){if(!el.checked)ok=false;}
+      else if(!el.value?.trim()||(el.type==='email'&&!/^\S+@\S+\.\S+$/.test(el.value))){f?.classList?.add('err');ok=false;}
+      else f?.classList?.remove('err');
+    });
+    if(step===1&&!state.type)ok=false;
+    return ok;
+  }
+  $('#nextBtn').onclick=()=>{
+    const panel=document.querySelector(`.step-panel[data-panel="${step}"]`);
+    panel.querySelectorAll('input,select,textarea').forEach(el=>{if(el.type==='checkbox')state[el.name]=el.checked;else if(el.name)state[el.name]=el.value;});
+    save(); if(!validate())return;
+    if(step===TOTAL)submit(); else goStep(step+1);
+  };
+  $('#backBtn').onclick=()=>goStep(step-1);
+  document.addEventListener('click',e=>{
+    const chip=e.target.closest('.chip'); if(chip){
+      const group=chip.closest('[data-multi]')||chip.closest('[data-single]'); if(!group)return;
+      const key=group.dataset.multi||group.dataset.single;
+      if(group.dataset.multi){chip.classList.toggle('selected');state[key]=[...group.querySelectorAll('.chip.selected')].map(c=>c.dataset.val);}
+      else {group.querySelectorAll('.chip').forEach(c=>c.classList.toggle('selected',c===chip));state[key]=chip.dataset.val;}
+      save();
+    }
+    const tile=e.target.closest('.tile-opt'); if(tile){
+      const key=tile.dataset.single;
+      tile.parentElement.querySelectorAll('.tile-opt').forEach(t=>t.classList.toggle('selected',t===tile));
+      state[key]=tile.dataset.val; save();
+    }
+  });
+  function submit(){
+    const ref='RJ-PA-'+Date.now().toString(36).toUpperCase();
+    state.ref = ref; state.submittedAt = new Date().toISOString(); save();
+    try { fetch('/api/public/lead/' + FORM_ID, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(state) }).catch(()=>{}); } catch(e){}
+    console.log('[RJ PARTNERSHIP APP]',state);
+    $('#refnum').textContent=ref;
+    $('#success').classList.add('active');
+    document.querySelectorAll('.step-panel').forEach(p=>p.classList.remove('active'));
+    $('#actions').style.display='none';
+    document.querySelector('.progress-wrap').style.display='none';
+  }
+  document.querySelectorAll('input[name],select[name],textarea[name]').forEach(el=>{if(state[el.name]!==undefined){if(el.type==='checkbox')el.checked=!!state[el.name];else el.value=state[el.name];}});
+  document.querySelectorAll('[data-multi]').forEach(g=>{const key=g.dataset.multi;if(Array.isArray(state[key]))g.querySelectorAll('.chip').forEach(c=>c.classList.toggle('selected',state[key].includes(c.dataset.val)));});
+  document.querySelectorAll('[data-single]').forEach(g=>{const key=g.dataset.single;if(state[key])g.querySelectorAll('.chip, .tile-opt').forEach(c=>c.classList.toggle('selected',c.dataset.val===state[key]));});
+  goStep(step);
+})();
+</script>
+
+</body>
+</html>

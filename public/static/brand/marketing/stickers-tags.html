@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Stickers + Merch Tags</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:60px 40px;display:flex;flex-direction:column;gap:48px;align-items:center}
+  .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:16px;text-align:center}
+
+  /* Die-cut sheet */
+  .sheet-wrap{background:#fff;border-radius:16px;padding:40px;box-shadow:0 20px 40px rgba(15,23,42,0.1)}
+  .cut-sheet{width:1200px;background:#fff;border:2px dashed #cbd5e1;border-radius:8px;padding:32px;position:relative}
+  .cut-sheet::before{content:"Trim Line";position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:#fff;padding:0 8px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;font-weight:600}
+
+  .cut-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:20px;align-items:center;justify-items:center}
+
+  .sticker{position:relative;filter:drop-shadow(0 6px 12px rgba(15,23,42,0.15))}
+
+  /* Circle · brand mark */
+  .s-circle{width:170px;height:170px;border-radius:50%;background:var(--grad-dark);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center;position:relative;overflow:hidden;border:6px solid #fff}
+  .s-circle::after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;background:radial-gradient(circle,rgba(14,165,233,0.5) 0%,transparent 60%);filter:blur(20px)}
+  .s-circle img{width:44px;height:44px;border-radius:10px;position:relative;z-index:1;margin-bottom:6px}
+  .s-circle .n{font-family:var(--font-head);font-weight:700;font-size:12px;letter-spacing:-0.01em;position:relative;z-index:1}
+  .s-circle .t{font-family:var(--font-mono);font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-top:3px;font-weight:600;position:relative;z-index:1}
+
+  /* Round · monogram */
+  .s-mono{width:130px;height:130px;border-radius:50%;background:var(--grad-primary);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:700;font-size:56px;letter-spacing:-0.05em;border:5px solid #fff;position:relative}
+  .s-mono::after{content:"";position:absolute;inset:8px;border:2px solid rgba(255,255,255,0.3);border-radius:50%;pointer-events:none}
+
+  /* Pill · quote */
+  .s-pill{padding:14px 22px;border-radius:999px;background:#0f172a;color:#fff;font-family:var(--font-head);font-weight:700;font-size:14px;letter-spacing:-0.01em;border:4px solid #fff;text-align:center;line-height:1.2}
+  .s-pill span{color:var(--rj-sky)}
+
+  /* Rounded square · tag */
+  .s-square{width:150px;height:150px;border-radius:24px;background:#fff;border:5px solid #fff;box-shadow:0 0 0 3px var(--rj-blue);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;text-align:center;color:var(--rj-navy)}
+  .s-square .top-t{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:6px}
+  .s-square h4{font-family:var(--font-head);font-weight:700;font-size:20px;color:var(--rj-navy);letter-spacing:-0.02em;line-height:1;margin:0}
+  .s-square .sub-t{font-family:var(--font-mono);font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);margin-top:8px;font-weight:600}
+
+  /* Badge / seal */
+  .s-badge{width:150px;height:150px;position:relative;filter:drop-shadow(0 6px 12px rgba(15,23,42,0.15))}
+  .s-badge svg{position:absolute;inset:0;width:100%;height:100%}
+  .s-badge .badge-inner{position:absolute;inset:22px;background:var(--grad-dark);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-align:center;padding:10px;overflow:hidden;border:3px solid #fff}
+  .s-badge .badge-inner::after{content:"";position:absolute;right:-20px;top:-20px;width:80px;height:80px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(15px)}
+  .s-badge .badge-inner .k{font-family:var(--font-mono);font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600;position:relative;z-index:1}
+  .s-badge .badge-inner .v{font-family:var(--font-head);font-weight:700;font-size:16px;letter-spacing:-0.02em;position:relative;z-index:1;margin-top:2px;line-height:1}
+  .s-badge .badge-inner .d{font-family:var(--font-mono);font-size:8px;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-top:2px;font-weight:600;position:relative;z-index:1}
+
+  /* Rectangle · URL */
+  .s-rect{background:#fff;border:4px solid var(--rj-blue);border-radius:12px;padding:14px 22px;color:var(--rj-navy);display:flex;align-items:center;gap:10px;box-shadow:inset 0 0 0 2px #fff}
+  .s-rect img{width:28px;height:28px;border-radius:6px}
+  .s-rect .u{font-family:var(--font-mono);font-weight:700;font-size:13px;letter-spacing:0.06em}
+
+  /* --- HANGTAGS --- */
+  .tag-stage{display:flex;justify-content:center;gap:32px;flex-wrap:wrap}
+  .tag{width:200px;height:340px;border-radius:8px;box-shadow:0 20px 40px rgba(15,23,42,0.2);position:relative;overflow:hidden;padding:40px 20px 20px;display:flex;flex-direction:column;justify-content:space-between;text-align:center}
+  .tag .hole{position:absolute;top:14px;left:50%;transform:translateX(-50%);width:14px;height:14px;background:#0f172a;border-radius:50%;border:2px solid #fff;z-index:2}
+  .tag .string{position:absolute;top:-30px;left:50%;transform:translateX(-50%);width:2px;height:35px;background:#94a3b8}
+
+  .tag.dark{background:var(--grad-dark);color:#fff}
+  .tag.dark::after{content:"";position:absolute;right:-40px;bottom:-40px;width:180px;height:180px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(20px)}
+  .tag.light{background:#fff;color:var(--rj-navy);border:2px solid var(--rj-line)}
+  .tag.blue{background:var(--grad-primary);color:#fff}
+
+  .tag .brand-mini{display:flex;align-items:center;justify-content:center;gap:6px;position:relative;z-index:1}
+  .tag .brand-mini img{width:22px;height:22px;border-radius:5px}
+  .tag .brand-mini .n{font-family:var(--font-head);font-weight:600;font-size:10px;letter-spacing:-0.01em}
+  .tag.light .brand-mini .n{color:var(--rj-navy)}
+
+  .tag .middle-t{position:relative;z-index:1}
+  .tag h3{font-family:var(--font-head);font-weight:700;font-size:26px;letter-spacing:-0.02em;line-height:0.95;margin:0}
+  .tag h3 span{color:var(--rj-sky)}
+  .tag.light h3 span{color:var(--rj-blue)}
+  .tag .msg{font-family:var(--font-head);font-size:13px;margin-top:12px;line-height:1.35;font-weight:500}
+  .tag.dark .msg{color:#cbd5e1}
+  .tag.light .msg{color:var(--rj-muted-text)}
+  .tag.blue .msg{color:rgba(255,255,255,0.9)}
+
+  .tag .foot-t{position:relative;z-index:1;font-family:var(--font-mono);font-size:8px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;padding-top:10px;border-top:1px solid rgba(255,255,255,0.15)}
+  .tag.light .foot-t{border-color:var(--rj-line);color:var(--rj-muted-text)}
+  .tag.dark .foot-t{color:var(--rj-sky)}
+  .tag.blue .foot-t{color:#e0f2fe;border-color:rgba(255,255,255,0.25)}
+</style>
+</head>
+<body>
+
+<div class="sheet-wrap">
+  <div class="lbl">Die-Cut Sticker Sheet · Laptop / Water Bottle / Notebook</div>
+  <div class="cut-sheet">
+    <div class="cut-grid">
+
+      <div class="sticker"><div class="s-circle"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business</div><div class="t">Solutions</div></div></div>
+
+      <div class="sticker"><div class="s-mono">RJ</div></div>
+
+      <div class="sticker"><div class="s-pill">Systems &gt; <span>Slogans</span></div></div>
+
+      <div class="sticker"><div class="s-square"><div class="top-t">● AI-Native</div><h4>Built the<br/>Backbone</h4><div class="sub-t">Est. 2026</div></div></div>
+
+      <div class="sticker">
+        <div class="s-badge">
+          <svg viewBox="0 0 150 150"><path fill="#0ea5e9" d="M75 5 L92 22 L115 15 L120 40 L143 50 L135 73 L148 92 L128 105 L130 130 L105 128 L92 148 L75 132 L58 148 L45 128 L20 130 L22 105 L2 92 L15 73 L7 50 L30 40 L35 15 L58 22 Z"/></svg>
+          <div class="badge-inner">
+            <div class="k">Certified</div>
+            <div class="v">Growth<br/>Partner</div>
+            <div class="d">2026</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sticker"><div class="s-pill" style="background:var(--grad-primary);border-color:#fff">DMs → <span style="color:#fff;text-decoration:underline">Booked Calls</span></div></div>
+
+      <div class="sticker"><div class="s-rect"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="u">rjbusinesssolutions.org</div></div></div>
+
+      <div class="sticker"><div class="s-square" style="box-shadow:0 0 0 3px var(--rj-sky)"><div class="top-t" style="color:var(--rj-sky)">● Founder-Led</div><h4>Real<br/>Systems.</h4><div class="sub-t">Rick Jefferson</div></div></div>
+
+      <div class="sticker"><div class="s-mono" style="background:var(--rj-navy)">RJ</div></div>
+
+      <div class="sticker"><div class="s-pill" style="background:#fff;color:var(--rj-navy);border-color:var(--rj-blue)">Growth is <span style="color:var(--rj-blue)">infrastructure.</span></div></div>
+
+    </div>
+  </div>
+</div>
+
+<div style="width:1200px">
+  <div class="lbl">Merch Hangtags · Apparel / Notebook / Gift Bag · 3 variants</div>
+  <div class="tag-stage">
+
+    <div class="tag dark">
+      <div class="string"></div>
+      <div class="hole"></div>
+      <div class="brand-mini"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ</div></div>
+      <div class="middle-t">
+        <h3>Built the<br/><span>backbone.</span></h3>
+        <div class="msg">RJ Business Solutions.<br/>AI-powered growth systems.</div>
+      </div>
+      <div class="foot-t">rjbusinesssolutions.org</div>
+    </div>
+
+    <div class="tag light">
+      <div class="string"></div>
+      <div class="hole"></div>
+      <div class="brand-mini"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+      <div class="middle-t">
+        <h3>Systems<br/>that <span>scale.</span></h3>
+        <div class="msg">Every offer ships as a system, not a slogan.<br/>— Rick Jefferson</div>
+      </div>
+      <div class="foot-t">Made for founders · Est. 2026</div>
+    </div>
+
+    <div class="tag blue">
+      <div class="string"></div>
+      <div class="hole"></div>
+      <div class="brand-mini"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="" style="background:#fff;padding:2px"/><div class="n">RJ</div></div>
+      <div class="middle-t">
+        <h3>Grow with<br/>the <span style="color:#fff;text-decoration:underline">system.</span></h3>
+        <div class="msg">Client gift · From Rick Jefferson &amp; the RJ team.</div>
+      </div>
+      <div class="foot-t">Thanks for building with us</div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

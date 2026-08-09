@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Utility Pages</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px;display:flex;flex-direction:column;gap:32px;align-items:center}
+  .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:12px}
+  .card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 20px 40px rgba(15,23,42,0.1)}
+
+  .browser{width:1200px;height:720px;border-radius:14px;overflow:hidden;box-shadow:0 30px 60px rgba(15,23,42,0.2);background:#fff}
+  .chrome{background:#f1f5f9;height:44px;display:flex;align-items:center;gap:8px;padding:0 16px;border-bottom:1px solid var(--rj-line)}
+  .chrome .dot{width:12px;height:12px;border-radius:50%}
+  .chrome .dot.r{background:#ef4444}
+  .chrome .dot.y{background:#f59e0b}
+  .chrome .dot.g{background:#10b981}
+  .chrome .url{margin-left:24px;background:#fff;border:1px solid var(--rj-line);border-radius:8px;padding:6px 16px;flex:1;max-width:400px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--rj-muted-text);display:flex;align-items:center;gap:8px}
+  .chrome .url::before{content:"🔒";font-size:10px}
+
+  .frame{height:676px;position:relative;overflow:hidden;display:flex;flex-direction:column}
+
+  /* 404 */
+  .p404{background:var(--grad-dark);color:#fff;flex:1;padding:60px 80px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+  .p404::after{content:"";position:absolute;right:-150px;top:-150px;width:600px;height:600px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(60px);pointer-events:none}
+  .p404 .nav{display:flex;align-items:center;gap:12px;position:relative;z-index:1}
+  .p404 .nav img{width:36px;height:36px;border-radius:8px}
+  .p404 .nav .n{font-family:var(--font-head);font-weight:600;font-size:15px}
+  .p404 .middle{position:relative;z-index:1;text-align:center;max-width:700px;margin:0 auto}
+  .p404 .big{font-family:var(--font-head);font-size:280px;font-weight:700;letter-spacing:-0.06em;line-height:0.9;background:linear-gradient(135deg,#0ea5e9 0%,#60a5fa 100%);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:20px}
+  .p404 h1{font-family:var(--font-head);font-size:44px;font-weight:600;letter-spacing:-0.02em;line-height:1;margin:0 0 16px 0;color:#fff}
+  .p404 .sub{font-family:var(--font-head);font-size:18px;color:#cbd5e1;margin-bottom:32px}
+  .p404 .cta-row{display:flex;gap:12px;justify-content:center}
+  .p404 .btn{padding:12px 24px;border-radius:10px;font-family:var(--font-head);font-weight:600;font-size:14px}
+  .p404 .btn.primary{background:var(--grad-primary);color:#fff;box-shadow:0 8px 20px rgba(37,99,235,0.4)}
+  .p404 .btn.ghost{background:transparent;border:1.5px solid rgba(255,255,255,0.3);color:#fff}
+  .p404 .foot{position:relative;z-index:1;text-align:center;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#64748b;font-weight:600}
+
+  /* COMING SOON */
+  .soon{background:var(--grad-dark);color:#fff;flex:1;padding:60px 80px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+  .soon::after{content:"";position:absolute;left:-150px;bottom:-150px;width:600px;height:600px;background:radial-gradient(circle,rgba(37,99,235,0.4) 0%,transparent 60%);filter:blur(60px)}
+  .soon .top{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1}
+  .soon .top .brand{display:flex;align-items:center;gap:12px}
+  .soon .top .brand img{width:44px;height:44px;border-radius:10px}
+  .soon .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:18px}
+  .soon .top .status{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);padding:8px 14px;border-radius:999px}
+  .soon .middle{position:relative;z-index:1;max-width:800px}
+  .soon .kicker{display:inline-block;padding:6px 14px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);border-radius:999px;font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-bottom:20px;font-weight:600}
+  .soon h1{font-family:var(--font-head);font-size:88px;font-weight:600;letter-spacing:-0.03em;line-height:1;margin:0}
+  .soon h1 span{background:linear-gradient(135deg,#0ea5e9 0%,#60a5fa 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .soon .sub{font-family:var(--font-head);font-size:20px;color:#cbd5e1;margin-top:20px;max-width:600px}
+  .soon .signup{position:relative;z-index:1;display:flex;gap:12px;margin-top:32px;max-width:500px}
+  .soon .signup input{flex:1;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;padding:14px 18px;border-radius:10px;font-family:var(--font-body);font-size:14px}
+  .soon .signup button{background:var(--grad-primary);color:#fff;border:none;padding:14px 24px;border-radius:10px;font-family:var(--font-head);font-weight:600;font-size:14px;cursor:pointer}
+  .soon .foot{position:relative;z-index:1;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#64748b;font-weight:600}
+
+  /* LOADING */
+  .loading{background:var(--grad-dark);color:#fff;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;position:relative;overflow:hidden;gap:24px}
+  .loading::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at center,rgba(14,165,233,0.3) 0%,transparent 60%);filter:blur(60px)}
+  .loading img{width:80px;height:80px;border-radius:20px;position:relative;z-index:1;animation:pulse 2s ease-in-out infinite}
+  @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.08);opacity:0.85}}
+  .loading .n{font-family:var(--font-head);font-weight:600;font-size:20px;position:relative;z-index:1}
+  .loading .bar{width:280px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;position:relative;z-index:1}
+  .loading .bar-fill{width:60%;height:100%;background:linear-gradient(90deg,#2563eb,#0ea5e9);border-radius:2px;animation:load 2s ease-in-out infinite}
+  @keyframes load{0%{width:10%}50%{width:80%}100%{width:10%}}
+  .loading .msg{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600;position:relative;z-index:1}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="lbl">404 · Not Found</div>
+  <div class="browser">
+    <div class="chrome"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><div class="url">rjbusinesssolutions.org/broken-page</div></div>
+    <div class="frame">
+      <div class="p404">
+        <div class="nav"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+        <div class="middle">
+          <div class="big">404</div>
+          <h1>This page went missing.<br/>The system did not.</h1>
+          <div class="sub">Head back home or book a call. Either way, we'll get you moving.</div>
+          <div class="cta-row">
+            <div class="btn primary">← Back to Home</div>
+            <div class="btn ghost">Book a Call</div>
+          </div>
+        </div>
+        <div class="foot">Error 404 · RJ Business Solutions · rjbusinesssolutions.org</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Coming Soon · Waitlist / Launch</div>
+  <div class="browser">
+    <div class="chrome"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><div class="url">rjbusinesssolutions.org</div></div>
+    <div class="frame">
+      <div class="soon">
+        <div class="top">
+          <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+          <div class="status">● Launching Q3 2026</div>
+        </div>
+        <div class="middle">
+          <div class="kicker">● Something Big Incoming</div>
+          <h1>The <span>automation<br/>backbone</span> is coming.</h1>
+          <div class="sub">AI-powered systems, automation, and growth infrastructure for businesses ready to scale. Join the waitlist for early access.</div>
+          <div class="signup">
+            <input type="email" placeholder="your@business.com"/>
+            <button>Get Early Access →</button>
+          </div>
+        </div>
+        <div class="foot">
+          <div>© 2026 RJ Business Solutions · Tijeras NM</div>
+          <div>support@rjbusinesssolutions.org</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Loading / Splash · PWA + app boot</div>
+  <div class="browser">
+    <div class="chrome"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><div class="url">app.rjbusinesssolutions.org</div></div>
+    <div class="frame">
+      <div class="loading">
+        <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+        <div class="n">RJ Business Solutions</div>
+        <div class="bar"><div class="bar-fill"></div></div>
+        <div class="msg">Loading your systems…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Receipt + Thank You</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px;display:flex;flex-direction:column;gap:40px;align-items:center}
+  .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:14px;text-align:center}
+
+  /* RECEIPT · half-letter 5.5"×8.5" scaled */
+  .receipt{width:560px;background:#fff;border-radius:14px;box-shadow:0 30px 60px rgba(15,23,42,0.15);overflow:hidden;display:flex;flex-direction:column;position:relative}
+
+  .r-top{background:var(--grad-dark);color:#fff;padding:26px 32px;position:relative;overflow:hidden}
+  .r-top::after{content:"";position:absolute;right:-80px;top:-80px;width:280px;height:280px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(30px)}
+  .r-top .row{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1;margin-bottom:14px}
+  .r-top .brand{display:flex;align-items:center;gap:10px}
+  .r-top .brand img{width:34px;height:34px;border-radius:8px}
+  .r-top .brand .n{font-family:var(--font-head);font-weight:600;font-size:13px}
+  .r-top .brand .t{font-family:var(--font-mono);font-size:8px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:2px;font-weight:600}
+  .r-top .badge{background:#dcfce7;color:#166534;padding:5px 12px;border-radius:6px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;font-weight:700}
+  .r-top h2{font-family:var(--font-head);font-size:28px;font-weight:600;letter-spacing:-0.02em;margin:0;position:relative;z-index:1;line-height:1}
+  .r-top h2 span{color:var(--rj-sky)}
+  .r-top .num{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;margin-top:4px;position:relative;z-index:1;font-weight:600}
+
+  .thin{height:3px;background:var(--grad-primary)}
+
+  .r-body{padding:22px 32px;flex:1;display:flex;flex-direction:column;gap:16px}
+
+  .meta-r{display:grid;grid-template-columns:1fr 1fr;gap:12px;font-family:var(--font-body);font-size:11px}
+  .meta-r .col .k{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:3px}
+  .meta-r .col .v{font-family:var(--font-head);font-weight:600;color:var(--rj-navy);font-size:12px}
+  .meta-r .col .a{font-size:10px;color:var(--rj-muted-text);margin-top:2px}
+
+  .amount-hero{background:linear-gradient(135deg,var(--rj-light),#fff);border:1px solid var(--rj-border);border-radius:12px;padding:24px;text-align:center}
+  .amount-hero .lbl-a{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:6px}
+  .amount-hero .big{font-family:var(--font-head);font-size:56px;font-weight:700;letter-spacing:-0.03em;line-height:1;background:linear-gradient(135deg,#2563eb,#0ea5e9);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .amount-hero .method{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);margin-top:6px;font-weight:600}
+
+  table{width:100%;border-collapse:collapse;font-size:11px}
+  th{text-align:left;padding:8px 12px;background:var(--rj-navy);color:#fff;font-family:var(--font-mono);font-size:8px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+  th:first-child{border-radius:6px 0 0 0}
+  th:last-child{text-align:right;border-radius:0 6px 0 0}
+  td{padding:9px 12px;border-bottom:1px solid var(--rj-line)}
+  td:last-child{text-align:right;font-family:var(--font-mono);font-weight:600;color:var(--rj-navy)}
+  tr.total td{background:var(--rj-light);font-family:var(--font-head);font-weight:600;color:var(--rj-navy);font-size:12px;border:none}
+
+  .thanks-note{background:var(--rj-navy);color:#fff;padding:16px 20px;border-radius:10px;font-family:'Space Grotesk',serif;font-style:italic;font-size:14px;text-align:center;position:relative;overflow:hidden;font-weight:500;letter-spacing:-0.01em}
+  .thanks-note::after{content:"";position:absolute;right:-40px;top:-40px;width:150px;height:150px;background:radial-gradient(circle,rgba(14,165,233,0.35) 0%,transparent 60%);filter:blur(20px)}
+  .thanks-note span{position:relative;z-index:1}
+  .thanks-note b{color:var(--rj-sky);font-style:normal;display:block;margin-top:4px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+
+  .foot-r{background:var(--rj-navy);color:#94a3b8;padding:10px 32px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:8px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+  .foot-r .brand{color:#fff;font-family:var(--font-head);font-size:10px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+
+  /* THANK YOU CARD · A2 folded front, 4.25×5.5 */
+  .thanks-card{width:420px;height:540px;background:var(--grad-dark);color:#fff;border-radius:14px;box-shadow:0 30px 60px rgba(15,23,42,0.3);padding:40px 32px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+  .thanks-card::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(50px)}
+  .thanks-card::before{content:"";position:absolute;left:-80px;bottom:-80px;width:300px;height:300px;background:radial-gradient(circle,rgba(37,99,235,0.35) 0%,transparent 60%);filter:blur(40px)}
+
+  .thanks-card .brand-c{display:flex;align-items:center;gap:10px;position:relative;z-index:2}
+  .thanks-card .brand-c img{width:32px;height:32px;border-radius:7px}
+  .thanks-card .brand-c .n{font-family:var(--font-head);font-weight:600;font-size:12px}
+  .thanks-card .brand-c .t{font-family:var(--font-mono);font-size:8px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:2px;font-weight:600}
+
+  .thanks-card .middle-c{position:relative;z-index:2;text-align:center}
+  .thanks-card .kicker{display:inline-block;padding:5px 12px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);border-radius:999px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-bottom:20px;font-weight:600}
+  .thanks-card h2{font-family:var(--font-head);font-size:56px;font-weight:700;letter-spacing:-0.04em;line-height:0.9;margin:0}
+  .thanks-card h2 span{background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .thanks-card .msg{font-family:var(--font-head);color:#cbd5e1;font-size:14px;margin-top:20px;line-height:1.5;font-weight:500;max-width:280px;margin-left:auto;margin-right:auto}
+
+  .thanks-card .sign-c{position:relative;z-index:2;text-align:center;padding-top:16px;border-top:1px solid rgba(255,255,255,0.15)}
+  .thanks-card .sign-c .from{font-family:'Space Grotesk',serif;font-style:italic;font-size:28px;font-weight:500;letter-spacing:-0.01em;color:var(--rj-sky)}
+  .thanks-card .sign-c .role{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;margin-top:4px;font-weight:600;color:#94a3b8}
+
+  @media print{body{background:#fff;padding:0}.receipt,.thanks-card{box-shadow:none}}
+</style>
+</head>
+<body>
+
+<div>
+  <div class="lbl">Payment Receipt · Half-Letter · Auto-generated after Stripe payment</div>
+  <div class="receipt">
+    <div class="r-top">
+      <div class="row">
+        <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Payment Receipt</div></div></div>
+        <div class="badge">● Paid</div>
+      </div>
+      <h2>Receipt <span>#RJ-R-0217.</span></h2>
+      <div class="num">Issued: August 7, 2026 · 10:14 AM MDT</div>
+    </div>
+    <div class="thin"></div>
+    <div class="r-body">
+      <div class="meta-r">
+        <div class="col"><div class="k">Billed To</div><div class="v">[Client Name]</div><div class="a">[Client Company]<br/>[client@email.com]</div></div>
+        <div class="col"><div class="k">Payment Method</div><div class="v">Visa •••• 4210</div><div class="a">Stripe · Ref pi_3O4Tq2CxYZ<br/>Processed instantly</div></div>
+      </div>
+
+      <div class="amount-hero">
+        <div class="lbl-a">Amount Paid</div>
+        <div class="big">$2,994.00</div>
+        <div class="method">USD · Charged 08/07/2026</div>
+      </div>
+
+      <table>
+        <thead><tr><th>Item</th><th>Type</th><th>Amount</th></tr></thead>
+        <tbody>
+          <tr><td>Growth Engine · Launch Setup</td><td>One-time</td><td>$1,997.00</td></tr>
+          <tr><td>Monthly Management · Month 1</td><td>Recurring</td><td>$997.00</td></tr>
+          <tr class="total"><td colspan="2">Total Paid</td><td>$2,994.00</td></tr>
+        </tbody>
+      </table>
+
+      <div class="thanks-note">
+        <span>Thanks for building with us. We'll be in touch within 4 business hours to kick off the 7-day launch.<br/><b>— Rick Jefferson</b></span>
+      </div>
+    </div>
+    <div class="foot-r"><div class="brand">RJ Business Solutions</div><div>Receipt RJ-R-0217 · rjbusinesssolutions.org</div></div>
+  </div>
+</div>
+
+<div>
+  <div class="lbl">Thank-You Card · A2 folded · 4.25" × 5.5" · Send with swag box</div>
+  <div class="thanks-card">
+    <div class="brand-c"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">From the Team</div></div></div>
+    <div class="middle-c">
+      <div class="kicker">● You Built Systems</div>
+      <h2>Thank<br/><span>you.</span></h2>
+      <div class="msg">Real ones ship. You did. We're proud to build with you.</div>
+    </div>
+    <div class="sign-c">
+      <div class="from">— Rick.</div>
+      <div class="role">Founder · Tijeras NM · 2026</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

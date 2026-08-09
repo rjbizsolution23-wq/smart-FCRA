@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Testimonial Cards</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px;display:grid;grid-template-columns:1fr 1fr;gap:32px;justify-items:center}
+  .card-wrap{}
+  .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);margin-bottom:12px;font-weight:600}
+  .card{width:540px;height:540px;border-radius:16px;overflow:hidden;position:relative;box-shadow:0 20px 40px rgba(15,23,42,0.15);padding:48px;display:flex;flex-direction:column;justify-content:space-between}
+
+  /* V1: Dark quote */
+  .v1{background:var(--grad-dark);color:#fff}
+  .v1::after{content:"";position:absolute;right:-100px;bottom:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .v1 .brand{display:flex;align-items:center;gap:10px;position:relative;z-index:1}
+  .v1 .brand img{width:32px;height:32px;border-radius:7px}
+  .v1 .brand .n{font-family:var(--font-head);font-weight:600;font-size:13px}
+  .v1 .brand .h{font-family:var(--font-mono);font-size:9px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase}
+  .v1 .quote{position:relative;z-index:1}
+  .v1 .quote::before{content:"\201C";font-family:var(--font-head);font-size:120px;color:rgba(14,165,233,0.3);line-height:0.8;display:block;margin-bottom:10px}
+  .v1 .quote p{font-family:var(--font-head);font-size:28px;font-weight:600;letter-spacing:-0.02em;line-height:1.15;margin:0}
+  .v1 .quote p span{color:var(--rj-sky)}
+  .v1 .who{position:relative;z-index:1;display:flex;align-items:center;gap:12px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.15)}
+  .v1 .who .av{width:44px;height:44px;border-radius:50%;background:var(--grad-primary);display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:700;font-size:16px;color:#fff}
+  .v1 .who .name{font-family:var(--font-head);font-weight:600;font-size:14px}
+  .v1 .who .role{font-size:11px;color:#94a3b8;margin-top:2px}
+  .v1 .stars{color:var(--rj-warning);font-size:14px;letter-spacing:2px;margin-top:4px}
+
+  /* V2: Metric hero */
+  .v2{background:var(--grad-primary);color:#fff}
+  .v2::after{content:"";position:absolute;left:-100px;top:-100px;width:350px;height:350px;background:radial-gradient(circle,rgba(255,255,255,0.15) 0%,transparent 60%);filter:blur(30px)}
+  .v2 .top{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1}
+  .v2 .top .k{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;background:rgba(255,255,255,0.15);padding:6px 12px;border-radius:999px}
+  .v2 .top img{width:36px;height:36px;border-radius:8px;background:#fff;padding:3px}
+  .v2 .metric{text-align:center;position:relative;z-index:1}
+  .v2 .metric .big{font-family:var(--font-head);font-size:200px;font-weight:700;letter-spacing:-0.05em;line-height:0.85}
+  .v2 .metric .sup{font-family:var(--font-head);font-size:20px;font-weight:500;margin-top:12px;letter-spacing:-0.01em}
+  .v2 .attrib{text-align:center;position:relative;z-index:1;font-family:var(--font-head);font-size:14px;font-weight:500}
+  .v2 .attrib .name{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.8);margin-top:4px}
+
+  /* V3: White + accent */
+  .v3{background:#fff;border:1px solid var(--rj-line)}
+  .v3::before{content:"";position:absolute;top:0;left:0;right:0;height:6px;background:var(--grad-primary)}
+  .v3 .top{display:flex;justify-content:space-between;align-items:center}
+  .v3 .top .brand{display:flex;align-items:center;gap:10px}
+  .v3 .top .brand img{width:36px;height:36px;border-radius:8px}
+  .v3 .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:14px;color:var(--rj-navy)}
+  .v3 .top .brand .h{font-family:var(--font-mono);font-size:9px;color:var(--rj-blue);letter-spacing:0.14em;text-transform:uppercase}
+  .v3 .stars{color:var(--rj-warning);font-size:22px;letter-spacing:3px}
+  .v3 .quote p{font-family:var(--font-head);font-size:24px;font-weight:600;color:var(--rj-navy);letter-spacing:-0.02em;line-height:1.25;margin:0}
+  .v3 .who{display:flex;align-items:center;gap:12px;padding-top:16px;border-top:1px solid var(--rj-line)}
+  .v3 .who .av{width:44px;height:44px;border-radius:50%;background:var(--rj-navy);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:700;font-size:16px}
+  .v3 .who .name{font-family:var(--font-head);font-weight:600;font-size:14px;color:var(--rj-navy)}
+  .v3 .who .role{font-size:11px;color:var(--rj-muted-text);margin-top:2px}
+
+  /* V4: Before/after split */
+  .v4{background:#fff;padding:0;display:grid;grid-template-rows:auto 1fr}
+  .v4 .head{padding:24px 32px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--rj-line)}
+  .v4 .head .brand{display:flex;align-items:center;gap:10px}
+  .v4 .head .brand img{width:32px;height:32px;border-radius:7px}
+  .v4 .head .brand .n{font-family:var(--font-head);font-weight:600;font-size:13px}
+  .v4 .head .kicker{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;background:var(--rj-light);padding:5px 10px;border-radius:4px}
+  .v4 .split{display:grid;grid-template-columns:1fr auto 1fr;align-items:stretch}
+  .v4 .side{padding:32px 28px;display:flex;flex-direction:column;justify-content:center;gap:8px}
+  .v4 .before{background:var(--rj-light)}
+  .v4 .after{background:var(--grad-dark);color:#fff}
+  .v4 .side .lbl{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+  .v4 .after .lbl{color:var(--rj-sky)}
+  .v4 .side .val{font-family:var(--font-head);font-size:52px;font-weight:600;letter-spacing:-0.03em;line-height:1;color:var(--rj-danger)}
+  .v4 .after .val{color:var(--rj-sky)}
+  .v4 .side .desc{font-size:12px;color:var(--rj-muted-text);margin-top:6px}
+  .v4 .after .desc{color:#cbd5e1}
+  .v4 .arrow{display:flex;align-items:center;justify-content:center;padding:0 12px;font-family:var(--font-head);font-weight:700;font-size:32px;color:var(--rj-blue)}
+  .v4 .foot{padding:20px 28px;border-top:1px solid var(--rj-line);font-family:var(--font-head);font-size:14px;font-weight:500;color:var(--rj-navy);text-align:center;background:#fff}
+  .v4 .foot small{display:block;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);margin-top:4px;font-weight:600}
+</style>
+</head>
+<body>
+
+<div class="card-wrap">
+  <div class="lbl">Variant 01 · Dark Quote (default)</div>
+  <div class="card v1">
+    <div class="brand">
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+      <div><div class="n">RJ Business Solutions</div><div class="h">Client Wins</div></div>
+    </div>
+    <div class="quote">
+      <p>Our DMs used to be a <span>graveyard.</span> Now they're the biggest revenue channel we have.</p>
+    </div>
+    <div class="who">
+      <div class="av">MJ</div>
+      <div>
+        <div class="name">Marcus Johnson</div>
+        <div class="role">Founder · Apex Credit Solutions</div>
+        <div class="stars">★★★★★</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card-wrap">
+  <div class="lbl">Variant 02 · Metric Hero (loud result)</div>
+  <div class="card v2">
+    <div class="top">
+      <div class="k">Result · 30 Days</div>
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+    </div>
+    <div class="metric">
+      <div class="big">+312%</div>
+      <div class="sup">Month-over-month revenue lift</div>
+    </div>
+    <div class="attrib">
+      "The system paid for itself in week 2."
+      <div class="name">— [Client Name] · [Company]</div>
+    </div>
+  </div>
+</div>
+
+<div class="card-wrap">
+  <div class="lbl">Variant 03 · Light Quote (LinkedIn-friendly)</div>
+  <div class="card v3">
+    <div class="top">
+      <div class="brand">
+        <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+        <div><div class="n">RJ Business Solutions</div><div class="h">Verified Client</div></div>
+      </div>
+      <div class="stars">★★★★★</div>
+    </div>
+    <div class="quote">
+      <p>They didn't just automate our DMs. They built us an actual system — one we can run without living in the inbox.</p>
+    </div>
+    <div class="who">
+      <div class="av">SD</div>
+      <div>
+        <div class="name">Sarah Davis</div>
+        <div class="role">Owner · Davis Financial Group</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card-wrap">
+  <div class="lbl">Variant 04 · Before / After (proof card)</div>
+  <div class="card v4">
+    <div class="head">
+      <div class="brand">
+        <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+        <div class="n">RJ Business Solutions</div>
+      </div>
+      <div class="kicker">● 7-Day Launch</div>
+    </div>
+    <div class="split">
+      <div class="side before">
+        <div class="lbl">Before</div>
+        <div class="val">6+ hrs</div>
+        <div class="desc">Average DM response time</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="side after">
+        <div class="lbl">After</div>
+        <div class="val">&lt;90s</div>
+        <div class="desc">Automated with brand voice</div>
+      </div>
+    </div>
+    <div class="foot">
+      "Response time dropped from hours to seconds."<small>— Growth Engine Client · 2026</small>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

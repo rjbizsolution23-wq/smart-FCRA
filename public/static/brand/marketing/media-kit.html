@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — Media Kit</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;flex-direction:column;gap:24px;align-items:center}
+  .page{width:794px;min-height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden;page-break-after:always;position:relative}
+
+  /* COVER */
+  .cover{background:var(--grad-dark);color:#fff;padding:56px 56px;position:relative;overflow:hidden;flex:1;display:flex;flex-direction:column;justify-content:space-between}
+  .cover::after{content:"";position:absolute;right:-150px;top:-150px;width:600px;height:600px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(60px)}
+  .cover .top{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:flex-start}
+  .cover .brand{display:flex;align-items:center;gap:12px}
+  .cover .brand img{width:44px;height:44px;border-radius:10px}
+  .cover .brand .n{font-family:var(--font-head);font-weight:600;font-size:16px}
+  .cover .brand .t{font-family:var(--font-mono);font-size:10px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:3px;font-weight:600}
+  .cover .doc{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);text-align:right;font-weight:600}
+  .cover .doc b{color:#fff;font-family:var(--font-head);font-size:12px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:block;margin-top:3px}
+
+  .cover .middle{position:relative;z-index:1}
+  .cover .kicker{display:inline-block;padding:6px 14px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);border-radius:999px;font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-bottom:20px;font-weight:600}
+  .cover h1{font-family:var(--font-head);font-size:76px;font-weight:700;letter-spacing:-0.03em;line-height:0.95;margin:0}
+  .cover h1 span{background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .cover .subtitle{font-family:var(--font-head);color:#cbd5e1;font-size:20px;margin-top:20px;line-height:1.4;max-width:520px;font-weight:500}
+
+  .cover .quick-stats{position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding-top:24px;border-top:1px solid rgba(255,255,255,0.15)}
+  .cover .quick-stats .k{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;margin-bottom:5px;font-weight:600}
+  .cover .quick-stats .v{font-family:var(--font-head);font-weight:700;font-size:22px;color:var(--rj-sky);letter-spacing:-0.02em;line-height:1}
+  .cover .quick-stats .d{font-family:var(--font-mono);font-size:8px;color:#cbd5e1;margin-top:4px;letter-spacing:0.1em;text-transform:uppercase;font-weight:600}
+
+  /* Inner */
+  .inner{padding:40px 56px;flex:1;display:flex;flex-direction:column;gap:20px}
+  .inner .head{display:flex;justify-content:space-between;align-items:center;padding-bottom:14px;border-bottom:2px solid var(--rj-blue)}
+  .inner .head .brand{display:flex;align-items:center;gap:10px;font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy)}
+  .inner .head .brand img{width:28px;height:28px;border-radius:6px}
+  .inner .head .pnum{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+
+  h2{font-family:var(--font-head);font-size:30px;font-weight:600;color:var(--rj-navy);margin:0 0 6px 0;letter-spacing:-0.02em;line-height:1.05}
+  h2 span{background:linear-gradient(135deg,#2563eb,#0ea5e9);-webkit-background-clip:text;background-clip:text;color:transparent}
+  h3{font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--rj-navy);margin:0 0 8px 0;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+  h3::before{content:"";width:3px;height:16px;background:var(--rj-blue);border-radius:2px}
+  p{font-size:12px;line-height:1.7;color:var(--rj-text);margin:0 0 8px 0}
+  .lead-t{font-family:var(--font-head);color:var(--rj-muted-text);font-size:14px;line-height:1.4;font-weight:500}
+
+  .chapter-badge{display:inline-block;padding:5px 12px;background:var(--rj-light);color:var(--rj-blue);border-radius:999px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;margin-bottom:6px}
+
+  /* Bio card */
+  .bio-card{background:linear-gradient(135deg,#0f172a,#1e3a8a);color:#fff;border-radius:14px;padding:24px 26px;display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:center;position:relative;overflow:hidden}
+  .bio-card::after{content:"";position:absolute;right:-60px;top:-60px;width:200px;height:200px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(30px)}
+  .bio-card .av{width:100px;height:100px;border-radius:22px;background:var(--grad-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--font-head);font-weight:700;font-size:40px;letter-spacing:-0.04em;flex-shrink:0;box-shadow:0 10px 30px rgba(37,99,235,0.4);position:relative;z-index:1}
+  .bio-card .info{position:relative;z-index:1}
+  .bio-card .n{font-family:var(--font-head);font-weight:600;font-size:22px;letter-spacing:-0.02em}
+  .bio-card .role{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-top:4px;font-weight:600}
+  .bio-card .bio{font-size:11px;color:#cbd5e1;line-height:1.6;margin-top:10px}
+
+  /* Speaking topics */
+  .topics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .topic{background:linear-gradient(135deg,#fff,var(--rj-light));border:1px solid var(--rj-border);border-left:3px solid var(--rj-blue);border-radius:10px;padding:12px 14px}
+  .topic .m{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:4px}
+  .topic .n{font-family:var(--font-head);font-weight:600;font-size:12px;color:var(--rj-navy);letter-spacing:-0.01em}
+  .topic .d{font-size:10px;color:var(--rj-muted-text);margin-top:4px;line-height:1.4}
+
+  /* Logo variants */
+  .logo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .logo-cell{border-radius:10px;padding:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:130px;border:1px solid var(--rj-line)}
+  .logo-cell.d{background:var(--grad-dark);border-color:transparent}
+  .logo-cell.g{background:var(--grad-primary);border-color:transparent}
+  .logo-cell img{width:56px;height:56px;border-radius:12px}
+  .logo-cell .cap{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+  .logo-cell.d .cap,.logo-cell.g .cap{color:rgba(255,255,255,0.85)}
+
+  /* Approved quotes */
+  .quote-list{display:flex;flex-direction:column;gap:8px}
+  .quote-item{background:#fff;border:1px solid var(--rj-line);border-left:3px solid var(--rj-blue);border-radius:8px;padding:12px 16px}
+  .quote-item .q{font-family:'Space Grotesk',serif;font-style:italic;font-size:13px;color:var(--rj-navy);line-height:1.4;margin:0 0 6px 0;font-weight:500}
+  .quote-item .attrib{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600}
+
+  /* Contact card */
+  .contact-card{background:var(--grad-primary);color:#fff;padding:18px 22px;border-radius:12px;display:grid;grid-template-columns:1fr 1fr;gap:20px;box-shadow:0 10px 24px rgba(37,99,235,0.35)}
+  .contact-card .lbl{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#e0f2fe;font-weight:600;margin-bottom:4px}
+  .contact-card .v{font-family:var(--font-head);font-weight:600;font-size:14px;letter-spacing:-0.01em}
+  .contact-card .v small{font-family:var(--font-body);font-size:11px;font-weight:400;color:rgba(255,255,255,0.85);display:block;margin-top:2px}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:14px 56px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+
+  @media print{body{background:#fff;padding:0;gap:0}.page{box-shadow:none}}
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="page">
+  <div class="cover">
+    <div class="top">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Media Kit · Press Package</div></div></div>
+      <div class="doc">Doc<b>MK-2026-v1</b></div>
+    </div>
+    <div class="middle">
+      <div class="kicker">● For Journalists, Podcasters &amp; Partners</div>
+      <h1>Media<br/><span>Kit.</span></h1>
+      <div class="subtitle">Everything you need to write about, interview, or introduce RJ Business Solutions — logos, bios, quotes, quick facts, contact.</div>
+    </div>
+    <div class="quick-stats">
+      <div><div class="k">Founded</div><div class="v">2026</div><div class="d">Tijeras · NM</div></div>
+      <div><div class="k">Clients</div><div class="v">142</div><div class="d">Year 1</div></div>
+      <div><div class="k">Assets Shipped</div><div class="v">50+</div><div class="d">Brand system</div></div>
+      <div><div class="k">Verticals</div><div class="v">6</div><div class="d">Credit · Fintech · SMB</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- PG 2 · BIO + TOPICS -->
+<div class="page">
+  <div class="inner">
+    <div class="head"><div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Media Kit</div><div class="pnum">Page 02 · Founder &amp; Topics</div></div>
+
+    <div class="chapter-badge">● Founder Bio</div>
+    <h2>Meet <span>Rick Jefferson.</span></h2>
+
+    <div class="bio-card">
+      <div class="av">RJ</div>
+      <div class="info">
+        <div class="n">Rick Jefferson</div>
+        <div class="role">Founder · CEO · Credit Technology Architect</div>
+        <div class="bio">Credit technology architect, AI systems builder, and business automation strategist. As founder of Rick Jefferson Solutions and operator behind RJ Business Solutions, Rick builds AI-powered platforms, credit repair systems, automation workflows, client portals, payment infrastructure, and growth engines for credit, fintech, and service-based businesses.</div>
+      </div>
+    </div>
+
+    <h3>Short Bio · &lt; 280 chars · for Twitter/X</h3>
+    <p style="background:var(--rj-light);border-left:3px solid var(--rj-blue);padding:12px 16px;border-radius:0 8px 8px 0;font-family:var(--font-head);color:var(--rj-navy);font-size:12px;line-height:1.5;font-weight:500">Credit technology architect &amp; AI systems builder. Founder of RJ Business Solutions — we build the automation backbone behind scalable businesses. Credit tech · CRM · Follow-up · Client portals.</p>
+
+    <div class="chapter-badge" style="margin-top:6px">● Speaking Topics</div>
+    <h2>Interview <span>topics.</span></h2>
+    <p class="lead-t">Rick speaks on the intersection of credit technology, AI automation, and executable business systems.</p>
+
+    <div class="topics">
+      <div class="topic"><div class="m">01</div><div class="n">The Follow-Up Gap</div><div class="d">Why service businesses lose 62% of leads to their inbox — and how to fix it.</div></div>
+      <div class="topic"><div class="m">02</div><div class="n">Credit Tech &amp; Compliance</div><div class="d">Building FCRA-informed automation without regulatory risk.</div></div>
+      <div class="topic"><div class="m">03</div><div class="n">AI That Sounds Human</div><div class="d">Training conversational agents on brand voice + escalation.</div></div>
+      <div class="topic"><div class="m">04</div><div class="n">The 7-Day Launch</div><div class="d">Ship-first architecture over perfection-first delays.</div></div>
+      <div class="topic"><div class="m">05</div><div class="n">Fleet Operations</div><div class="d">Running multiple businesses on shared infrastructure.</div></div>
+      <div class="topic"><div class="m">06</div><div class="n">Systems &gt; Slogans</div><div class="d">Why infrastructure beats hype, and how to sell that.</div></div>
+    </div>
+
+    <div class="chapter-badge" style="margin-top:6px">● Approved Quotes</div>
+    <h3>Quotable — use verbatim in press or podcasts</h3>
+    <div class="quote-list">
+      <div class="quote-item">
+        <p class="q">"We don't sell templates. We build systems. Every offer ships with the infrastructure to run it."</p>
+        <div class="attrib">Rick Jefferson · On the RJ Approach</div>
+      </div>
+      <div class="quote-item">
+        <p class="q">"Your leads should not disappear in DMs. If your business depends on follow-up, your follow-up cannot depend on memory."</p>
+        <div class="attrib">Rick Jefferson · The Follow-Up Gap</div>
+      </div>
+      <div class="quote-item">
+        <p class="q">"Growth isn't more noise. Growth is better infrastructure."</p>
+        <div class="attrib">Rick Jefferson · On Scale</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Media Kit · Page 02</div></div>
+</div>
+
+<!-- PG 3 · LOGOS + CONTACT -->
+<div class="page">
+  <div class="inner">
+    <div class="head"><div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Media Kit</div><div class="pnum">Page 03 · Logos &amp; Contact</div></div>
+
+    <div class="chapter-badge">● Logo Variants</div>
+    <h2>Download <span>&amp; use.</span></h2>
+    <p class="lead-t">Logo variants for print, digital, dark, and light contexts. Right-click each and save. Never recolor, distort, or add drop shadows.</p>
+
+    <div class="logo-grid">
+      <div class="logo-cell"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="cap">Primary · On White</div></div>
+      <div class="logo-cell" style="background:var(--rj-light)"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="cap">On Light Blue</div></div>
+      <div class="logo-cell d"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="cap">On Navy</div></div>
+      <div class="logo-cell g"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="" style="background:#fff;padding:3px"/><div class="cap">On Gradient</div></div>
+      <div class="logo-cell"><div style="width:56px;height:56px;background:var(--grad-primary);border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--font-head);font-weight:700;font-size:22px;letter-spacing:-0.03em">RJ</div><div class="cap">Monogram · Gradient</div></div>
+      <div class="logo-cell"><div style="width:56px;height:56px;background:var(--rj-navy);border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--font-head);font-weight:700;font-size:22px;letter-spacing:-0.03em">RJ</div><div class="cap">Monogram · Navy</div></div>
+    </div>
+
+    <div class="chapter-badge" style="margin-top:6px">● Company Facts</div>
+    <h3>Quick reference · Copy-paste ready</h3>
+    <div class="topics">
+      <div class="topic"><div class="m">Founded</div><div class="n">2026</div><div class="d">Tijeras, New Mexico</div></div>
+      <div class="topic"><div class="m">Founder</div><div class="n">Rick Jefferson</div><div class="d">CEO · Credit Tech Architect</div></div>
+      <div class="topic"><div class="m">HQ</div><div class="n">Tijeras, NM</div><div class="d">1342 NM 333 · 87059</div></div>
+      <div class="topic"><div class="m">Industry</div><div class="n">SaaS · FinTech · Growth</div><div class="d">B2B infrastructure</div></div>
+      <div class="topic"><div class="m">Model</div><div class="n">Subscription + Setup</div><div class="d">$1,997 + $997/mo</div></div>
+      <div class="topic"><div class="m">Website</div><div class="n">rjbusinesssolutions.org</div><div class="d">All the receipts</div></div>
+    </div>
+
+    <div class="chapter-badge" style="margin-top:6px">● Press Contact</div>
+    <div class="contact-card">
+      <div>
+        <div class="lbl">Media Inquiries</div>
+        <div class="v">press@rjbusinesssolutions.org<small>Response within 24 business hours</small></div>
+      </div>
+      <div>
+        <div class="lbl">Direct Line · Podcasts &amp; Interviews</div>
+        <div class="v">Rick Jefferson<small>rick@rjbusinesssolutions.org</small></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>MK-2026-v1 · Page 03 · rjbusinesssolutions.org/press</div></div>
+</div>
+
+</body>
+</html>

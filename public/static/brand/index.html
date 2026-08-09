@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>RJ Brand Library — Smart FCRA</title>
+<link rel="stylesheet" href="brand.css"/>
+</head>
+<body class="rj-page">
+  <header class="rj-topbar">
+    <a class="brand" href="/static/brand/">
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="RJ Business Solutions"/>
+      <div><div class="n">RJ Business Solutions</div><div class="t">Brand Library · Smart FCRA</div></div>
+    </a>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a class="btn btn-ghost" href="/">App Login</a>
+      <a class="btn btn-gradient" href="/static/brand/forms/credit-qualify.html">Start Credit Qualify</a>
+    </div>
+  </header>
+
+  <main class="rj-wrap">
+    <section class="rj-hero">
+      <div class="kicker">Empowering Generational Wealth</div>
+      <h1>Complete brand system for forms, signups &amp; client ops.</h1>
+      <p>Interactive lead forms, sales collateral, legal templates, and marketing surfaces — all wired to Smart FCRA with matching RJ blue / Space Grotesk identity.</p>
+    </section>
+
+    <div class="rj-section-title">14 · Interactive Forms</div>
+    <div class="rj-grid" id="forms"></div>
+
+    <div class="rj-section-title">07 · Product &amp; Web</div>
+    <div class="rj-grid" id="web"></div>
+
+    <div class="rj-section-title">05 · Sales Decks &amp; Docs</div>
+    <div class="rj-grid" id="sales"></div>
+
+    <div class="rj-section-title">06 · Legal &amp; Contracts</div>
+    <div class="rj-grid" id="legal"></div>
+
+    <div class="rj-section-title">12 · Client Ops</div>
+    <div class="rj-grid" id="ops"></div>
+
+    <div class="rj-section-title">08–10 · Ads, Video &amp; Merch</div>
+    <div class="rj-grid" id="media"></div>
+
+    <div class="rj-section-title">15 · Founder Documents</div>
+    <div class="rj-grid" id="founder"></div>
+  </main>
+
+<script>
+const RJ_LOGO='https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg';
+function tile(cat, title, desc, href){
+  return `<a class="rj-tile" href="${href}" target="_blank" rel="noopener"><div class="cat">${cat}</div><h3>${title}</h3><p>${desc}</p></a>`;
+}
+const forms=[
+  ['Credit','Credit Qualify','Free 4-step credit repair qualifier','forms/credit-qualify.html'],
+  ['Funding','Funding Qualify','Business funding readiness intake','forms/funding-qualify.html'],
+  ['Funnel','Universal Funnel','Routes credit / funding / growth / portal paths','forms/universal-funnel.html'],
+  ['Intake','Service Intake','Active client service kickoff','forms/service-intake.html'],
+  ['Audit','Growth Audit','Website + systems growth score','forms/growth-audit.html'],
+  ['Enterprise','Whitelabel Application','Platform white-label application','forms/whitelabel-application.html'],
+  ['Partners','Partnership Application','Referral partner onboarding','forms/partnership-application.html'],
+  ['Media','Podcast Guest','Guest booking application','forms/podcast-guest.html'],
+];
+const web=[
+  ['Web','Landing Page','Primary conversion homepage','marketing/landing-page.html'],
+  ['Web','Meet Rick','Founder media page','marketing/meet-rick.html'],
+  ['Web','Team + Careers','Careers & culture','marketing/team-careers.html'],
+  ['Web','Digital Card','Shareable digital business card','marketing/digital-card.html'],
+  ['Web','Dashboard Reference','Portal shell design reference','marketing/dashboard-reference.html'],
+  ['Web','Utility Pages','404 / Coming Soon / Loading','marketing/utility-pages.html'],
+];
+const sales=[
+  ['Sales','Pitch Deck','10-slide investor deck','marketing/pitch-deck.html'],
+  ['Sales','Sales Deck','5-slide short deck','marketing/sales-deck.html'],
+  ['Sales','One Pager','Service one-pager','marketing/one-pager.html'],
+  ['Sales','Rate Card','Pricing sheet','marketing/rate-card.html'],
+  ['Sales','Quote / Estimate','Client estimate','marketing/quote-estimate.html'],
+  ['Sales','Proposal','Formal proposal','marketing/proposal.html'],
+  ['Sales','Case Study','Results story','marketing/case-study.html'],
+  ['Sales','Testimonial Cards','Social proof cards','marketing/testimonial-cards.html'],
+  ['Corp','Media Kit','Press kit','marketing/media-kit.html'],
+  ['Corp','Investor One-Pager','Investor summary','marketing/investor-one-pager.html'],
+  ['Corp','Whitepaper','Thought leadership','marketing/whitepaper.html'],
+  ['Corp','Growth Playbook','8-page ebook','marketing/growth-playbook.html'],
+  ['Corp','Annual Report','Year in review','marketing/annual-report.html'],
+];
+const legal=[
+  ['Legal','NDA','Standalone NDA','legal/nda.html'],
+  ['Legal','Referral Partner Agreement','Partner contract','legal/referral-partner-agreement.html'],
+  ['Legal','Dispute Letter','FCRA §611 letter','legal/dispute-letter.html'],
+  ['Legal','Contract Cover','Agreement cover','legal/contract-cover.html'],
+  ['Legal','Contract Addendums','Change order + NDA + SOW','legal/contract-addendums.html'],
+];
+const ops=[
+  ['Ops','Onboarding Welcome','New client welcome','ops/onboarding-welcome.html'],
+  ['Ops','Receipt Thank You','Payment receipt','ops/receipt-thank-you.html'],
+  ['Ops','SMS Templates','Text sequences','ops/sms-templates.html'],
+  ['Ops','Systems Worksheets','Internal worksheets','ops/systems-worksheets.html'],
+  ['Ops','Credit Report','Branded report deliverable','ops/credit-report.html'],
+  ['Ops','Employee Handbook','Team handbook','ops/employee-handbook.html'],
+];
+const media=[
+  ['Ads','Ad Creatives','Meta / LinkedIn / Google','marketing/ad-creatives.html'],
+  ['Ads','Feature Launch','Launch cards','marketing/feature-launch.html'],
+  ['Ads','App Store Screenshots','Store creatives','marketing/app-store-screenshots.html'],
+  ['Video','Video Thumbnails','YouTube thumbs','marketing/video-thumbnails.html'],
+  ['Video','Testimonial Video','Overlay templates','marketing/testimonial-video.html'],
+  ['Video','Podcast Cards','Episode cards','marketing/podcast-cards.html'],
+  ['Video','Zoom Backgrounds','Meeting BGs','marketing/zoom-backgrounds.html'],
+  ['Merch','Phone Wallpapers','Brand wallpapers','marketing/phone-wallpapers.html'],
+  ['Merch','Merch Mockups','Apparel mockups','marketing/merch-mockups.html'],
+  ['Merch','Swag Box','Client gift kit','marketing/swag-box.html'],
+  ['Merch','Stickers + Tags','Print stickers','marketing/stickers-tags.html'],
+  ['Merch','Event Booth','Trade show booth','marketing/event-booth.html'],
+  ['Merch','Popup Display','Popup banner','marketing/popup-display.html'],
+  ['Merch','Holiday Cards','Seasonal cards','marketing/holiday-cards.html'],
+  ['Merch','Gift Card','Gift voucher','marketing/gift-card.html'],
+  ['Merch','Referral Card','Referral handout','marketing/referral-card.html'],
+  ['Merch','Certificate','Achievement certificate','marketing/certificate.html'],
+  ['Merch','Wrapping Paper','Brand wrap','marketing/wrapping-paper.html'],
+];
+const founder=[
+  ['Founder','Cap Table','Ownership table','founder/cap-table.html'],
+  ['Founder','Valuation Summary','Valuation brief','founder/valuation-summary.html'],
+  ['Founder','Term Sheet','Investment terms','founder/term-sheet.html'],
+  ['Founder','Operating Agreement','Entity agreement','founder/operating-agreement.html'],
+  ['Founder','Financial Model','Projections','founder/financial-model.html'],
+  ['Founder','Vesting Agreement','Founder vesting','founder/vesting-agreement.html'],
+];
+function fill(id, rows){ document.getElementById(id).innerHTML = rows.map(r=>tile(r[0],r[1],r[2],r[3])).join(''); }
+fill('forms',forms); fill('web',web); fill('sales',sales); fill('legal',legal); fill('ops',ops); fill('media',media); fill('founder',founder);
+</script>
+</body>
+</html>

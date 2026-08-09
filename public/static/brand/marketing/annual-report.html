@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — 2026 Annual Report</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;flex-direction:column;gap:24px;align-items:center}
+  .page{width:794px;height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden;page-break-after:always;position:relative}
+
+  /* COVER */
+  .cover{background:var(--grad-dark);color:#fff;padding:72px 60px;position:relative;overflow:hidden;flex:1;display:flex;flex-direction:column;justify-content:space-between}
+  .cover::after{content:"";position:absolute;right:-150px;top:-150px;width:600px;height:600px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(60px)}
+  .cover::before{content:"";position:absolute;left:-100px;bottom:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(37,99,235,0.35) 0%,transparent 60%);filter:blur(50px)}
+  .cover .top{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:flex-start}
+  .cover .brand{display:flex;align-items:center;gap:12px}
+  .cover .brand img{width:44px;height:44px;border-radius:10px}
+  .cover .brand .n{font-family:var(--font-head);font-weight:600;font-size:16px}
+  .cover .brand .t{font-family:var(--font-mono);font-size:10px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:3px;font-weight:600}
+  .cover .doc{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);text-align:right;font-weight:600}
+  .cover .doc b{color:#fff;font-family:var(--font-head);font-size:12px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:block;margin-top:3px}
+
+  .cover .middle{position:relative;z-index:1}
+  .cover .year{font-family:var(--font-head);font-size:220px;font-weight:700;letter-spacing:-0.06em;line-height:0.85;margin:0;background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent;display:inline-block}
+  .cover h1{font-family:var(--font-head);font-size:52px;font-weight:600;letter-spacing:-0.03em;line-height:1;margin:20px 0 0 0}
+  .cover .sub{font-family:var(--font-head);color:#cbd5e1;font-size:20px;margin-top:16px;max-width:520px;line-height:1.4;font-weight:500}
+
+  .cover .foot-line{position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,1fr);gap:24px;padding-top:32px;border-top:1px solid rgba(255,255,255,0.15)}
+  .cover .foot-line .k{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;font-weight:600}
+  .cover .foot-line .v{font-family:var(--font-head);font-weight:600;font-size:14px}
+
+  /* Inner */
+  .inner{padding:44px 60px;flex:1;display:flex;flex-direction:column;gap:22px}
+  .inner .head{display:flex;justify-content:space-between;align-items:center;padding-bottom:14px;border-bottom:2px solid var(--rj-blue)}
+  .inner .head .brand{display:flex;align-items:center;gap:10px;font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy)}
+  .inner .head .brand img{width:28px;height:28px;border-radius:6px}
+  .inner .head .pnum{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+
+  h2{font-family:var(--font-head);font-size:34px;font-weight:600;color:var(--rj-navy);margin:0 0 12px 0;letter-spacing:-0.02em;line-height:1.05}
+  h2 span{background:linear-gradient(135deg,#2563eb,#0ea5e9);-webkit-background-clip:text;background-clip:text;color:transparent}
+  h3{font-family:var(--font-head);font-size:15px;font-weight:600;color:var(--rj-navy);margin:0 0 8px 0;letter-spacing:-0.01em;display:flex;align-items:center;gap:10px}
+  h3::before{content:"";width:4px;height:18px;background:var(--rj-blue);border-radius:2px}
+  p{font-size:13px;line-height:1.7;color:var(--rj-text);margin:0 0 8px 0}
+  .lead-t{font-family:var(--font-head);color:var(--rj-muted-text);font-size:15px;line-height:1.4;font-weight:500}
+
+  .chapter-badge{display:inline-block;padding:5px 12px;background:var(--rj-light);color:var(--rj-blue);border-radius:999px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;margin-bottom:6px}
+
+  /* Big metrics */
+  .metrics-hero{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .mh{background:linear-gradient(180deg,#fff,var(--rj-light));border:1px solid var(--rj-border);border-radius:12px;padding:20px 16px;text-align:center}
+  .mh .v{font-family:var(--font-head);font-size:44px;font-weight:700;color:var(--rj-blue);letter-spacing:-0.03em;line-height:1}
+  .mh .l{font-family:var(--font-head);font-size:11px;color:var(--rj-navy);font-weight:600;margin-top:6px;letter-spacing:-0.01em}
+  .mh .d{font-family:var(--font-mono);font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);margin-top:4px;font-weight:600}
+
+  /* Growth chart */
+  .chart-card{background:#fff;border:1px solid var(--rj-line);border-radius:12px;padding:20px 24px;position:relative;overflow:hidden}
+  .chart-card .top-c{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  .chart-card h4{font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--rj-navy);margin:0}
+  .chart-card .legend{display:flex;gap:16px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+  .chart-card .legend span{display:flex;align-items:center;gap:5px}
+  .chart-card .dot-l{width:8px;height:8px;border-radius:2px}
+  .chart-card .chart-svg{height:140px}
+  .chart-card .chart-svg svg{width:100%;height:100%}
+  .chart-card .x-axis{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-top:6px}
+
+  /* Highlights */
+  .highlight-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .highlight{background:linear-gradient(135deg,#fff,var(--rj-light));border:1px solid var(--rj-border);border-left:4px solid var(--rj-blue);border-radius:10px;padding:16px 18px}
+  .highlight .m{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:6px}
+  .highlight h4{font-family:var(--font-head);font-size:15px;font-weight:600;color:var(--rj-navy);margin:0 0 4px 0;letter-spacing:-0.01em}
+  .highlight p{font-size:12px;line-height:1.5;color:var(--rj-muted-text);margin:0}
+
+  .pull-quote{background:var(--grad-dark);color:#fff;padding:20px 26px;border-radius:12px;position:relative;overflow:hidden;margin:6px 0}
+  .pull-quote::before{content:"\201C";position:absolute;top:0;left:16px;font-family:var(--font-head);font-size:90px;color:rgba(14,165,233,0.3);line-height:1}
+  .pull-quote::after{content:"";position:absolute;right:-60px;top:-60px;width:200px;height:200px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(30px)}
+  .pull-quote p{font-family:var(--font-head);font-size:17px;font-weight:500;letter-spacing:-0.01em;line-height:1.35;margin:0 0 6px 0;padding-left:32px;position:relative;z-index:1}
+  .pull-quote p span{color:var(--rj-sky)}
+  .pull-quote .attrib{padding-left:32px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);position:relative;z-index:1;font-weight:600}
+
+  /* Revenue breakdown */
+  .rev-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .rev-row{background:#fff;border:1px solid var(--rj-line);border-radius:10px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+  .rev-row .l{font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy)}
+  .rev-row .l .d{font-family:var(--font-mono);font-size:9px;color:var(--rj-muted-text);letter-spacing:0.1em;text-transform:uppercase;margin-top:2px;font-weight:600}
+  .rev-row .v{font-family:var(--font-head);font-weight:700;font-size:18px;color:var(--rj-blue);letter-spacing:-0.02em}
+
+  /* Forward */
+  .forward{background:var(--grad-primary);color:#fff;padding:36px 40px;border-radius:14px;position:relative;overflow:hidden;text-align:center;flex:1;display:flex;flex-direction:column;justify-content:center;gap:14px}
+  .forward::after{content:"";position:absolute;right:-80px;top:-80px;width:300px;height:300px;background:radial-gradient(circle,rgba(255,255,255,0.2) 0%,transparent 60%);filter:blur(40px)}
+  .forward .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;color:#e0f2fe;position:relative;z-index:1}
+  .forward h2{color:#fff;font-size:44px;margin:0;position:relative;z-index:1}
+  .forward h2 span{color:#fff;text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:6px}
+  .forward .msg{font-family:var(--font-head);font-size:16px;color:rgba(255,255,255,0.9);line-height:1.5;max-width:520px;margin:0 auto;position:relative;z-index:1}
+  .forward .three{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;position:relative;z-index:1;margin-top:12px;text-align:left}
+  .forward .three .item{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);border-radius:10px;padding:14px 16px;backdrop-filter:blur(10px)}
+  .forward .three .item .n{font-family:var(--font-head);font-weight:600;font-size:12px;letter-spacing:-0.01em}
+  .forward .three .item .d{font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#e0f2fe;margin-top:3px;font-weight:600}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:14px 60px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+
+  @media print{body{background:#fff;padding:0;gap:0}.page{box-shadow:none}}
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="page">
+  <div class="cover">
+    <div class="top">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Annual Report · Year One</div></div></div>
+      <div class="doc">Document<b>AR-2026-v1</b></div>
+    </div>
+    <div class="middle">
+      <div class="year">2026.</div>
+      <h1>The year we<br/>built the <span style="color:var(--rj-sky)">backbone.</span></h1>
+      <div class="sub">A full-year review of what we shipped, what we learned, and where we're going next.</div>
+    </div>
+    <div class="foot-line">
+      <div><div class="k">Prepared</div><div class="v">July 18, 2026</div></div>
+      <div><div class="k">Reporting Period</div><div class="v">Jan 1 – Dec 31</div></div>
+      <div><div class="k">Owner</div><div class="v">Rick Jefferson</div></div>
+      <div><div class="k">Pages</div><div class="v">04 Total</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- PG 2 · LETTER + METRICS -->
+<div class="page">
+  <div class="inner">
+    <div class="head"><div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Annual Report 2026</div><div class="pnum">Page 02 · Letter &amp; Numbers</div></div>
+    <div class="chapter-badge">● Letter from the Founder</div>
+    <h2>From <span>Rick.</span></h2>
+    <p>2026 was the year the thesis proved out. We said businesses lose more revenue to bad follow-up than to bad marketing. We built systems to fix that. Then we shipped them — 50+ times, across credit tech, service, and fintech operators.</p>
+    <p>The numbers below are the receipts. The best part isn't what we shipped — it's what our clients did with it once the infrastructure was live. Every point of MRR lift, every recovered no-show, every DM converted to a booked call is one more founder who got their weekends back. That's the win.</p>
+
+    <div class="pull-quote">
+      <p>We didn't build a company. We built a <span>system that ships systems.</span> The compounding starts now.</p>
+      <div class="attrib">— Rick Jefferson · Founder</div>
+    </div>
+
+    <h3>The Numbers</h3>
+    <div class="metrics-hero">
+      <div class="mh"><div class="v">$742K</div><div class="l">Total Revenue</div><div class="d">↑ vs $0 · Year 1</div></div>
+      <div class="mh"><div class="v">142</div><div class="l">Clients Served</div><div class="d">Onboarded 2026</div></div>
+      <div class="mh"><div class="v">50+</div><div class="l">Assets Shipped</div><div class="d">Brand · Product · Print</div></div>
+      <div class="mh"><div class="v">98%</div><div class="l">Client Retention</div><div class="d">Month-over-month</div></div>
+    </div>
+
+    <h3>Growth Curve · Monthly Recurring Revenue</h3>
+    <div class="chart-card">
+      <div class="top-c">
+        <h4>MRR Trajectory · Jan → Dec 2026</h4>
+        <div class="legend">
+          <span><span class="dot-l" style="background:#2563eb"></span>MRR</span>
+          <span><span class="dot-l" style="background:#0ea5e9"></span>New Clients</span>
+        </div>
+      </div>
+      <div class="chart-svg">
+        <svg viewBox="0 0 700 140" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="mrrFill" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stop-color="#2563eb" stop-opacity="0.35"/>
+              <stop offset="100%" stop-color="#2563eb" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <line x1="0" y1="35" x2="700" y2="35" stroke="#e2e8f0" stroke-dasharray="2 4"/>
+          <line x1="0" y1="70" x2="700" y2="70" stroke="#e2e8f0" stroke-dasharray="2 4"/>
+          <line x1="0" y1="105" x2="700" y2="105" stroke="#e2e8f0" stroke-dasharray="2 4"/>
+          <path d="M 0,130 L 58,120 L 116,110 L 174,95 L 232,80 L 290,70 L 348,55 L 406,42 L 464,32 L 522,22 L 580,14 L 638,8 L 700,4 L 700,140 L 0,140 Z" fill="url(#mrrFill)"/>
+          <path d="M 0,130 L 58,120 L 116,110 L 174,95 L 232,80 L 290,70 L 348,55 L 406,42 L 464,32 L 522,22 L 580,14 L 638,8 L 700,4" fill="none" stroke="#2563eb" stroke-width="2.5"/>
+          <path d="M 0,132 L 58,128 L 116,122 L 174,118 L 232,112 L 290,108 L 348,100 L 406,90 L 464,80 L 522,72 L 580,62 L 638,50 L 700,42" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-dasharray="4 3"/>
+          <circle cx="700" cy="4" r="4" fill="#2563eb"/>
+        </svg>
+      </div>
+      <div class="x-axis"><span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span></div>
+    </div>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Annual Report 2026 · Page 02</div></div>
+</div>
+
+<!-- PG 3 · HIGHLIGHTS + REVENUE -->
+<div class="page">
+  <div class="inner">
+    <div class="head"><div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Annual Report 2026</div><div class="pnum">Page 03 · Highlights &amp; Revenue</div></div>
+    <div class="chapter-badge">● 2026 Highlights</div>
+    <h2>What we <span>shipped.</span></h2>
+
+    <div class="highlight-grid">
+      <div class="highlight"><div class="m">Q1 · Foundation</div><h4>The Growth Engine launched</h4><p>7-day launch protocol built and stress-tested. First 12 clients onboarded.</p></div>
+      <div class="highlight"><div class="m">Q2 · Scale</div><h4>Credit Tech platform live</h4><p>Bureau API integrations shipped. First fintech clients migrated onto RJ infrastructure.</p></div>
+      <div class="highlight"><div class="m">Q3 · System</div><h4>Brand system v1 → v5</h4><p>50 branded surfaces shipped. Full asset pack made repeatable for every new engagement.</p></div>
+      <div class="highlight"><div class="m">Q4 · Compounding</div><h4>White-label deployments</h4><p>First 3 white-label fleet operators onboarded. Recurring revenue crossed $85K/mo run rate.</p></div>
+    </div>
+
+    <h3>Revenue Composition</h3>
+    <div class="rev-grid">
+      <div class="rev-row"><div class="l">Growth Engine · Recurring<div class="d">$997/mo × 68 clients</div></div><div class="v">$412K</div></div>
+      <div class="rev-row"><div class="l">Launch Setups · One-Time<div class="d">142 launches @ avg $1,997</div></div><div class="v">$217K</div></div>
+      <div class="rev-row"><div class="l">Credit Tech Platform<div class="d">Enterprise / white-label</div></div><div class="v">$78K</div></div>
+      <div class="rev-row"><div class="l">Ā la Carte Services<div class="d">Portals · APIs · consulting</div></div><div class="v">$35K</div></div>
+      <div class="rev-row" style="grid-column:span 2;background:var(--grad-dark);color:#fff;border:none"><div class="l" style="color:#fff">Total 2026 Revenue<div class="d" style="color:var(--rj-sky)">All streams combined · verified</div></div><div class="v" style="color:var(--rj-sky);font-size:22px">$742,000</div></div>
+    </div>
+
+    <h3>Client Impact · Weighted Average Across 142 Engagements</h3>
+    <div class="metrics-hero">
+      <div class="mh"><div class="v">+287%</div><div class="l">Revenue Lift</div><div class="d">MoM after launch</div></div>
+      <div class="mh"><div class="v">&lt;90s</div><div class="l">Response Time</div><div class="d">Down from 6hrs+</div></div>
+      <div class="mh"><div class="v">64%</div><div class="l">No-Show Recovery</div><div class="d">Rebooked automatically</div></div>
+      <div class="mh"><div class="v">4.9/5</div><div class="l">Client NPS</div><div class="d">Verified feedback</div></div>
+    </div>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Annual Report 2026 · Page 03</div></div>
+</div>
+
+<!-- PG 4 · FORWARD -->
+<div class="page">
+  <div class="inner">
+    <div class="head"><div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Annual Report 2026</div><div class="pnum">Page 04 · Looking Forward</div></div>
+    <div class="forward">
+      <div class="lbl">● Looking Forward · 2027</div>
+      <h2 style="text-align:center">Next year, we<br/><span>compound.</span></h2>
+      <div class="msg">2026 was building the machine. 2027 is running it — at 10× the throughput, with the same team, on infrastructure that already scales.</div>
+      <div class="three">
+        <div class="item"><div class="n">Fleet Expansion</div><div class="d">Q1 · 10 new white-label operators</div></div>
+        <div class="item"><div class="n">Credit Tech Product</div><div class="d">Q2 · Public API launch</div></div>
+        <div class="item"><div class="n">$3M ARR Target</div><div class="d">Q4 · Verified path</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Annual Report 2026 · Page 04 · Thank you for building with us</div></div>
+</div>
+
+</body>
+</html>

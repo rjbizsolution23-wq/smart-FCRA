@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — PWA Manifest</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#f1f5f9;padding:40px;display:flex;flex-direction:column;gap:24px;align-items:center}
+  .wrap{width:800px}
+
+  .hero{background:var(--grad-dark);color:#fff;border-radius:16px;padding:36px 40px;position:relative;overflow:hidden;margin-bottom:20px}
+  .hero::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(50px)}
+  .hero .top{display:flex;align-items:center;gap:14px;position:relative;z-index:1;margin-bottom:20px}
+  .hero .top img{width:44px;height:44px;border-radius:10px}
+  .hero .top .n{font-family:var(--font-head);font-weight:600;font-size:16px}
+  .hero h1{font-family:var(--font-head);font-size:32px;font-weight:600;letter-spacing:-0.02em;margin:0;position:relative;z-index:1}
+  .hero .sub{font-family:var(--font-head);color:#cbd5e1;font-size:15px;margin-top:8px;position:relative;z-index:1}
+
+  .label{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);margin-bottom:8px;font-weight:600;display:flex;align-items:center;gap:10px}
+  .label .file{background:var(--rj-blue);color:#fff;padding:3px 10px;border-radius:4px;font-size:10px;text-transform:none;letter-spacing:0.06em}
+
+  .code-block{background:var(--rj-navy);color:#e2e8f0;border-radius:12px;padding:24px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.7;white-space:pre-wrap;word-break:break-word;overflow-x:auto;position:relative}
+  .code-block .k{color:#0ea5e9}
+  .code-block .s{color:#86efac}
+  .code-block .c{color:#64748b;font-style:italic}
+
+  .copy-btn{position:absolute;top:16px;right:16px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);color:var(--rj-sky);padding:6px 12px;border-radius:6px;font-family:var(--font-head);font-size:11px;font-weight:600;cursor:pointer;letter-spacing:0.06em}
+  .copy-btn:hover{background:rgba(14,165,233,0.25)}
+
+  .checklist{background:#fff;border-radius:12px;padding:24px;border:1px solid var(--rj-line)}
+  .checklist h3{font-family:var(--font-head);font-size:16px;color:var(--rj-navy);margin:0 0 14px 0}
+  .checklist ul{list-style:none;padding:0;margin:0;font-size:13px;line-height:1.8;color:var(--rj-text)}
+  .checklist li{padding-left:24px;position:relative}
+  .checklist li::before{content:"→";position:absolute;left:0;color:var(--rj-blue);font-weight:700}
+  .checklist code{background:var(--rj-light);color:var(--rj-blue);padding:2px 6px;border-radius:4px;font-family:ui-monospace,Menlo,monospace;font-size:11px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="top">
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+      <div class="n">RJ Business Solutions</div>
+    </div>
+    <h1>PWA Manifest + Favicon Setup</h1>
+    <div class="sub">Drop these files into any RJ property. Installable web app, on-brand splash, correct icon in every browser tab.</div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="label"><span class="file">/public/site.webmanifest</span> Progressive Web App manifest</div>
+  <div class="code-block"><button class="copy-btn" onclick="copyIt(this,'manifest')">📋 Copy</button><pre id="manifest">{
+  <span class="s">"name"</span>: <span class="s">"RJ Business Solutions"</span>,
+  <span class="s">"short_name"</span>: <span class="s">"RJ"</span>,
+  <span class="s">"description"</span>: <span class="s">"AI-powered systems, automation, and growth infrastructure for businesses ready to scale."</span>,
+  <span class="s">"start_url"</span>: <span class="s">"/"</span>,
+  <span class="s">"display"</span>: <span class="s">"standalone"</span>,
+  <span class="s">"orientation"</span>: <span class="s">"portrait"</span>,
+  <span class="s">"background_color"</span>: <span class="s">"#0f172a"</span>,
+  <span class="s">"theme_color"</span>: <span class="s">"#2563eb"</span>,
+  <span class="s">"lang"</span>: <span class="s">"en-US"</span>,
+  <span class="s">"scope"</span>: <span class="s">"/"</span>,
+  <span class="s">"categories"</span>: [<span class="s">"business"</span>, <span class="s">"productivity"</span>, <span class="s">"finance"</span>],
+  <span class="s">"icons"</span>: [
+    {
+      <span class="s">"src"</span>: <span class="s">"/icons/icon-192.png"</span>,
+      <span class="s">"sizes"</span>: <span class="s">"192x192"</span>,
+      <span class="s">"type"</span>: <span class="s">"image/png"</span>,
+      <span class="s">"purpose"</span>: <span class="s">"any"</span>
+    },
+    {
+      <span class="s">"src"</span>: <span class="s">"/icons/icon-512.png"</span>,
+      <span class="s">"sizes"</span>: <span class="s">"512x512"</span>,
+      <span class="s">"type"</span>: <span class="s">"image/png"</span>,
+      <span class="s">"purpose"</span>: <span class="s">"any"</span>
+    },
+    {
+      <span class="s">"src"</span>: <span class="s">"/icons/icon-maskable-512.png"</span>,
+      <span class="s">"sizes"</span>: <span class="s">"512x512"</span>,
+      <span class="s">"type"</span>: <span class="s">"image/png"</span>,
+      <span class="s">"purpose"</span>: <span class="s">"maskable"</span>
+    }
+  ],
+  <span class="s">"shortcuts"</span>: [
+    {
+      <span class="s">"name"</span>: <span class="s">"Book a Call"</span>,
+      <span class="s">"url"</span>: <span class="s">"/book"</span>,
+      <span class="s">"description"</span>: <span class="s">"Schedule a strategy call"</span>
+    },
+    {
+      <span class="s">"name"</span>: <span class="s">"Client Portal"</span>,
+      <span class="s">"url"</span>: <span class="s">"/portal"</span>,
+      <span class="s">"description"</span>: <span class="s">"Access your dashboard"</span>
+    }
+  ]
+}</pre></div>
+</div>
+
+<div class="wrap">
+  <div class="label"><span class="file">&lt;head&gt; snippet</span> Drop into every RJ site</div>
+  <div class="code-block"><button class="copy-btn" onclick="copyIt(this,'head')">📋 Copy</button><pre id="head"><span class="c">&lt;!-- RJ Business Solutions · PWA + Favicon Setup --&gt;</span>
+<span class="k">&lt;link</span> rel=<span class="s">"icon"</span> type=<span class="s">"image/png"</span> sizes=<span class="s">"32x32"</span> href=<span class="s">"/icons/favicon-32.png"</span><span class="k">&gt;</span>
+<span class="k">&lt;link</span> rel=<span class="s">"icon"</span> type=<span class="s">"image/png"</span> sizes=<span class="s">"16x16"</span> href=<span class="s">"/icons/favicon-16.png"</span><span class="k">&gt;</span>
+<span class="k">&lt;link</span> rel=<span class="s">"apple-touch-icon"</span> sizes=<span class="s">"180x180"</span> href=<span class="s">"/icons/apple-touch-icon.png"</span><span class="k">&gt;</span>
+<span class="k">&lt;link</span> rel=<span class="s">"manifest"</span> href=<span class="s">"/site.webmanifest"</span><span class="k">&gt;</span>
+<span class="k">&lt;meta</span> name=<span class="s">"theme-color"</span> content=<span class="s">"#2563eb"</span><span class="k">&gt;</span>
+<span class="k">&lt;meta</span> name=<span class="s">"apple-mobile-web-app-title"</span> content=<span class="s">"RJ"</span><span class="k">&gt;</span>
+<span class="k">&lt;meta</span> name=<span class="s">"apple-mobile-web-app-capable"</span> content=<span class="s">"yes"</span><span class="k">&gt;</span>
+<span class="k">&lt;meta</span> name=<span class="s">"apple-mobile-web-app-status-bar-style"</span> content=<span class="s">"black-translucent"</span><span class="k">&gt;</span>
+<span class="k">&lt;meta</span> name=<span class="s">"application-name"</span> content=<span class="s">"RJ Business Solutions"</span><span class="k">&gt;</span>
+
+<span class="c">&lt;!-- SEO --&gt;</span>
+<span class="k">&lt;meta</span> name=<span class="s">"description"</span> content=<span class="s">"AI-powered automation, credit technology, funnels, client portals, CRM workflows, and growth systems for businesses ready to scale."</span><span class="k">&gt;</span>
+<span class="k">&lt;link</span> rel=<span class="s">"canonical"</span> href=<span class="s">"https://rjbusinesssolutions.org/"</span><span class="k">&gt;</span></pre></div>
+</div>
+
+<div class="wrap">
+  <div class="label">Icon Export Checklist</div>
+  <div class="checklist">
+    <h3>Ship these 6 files to /public/icons/</h3>
+    <ul>
+      <li><code>favicon-16.png</code> — 16 × 16, browser tab</li>
+      <li><code>favicon-32.png</code> — 32 × 32, browser tab retina</li>
+      <li><code>apple-touch-icon.png</code> — 180 × 180, iOS home screen</li>
+      <li><code>icon-192.png</code> — 192 × 192, Android PWA</li>
+      <li><code>icon-512.png</code> — 512 × 512, PWA install prompt</li>
+      <li><code>icon-maskable-512.png</code> — 512 × 512 with safe zone (Android adaptive)</li>
+    </ul>
+    <p style="font-size:12px;color:var(--rj-muted-text);margin-top:16px">Source: use the RJ logo JPEG. Convert to PNG with rounded corners at each size. Maskable icon needs 10% padding on all sides for Android's adaptive shape.</p>
+  </div>
+</div>
+
+<script>
+  function copyIt(btn, id){
+    const el = document.getElementById(id);
+    navigator.clipboard.writeText(el.textContent);
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    setTimeout(()=>btn.textContent = orig, 1500);
+  }
+</script>
+
+</body>
+</html>

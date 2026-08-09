@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Referral Partner Agreement</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;flex-direction:column;gap:24px;align-items:center}
+  .page{width:794px;min-height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden;page-break-after:always;position:relative}
+
+  .top{background:var(--grad-dark);color:#fff;padding:32px 56px 24px;position:relative;overflow:hidden}
+  .top::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .top .row{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1;margin-bottom:14px}
+  .top .brand{display:flex;align-items:center;gap:12px}
+  .top .brand img{width:40px;height:40px;border-radius:9px}
+  .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:15px}
+  .top .brand .t{font-family:var(--font-mono);font-size:9px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:2px;font-weight:600}
+  .top .doc{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);text-align:right;font-weight:600}
+  .top .doc b{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:block;margin-top:2px}
+  .top h1{font-family:var(--font-head);font-size:36px;font-weight:600;letter-spacing:-0.02em;margin:0;position:relative;z-index:1;line-height:1}
+  .top h1 span{color:var(--rj-sky)}
+  .top .sub{font-family:var(--font-head);color:#cbd5e1;font-size:13px;margin-top:6px;position:relative;z-index:1}
+  .thin{height:3px;background:var(--grad-primary)}
+
+  .body{padding:32px 56px;flex:1;display:flex;flex-direction:column;gap:16px;font-family:var(--font-body);font-size:12px;line-height:1.7;color:var(--rj-text)}
+
+  h3{font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--rj-navy);margin:0 0 6px 0;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+  h3::before{content:"";width:3px;height:16px;background:var(--rj-blue);border-radius:2px}
+
+  .parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;background:var(--rj-light);padding:16px 20px;border-radius:10px}
+  .parties .k{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:4px}
+  .parties .v{font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy);letter-spacing:-0.01em}
+  .parties .a{font-size:11px;color:var(--rj-muted-text);margin-top:2px;line-height:1.5}
+
+  /* Commission tiers */
+  .tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .tier-c{background:linear-gradient(180deg,#fff,var(--rj-light));border:1px solid var(--rj-border);border-radius:10px;padding:16px 14px;text-align:center}
+  .tier-c.mid{background:var(--grad-dark);color:#fff;border:none;transform:scale(1.02);box-shadow:0 15px 30px rgba(15,23,42,0.25);position:relative;overflow:hidden}
+  .tier-c.mid::after{content:"";position:absolute;right:-40px;top:-40px;width:150px;height:150px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(20px)}
+  .tier-c .tag{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;position:relative;z-index:1}
+  .tier-c.mid .tag{color:var(--rj-sky)}
+  .tier-c .lvl{font-family:var(--font-head);font-weight:600;font-size:16px;color:var(--rj-navy);margin-top:4px;letter-spacing:-0.01em;position:relative;z-index:1}
+  .tier-c.mid .lvl{color:#fff}
+  .tier-c .rate{font-family:var(--font-head);font-weight:700;font-size:38px;background:linear-gradient(135deg,#2563eb,#0ea5e9);-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:-0.03em;line-height:1;margin:8px 0;position:relative;z-index:1}
+  .tier-c.mid .rate{background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .tier-c .req{font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;position:relative;z-index:1}
+  .tier-c.mid .req{color:#cbd5e1}
+
+  /* Clauses */
+  .clauses{display:flex;flex-direction:column;gap:12px}
+  .clause-block{background:#fff;border:1px solid var(--rj-line);border-left:4px solid var(--rj-blue);border-radius:8px;padding:14px 18px}
+  .clause-block .num{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:4px}
+  .clause-block h4{font-family:var(--font-head);font-size:13px;font-weight:600;color:var(--rj-navy);margin:0 0 4px 0;letter-spacing:-0.01em}
+  .clause-block p{font-size:11px;line-height:1.6;color:var(--rj-text);margin:0}
+  .clause-block p b{color:var(--rj-navy);font-family:var(--font-head);font-weight:600}
+
+  .call-flow{background:var(--grad-primary);color:#fff;padding:16px 20px;border-radius:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px;box-shadow:0 8px 20px rgba(37,99,235,0.3)}
+  .call-flow .step{position:relative}
+  .call-flow .step .n{font-family:var(--font-head);font-weight:700;font-size:24px;letter-spacing:-0.03em;color:#fff;line-height:1}
+  .call-flow .step .l{font-family:var(--font-head);font-weight:600;font-size:11px;margin-top:4px;letter-spacing:-0.01em}
+  .call-flow .step .d{font-family:var(--font-mono);font-size:8px;letter-spacing:0.12em;text-transform:uppercase;color:#e0f2fe;margin-top:2px;font-weight:600}
+
+  .sig-block{margin-top:auto;padding-top:20px;border-top:1px solid var(--rj-line);display:grid;grid-template-columns:1fr 1fr;gap:28px}
+  .sig-line{border-bottom:1.5px solid var(--rj-navy);padding-bottom:6px;font-family:'Space Grotesk',serif;font-style:italic;font-size:22px;color:var(--rj-blue);font-weight:500;min-height:36px}
+  .sig-meta{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);margin-top:6px;font-weight:600}
+  .sig-meta b{color:var(--rj-navy);display:block;margin-top:2px;font-family:var(--font-head);font-size:12px;letter-spacing:0.02em;text-transform:none;font-weight:600}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:12px 56px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+
+  @media print{body{background:#fff;padding:0;gap:0}.page{box-shadow:none}}
+</style>
+</head>
+<body>
+
+<!-- P1 · PROGRAM OVERVIEW -->
+<div class="page">
+  <div class="top">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Referral Partner Program · 2026</div></div></div>
+      <div class="doc">Agreement<b>RPA-2026-0142</b></div>
+    </div>
+    <h1>Referral Partner <span>Agreement.</span></h1>
+    <div class="sub">Governs the referral partnership between the Parties named below</div>
+  </div>
+  <div class="thin"></div>
+
+  <div class="body">
+    <div class="parties">
+      <div>
+        <div class="k">Company</div>
+        <div class="v">RJ Business Solutions</div>
+        <div class="a">1342 NM 333, Tijeras NM 87059</div>
+      </div>
+      <div>
+        <div class="k">Referral Partner</div>
+        <div class="v">[Partner Legal Name]</div>
+        <div class="a">[Partner Address]</div>
+      </div>
+    </div>
+
+    <h3>1. Program Overview</h3>
+    <p>This Agreement governs a non-exclusive referral relationship between RJ Business Solutions ("Company") and the Referral Partner ("Partner"). Partner agrees to promote and refer prospective clients to Company in exchange for the commission structure below. This is not an employment relationship — Partner operates as an independent contractor.</p>
+
+    <h3>2. Commission Tiers</h3>
+    <div class="tiers">
+      <div class="tier-c">
+        <div class="tag">Tier 01</div>
+        <div class="lvl">Growth Partner</div>
+        <div class="rate">15%</div>
+        <div class="req">1–5 closed / yr</div>
+      </div>
+      <div class="tier-c mid">
+        <div class="tag">Tier 02 · Most Common</div>
+        <div class="lvl">Certified Partner</div>
+        <div class="rate">25%</div>
+        <div class="req">6–15 closed / yr</div>
+      </div>
+      <div class="tier-c">
+        <div class="tag">Tier 03</div>
+        <div class="lvl">Fleet Partner</div>
+        <div class="rate">35%</div>
+        <div class="req">16+ closed / yr</div>
+      </div>
+    </div>
+    <p style="margin-top:4px">Commission is calculated on <b>collected revenue</b> — one-time setup fees + first 12 months of recurring subscription. Enterprise white-label deals negotiated separately at flat referral fees per deal.</p>
+
+    <h3>3. How Referrals Flow</h3>
+    <div class="call-flow">
+      <div class="step"><div class="n">01</div><div class="l">Introduction</div><div class="d">Partner sends warm intro</div></div>
+      <div class="step"><div class="n">02</div><div class="l">Attribution</div><div class="d">Logged via code + CRM</div></div>
+      <div class="step"><div class="n">03</div><div class="l">Close</div><div class="d">RJ closes the deal</div></div>
+      <div class="step"><div class="n">04</div><div class="l">Payout</div><div class="d">Net-15 after collection</div></div>
+    </div>
+  </div>
+
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Referral Partner Agreement · Page 01</div></div>
+</div>
+
+<!-- P2 · TERMS -->
+<div class="page">
+  <div class="top" style="padding:20px 56px 16px">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Referral Partner Agreement · Page 02</div></div></div>
+      <div class="doc">RPA-2026-0142</div>
+    </div>
+  </div>
+  <div class="thin"></div>
+
+  <div class="body">
+    <h3>4. Terms &amp; Conditions</h3>
+    <div class="clauses">
+      <div class="clause-block">
+        <div class="num">Clause 4.1 · Attribution</div>
+        <h4>Referral tracking window</h4>
+        <p>A referral is considered attributed to Partner if a prospect (a) uses Partner's unique referral code at signup, or (b) mentions Partner by name in the discovery call and Company confirms the source within <b>90 days</b> of first contact. Attribution disputes are resolved by written confirmation from the prospect.</p>
+      </div>
+      <div class="clause-block">
+        <div class="num">Clause 4.2 · Payment</div>
+        <h4>Commission payout schedule</h4>
+        <p>Commission is paid <b>Net-15</b> after Company collects payment from the referred client. Recurring subscription commissions are paid monthly on the collection anniversary. Payments made via ACH or Stripe. Minimum payout: <b>$100</b> — smaller amounts roll to next cycle.</p>
+      </div>
+      <div class="clause-block">
+        <div class="num">Clause 4.3 · Tier Advancement</div>
+        <h4>Moving between tiers</h4>
+        <p>Tier is evaluated on a <b>rolling 12-month basis</b>. Partners advancing to a new tier receive the new commission rate on the very next referral. Tier promotions are not retroactive to prior referrals unless negotiated in writing.</p>
+      </div>
+      <div class="clause-block">
+        <div class="num">Clause 4.4 · Marketing Materials</div>
+        <h4>Approved use of RJ brand</h4>
+        <p>Partner may use RJ Business Solutions' logo, tagline, and marketing copy as provided in the Partner Media Kit. Partner may not modify the logo, misrepresent RJ services, or make claims Company has not authorized. Any independent marketing must be pre-approved via email.</p>
+      </div>
+      <div class="clause-block">
+        <div class="num">Clause 4.5 · Non-Exclusivity</div>
+        <h4>Both parties are free to work with others</h4>
+        <p>This Agreement is <b>non-exclusive</b> for both parties. Partner may refer to competing services; Company may work with competing referral sources. Neither party owes the other a right of first refusal on any opportunity.</p>
+      </div>
+      <div class="clause-block">
+        <div class="num">Clause 4.6 · Confidentiality</div>
+        <h4>Client &amp; company information</h4>
+        <p>Partner agrees to hold in strict confidence all client information, pricing details, and internal Company operations shared during the course of this Agreement. Confidentiality obligations survive termination for <b>three (3) years</b>.</p>
+      </div>
+      <div class="clause-block">
+        <div class="num">Clause 4.7 · Termination</div>
+        <h4>How this ends</h4>
+        <p>Either party may terminate this Agreement with <b>30 days written notice</b>. Commissions earned prior to termination continue to be paid through their full 12-month recurring window. Termination for cause (breach, fraud, misrepresentation) is immediate and voids future commissions.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Referral Partner Agreement · Page 02</div></div>
+</div>
+
+<!-- P3 · SIGNATURES -->
+<div class="page">
+  <div class="top" style="padding:20px 56px 16px">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Signatures &amp; Acceptance</div></div></div>
+      <div class="doc">Page 03</div>
+    </div>
+  </div>
+  <div class="thin"></div>
+
+  <div class="body">
+    <h3>5. General Provisions</h3>
+    <div class="clause-block">
+      <div class="num">Clause 5.1 · Governing Law</div>
+      <h4>New Mexico, USA</h4>
+      <p>This Agreement is governed by the laws of the State of New Mexico. Disputes shall be resolved by binding arbitration in Bernalillo County, NM, under AAA Commercial Arbitration Rules.</p>
+    </div>
+    <div class="clause-block">
+      <div class="num">Clause 5.2 · Entire Agreement</div>
+      <h4>Supersedes prior discussions</h4>
+      <p>This Agreement, together with any signed addenda, constitutes the entire understanding between the Parties and supersedes all prior verbal or written communications on the referral relationship.</p>
+    </div>
+    <div class="clause-block">
+      <div class="num">Clause 5.3 · Amendments</div>
+      <h4>Must be in writing</h4>
+      <p>Any changes to commission rates, tiers, or terms must be agreed in writing (email is sufficient) and signed or acknowledged by both Parties before taking effect.</p>
+    </div>
+
+    <h3 style="margin-top:12px">6. Acceptance</h3>
+    <p>By signing below, both Parties agree to be bound by the terms of this Agreement effective as of the Execution Date.</p>
+
+    <div class="sig-block">
+      <div>
+        <div class="sig-line">Signature</div>
+        <div class="sig-meta">Referral Partner<b>[Full Name · Title · Date]</b></div>
+      </div>
+      <div>
+        <div class="sig-line">Rick Jefferson</div>
+        <div class="sig-meta">RJ Business Solutions<b>Rick Jefferson · Founder · July 18, 2026</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>RPA-2026-0142 · Page 03 · support@rjbusinesssolutions.org</div></div>
+</div>
+
+</body>
+</html>

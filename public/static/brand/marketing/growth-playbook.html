@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — The Growth Playbook</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;flex-direction:column;gap:24px;align-items:center}
+  .page{width:794px;height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden;page-break-after:always;position:relative}
+
+  /* Shared inner styling */
+  .inner{padding:56px 64px;flex:1;display:flex;flex-direction:column;gap:20px}
+  .inner .head{display:flex;justify-content:space-between;align-items:center;padding-bottom:14px;border-bottom:2px solid var(--rj-blue);margin-bottom:12px}
+  .inner .head .brand{display:flex;align-items:center;gap:8px;font-family:var(--font-head);font-weight:600;font-size:12px;color:var(--rj-navy)}
+  .inner .head .brand img{width:24px;height:24px;border-radius:5px}
+  .inner .head .pnum{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+
+  h2{font-family:var(--font-head);font-size:36px;font-weight:600;letter-spacing:-0.02em;color:var(--rj-navy);margin:0 0 8px 0;line-height:1.05}
+  h2 span{background:linear-gradient(135deg,#2563eb,#0ea5e9);-webkit-background-clip:text;background-clip:text;color:transparent}
+  h3{font-family:var(--font-head);font-size:20px;font-weight:600;letter-spacing:-0.01em;color:var(--rj-navy);margin:0 0 8px 0;display:flex;align-items:center;gap:10px}
+  h3::before{content:"";width:4px;height:22px;background:var(--rj-blue);border-radius:2px}
+  p{font-size:13px;line-height:1.7;color:var(--rj-text);margin:0 0 8px 0}
+  .lead-t{font-family:var(--font-head);font-size:16px;color:var(--rj-muted-text);line-height:1.4;font-weight:500;margin-bottom:12px}
+
+  .chapter-badge{display:inline-block;padding:5px 12px;background:var(--rj-light);color:var(--rj-blue);border-radius:999px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;margin-bottom:12px}
+
+  /* Page bottom footer */
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:14px 64px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+
+  /* COVER */
+  .cover{background:var(--grad-dark);color:#fff;padding:72px 64px;position:relative;overflow:hidden;flex:1;display:flex;flex-direction:column;justify-content:space-between}
+  .cover::after{content:"";position:absolute;right:-150px;top:-150px;width:600px;height:600px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(60px)}
+  .cover::before{content:"";position:absolute;left:-100px;bottom:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(37,99,235,0.35) 0%,transparent 60%);filter:blur(50px)}
+  .cover .top{display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1}
+  .cover .top .brand{display:flex;align-items:center;gap:10px}
+  .cover .top .brand img{width:40px;height:40px;border-radius:9px}
+  .cover .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:14px}
+  .cover .top .doc{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);text-align:right;font-weight:600}
+  .cover .top .doc b{color:#fff;font-weight:500;display:block;margin-top:3px;font-size:12px}
+  .cover .middle{position:relative;z-index:1}
+  .cover .kicker{display:inline-block;padding:8px 16px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);border-radius:999px;font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-bottom:24px;font-weight:600}
+  .cover h1{font-family:var(--font-head);font-size:84px;font-weight:700;letter-spacing:-0.04em;line-height:0.9;margin:0}
+  .cover h1 span{background:linear-gradient(135deg,#0ea5e9 0%,#60a5fa 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .cover .subtitle{font-family:var(--font-head);color:#cbd5e1;font-size:22px;margin-top:24px;line-height:1.3;max-width:520px;font-weight:500}
+  .cover .from{padding-top:24px;border-top:1px solid rgba(255,255,255,0.15);display:flex;justify-content:space-between;align-items:flex-end;position:relative;z-index:1}
+  .cover .from .l .k{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;font-weight:600}
+  .cover .from .l .v{font-family:var(--font-head);font-weight:600;font-size:18px;color:#fff}
+  .cover .from .l .r{font-family:var(--font-mono);font-size:10px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:4px;font-weight:600}
+  .cover .from .pages{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;font-weight:600}
+  .cover .from .pages b{color:var(--rj-sky);font-family:var(--font-head);font-size:20px;display:block;margin-top:4px;letter-spacing:-0.02em}
+
+  /* TOC */
+  .toc-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 32px;margin-top:12px}
+  .toc-item{padding:14px 16px;background:var(--rj-light);border-radius:10px;border-left:3px solid var(--rj-blue);display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .toc-item .num{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:3px}
+  .toc-item .title{font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy);letter-spacing:-0.01em;line-height:1.3}
+  .toc-item .desc{font-size:11px;color:var(--rj-muted-text);margin-top:4px;line-height:1.4}
+  .toc-item .p{font-family:var(--font-mono);font-size:11px;color:var(--rj-blue);font-weight:600;letter-spacing:0.06em;white-space:nowrap;padding-top:3px}
+
+  /* PILL CARDS */
+  .pills{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .pill{background:var(--rj-light);border-radius:10px;padding:16px}
+  .pill .k{font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy);margin-bottom:4px;letter-spacing:-0.01em}
+  .pill .v{font-size:11px;color:var(--rj-muted-text);line-height:1.4}
+
+  /* CALLOUT */
+  .callout{background:var(--rj-navy);color:#fff;padding:22px 26px;border-radius:12px;position:relative;overflow:hidden;margin:8px 0}
+  .callout::after{content:"";position:absolute;right:-60px;top:-60px;width:200px;height:200px;background:radial-gradient(circle,rgba(14,165,233,0.35) 0%,transparent 60%);filter:blur(30px)}
+  .callout .lbl-c{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600;position:relative;z-index:1;margin-bottom:8px}
+  .callout .txt{font-family:var(--font-head);font-size:17px;font-weight:500;letter-spacing:-0.01em;line-height:1.35;position:relative;z-index:1}
+  .callout .txt span{color:var(--rj-sky)}
+
+  /* STEP LIST */
+  .step-list{display:flex;flex-direction:column;gap:10px}
+  .step-i{display:flex;gap:14px;background:linear-gradient(180deg,#fff,var(--rj-light));border:1px solid var(--rj-border);border-radius:12px;padding:16px 18px}
+  .step-i .num{width:34px;height:34px;background:var(--grad-primary);border-radius:9px;color:#fff;font-family:var(--font-head);font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 10px rgba(37,99,235,0.35)}
+  .step-i h4{font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--rj-navy);margin:0 0 4px 0;letter-spacing:-0.01em}
+  .step-i p{font-size:12px;line-height:1.5;color:var(--rj-muted-text);margin:0}
+
+  /* METRIC ROW */
+  .metric-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .m-block{background:linear-gradient(180deg,#fff,var(--rj-light));border:1px solid var(--rj-border);border-radius:12px;padding:20px;text-align:center}
+  .m-block .v{font-family:var(--font-head);font-size:40px;font-weight:700;color:var(--rj-blue);letter-spacing:-0.03em;line-height:1}
+  .m-block .l{font-family:var(--font-head);font-size:12px;color:var(--rj-navy);font-weight:600;margin-top:6px}
+  .m-block .d{font-size:10px;color:var(--rj-muted-text);margin-top:4px;line-height:1.4}
+
+  /* QUOTE */
+  .pull-quote{background:var(--grad-primary);color:#fff;padding:24px 28px;border-radius:14px;position:relative;overflow:hidden;margin:8px 0}
+  .pull-quote::before{content:"\201C";position:absolute;top:0;left:16px;font-family:var(--font-head);font-size:100px;color:rgba(255,255,255,0.2);line-height:1}
+  .pull-quote p{font-family:var(--font-head);font-size:18px;font-weight:500;letter-spacing:-0.01em;line-height:1.35;margin:0 0 8px 0;padding-left:36px;position:relative;z-index:1}
+  .pull-quote .attrib{padding-left:36px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#e0f2fe;position:relative;z-index:1;font-weight:600}
+
+  /* FINAL CTA PAGE */
+  .final-page{background:var(--grad-dark);color:#fff;padding:80px 72px;position:relative;overflow:hidden;flex:1;display:flex;flex-direction:column;justify-content:space-between}
+  .final-page::after{content:"";position:absolute;right:-150px;bottom:-150px;width:600px;height:600px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(60px)}
+  .final-page .top-row{position:relative;z-index:1;display:flex;align-items:center;gap:10px}
+  .final-page .top-row img{width:40px;height:40px;border-radius:9px}
+  .final-page .top-row .n{font-family:var(--font-head);font-weight:600;font-size:14px}
+  .final-page .middle{position:relative;z-index:1;text-align:center}
+  .final-page .middle h1{font-family:var(--font-head);font-size:72px;font-weight:700;letter-spacing:-0.03em;line-height:0.95;margin:0 0 20px 0}
+  .final-page .middle h1 span{color:var(--rj-sky)}
+  .final-page .middle .sub{font-family:var(--font-head);font-size:20px;color:#cbd5e1;max-width:520px;margin:0 auto;line-height:1.4}
+  .final-page .cta-block{text-align:center;position:relative;z-index:1}
+  .final-page .cta-block .btn{display:inline-block;padding:18px 32px;background:var(--grad-primary);color:#fff;border-radius:12px;font-family:var(--font-head);font-weight:700;font-size:16px;box-shadow:0 15px 40px rgba(37,99,235,0.5);margin-bottom:14px}
+  .final-page .cta-block .url{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600}
+  .final-page .signoff{position:relative;z-index:1;padding-top:20px;border-top:1px solid rgba(255,255,255,0.15);text-align:center}
+  .final-page .signoff .from{font-family:var(--font-head);font-style:italic;font-size:20px;color:var(--rj-sky);margin-bottom:6px}
+  .final-page .signoff .role{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;font-weight:600}
+
+  @media print{body{background:#fff;padding:0;gap:0}.page{box-shadow:none}}
+</style>
+</head>
+<body>
+
+<!-- P1 · COVER -->
+<div class="page">
+  <div class="cover">
+    <div class="top">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+      <div class="doc">Free Playbook<b>Growth Systems 2026</b></div>
+    </div>
+    <div class="middle">
+      <div class="kicker">● The Field Guide</div>
+      <h1>The Growth<br/><span>Playbook.</span></h1>
+      <div class="subtitle">How service businesses turn scattered leads into a system that closes calls, follows up, and scales — without living in the inbox.</div>
+    </div>
+    <div class="from">
+      <div class="l">
+        <div class="k">By</div>
+        <div class="v">Rick Jefferson</div>
+        <div class="r">Founder · RJ Business Solutions</div>
+      </div>
+      <div class="pages">
+        <span>Total</span>
+        <b>8 Pages</b>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- P2 · TOC -->
+<div class="page">
+  <div class="inner">
+    <div class="head"><div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Growth Playbook</div><div class="pnum">Page 02 · Contents</div></div>
+    <div class="chapter-badge">● Table of Contents</div>
+    <h2>What's inside.</h2>
+    <p class="lead-t">Six chapters. One system. Every step designed to be shipped, not shelved.</p>
+
+    <div class="toc-grid">
+      <div class="toc-item"><div><div class="num">Chapter 01</div><div class="title">The Follow-Up Gap</div><div class="desc">Why leads die between DM and CRM.</div></div><div class="p">p. 03</div></div>
+      <div class="toc-item"><div><div class="num">Chapter 02</div><div class="title">The 5 Pillars</div><div class="desc">Capture, qualify, route, follow up, convert.</div></div><div class="p">p. 04</div></div>
+      <div class="toc-item"><div><div class="num">Chapter 03</div><div class="title">The 7-Day Build</div><div class="desc">Kickoff to live system in one week.</div></div><div class="p">p. 05</div></div>
+      <div class="toc-item"><div><div class="num">Chapter 04</div><div class="title">Measuring What Matters</div><div class="desc">The 4 numbers that predict scale.</div></div><div class="p">p. 06</div></div>
+      <div class="toc-item"><div><div class="num">Chapter 05</div><div class="title">Compliance Guardrails</div><div class="desc">Automation without regulatory risk.</div></div><div class="p">p. 07</div></div>
+      <div class="toc-item"><div><div class="num">Chapter 06</div><div class="title">Next Steps</div><div class="desc">Build it yourself, or hand it to us.</div></div><div class="p">p. 08</div></div>
+    </div>
+
+    <div class="callout">
+      <div class="lbl-c">Read Time</div>
+      <div class="txt">12 minutes to read. <span>7 days to ship.</span> Zero fluff between the two.</div>
+    </div>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>The Growth Playbook · 2026 · Page 02</div></div>
+</div>
+
+<!-- P3 · CH1 · THE PROBLEM -->
+<div class="page">
+  <div class="inner">
+    <div class="head"><div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Growth Playbook</div><div class="pnum">Chapter 01 · Page 03</div></div>
+    <div class="chapter-badge">● Chapter 01</div>
+    <h2>The <span>Follow-Up Gap.</span></h2>
+    <p class="lead-t">Most businesses aren't losing to competitors. They're losing to their own inbox.</p>
+
+    <p>Here's the pattern we see in almost every audit we run: attention is coming in — DMs, form fills, ad clicks, referrals — but the response layer between "lead expressed interest" and "lead is on a call" is manual, inconsistent, and slow. That's the Follow-Up Gap. And it's expensive.</p>
+
+    <h3>Where leads actually die</h3>
+    <div class="pills">
+      <div class="pill"><div class="k">The 6-Hour Gap</div><div class="v">First DM reply arrives after the lead has already moved on.</div></div>
+      <div class="pill"><div class="k">The Handoff Gap</div><div class="v">Booked call → no reminder → no-show. Revenue vanishes.</div></div>
+      <div class="pill"><div class="k">The Nurture Gap</div><div class="v">Cold leads never hear from you again. Zero re-engagement.</div></div>
+    </div>
+
+    <h3>Why it's not a "hustle harder" problem</h3>
+    <p>Adding hours doesn't fix a broken pipe. If your follow-up depends on remembering, it will always leak — because humans forget, tabs close, and inboxes fill. The only sustainable fix is <b>system</b>: a repeatable, automated flow that catches every lead, tags them, routes them, and follows up whether you're at your desk or not.</p>
+
+    <div class="pull-quote">
+      <p>Your leads should not disappear in DMs. If your business depends on follow-up, your follow-up cannot depend on memory.</p>
+      <div class="attrib">— Rick Jefferson</div>
+    </div>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Chapter 01 · The Follow-Up Gap · Page 03</div></div>
+</div>
+
+<!-- P4 · CH2 · 5 PILLARS -->
+<div class="page">
+  <div class="inner">
+    <div class="head"><div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Growth Playbook</div><div class="pnum">Chapter 02 · Page 04</div></div>
+    <div class="chapter-badge">● Chapter 02</div>
+    <h2>The <span>5 Pillars</span> of a growth system.</h2>
+    <p class="lead-t">Every RJ-built system runs on the same architecture. These five pillars, wired together, are what turn attention into revenue.</p>
+
+    <div class="step-list">
+      <div class="step-i">
+        <div class="num">1</div>
+        <div>
+          <h4>Capture</h4>
+          <p>Every touchpoint — DMs, forms, referrals, ads — feeds one unified pipeline. Nothing lives in someone's phone.</p>
+        </div>
+      </div>
+      <div class="step-i">
+        <div class="num">2</div>
+        <div>
+          <h4>Qualify</h4>
+          <p>AI reads intent signals in real time and tags leads as Hot / Warm / Nurture. Every lead gets a status inside 90 seconds.</p>
+        </div>
+      </div>
+      <div class="step-i">
+        <div class="num">3</div>
+        <div>
+          <h4>Route</h4>
+          <p>Hot leads go direct to booking. Warm leads enter follow-up sequences. Compliance escalations go to human review.</p>
+        </div>
+      </div>
+      <div class="step-i">
+        <div class="num">4</div>
+        <div>
+          <h4>Follow Up</h4>
+          <p>Automated sequences with brand voice, no-show recovery, and re-engagement — all logged in the CRM.</p>
+        </div>
+      </div>
+      <div class="step-i">
+        <div class="num">5</div>
+        <div>
+          <h4>Convert</h4>
+          <p>Booking, payment, onboarding, and reporting — the back half of the funnel automated end-to-end.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Chapter 02 · The 5 Pillars · Page 04</div></div>
+</div>
+
+<!-- P5 · CH3 · 7 DAY BUILD -->
+<div class="page">
+  <div class="inner">
+    <div class="head"><div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Growth Playbook</div><div class="pnum">Chapter 03 · Page 05</div></div>
+    <div class="chapter-badge">● Chapter 03</div>
+    <h2>The <span>7-Day Build.</span></h2>
+    <p class="lead-t">This is how a growth system goes from "we should do this" to "it's live" — in one week.</p>
+
+    <div class="step-list">
+      <div class="step-i"><div class="num">D1</div><div><h4>Kickoff + Access</h4><p>30-min working session. Delegated access setup. Brand voice deep-dive. Ends with a signed access log and a project channel.</p></div></div>
+      <div class="step-i"><div class="num">D2</div><div><h4>System Design</h4><p>Architecture locked. Pipeline stages defined. Follow-up sequences drafted. Booking calendar wired.</p></div></div>
+      <div class="step-i"><div class="num">D3</div><div><h4>Buildout Begins</h4><p>CRM, DM automation, and sequences built in staging. Nothing goes live yet.</p></div></div>
+      <div class="step-i"><div class="num">D4</div><div><h4>Voice Training</h4><p>AI trained on your voice. Escalation rules wired. Compliance guardrails installed.</p></div></div>
+      <div class="step-i"><div class="num">D5</div><div><h4>QA + Dry Runs</h4><p>Dry-runs on real conversations. You review every reply before we go live.</p></div></div>
+      <div class="step-i"><div class="num">D6</div><div><h4>Soft Launch</h4><p>System flipped on for a slice of traffic. Live monitoring. Rapid tuning.</p></div></div>
+      <div class="step-i"><div class="num">D7</div><div><h4>Full Launch</h4><p>All traffic switched. Reporting cadence starts. Human escalation queue live.</p></div></div>
+    </div>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Chapter 03 · The 7-Day Build · Page 05</div></div>
+</div>
+
+<!-- P6 · CH4 · METRICS -->
+<div class="page">
+  <div class="inner">
+    <div class="head"><div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Growth Playbook</div><div class="pnum">Chapter 04 · Page 06</div></div>
+    <div class="chapter-badge">● Chapter 04</div>
+    <h2>Measuring what <span>actually matters.</span></h2>
+    <p class="lead-t">Vanity metrics are noise. Here are the four numbers that predict whether your growth system will scale.</p>
+
+    <div class="metric-row">
+      <div class="m-block"><div class="v">&lt;90s</div><div class="l">Response Time</div><div class="d">First reply to inbound lead</div></div>
+      <div class="m-block"><div class="v">34%</div><div class="l">Qualification Rate</div><div class="d">DMs → tagged as Hot/Warm</div></div>
+      <div class="m-block"><div class="v">2.4×</div><div class="l">Booking Ratio</div><div class="d">Qualified → booked calls</div></div>
+    </div>
+
+    <h3>Why these four</h3>
+    <p>Response time is the single biggest predictor of close rate. Qualification separates real intent from noise. Booking ratio is where systems break — most businesses lose 60%+ of qualified leads at the booking step. And no-show recovery is pure margin: every recovered no-show is a call that would have died.</p>
+
+    <div class="callout">
+      <div class="lbl-c">Benchmark</div>
+      <div class="txt">Clients on the Growth Engine hit &lt;90s response, 34%+ qualification, and recover <span>60%+ of no-shows</span> inside 30 days of launch.</div>
+    </div>
+
+    <h3>How to instrument this today</h3>
+    <p>Add timestamps to every stage of your pipeline. Track first-reply-time as a required field. Log every booked call and every no-show. If you can't see these numbers weekly, you can't fix them. RJ systems ship with all four wired by default.</p>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Chapter 04 · Measuring What Matters · Page 06</div></div>
+</div>
+
+<!-- P7 · CH5 · COMPLIANCE -->
+<div class="page">
+  <div class="inner">
+    <div class="head"><div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Growth Playbook</div><div class="pnum">Chapter 05 · Page 07</div></div>
+    <div class="chapter-badge">● Chapter 05</div>
+    <h2>Compliance <span>guardrails.</span></h2>
+    <p class="lead-t">Automation without guardrails is a lawsuit waiting to happen. Especially in credit-adjacent verticals.</p>
+
+    <p>Every RJ-built system ships with FCRA/FDCPA-informed workflows, delegated-access rules, and audit trails. We're not lawyers — but we build systems the way compliance-first operators need them built.</p>
+
+    <h3>Four rules we build into every system</h3>
+    <div class="pills">
+      <div class="pill"><div class="k">Delegated Access</div><div class="v">No password sharing. Role-based permissions only.</div></div>
+      <div class="pill"><div class="k">Consent Logging</div><div class="v">Every outbound message tied to a documented opt-in.</div></div>
+      <div class="pill"><div class="k">Escalation Paths</div><div class="v">Sensitive topics auto-escalate to human review.</div></div>
+      <div class="pill"><div class="k">Audit Trails</div><div class="v">Every AI reply logged, timestamped, exportable.</div></div>
+      <div class="pill"><div class="k">Data Minimization</div><div class="v">Collect only what's needed to serve the client.</div></div>
+      <div class="pill"><div class="k">Secure Storage</div><div class="v">Encrypted at rest + in transit. Row-level security.</div></div>
+    </div>
+
+    <div class="pull-quote">
+      <p>Automation only works when the strategy is clean. Compliance isn't a blocker — it's the foundation you build the system on.</p>
+      <div class="attrib">— Rick Jefferson</div>
+    </div>
+  </div>
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Chapter 05 · Compliance Guardrails · Page 07</div></div>
+</div>
+
+<!-- P8 · FINAL CTA -->
+<div class="page">
+  <div class="final-page">
+    <div class="top-row"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+    <div class="middle">
+      <div class="chapter-badge" style="background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);color:var(--rj-sky)">● Chapter 06 · Your Move</div>
+      <h1>Build it yourself,<br/>or <span>hand it to us.</span></h1>
+      <div class="sub">You now have the blueprint. If you want to build it in-house, use this as your spec. If you want it live in 7 days with our team on the tools, book a call.</div>
+    </div>
+    <div class="cta-block">
+      <div class="btn">Book a Free Growth Call →</div>
+      <div class="url">rjbusinesssolutions.org</div>
+    </div>
+    <div class="signoff">
+      <div class="from">Rick.</div>
+      <div class="role">Founder · RJ Business Solutions · Tijeras NM</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

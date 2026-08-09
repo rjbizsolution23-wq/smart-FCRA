@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Podcast Cards</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px;display:flex;flex-direction:column;gap:32px;align-items:center}
+  .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:12px}
+  .card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 20px 40px rgba(15,23,42,0.1)}
+
+  /* 16:9 hero cards 1280x720 */
+  .p{width:1200px;height:675px;border-radius:14px;overflow:hidden;position:relative;box-shadow:0 20px 40px rgba(15,23,42,0.2)}
+
+  /* INTRO */
+  .intro{background:var(--grad-dark);color:#fff;padding:80px 90px;display:flex;flex-direction:column;justify-content:space-between}
+  .intro::after{content:"";position:absolute;right:-150px;top:-150px;width:600px;height:600px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(60px)}
+  .intro .top{display:flex;align-items:center;gap:16px;position:relative;z-index:1}
+  .intro .top img{width:56px;height:56px;border-radius:12px}
+  .intro .top .n{font-family:var(--font-head);font-weight:600;font-size:22px}
+  .intro .top .t{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-top:3px;font-weight:600}
+  .intro .middle{position:relative;z-index:1}
+  .intro .show-tag{display:inline-block;padding:8px 16px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);border-radius:999px;font-family:var(--font-mono);font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-bottom:24px;font-weight:600}
+  .intro h1{font-family:var(--font-head);font-size:104px;font-weight:700;letter-spacing:-0.04em;line-height:0.9;margin:0}
+  .intro h1 span{background:linear-gradient(135deg,#0ea5e9 0%,#60a5fa 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .intro .sub{font-family:var(--font-head);color:#cbd5e1;font-size:24px;margin-top:20px;font-weight:500;letter-spacing:-0.01em}
+  .intro .foot{display:flex;justify-content:space-between;align-items:flex-end;padding-top:32px;border-top:1px solid rgba(255,255,255,0.15);position:relative;z-index:1}
+  .intro .foot .k{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;font-weight:600}
+  .intro .foot .v{font-family:var(--font-head);font-size:16px;color:#fff;font-weight:500}
+
+  /* OUTRO */
+  .outro{background:var(--grad-primary);color:#fff;padding:80px 90px;display:flex;flex-direction:column;justify-content:space-between}
+  .outro::after{content:"";position:absolute;left:-100px;bottom:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(255,255,255,0.2) 0%,transparent 60%);filter:blur(50px)}
+  .outro .top{display:flex;align-items:center;gap:16px;position:relative;z-index:1}
+  .outro .top img{width:56px;height:56px;border-radius:12px;background:#fff;padding:4px}
+  .outro .top .n{font-family:var(--font-head);font-weight:600;font-size:22px}
+  .outro h1{font-family:var(--font-head);font-size:88px;font-weight:700;letter-spacing:-0.04em;line-height:0.95;margin:0;position:relative;z-index:1;text-align:center;max-width:900px;margin:0 auto}
+  .outro .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;position:relative;z-index:1}
+  .outro .grid .box{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);border-radius:16px;padding:24px;backdrop-filter:blur(20px)}
+  .outro .grid .box .k{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.85);margin-bottom:8px;font-weight:600}
+  .outro .grid .box .v{font-family:var(--font-head);font-weight:600;font-size:18px;letter-spacing:-0.01em}
+
+  /* SPONSOR */
+  .sponsor{background:#fff;color:var(--rj-navy);padding:0;display:grid;grid-template-columns:1fr 1fr}
+  .sponsor .left{background:var(--grad-dark);color:#fff;padding:60px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+  .sponsor .left::after{content:"";position:absolute;right:-80px;top:-80px;width:300px;height:300px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(30px)}
+  .sponsor .left .brand{display:flex;align-items:center;gap:12px;position:relative;z-index:1}
+  .sponsor .left .brand img{width:48px;height:48px;border-radius:10px}
+  .sponsor .left .brand .n{font-family:var(--font-head);font-weight:600;font-size:18px}
+  .sponsor .left .kicker{position:relative;z-index:1;display:inline-block;padding:5px 12px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);border-radius:999px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600;align-self:flex-start;margin-bottom:16px}
+  .sponsor .left h2{font-family:var(--font-head);font-size:44px;font-weight:600;letter-spacing:-0.03em;line-height:1;margin:0;position:relative;z-index:1}
+  .sponsor .left h2 span{color:var(--rj-sky)}
+  .sponsor .left .url{position:relative;z-index:1;font-family:var(--font-mono);font-size:14px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600}
+  .sponsor .right{padding:60px;display:flex;flex-direction:column;justify-content:center;gap:16px}
+  .sponsor .right .lbl-r{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600}
+  .sponsor .right h3{font-family:var(--font-head);font-size:32px;font-weight:600;color:var(--rj-navy);letter-spacing:-0.02em;line-height:1.1;margin:0}
+  .sponsor .right ul{list-style:none;padding:0;margin:16px 0}
+  .sponsor .right li{padding:8px 0;padding-left:26px;position:relative;font-size:15px;color:var(--rj-text);line-height:1.4}
+  .sponsor .right li::before{content:"→";position:absolute;left:0;color:var(--rj-blue);font-weight:700}
+  .sponsor .right .cta{display:inline-block;margin-top:12px;padding:14px 24px;background:var(--grad-primary);color:#fff;border-radius:10px;font-family:var(--font-head);font-weight:600;font-size:14px;align-self:flex-start;box-shadow:0 8px 20px rgba(37,99,235,0.35)}
+
+  /* GUEST LOWER THIRD */
+  .lt{width:1200px;height:200px;position:relative;background:transparent;padding:0;border-radius:0;box-shadow:none;overflow:visible}
+  .lt-bar{position:absolute;bottom:0;left:0;right:0;background:var(--grad-dark);padding:20px 40px;display:flex;align-items:center;gap:20px;color:#fff;border-radius:12px 12px 0 0;box-shadow:0 -10px 40px rgba(15,23,42,0.3);position:relative;overflow:hidden}
+  .lt-bar::after{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--grad-primary)}
+  .lt-bar .avatar{width:64px;height:64px;border-radius:14px;background:var(--grad-primary);display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:700;font-size:24px;color:#fff;flex-shrink:0;box-shadow:0 8px 20px rgba(37,99,235,0.4)}
+  .lt-bar .txt{flex:1}
+  .lt-bar .name{font-family:var(--font-head);font-weight:600;font-size:28px;letter-spacing:-0.02em}
+  .lt-bar .role{font-family:var(--font-mono);font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-top:4px;font-weight:600}
+  .lt-bar .show{margin-left:auto;text-align:right}
+  .lt-bar .show .ep{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;font-weight:600}
+  .lt-bar .show .sh{font-family:var(--font-head);font-weight:600;font-size:16px;margin-top:3px}
+  .lt-space{padding-top:100px}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="lbl">Podcast Intro · 1280 × 720 (episode open)</div>
+  <div class="p intro">
+    <div class="top"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">The Systems Brief · Podcast</div></div></div>
+    <div class="middle">
+      <div class="show-tag">● Episode 24 · Now Playing</div>
+      <h1>Why credit tech<br/>is the next <span>fintech gold rush.</span></h1>
+      <div class="sub">With Rick Jefferson · Founder, RJ Business Solutions</div>
+    </div>
+    <div class="foot">
+      <div style="display:flex;gap:56px">
+        <div><div class="k">Runtime</div><div class="v">42:18</div></div>
+        <div><div class="k">Released</div><div class="v">July 17, 2026</div></div>
+        <div><div class="k">Season</div><div class="v">02 · Episode 24</div></div>
+      </div>
+      <div><div class="k">Listen</div><div class="v">rjbusinesssolutions.org/pod</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Podcast Outro · 1280 × 720 (thank you + subscribe)</div>
+  <div class="p outro">
+    <div class="top"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">Systems Brief</div></div></div>
+    <h1>Thanks for<br/>listening.</h1>
+    <div class="grid">
+      <div class="box"><div class="k">Subscribe</div><div class="v">Apple · Spotify · YouTube</div></div>
+      <div class="box"><div class="k">Show notes</div><div class="v">rjbusinesssolutions.org/pod/24</div></div>
+      <div class="box"><div class="k">Work with Rick</div><div class="v">Book a call → link in bio</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Sponsor / Mid-Roll Card · 1280 × 720</div>
+  <div class="p sponsor">
+    <div class="left">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+      <div>
+        <div class="kicker">● Sponsored By</div>
+        <h2>The <span>automation backbone</span><br/>behind scalable businesses.</h2>
+      </div>
+      <div class="url">rjbusinesssolutions.org</div>
+    </div>
+    <div class="right">
+      <div class="lbl-r">Growth Engine · $997/mo</div>
+      <h3>Turn your DMs<br/>into booked calls.<br/>In 7 days.</h3>
+      <ul>
+        <li>AI-powered DM replies</li>
+        <li>CRM + follow-up wired</li>
+        <li>Compliance guardrails</li>
+        <li>Monthly reporting</li>
+      </ul>
+      <a class="cta">Book a Free Call →</a>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Guest Lower-Third · 1280 × 200 · Video overlay</div>
+  <div class="lt lt-space">
+    <div class="lt-bar">
+      <div class="avatar">RJ</div>
+      <div class="txt">
+        <div class="name">Rick Jefferson</div>
+        <div class="role">Founder · Credit Technology Architect</div>
+      </div>
+      <div class="show">
+        <div class="ep">Systems Brief · Episode 24</div>
+        <div class="sh">RJ Business Solutions</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

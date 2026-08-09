@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ · Client Dashboard</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:var(--rj-soft);min-height:100vh}
+
+  .app{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+
+  /* SIDEBAR */
+  .sidebar{background:var(--rj-navy);color:#cbd5e1;padding:24px 20px;display:flex;flex-direction:column;gap:32px}
+  .side-brand{display:flex;align-items:center;gap:10px;padding:0 4px}
+  .side-brand img{width:36px;height:36px;border-radius:8px}
+  .side-brand .n{font-family:var(--font-head);font-weight:600;font-size:14px;color:#fff}
+  .side-brand .t{font-family:var(--font-mono);font-size:9px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;font-weight:600;margin-top:2px}
+
+  .nav-section .lbl{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#64748b;padding:0 12px;margin-bottom:8px;font-weight:600}
+  .nav-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;font-family:var(--font-body);font-size:13px;font-weight:500;color:#cbd5e1;cursor:pointer;transition:background .15s}
+  .nav-item:hover{background:rgba(255,255,255,0.05)}
+  .nav-item.active{background:var(--grad-primary);color:#fff;box-shadow:0 6px 16px rgba(37,99,235,0.35)}
+  .nav-item .icon{width:18px;height:18px;border-radius:5px;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:700;font-size:10px;color:#fff}
+  .nav-item.active .icon{background:rgba(255,255,255,0.25)}
+  .nav-item .badge{margin-left:auto;background:var(--rj-danger);color:#fff;font-family:var(--font-mono);font-size:9px;padding:2px 6px;border-radius:999px;font-weight:600}
+
+  .side-foot{margin-top:auto;padding:16px 12px;background:rgba(14,165,233,0.08);border:1px solid rgba(14,165,233,0.2);border-radius:12px}
+  .side-foot .lbl{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600}
+  .side-foot .n{font-family:var(--font-head);font-weight:600;font-size:13px;color:#fff;margin-top:4px}
+  .side-foot .btn{margin-top:10px;background:var(--grad-primary);color:#fff;padding:8px;border-radius:6px;font-family:var(--font-head);font-weight:600;font-size:11px;text-align:center}
+
+  /* MAIN */
+  .main{padding:24px 32px;background:var(--rj-soft);overflow-x:hidden}
+
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:32px}
+  .greet .k{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:4px}
+  .greet h1{font-family:var(--font-head);font-size:28px;font-weight:600;color:var(--rj-navy);margin:0;letter-spacing:-0.02em}
+  .topbar-right{display:flex;gap:12px;align-items:center}
+  .search{background:#fff;border:1px solid var(--rj-line);border-radius:10px;padding:10px 14px 10px 34px;font-family:var(--font-body);font-size:13px;color:var(--rj-muted-text);width:280px;position:relative}
+  .search-wrap{position:relative}
+  .search-wrap::before{content:"⌕";position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--rj-muted-text);font-size:14px}
+  .icon-btn{width:38px;height:38px;background:#fff;border:1px solid var(--rj-line);border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy);position:relative;cursor:pointer}
+  .icon-btn .dot{position:absolute;top:-2px;right:-2px;width:8px;height:8px;background:var(--rj-danger);border-radius:50%;border:2px solid #fff}
+  .avatar{width:38px;height:38px;background:var(--grad-primary);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--font-head);font-weight:700;font-size:14px}
+
+  /* KPI CARDS */
+  .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+  .kpi{background:#fff;border:1px solid var(--rj-line);border-radius:16px;padding:20px 22px;position:relative;overflow:hidden}
+  .kpi.featured{background:var(--grad-dark);color:#fff;border:none;box-shadow:0 20px 40px rgba(15,23,42,0.15)}
+  .kpi.featured::after{content:"";position:absolute;right:-40px;top:-40px;width:150px;height:150px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(20px)}
+  .kpi .top{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1}
+  .kpi .lbl{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+  .kpi.featured .lbl{color:var(--rj-sky)}
+  .kpi .trend{font-family:var(--font-mono);font-size:11px;font-weight:600;padding:3px 8px;border-radius:4px}
+  .kpi .trend.up{background:#dcfce7;color:#166534}
+  .kpi .trend.down{background:#fee2e2;color:#991b1b}
+  .kpi.featured .trend.up{background:rgba(255,255,255,0.15);color:#86efac}
+  .kpi .v{font-family:var(--font-head);font-size:34px;font-weight:600;color:var(--rj-navy);letter-spacing:-0.02em;margin-top:8px;position:relative;z-index:1;line-height:1}
+  .kpi.featured .v{color:#fff}
+  .kpi .d{font-size:12px;color:var(--rj-muted-text);margin-top:6px;position:relative;z-index:1}
+  .kpi.featured .d{color:#94a3b8}
+
+  /* GRID */
+  .grid-2{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px}
+  .card{background:#fff;border:1px solid var(--rj-line);border-radius:16px;padding:24px}
+  .card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+  .card-head h3{font-family:var(--font-head);font-size:16px;font-weight:600;color:var(--rj-navy);margin:0;letter-spacing:-0.01em}
+  .card-head .lbl{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+  .card-head .filter{display:flex;gap:6px}
+  .filter .chip{padding:5px 10px;border-radius:6px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;font-weight:600;cursor:pointer}
+  .filter .chip.active{background:var(--rj-navy);color:#fff}
+  .filter .chip:not(.active){color:var(--rj-muted-text);background:var(--rj-light)}
+
+  /* Chart */
+  .chart{height:220px;position:relative;padding:0 4px}
+  .chart svg{width:100%;height:100%}
+  .chart-legend{display:flex;gap:20px;margin-top:12px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+  .chart-legend span{display:flex;align-items:center;gap:6px}
+  .chart-legend .dot{width:8px;height:8px;border-radius:2px}
+
+  /* Pipeline */
+  .pipe-stage{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--rj-line)}
+  .pipe-stage:last-child{border:none}
+  .pipe-stage .info .n{font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy)}
+  .pipe-stage .info .d{font-size:11px;color:var(--rj-muted-text);margin-top:2px}
+  .pipe-stage .num{font-family:var(--font-head);font-weight:700;font-size:22px;color:var(--rj-blue);letter-spacing:-0.02em}
+  .pipe-bar{height:4px;background:var(--rj-light);border-radius:2px;overflow:hidden;margin-top:8px}
+  .pipe-bar-fill{height:100%;background:var(--grad-primary);border-radius:2px}
+
+  /* Activity feed */
+  .activity{display:flex;flex-direction:column;gap:14px}
+  .act-item{display:flex;gap:12px;align-items:flex-start}
+  .act-item .av{width:32px;height:32px;border-radius:8px;background:var(--rj-light);color:var(--rj-blue);display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:700;font-size:12px;flex-shrink:0}
+  .act-item .av.win{background:#dcfce7;color:#166534}
+  .act-item .av.msg{background:var(--rj-navy);color:#fff}
+  .act-item .txt{flex:1}
+  .act-item .txt .n{font-family:var(--font-body);font-size:13px;color:var(--rj-text);line-height:1.4}
+  .act-item .txt .n b{font-family:var(--font-head);font-weight:600;color:var(--rj-navy)}
+  .act-item .txt .time{font-family:var(--font-mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--rj-muted-text);margin-top:3px;font-weight:600}
+
+  /* Table */
+  .tbl{width:100%;border-collapse:collapse}
+  .tbl th{text-align:left;padding:10px 12px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;border-bottom:1px solid var(--rj-line)}
+  .tbl td{padding:14px 12px;border-bottom:1px solid var(--rj-line);font-size:13px;color:var(--rj-text)}
+  .tbl .lead-name{display:flex;align-items:center;gap:10px}
+  .tbl .lead-av{width:30px;height:30px;border-radius:50%;background:var(--grad-primary);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:700;font-size:11px}
+  .tbl .lead-name .n{font-family:var(--font-head);font-weight:600;color:var(--rj-navy)}
+  .tbl .lead-name .e{font-size:11px;color:var(--rj-muted-text)}
+  .status{padding:4px 10px;border-radius:999px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;font-weight:600;display:inline-block}
+  .status.hot{background:#fef3c7;color:#92400e}
+  .status.qual{background:#dbeafe;color:#1e40af}
+  .status.booked{background:#dcfce7;color:#166534}
+  .status.cold{background:#f1f5f9;color:#64748b}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="side-brand">
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+      <div>
+        <div class="n">RJ Portal</div>
+        <div class="t">Growth Engine · v2</div>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <div class="lbl">Overview</div>
+      <div class="nav-item active"><div class="icon">◇</div>Dashboard</div>
+      <div class="nav-item"><div class="icon">↗</div>Analytics</div>
+      <div class="nav-item"><div class="icon">✎</div>Reports</div>
+    </div>
+
+    <div class="nav-section">
+      <div class="lbl">Growth Engine</div>
+      <div class="nav-item"><div class="icon">✉</div>Leads<span class="badge">12</span></div>
+      <div class="nav-item"><div class="icon">☰</div>Pipeline</div>
+      <div class="nav-item"><div class="icon">◈</div>Automations</div>
+      <div class="nav-item"><div class="icon">◉</div>DMs<span class="badge">3</span></div>
+    </div>
+
+    <div class="nav-section">
+      <div class="lbl">Settings</div>
+      <div class="nav-item"><div class="icon">$</div>Billing</div>
+      <div class="nav-item"><div class="icon">◐</div>Team</div>
+      <div class="nav-item"><div class="icon">?</div>Support</div>
+    </div>
+
+    <div class="side-foot">
+      <div class="lbl">Need a hand?</div>
+      <div class="n">Talk to Rick</div>
+      <div class="btn">Book 15 min →</div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <div class="greet">
+        <div class="k">Friday · July 17</div>
+        <h1>Welcome back, Sarah 👋</h1>
+      </div>
+      <div class="topbar-right">
+        <div class="search-wrap"><input class="search" placeholder="Search leads, deals, contacts…"/></div>
+        <div class="icon-btn">◐<div class="dot"></div></div>
+        <div class="icon-btn">⚙</div>
+        <div class="avatar">SD</div>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi featured">
+        <div class="top"><div class="lbl">MRR</div><div class="trend up">↑ 24%</div></div>
+        <div class="v">$28,940</div>
+        <div class="d">vs $23,340 last month</div>
+      </div>
+      <div class="kpi">
+        <div class="top"><div class="lbl">Booked Calls</div><div class="trend up">↑ 47</div></div>
+        <div class="v">142</div>
+        <div class="d">This month · avg 4.7/day</div>
+      </div>
+      <div class="kpi">
+        <div class="top"><div class="lbl">Response Time</div><div class="trend up">↓ 84%</div></div>
+        <div class="v">&lt;90s</div>
+        <div class="d">Down from 6+ hrs</div>
+      </div>
+      <div class="kpi">
+        <div class="top"><div class="lbl">Conversion</div><div class="trend up">↑ 8pt</div></div>
+        <div class="v">34.2%</div>
+        <div class="d">DM → booked call</div>
+      </div>
+    </div>
+
+    <!-- Chart + Pipeline -->
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <h3>Growth Trend · Last 30 Days</h3>
+          <div class="filter">
+            <span class="chip">7D</span>
+            <span class="chip active">30D</span>
+            <span class="chip">90D</span>
+          </div>
+        </div>
+        <div class="chart">
+          <svg viewBox="0 0 700 220" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="gradFill" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stop-color="#2563eb" stop-opacity="0.35"/>
+                <stop offset="100%" stop-color="#2563eb" stop-opacity="0"/>
+              </linearGradient>
+              <linearGradient id="gradFill2" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stop-color="#0ea5e9" stop-opacity="0.25"/>
+                <stop offset="100%" stop-color="#0ea5e9" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <!-- gridlines -->
+            <line x1="0" y1="40" x2="700" y2="40" stroke="#e2e8f0" stroke-dasharray="2 4"/>
+            <line x1="0" y1="90" x2="700" y2="90" stroke="#e2e8f0" stroke-dasharray="2 4"/>
+            <line x1="0" y1="140" x2="700" y2="140" stroke="#e2e8f0" stroke-dasharray="2 4"/>
+            <line x1="0" y1="190" x2="700" y2="190" stroke="#e2e8f0" stroke-dasharray="2 4"/>
+            <!-- area 2 (sky) -->
+            <path d="M 0,180 L 60,170 L 120,160 L 180,155 L 240,140 L 300,135 L 360,125 L 420,110 L 480,100 L 540,95 L 600,80 L 660,70 L 700,60 L 700,220 L 0,220 Z" fill="url(#gradFill2)"/>
+            <path d="M 0,180 L 60,170 L 120,160 L 180,155 L 240,140 L 300,135 L 360,125 L 420,110 L 480,100 L 540,95 L 600,80 L 660,70 L 700,60" fill="none" stroke="#0ea5e9" stroke-width="2"/>
+            <!-- area 1 (blue) -->
+            <path d="M 0,200 L 60,190 L 120,175 L 180,165 L 240,155 L 300,140 L 360,130 L 420,115 L 480,90 L 540,80 L 600,60 L 660,45 L 700,35 L 700,220 L 0,220 Z" fill="url(#gradFill)"/>
+            <path d="M 0,200 L 60,190 L 120,175 L 180,165 L 240,155 L 300,140 L 360,130 L 420,115 L 480,90 L 540,80 L 600,60 L 660,45 L 700,35" fill="none" stroke="#2563eb" stroke-width="2.5"/>
+            <!-- dots -->
+            <circle cx="700" cy="35" r="5" fill="#2563eb"/>
+            <circle cx="700" cy="35" r="10" fill="#2563eb" fill-opacity="0.2"/>
+          </svg>
+        </div>
+        <div class="chart-legend">
+          <span><span class="dot" style="background:#2563eb"></span>Booked Calls</span>
+          <span><span class="dot" style="background:#0ea5e9"></span>Qualified Leads</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Pipeline</h3><div class="lbl">Live</div></div>
+        <div class="pipe-stage">
+          <div class="info">
+            <div class="n">New Leads</div>
+            <div class="d">Untouched, waiting</div>
+            <div class="pipe-bar"><div class="pipe-bar-fill" style="width:92%"></div></div>
+          </div>
+          <div class="num">47</div>
+        </div>
+        <div class="pipe-stage">
+          <div class="info">
+            <div class="n">Qualified</div>
+            <div class="d">AI-tagged hot</div>
+            <div class="pipe-bar"><div class="pipe-bar-fill" style="width:68%"></div></div>
+          </div>
+          <div class="num">28</div>
+        </div>
+        <div class="pipe-stage">
+          <div class="info">
+            <div class="n">Booked</div>
+            <div class="d">Call scheduled</div>
+            <div class="pipe-bar"><div class="pipe-bar-fill" style="width:44%"></div></div>
+          </div>
+          <div class="num">18</div>
+        </div>
+        <div class="pipe-stage">
+          <div class="info">
+            <div class="n">Closed Won</div>
+            <div class="d">This month</div>
+            <div class="pipe-bar"><div class="pipe-bar-fill" style="width:24%"></div></div>
+          </div>
+          <div class="num">9</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Leads + Activity -->
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <h3>Recent Leads</h3>
+          <div class="lbl">Updated 2m ago</div>
+        </div>
+        <table class="tbl">
+          <thead>
+            <tr><th>Lead</th><th>Source</th><th>Status</th><th>Value</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><div class="lead-name"><div class="lead-av">MJ</div><div><div class="n">Marcus Johnson</div><div class="e">m.johnson@apex.co</div></div></div></td>
+              <td>Instagram DM</td>
+              <td><span class="status hot">Hot</span></td>
+              <td>$4,500</td>
+            </tr>
+            <tr>
+              <td><div class="lead-name"><div class="lead-av">DR</div><div><div class="n">Devon Reyes</div><div class="e">devon@fintechlab.io</div></div></div></td>
+              <td>Landing Page</td>
+              <td><span class="status booked">Booked</span></td>
+              <td>$12,000</td>
+            </tr>
+            <tr>
+              <td><div class="lead-name"><div class="lead-av">SA</div><div><div class="n">Sarah Ahmed</div><div class="e">sarah@growthlab.co</div></div></div></td>
+              <td>LinkedIn Ad</td>
+              <td><span class="status qual">Qualified</span></td>
+              <td>$2,997</td>
+            </tr>
+            <tr>
+              <td><div class="lead-name"><div class="lead-av">TK</div><div><div class="n">Terrell King</div><div class="e">tk@creditco.com</div></div></div></td>
+              <td>Referral</td>
+              <td><span class="status booked">Booked</span></td>
+              <td>$8,500</td>
+            </tr>
+            <tr>
+              <td><div class="lead-name"><div class="lead-av">JL</div><div><div class="n">Jamie Liu</div><div class="e">j.liu@signalhouse.co</div></div></div></td>
+              <td>TikTok DM</td>
+              <td><span class="status cold">Nurture</span></td>
+              <td>—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Live Activity</h3><div class="lbl">System</div></div>
+        <div class="activity">
+          <div class="act-item">
+            <div class="av win">✓</div>
+            <div class="txt">
+              <div class="n"><b>Devon Reyes</b> booked a 30-min strategy call for July 22.</div>
+              <div class="time">2 min ago</div>
+            </div>
+          </div>
+          <div class="act-item">
+            <div class="av msg">DM</div>
+            <div class="txt">
+              <div class="n">AI replied to <b>Marcus Johnson</b> on Instagram · flagged as Hot.</div>
+              <div class="time">7 min ago</div>
+            </div>
+          </div>
+          <div class="act-item">
+            <div class="av">$</div>
+            <div class="txt">
+              <div class="n">Payment received · <b>$997</b> from Apex Credit Solutions.</div>
+              <div class="time">14 min ago</div>
+            </div>
+          </div>
+          <div class="act-item">
+            <div class="av win">✓</div>
+            <div class="txt">
+              <div class="n">No-show recovery sequence recovered <b>Terrell King</b>.</div>
+              <div class="time">32 min ago</div>
+            </div>
+          </div>
+          <div class="act-item">
+            <div class="av msg">DM</div>
+            <div class="txt">
+              <div class="n">3 new DMs qualified by AI · awaiting your review.</div>
+              <div class="time">1 hr ago</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+</body>
+</html>

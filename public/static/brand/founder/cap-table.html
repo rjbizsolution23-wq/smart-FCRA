@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — Cap Table</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;justify-content:center}
+  .sheet{width:1123px;min-height:794px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden;position:relative}
+  .top{background:var(--grad-dark);color:#fff;padding:26px 48px 22px;position:relative;overflow:hidden}
+  .top::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .top .row{display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1;margin-bottom:12px}
+  .top .brand{display:flex;align-items:center;gap:12px}
+  .top .brand img{width:36px;height:36px;border-radius:8px}
+  .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:14px}
+  .top .brand .t{font-family:var(--font-mono);font-size:9px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:2px;font-weight:600}
+  .top .doc{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);text-align:right;font-weight:600}
+  .top .doc b{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:block;margin-top:2px}
+  .top h1{font-family:var(--font-head);font-size:30px;font-weight:600;letter-spacing:-0.02em;margin:0;position:relative;z-index:1;line-height:1}
+  .top h1 span{color:var(--rj-sky)}
+  .top .sub{font-family:var(--font-head);color:#cbd5e1;font-size:12px;margin-top:4px;position:relative;z-index:1}
+  .thin{height:3px;background:var(--grad-primary)}
+
+  .body{padding:24px 48px;flex:1;display:flex;flex-direction:column;gap:16px}
+
+  .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;background:var(--rj-light);padding:14px 18px;border-radius:10px}
+  .meta .k{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:3px}
+  .meta .v{font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy);letter-spacing:-0.01em}
+
+  h3{font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--rj-navy);margin:0 0 8px 0;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+  h3::before{content:"";width:3px;height:16px;background:var(--rj-blue);border-radius:2px}
+
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--rj-line);border-radius:10px;overflow:hidden;font-size:11px}
+  th{background:var(--rj-navy);color:#fff;padding:9px 12px;text-align:left;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+  th.r{text-align:right}
+  td{padding:9px 12px;border-bottom:1px solid var(--rj-line);color:var(--rj-text)}
+  td.r{text-align:right;font-family:ui-monospace,Menlo,monospace;font-weight:600;color:var(--rj-navy)}
+  td .n{font-family:var(--font-head);font-weight:600;color:var(--rj-navy);font-size:12px}
+  td .d{color:var(--rj-muted-text);font-size:10px;margin-top:1px}
+  tr.total td{background:var(--rj-light);font-family:var(--font-head);font-weight:700;color:var(--rj-navy);font-size:12px;border:none}
+  tr.new td{background:#eff6ff}
+
+  .chart-wrap{background:linear-gradient(180deg,#fff,var(--rj-light));border:1px solid var(--rj-border);border-radius:12px;padding:16px 20px}
+  .bar-row{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+  .bar-item{display:grid;grid-template-columns:140px 1fr 80px;gap:12px;align-items:center;font-size:11px}
+  .bar-item .lbl{font-family:var(--font-head);font-weight:600;color:var(--rj-navy);font-size:12px}
+  .bar-item .bar{height:22px;background:var(--rj-light);border-radius:6px;overflow:hidden}
+  .bar-item .bar .fill{height:100%;border-radius:6px;display:flex;align-items:center;padding:0 10px;color:#fff;font-family:ui-monospace,Menlo,monospace;font-size:10px;font-weight:600}
+  .bar-item .fill.f-blue{background:var(--grad-primary)}
+  .bar-item .fill.f-navy{background:linear-gradient(135deg,#1e3a8a,#0f172a)}
+  .bar-item .fill.f-sky{background:linear-gradient(135deg,#0ea5e9,#38bdf8)}
+  .bar-item .fill.f-amber{background:linear-gradient(135deg,#f59e0b,#facc15)}
+  .bar-item .fill.f-green{background:linear-gradient(135deg,#059669,#10b981)}
+  .bar-item .pct{text-align:right;font-family:ui-monospace,Menlo,monospace;font-weight:700;color:var(--rj-navy);font-size:12px}
+
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:10px 48px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+  @media print{body{background:#fff;padding:0}.sheet{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="top">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Founder Documents · Cap Table</div></div></div>
+      <div class="doc">Doc<b>CT-2026-v1</b></div>
+    </div>
+    <h1>Capitalization <span>Table.</span></h1>
+    <div class="sub">Pre-Round · Post-Seed · Fully Diluted · As of August 7, 2026</div>
+  </div>
+  <div class="thin"></div>
+
+  <div class="body">
+
+    <div class="meta">
+      <div><div class="k">Entity</div><div class="v">RJ Business Solutions, LLC</div></div>
+      <div><div class="k">State</div><div class="v">New Mexico</div></div>
+      <div><div class="k">Authorized Shares</div><div class="v">10,000,000</div></div>
+      <div><div class="k">Fully Diluted</div><div class="v">8,500,000</div></div>
+    </div>
+
+    <div class="grid-2">
+      <div>
+        <h3>Ownership Snapshot · Pre-Round</h3>
+        <div class="chart-wrap">
+          <div class="bar-row">
+            <div class="bar-item"><div class="lbl">Rick Jefferson (Founder)</div><div class="bar"><div class="fill f-blue" style="width:82%">6,560,000 shares</div></div><div class="pct">82.0%</div></div>
+            <div class="bar-item"><div class="lbl">Employee Option Pool</div><div class="bar"><div class="fill f-navy" style="width:12%">960,000</div></div><div class="pct">12.0%</div></div>
+            <div class="bar-item"><div class="lbl">Advisor Grants</div><div class="bar"><div class="fill f-amber" style="width:3%">240,000</div></div><div class="pct">3.0%</div></div>
+            <div class="bar-item"><div class="lbl">Reserved (SAFE conv.)</div><div class="bar"><div class="fill f-sky" style="width:3%">240,000</div></div><div class="pct">3.0%</div></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h3>Ownership Snapshot · Post-Seed</h3>
+        <div class="chart-wrap">
+          <div class="bar-row">
+            <div class="bar-item"><div class="lbl">Rick Jefferson (Founder)</div><div class="bar"><div class="fill f-blue" style="width:68%">6,560,000</div></div><div class="pct">68.0%</div></div>
+            <div class="bar-item"><div class="lbl">Seed Investors</div><div class="bar"><div class="fill f-green" style="width:15%">1,447,059</div></div><div class="pct">15.0%</div></div>
+            <div class="bar-item"><div class="lbl">Employee Option Pool</div><div class="bar"><div class="fill f-navy" style="width:12%">960,000</div></div><div class="pct">12.0%</div></div>
+            <div class="bar-item"><div class="lbl">Advisor Grants</div><div class="bar"><div class="fill f-amber" style="width:3%">240,000</div></div><div class="pct">3.0%</div></div>
+            <div class="bar-item"><div class="lbl">Reserved (SAFE conv.)</div><div class="bar"><div class="fill f-sky" style="width:2%">240,000</div></div><div class="pct">2.0%</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3>Full Ledger · Post-Seed Round</h3>
+      <table>
+        <thead>
+          <tr><th>Holder</th><th>Security</th><th class="r">Shares</th><th class="r">% Fully Diluted</th><th class="r">Basis · Cost</th><th class="r">Current Value</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><div class="n">Rick Jefferson</div><div class="d">Founder · Common</div></td><td>Common Stock</td><td class="r">6,560,000</td><td class="r">68.00%</td><td class="r">$0.001 / $6,560</td><td class="r">$6,560,000</td></tr>
+          <tr class="new"><td><div class="n">Seed Investor A</div><div class="d">Lead · SAFE converted</div></td><td>Series Seed Pref</td><td class="r">964,706</td><td class="r">10.00%</td><td class="r">$0.35 / $337,647</td><td class="r">$964,706</td></tr>
+          <tr class="new"><td><div class="n">Seed Investor B</div><div class="d">Angel syndicate</div></td><td>Series Seed Pref</td><td class="r">289,412</td><td class="r">3.00%</td><td class="r">$0.35 / $101,294</td><td class="r">$289,412</td></tr>
+          <tr class="new"><td><div class="n">Seed Investor C</div><div class="d">Strategic operator</div></td><td>Series Seed Pref</td><td class="r">192,941</td><td class="r">2.00%</td><td class="r">$0.35 / $67,529</td><td class="r">$192,941</td></tr>
+          <tr><td><div class="n">Employee Option Pool</div><div class="d">Unissued · reserved</div></td><td>ISO Pool</td><td class="r">960,000</td><td class="r">12.00%</td><td class="r">TBD strike</td><td class="r">$960,000</td></tr>
+          <tr><td><div class="n">Advisor Grants</div><div class="d">3 advisors · 4-yr cliff</div></td><td>RSAs</td><td class="r">240,000</td><td class="r">3.00%</td><td class="r">$0.001 / $240</td><td class="r">$240,000</td></tr>
+          <tr><td><div class="n">SAFE Reserved</div><div class="d">Unconverted safes</div></td><td>Convertibles</td><td class="r">240,000</td><td class="r">2.00%</td><td class="r">$0.35 assumed</td><td class="r">$240,000</td></tr>
+          <tr class="total"><td colspan="2">Total Fully Diluted</td><td class="r">9,447,059</td><td class="r">100.00%</td><td class="r">$506,710</td><td class="r">$9,447,059</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid-2">
+      <div>
+        <h3>Round Economics · Post-Seed</h3>
+        <table>
+          <tbody>
+            <tr><td><div class="n">Round Size</div><div class="d">Total capital raised</div></td><td class="r">$500,000</td></tr>
+            <tr><td><div class="n">Pre-Money Valuation</div><div class="d">Priced round</div></td><td class="r">$2,800,000</td></tr>
+            <tr><td><div class="n">Post-Money Valuation</div><div class="d">Post-close</div></td><td class="r">$3,300,000</td></tr>
+            <tr><td><div class="n">Price Per Share</div><div class="d">Seed Pref</div></td><td class="r">$0.35</td></tr>
+            <tr><td><div class="n">Investor Dilution to Founder</div><div class="d">Pre → Post</div></td><td class="r">14.0%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <h3>Vesting Status · Founder + Employees</h3>
+        <table>
+          <thead><tr><th>Holder</th><th class="r">Vested</th><th class="r">Unvested</th><th class="r">Cliff Date</th></tr></thead>
+          <tbody>
+            <tr><td>Rick Jefferson</td><td class="r">3,280,000</td><td class="r">3,280,000</td><td class="r">Jan 15, 2027</td></tr>
+            <tr><td>Advisor #1</td><td class="r">30,000</td><td class="r">90,000</td><td class="r">Feb 1, 2027</td></tr>
+            <tr><td>Advisor #2</td><td class="r">20,000</td><td class="r">80,000</td><td class="r">Mar 1, 2027</td></tr>
+            <tr><td>Advisor #3</td><td class="r">0</td><td class="r">20,000</td><td class="r">Jul 15, 2027</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="foot"><div class="brand">RJ Business Solutions · Cap Table</div><div>CT-2026-v1 · Confidential · Not for distribution</div></div>
+</div>
+</body>
+</html>

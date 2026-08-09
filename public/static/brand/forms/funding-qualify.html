@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Business Funding Qualifier — RJ Business Solutions</title>
+<link rel="stylesheet" href="../brand.css">
+<link rel="stylesheet" href="forms.css">
+</head>
+<body class="forms-page">
+
+<div class="form-shell" id="app">
+
+  <div class="form-header">
+    <div class="brand">
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+      <div><div class="n">RJ Business Solutions</div><div class="t">Business Funding Qualifier</div></div>
+    </div>
+    <div class="save-tag">Auto-saving</div>
+  </div>
+
+  <div class="form-title-block">
+    <div class="kicker">● Funding Assessment · 2 Minutes</div>
+    <h1>See how much <span>funding</span> your business qualifies for.</h1>
+    <div class="sub">Five short steps. No hard pull. We map you to the right capital stack: term loans, LOCs, SBA, revenue-based, MCAs, or equity — matched to your revenue + credit profile.</div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-steps">
+      <div class="fill-line" id="fill-line" style="width:0%"></div>
+      <div class="pstep active" data-step="1"><div class="circ">1</div><div class="lbl">Business Info</div></div>
+      <div class="pstep" data-step="2"><div class="circ">2</div><div class="lbl">Financials</div></div>
+      <div class="pstep" data-step="3"><div class="circ">3</div><div class="lbl">Funding Need</div></div>
+      <div class="pstep" data-step="4"><div class="circ">4</div><div class="lbl">Owner Profile</div></div>
+      <div class="pstep" data-step="5"><div class="circ">5</div><div class="lbl">Consent</div></div>
+    </div>
+  </div>
+
+  <form id="rjForm" onsubmit="return false">
+
+    <!-- STEP 1 · Business Info -->
+    <div class="step-panel active" data-panel="1">
+      <h2><span class="step-of">Step 01 of 05</span>Your business</h2>
+      <div class="step-sub">Legal name, structure, and where you operate.</div>
+      <div class="field-row">
+        <div class="field"><label>Legal Business Name <span class="req">*</span></label><input type="text" name="bizName" required/><div class="error">Required</div></div>
+        <div class="field"><label>DBA (if different)</label><input type="text" name="dba"/></div>
+      </div>
+      <div class="field-row three">
+        <div class="field"><label>Entity Type <span class="req">*</span></label>
+          <select name="entity" required><option value="">Select…</option><option>Sole Prop</option><option>LLC</option><option>S-Corp</option><option>C-Corp</option><option>Partnership</option><option>Nonprofit</option></select>
+          <div class="error">Required</div>
+        </div>
+        <div class="field"><label>EIN <span class="req">*</span></label><input type="text" name="ein" required placeholder="XX-XXXXXXX"/><div class="error">Required</div></div>
+        <div class="field"><label>State of Formation <span class="req">*</span></label><input type="text" name="stateForm" required placeholder="NM"/><div class="error">Required</div></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Industry / NAICS</label><input type="text" name="industry" placeholder="e.g., Financial Services"/></div>
+        <div class="field"><label>Time in Business <span class="req">*</span></label>
+          <select name="timeInBiz" required><option value="">Select…</option><option>Under 6 mo</option><option>6–12 mo</option><option>1–2 yr</option><option>2–5 yr</option><option>5+ yr</option></select>
+          <div class="error">Required</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2 · Financials -->
+    <div class="step-panel" data-panel="2">
+      <h2><span class="step-of">Step 02 of 05</span>Revenue &amp; deposits</h2>
+      <div class="step-sub">Ballpark is fine. We use this to pre-match lenders.</div>
+      <div class="field-row">
+        <div class="field"><label>Annual Revenue <span class="req">*</span></label>
+          <select name="annualRev" required>
+            <option value="">Select…</option>
+            <option>Under $50K</option><option>$50K–$100K</option><option>$100K–$250K</option>
+            <option>$250K–$500K</option><option>$500K–$1M</option><option>$1M–$5M</option>
+            <option>$5M–$10M</option><option>$10M+</option>
+          </select>
+          <div class="error">Required</div>
+        </div>
+        <div class="field"><label>Avg Monthly Deposits <span class="req">*</span></label>
+          <select name="avgDeposits" required>
+            <option value="">Select…</option>
+            <option>Under $5K</option><option>$5K–$15K</option><option>$15K–$40K</option>
+            <option>$40K–$100K</option><option>$100K–$250K</option><option>$250K+</option>
+          </select>
+          <div class="error">Required</div>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Profitable?</label>
+          <select name="profitable"><option value="">Select…</option><option>Yes — consistently</option><option>Yes — recently</option><option>Break-even</option><option>Not yet</option></select>
+        </div>
+        <div class="field"><label>Existing Business Debt</label>
+          <select name="existingDebt"><option value="">Select…</option><option>None</option><option>Under $25K</option><option>$25K–$100K</option><option>$100K–$500K</option><option>$500K+</option></select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Business Bank Account?</label>
+          <div class="chip-group" data-single="hasBank">
+            <div class="chip" data-val="yes-1yr">Yes · 1+ year</div>
+            <div class="chip" data-val="yes-new">Yes · Newer</div>
+            <div class="chip" data-val="no">Not yet</div>
+          </div>
+        </div>
+        <div class="field"><label>Currently Accept Credit Cards?</label>
+          <div class="chip-group" data-single="acceptsCards">
+            <div class="chip" data-val="yes-heavy">Yes · High volume</div>
+            <div class="chip" data-val="yes-light">Yes · Low volume</div>
+            <div class="chip" data-val="no">No</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3 · Funding Need -->
+    <div class="step-panel" data-panel="3">
+      <h2><span class="step-of">Step 03 of 05</span>What do you need the capital for?</h2>
+      <div class="step-sub">Pick the primary use. This drives the product match.</div>
+
+      <div class="field">
+        <label>Funding Amount Needed <span class="req">*</span></label>
+        <div class="tile-select three">
+          <div class="tile-opt" data-single="amount" data-val="under-25k"><div class="icon">Tier 01</div><div class="t">Under $25K</div><div class="d">Micro / working capital</div></div>
+          <div class="tile-opt" data-single="amount" data-val="25-50k"><div class="icon">Tier 02</div><div class="t">$25K–$50K</div><div class="d">Growth cash flow</div></div>
+          <div class="tile-opt" data-single="amount" data-val="50-150k"><div class="icon">Tier 03</div><div class="t">$50K–$150K</div><div class="d">Expansion push</div></div>
+          <div class="tile-opt" data-single="amount" data-val="150-500k"><div class="icon">Tier 04</div><div class="t">$150K–$500K</div><div class="d">Real growth capital</div></div>
+          <div class="tile-opt" data-single="amount" data-val="500k-1m"><div class="icon">Tier 05</div><div class="t">$500K–$1M</div><div class="d">Bank / SBA territory</div></div>
+          <div class="tile-opt" data-single="amount" data-val="1m-plus"><div class="icon">Tier 06</div><div class="t">$1M+</div><div class="d">Structured / equity</div></div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Primary Use (select all)</label>
+        <div class="chip-group" data-multi="use">
+          <div class="chip" data-val="working-capital">Working Capital</div>
+          <div class="chip" data-val="equipment">Equipment</div>
+          <div class="chip" data-val="real-estate">Real Estate</div>
+          <div class="chip" data-val="inventory">Inventory</div>
+          <div class="chip" data-val="marketing">Marketing / Ads</div>
+          <div class="chip" data-val="hire">Hiring</div>
+          <div class="chip" data-val="refi">Refinance / Consolidate</div>
+          <div class="chip" data-val="expansion">Location / Expansion</div>
+          <div class="chip" data-val="tech">Tech / Software</div>
+          <div class="chip" data-val="acquisition">Acquisition / Buy Out</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>How fast do you need it?</label>
+        <div class="chip-group" data-single="urgency">
+          <div class="chip" data-val="24-48h">24–48 hours</div>
+          <div class="chip" data-val="1wk">Within 1 week</div>
+          <div class="chip" data-val="2-4wk">2–4 weeks</div>
+          <div class="chip" data-val="30-60d">30–60 days</div>
+          <div class="chip" data-val="planning">Just planning</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 4 · Owner Profile -->
+    <div class="step-panel" data-panel="4">
+      <h2><span class="step-of">Step 04 of 05</span>Owner / guarantor profile</h2>
+      <div class="step-sub">Personal credit is often part of underwriting. We just need ranges.</div>
+      <div class="field-row">
+        <div class="field"><label>Owner First Name <span class="req">*</span></label><input type="text" name="firstName" required/><div class="error">Required</div></div>
+        <div class="field"><label>Owner Last Name <span class="req">*</span></label><input type="text" name="lastName" required/><div class="error">Required</div></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Email <span class="req">*</span></label><input type="email" name="email" required placeholder="you@company.com"/><div class="error">Valid email required</div></div>
+        <div class="field"><label>Phone <span class="req">*</span></label><input type="tel" name="phone" required placeholder="(555) 555-5555"/><div class="error">Required</div></div>
+      </div>
+      <div class="field-row three">
+        <div class="field"><label>Ownership %</label>
+          <select name="ownership"><option value="">Select…</option><option>100%</option><option>75–99%</option><option>51–74%</option><option>26–50%</option><option>Under 25%</option></select>
+        </div>
+        <div class="field"><label>State (personal)</label><input type="text" name="ownerState" placeholder="NM"/></div>
+        <div class="field"><label>Est. Personal Credit</label>
+          <select name="personalCredit"><option value="">Select…</option><option>Below 600</option><option>600–649</option><option>650–699</option><option>700–749</option><option>750+</option><option>Unknown</option></select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Any recent issues?</label>
+        <div class="chip-group" data-multi="ownerIssues">
+          <div class="chip" data-val="bk">Bankruptcy (last 4 yrs)</div>
+          <div class="chip" data-val="tax-lien">Tax Lien</div>
+          <div class="chip" data-val="judgment">Judgment</div>
+          <div class="chip" data-val="foreclosure">Foreclosure</div>
+          <div class="chip" data-val="late-30">30+ Day Lates</div>
+          <div class="chip" data-val="none">None of the above</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 5 · Consent -->
+    <div class="step-panel" data-panel="5">
+      <h2><span class="step-of">Step 05 of 05</span>Consent &amp; next step</h2>
+      <div class="step-sub">One quick disclosure before we route your file.</div>
+
+      <div class="field">
+        <label>Best time to reach you</label>
+        <div class="chip-group" data-single="contactTime">
+          <div class="chip" data-val="morning">Morning</div>
+          <div class="chip" data-val="afternoon">Afternoon</div>
+          <div class="chip" data-val="evening">Evening</div>
+          <div class="chip" data-val="anytime">Anytime</div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:6px">
+        <label class="cb-row"><input type="checkbox" name="fcra" required/><div class="cb-t"><b>Credit review consent (required)</b> · I authorize RJ Business Solutions and its lending partners to review my business and personal credit for the sole purpose of matching me with funding options. This is a soft-pull authorization only.</div></label>
+        <label class="cb-row"><input type="checkbox" name="tcpa"/><div class="cb-t"><b>Communication opt-in (optional)</b> · I agree to receive calls, texts, and emails at the contact info provided. Reply STOP to opt out.</div></label>
+        <label class="cb-row"><input type="checkbox" name="broker"/><div class="cb-t">I understand RJ Business Solutions works with a network of lending partners and may earn a fee from the lender if a deal closes. This does not increase my cost.</div></label>
+      </div>
+
+      <div class="turnstile-placeholder"><b>Cloudflare Turnstile</b> · Silent bot check runs on submit.</div>
+    </div>
+
+    <!-- SUCCESS -->
+    <div class="success-state" id="success">
+      <div class="check">$</div>
+      <h2>Funding review <span>started.</span></h2>
+      <p>Your file is in the queue. A funding specialist will contact you within <b>4 business hours</b> with a pre-qualification range and product match (term loan, LOC, SBA, revenue-based, or equity).</p>
+      <div class="next-steps">
+        <h4>● Next 24 Hours</h4>
+        <ol>
+          <li>Instant confirmation email + text.</li>
+          <li>Specialist call with soft-quote range.</li>
+          <li>Document checklist sent (bank stmts, tax returns, P&amp;L).</li>
+          <li>Full underwriting starts once docs return.</li>
+        </ol>
+      </div>
+      <p style="font-size:12px;color:var(--rj-muted-text)">Reference № <b id="refnum" style="color:var(--rj-navy);font-family:ui-monospace,Menlo,monospace">—</b></p>
+    </div>
+
+    <div class="form-actions" id="actions">
+      <button type="button" class="btn ghost" id="backBtn" style="visibility:hidden">← Back</button>
+      <button type="button" class="btn primary" id="nextBtn">Next Step →</button>
+    </div>
+
+  </form>
+
+  <div class="backend-note">
+    <b>// Backend</b> · POST /api/lead/funding-qualify → Cloudflare Worker → D1 <code>funding_leads</code> + document upload to R2 + Slack ping to Rick. See <code>docs/CLOUDFLARE-BACKEND.md</code>.
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const FORM_ID = 'funding-qualify';
+  const TOTAL_STEPS = 5;
+  let step = 1;
+  const state = { form: FORM_ID, use: [], ownerIssues: [] };
+  try { Object.assign(state, JSON.parse(localStorage.getItem('rj-' + FORM_ID) || '{}')); } catch (e) {}
+  const $ = s => document.querySelector(s), $$ = s => document.querySelectorAll(s);
+  function save(){ localStorage.setItem('rj-' + FORM_ID, JSON.stringify(state)); }
+  function goStep(n){
+    step = Math.max(1, Math.min(TOTAL_STEPS, n));
+    $$('.step-panel').forEach(p => p.classList.toggle('active', +p.dataset.panel === step));
+    $$('.pstep').forEach(ps => { const s = +ps.dataset.step; ps.classList.toggle('active', s === step); ps.classList.toggle('done', s < step); });
+    $('#fill-line').style.width = ((step - 1) / (TOTAL_STEPS - 1)) * 100 + '%';
+    $('#backBtn').style.visibility = step === 1 ? 'hidden' : 'visible';
+    $('#nextBtn').textContent = step === TOTAL_STEPS ? 'Submit →' : 'Next Step →';
+  }
+  function validate(){
+    let ok = true;
+    const panel = document.querySelector(`.step-panel[data-panel="${step}"]`);
+    panel.querySelectorAll('input[required], select[required]').forEach(el => {
+      const f = el.closest('.field');
+      if (!el.value.trim() || (el.type === 'email' && !/^\S+@\S+\.\S+$/.test(el.value))) { f.classList.add('err'); ok = false; } else f.classList.remove('err');
+    });
+    if (step === 3 && !state.amount) ok = false;
+    if (step === 5 && !panel.querySelector('input[name="fcra"]').checked) ok = false;
+    return ok;
+  }
+  $('#nextBtn').onclick = () => {
+    const panel = document.querySelector(`.step-panel[data-panel="${step}"]`);
+    panel.querySelectorAll('input, select, textarea').forEach(el => {
+      if (el.type === 'checkbox') state[el.name] = el.checked;
+      else if (el.name) state[el.name] = el.value;
+    });
+    save();
+    if (!validate()) return;
+    if (step === TOTAL_STEPS) submit();
+    else goStep(step + 1);
+  };
+  $('#backBtn').onclick = () => goStep(step - 1);
+  document.addEventListener('click', e => {
+    const chip = e.target.closest('.chip'); if (chip){
+      const group = chip.closest('[data-multi]') || chip.closest('[data-single]'); if (!group) return;
+      const key = group.dataset.multi || group.dataset.single;
+      if (group.dataset.multi){ chip.classList.toggle('selected'); state[key] = [...group.querySelectorAll('.chip.selected')].map(c=>c.dataset.val); }
+      else { group.querySelectorAll('.chip').forEach(c=>c.classList.toggle('selected', c===chip)); state[key] = chip.dataset.val; }
+      save();
+    }
+    const tile = e.target.closest('.tile-opt'); if (tile){
+      const key = tile.dataset.single;
+      tile.parentElement.querySelectorAll('.tile-opt').forEach(t=>t.classList.toggle('selected', t===tile));
+      state[key] = tile.dataset.val; save();
+    }
+  });
+  async function submit(){
+    const ref = 'RJ-BF-' + Date.now().toString(36).toUpperCase();
+    state.ref = ref; state.submittedAt = new Date().toISOString(); save();
+    try { fetch('/api/public/lead/' + FORM_ID, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(state) }).catch(()=>{}); } catch(e){}
+    try { console.log('[RJ FUNDING SUBMIT]', state); } catch (e) {}
+    $('#refnum').textContent = ref;
+    $('#success').classList.add('active');
+    document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+    $('#actions').style.display = 'none';
+    document.querySelector('.progress-wrap').style.display = 'none';
+  }
+  // Restore
+  document.querySelectorAll('input[name], select[name], textarea[name]').forEach(el => {
+    if (state[el.name] !== undefined) { if (el.type === 'checkbox') el.checked = !!state[el.name]; else el.value = state[el.name]; }
+  });
+  document.querySelectorAll('[data-multi]').forEach(g => { const key = g.dataset.multi; if (Array.isArray(state[key])) g.querySelectorAll('.chip').forEach(c=>c.classList.toggle('selected', state[key].includes(c.dataset.val))); });
+  document.querySelectorAll('[data-single]').forEach(g => { const key = g.dataset.single; if (state[key]) g.querySelectorAll('.chip, .tile-opt').forEach(c=>c.classList.toggle('selected', c.dataset.val === state[key])); });
+  goStep(step);
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Zoom / Meeting Backgrounds</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px;display:grid;grid-template-columns:1fr 1fr;gap:32px}
+  .card{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 20px 40px rgba(15,23,42,0.1)}
+  .card .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);padding:14px 20px;border-bottom:1px solid var(--rj-line);font-weight:600}
+  .bg{width:100%;aspect-ratio:16/9;position:relative;overflow:hidden}
+
+  /* Person silhouette guide */
+  .person-guide{position:absolute;bottom:0;right:15%;width:26%;aspect-ratio:1/1.2;background:rgba(255,255,255,0.05);border:2px dashed rgba(255,255,255,0.15);border-radius:50% 50% 0 0;z-index:3;pointer-events:none;display:flex;align-items:flex-end;justify-content:center;padding-bottom:10px}
+  .person-guide::after{content:"Camera Safe Zone";font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:0.14em;color:rgba(255,255,255,0.3);text-transform:uppercase;font-weight:600}
+  .light .person-guide{border-color:rgba(15,23,42,0.15);background:rgba(15,23,42,0.03)}
+  .light .person-guide::after{color:rgba(15,23,42,0.3)}
+
+  /* Brand block for corner */
+  .brand-block{position:absolute;top:40px;left:48px;display:flex;align-items:center;gap:12px;z-index:2}
+  .brand-block img{width:44px;height:44px;border-radius:10px}
+  .brand-block .n{font-family:var(--font-head);font-weight:600;font-size:20px;color:#fff;letter-spacing:-0.01em}
+  .brand-block .t{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-top:3px;font-weight:600}
+  .light .brand-block .n{color:var(--rj-navy)}
+  .light .brand-block .t{color:var(--rj-blue)}
+
+  .quote-tag{position:absolute;bottom:40px;left:48px;z-index:2;max-width:40%}
+  .quote-tag .q{font-family:var(--font-head);font-size:24px;font-weight:600;color:#fff;letter-spacing:-0.02em;line-height:1.15;margin:0}
+  .quote-tag .q span{color:var(--rj-sky)}
+  .quote-tag .attrib{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;margin-top:12px;font-weight:600}
+  .light .quote-tag .q{color:var(--rj-navy)}
+  .light .quote-tag .q span{color:var(--rj-blue)}
+  .light .quote-tag .attrib{color:var(--rj-muted-text)}
+
+  /* BG 1 · Signature */
+  .bg1{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 55%,#2563eb 100%)}
+  .bg1::after{content:"";position:absolute;left:-10%;bottom:-30%;width:60%;height:100%;background:radial-gradient(circle,rgba(37,99,235,0.5) 0%,transparent 60%);filter:blur(80px)}
+
+  /* BG 2 · Grid tech */
+  .bg2{background:#0f172a;background-image:linear-gradient(rgba(37,99,235,0.15) 1px,transparent 1px),linear-gradient(90deg,rgba(37,99,235,0.15) 1px,transparent 1px);background-size:60px 60px}
+  .bg2::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 25% 50%,rgba(14,165,233,0.35) 0%,transparent 55%)}
+
+  /* BG 3 · Sky gradient */
+  .bg3{background:linear-gradient(135deg,#2563eb 0%,#0ea5e9 100%)}
+  .bg3::after{content:"";position:absolute;right:-15%;top:-30%;width:60%;height:120%;background:radial-gradient(circle,rgba(255,255,255,0.2) 0%,transparent 60%);filter:blur(50px)}
+
+  /* BG 4 · Light minimal */
+  .bg4{background:linear-gradient(180deg,#ffffff 0%,#eff6ff 100%)}
+  .bg4::after{content:"";position:absolute;left:-10%;bottom:-30%;width:70%;height:100%;background:radial-gradient(circle,rgba(37,99,235,0.25) 0%,transparent 60%);filter:blur(60px)}
+
+  /* BG 5 · Blueprint */
+  .bg5{background:#0f172a}
+  .bg5::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 80px,rgba(14,165,233,0.12) 80px,rgba(14,165,233,0.12) 81px),repeating-linear-gradient(90deg,transparent,transparent 80px,rgba(14,165,233,0.12) 80px,rgba(14,165,233,0.12) 81px)}
+  .bg5::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 70% 30%,rgba(37,99,235,0.4) 0%,transparent 60%)}
+
+  /* BG 6 · Deep spotlight */
+  .bg6{background:#020617}
+  .bg6::after{content:"";position:absolute;left:20%;bottom:0;width:60%;height:100%;background:radial-gradient(ellipse at bottom center,rgba(37,99,235,0.5) 0%,transparent 60%);filter:blur(40px)}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="lbl">Zoom 01 · Signature Navy Glow · Default meeting</div>
+  <div class="bg bg1">
+    <div class="brand-block"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">AI · Automation · Growth</div></div></div>
+    <div class="person-guide"></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Zoom 02 · Tech Grid · Product demos</div>
+  <div class="bg bg2">
+    <div class="brand-block"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Credit Tech · Fintech Systems</div></div></div>
+    <div class="quote-tag">
+      <p class="q">Systems that <span>actually convert.</span></p>
+      <div class="attrib">rjbusinesssolutions.org</div>
+    </div>
+    <div class="person-guide"></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Zoom 03 · Bold Blue Gradient · Sales calls</div>
+  <div class="bg bg3">
+    <div class="brand-block"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t" style="color:rgba(255,255,255,0.85)">Rick Jefferson · Founder</div></div></div>
+    <div class="person-guide"></div>
+  </div>
+</div>
+
+<div class="card light">
+  <div class="lbl">Zoom 04 · Light Minimal · Investor / partner calls</div>
+  <div class="bg bg4">
+    <div class="brand-block"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">AI Systems · Growth Infrastructure</div></div></div>
+    <div class="quote-tag">
+      <p class="q">Built systems.<br/>Better <span>follow-up.</span></p>
+      <div class="attrib">rjbusinesssolutions.org</div>
+    </div>
+    <div class="person-guide"></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Zoom 05 · Blueprint · Engineering calls</div>
+  <div class="bg bg5">
+    <div class="brand-block"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Building the automation backbone</div></div></div>
+    <div class="person-guide"></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Zoom 06 · Deep Spotlight · Podcast / keynote</div>
+  <div class="bg bg6">
+    <div class="brand-block"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">Rick Jefferson</div><div class="t">Founder · RJ Business Solutions</div></div></div>
+    <div class="quote-tag">
+      <p class="q">Growth is not more noise.<br/>Growth is better <span>infrastructure.</span></p>
+      <div class="attrib">— Rick Jefferson</div>
+    </div>
+    <div class="person-guide"></div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — One Pager</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;justify-content:center}
+  .sheet{width:794px;min-height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden}
+
+  /* HEADER */
+  .top{background:var(--grad-dark);color:#fff;padding:44px 56px;position:relative;overflow:hidden}
+  .top::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .top-row{display:flex;align-items:center;gap:14px;position:relative;z-index:1;margin-bottom:24px}
+  .top-row img{width:44px;height:44px;border-radius:10px}
+  .top-row .n{font-family:var(--font-head);font-weight:600;font-size:16px}
+  .top-row .t{font-family:var(--font-mono);font-size:10px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:3px}
+  .top h1{font-family:var(--font-head);font-size:44px;font-weight:600;letter-spacing:-0.02em;line-height:1.05;margin:0;position:relative;z-index:1;max-width:600px}
+  .top h1 span{background:linear-gradient(135deg,#0ea5e9 0%,#60a5fa 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .top .sub{position:relative;z-index:1;font-family:var(--font-head);color:#cbd5e1;font-size:16px;margin-top:12px;max-width:520px;line-height:1.4}
+
+  .thin{height:4px;background:var(--grad-primary)}
+
+  /* BODY */
+  .body{padding:36px 56px;flex:1;display:flex;flex-direction:column;gap:28px}
+  .section h3{font-family:var(--font-head);font-size:22px;font-weight:600;color:var(--rj-navy);margin:0 0 14px 0;letter-spacing:-0.01em;display:flex;align-items:center;gap:10px}
+  .section h3::before{content:"";width:6px;height:22px;background:var(--rj-blue);border-radius:3px}
+
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .pill{background:var(--rj-light);border:1px solid var(--rj-border);border-radius:10px;padding:14px 16px}
+  .pill .k{font-family:var(--font-head);font-weight:600;font-size:14px;color:var(--rj-navy);margin-bottom:4px}
+  .pill .v{font-size:12px;color:var(--rj-muted-text);line-height:1.5}
+
+  .offer{background:var(--rj-navy);color:#fff;border-radius:14px;padding:28px;position:relative;overflow:hidden}
+  .offer::after{content:"";position:absolute;right:-80px;bottom:-80px;width:250px;height:250px;background:radial-gradient(circle,rgba(14,165,233,0.35) 0%,transparent 60%);filter:blur(30px)}
+  .offer .lbl{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);position:relative;z-index:1;margin-bottom:12px;font-weight:600}
+  .offer h4{font-family:var(--font-head);font-size:24px;font-weight:600;margin:0 0 16px 0;position:relative;z-index:1;letter-spacing:-0.01em}
+  .offer .price-row{display:flex;gap:24px;position:relative;z-index:1;margin-bottom:16px}
+  .offer .price-block .p{font-family:var(--font-head);font-size:36px;font-weight:600;letter-spacing:-0.02em}
+  .offer .price-block .l{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;margin-top:2px}
+  .offer ul{list-style:none;padding:0;margin:0;font-size:12px;color:#cbd5e1;line-height:1.7;position:relative;z-index:1;columns:2;gap:24px}
+  .offer li{padding-left:16px;position:relative;break-inside:avoid}
+  .offer li::before{content:"✓";position:absolute;left:0;color:var(--rj-sky);font-weight:700}
+
+  .why{background:var(--grad-light);border:1px solid var(--rj-border);border-radius:14px;padding:24px 28px}
+  .why blockquote{font-family:var(--font-head);font-size:18px;font-weight:500;color:var(--rj-navy);margin:0;letter-spacing:-0.01em;line-height:1.4}
+
+  .cta-row{display:flex;gap:16px;align-items:center;background:var(--grad-primary);padding:20px 28px;border-radius:14px;color:#fff;box-shadow:0 12px 30px rgba(37,99,235,0.35)}
+  .cta-row .txt{flex:1}
+  .cta-row .txt .t{font-family:var(--font-head);font-weight:600;font-size:18px;letter-spacing:-0.01em}
+  .cta-row .txt .s{font-family:var(--font-head);font-size:13px;opacity:0.9;margin-top:2px}
+  .cta-row .btn{background:#fff;color:var(--rj-blue);padding:12px 20px;border-radius:10px;font-family:var(--font-head);font-weight:600;font-size:14px}
+
+  /* FOOTER */
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:20px 56px;display:flex;justify-content:space-between;align-items:center;font-family:var(--font-mono);font-size:10px;letter-spacing:0.12em;text-transform:uppercase}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:13px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+
+  @media print{body{background:#fff;padding:0}.sheet{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="top">
+    <div class="top-row">
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+      <div>
+        <div class="n">RJ Business Solutions</div>
+        <div class="t">AI · Automation · Credit Tech · Growth</div>
+      </div>
+    </div>
+    <h1>We turn business chaos into <span>automated growth systems.</span></h1>
+    <div class="sub">Done-for-you social, DMs, follow-up, CRM, credit tech, portals, payments — one connected system.</div>
+  </div>
+  <div class="thin"></div>
+
+  <div class="body">
+
+    <div class="section">
+      <h3>What we build</h3>
+      <div class="grid-3">
+        <div class="pill"><div class="k">Social + DMs</div><div class="v">Content, comment rules, AI DM replies, booking sync.</div></div>
+        <div class="pill"><div class="k">CRM + Follow-Up</div><div class="v">Pipelines, sequences, no-show recovery, reporting.</div></div>
+        <div class="pill"><div class="k">Credit Technology</div><div class="v">Platforms, APIs, client portals, compliance workflows.</div></div>
+        <div class="pill"><div class="k">Funnels + Landing</div><div class="v">Conversion-focused pages, checkout, lead magnets.</div></div>
+        <div class="pill"><div class="k">Payments</div><div class="v">Stripe subscriptions, usage billing, self-serve portal.</div></div>
+        <div class="pill"><div class="k">White-Label SaaS</div><div class="v">FinTech infrastructure your brand can ship as its own.</div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Featured offer</h3>
+      <div class="offer">
+        <div class="lbl">Done-For-You Social Growth</div>
+        <h4>Turn your DMs into booked calls in 7 days.</h4>
+        <div class="price-row">
+          <div class="price-block"><div class="p">$1,997</div><div class="l">Launch Setup</div></div>
+          <div class="price-block"><div class="p">$997<span style="font-size:16px">/mo</span></div><div class="l">Monthly Management</div></div>
+        </div>
+        <ul>
+          <li>Social content system</li>
+          <li>Caption + post planning</li>
+          <li>AI-powered DM replies</li>
+          <li>Comment response rules</li>
+          <li>Lead qualification</li>
+          <li>Booking link integration</li>
+          <li>CRM pipeline sync</li>
+          <li>Follow-up messages</li>
+          <li>No-show recovery</li>
+          <li>Human escalation rules</li>
+          <li>Monthly reporting</li>
+          <li>Compliance guardrails</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3>Why RJ</h3>
+      <div class="why">
+        <blockquote>"We do not sell templates. We build systems. Every offer ships with the infrastructure to run it — from lead capture and follow-up to booking, payments, and reporting."</blockquote>
+      </div>
+    </div>
+
+    <div class="cta-row">
+      <div class="txt">
+        <div class="t">Book a Free Growth Call</div>
+        <div class="s">15 minutes. Real audit. Real plan.</div>
+      </div>
+      <div class="btn">rjbusinesssolutions.org →</div>
+    </div>
+
+  </div>
+
+  <div class="foot">
+    <div class="brand">RJ Business Solutions</div>
+    <div>1342 NM 333 · Tijeras NM 87059 · support@rjbusinesssolutions.org</div>
+  </div>
+</div>
+</body>
+</html>

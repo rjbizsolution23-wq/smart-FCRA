@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ App Store Screenshots</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:60px 40px;display:flex;flex-direction:column;gap:48px;align-items:center}
+  .lbl{font-family:var(--font-mono);font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:16px}
+
+  .row{display:flex;gap:32px;align-items:flex-start}
+
+  /* App store screenshot canvas: 1290x2796 (iPhone 15 Pro Max ratio) scaled — 260x564 */
+  .ss{width:280px;height:606px;border-radius:36px;overflow:hidden;position:relative;box-shadow:0 30px 60px rgba(15,23,42,0.3);display:flex;flex-direction:column}
+
+  /* Background style 1 — dark hero */
+  .ss.dark{background:var(--grad-dark);color:#fff}
+  .ss.dark::after{content:"";position:absolute;right:-60px;top:-60px;width:250px;height:250px;background:radial-gradient(circle,rgba(14,165,233,0.5) 0%,transparent 60%);filter:blur(40px);pointer-events:none}
+  .ss.gradient{background:var(--grad-primary);color:#fff}
+  .ss.light{background:linear-gradient(180deg,#fff,#eff6ff);color:var(--rj-navy)}
+
+  .ss .status{padding:12px 20px 0;display:flex;justify-content:space-between;position:relative;z-index:2;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:600}
+  .ss.dark .status,.ss.gradient .status{color:#fff}
+  .ss.light .status{color:var(--rj-navy)}
+  .ss .status .r{display:flex;gap:5px;font-size:9px;align-items:center}
+
+  .ss .marketing{padding:20px 22px 12px;text-align:center;position:relative;z-index:2}
+  .ss .kicker-a{display:inline-block;padding:4px 10px;border-radius:999px;font-family:var(--font-mono);font-size:8px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;margin-bottom:10px}
+  .ss.dark .kicker-a,.ss.gradient .kicker-a{background:rgba(14,165,233,0.2);border:1px solid rgba(14,165,233,0.4);color:var(--rj-sky)}
+  .ss.gradient .kicker-a{background:rgba(255,255,255,0.2);border-color:rgba(255,255,255,0.3);color:#fff}
+  .ss.light .kicker-a{background:var(--rj-light);border:1px solid var(--rj-border);color:var(--rj-blue)}
+  .ss .marketing h2{font-family:var(--font-head);font-weight:700;font-size:26px;letter-spacing:-0.02em;line-height:0.98;margin:0}
+  .ss .marketing h2 span{color:var(--rj-sky)}
+  .ss.gradient .marketing h2 span{color:#fff;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
+  .ss.light .marketing h2 span{background:linear-gradient(135deg,#2563eb,#0ea5e9);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .ss .marketing .sub{font-family:var(--font-head);font-size:11px;margin-top:8px;font-weight:500;line-height:1.35}
+  .ss.dark .marketing .sub{color:#cbd5e1}
+  .ss.gradient .marketing .sub{color:rgba(255,255,255,0.9)}
+  .ss.light .marketing .sub{color:var(--rj-muted-text)}
+
+  /* Phone screen area (below marketing) — inset app UI */
+  .ss .device{flex:1;margin:6px 18px 20px;background:#fff;border-radius:22px;overflow:hidden;box-shadow:0 15px 30px rgba(0,0,0,0.2);position:relative}
+
+  /* App UI variants inside device */
+  .app-dash{padding:14px 12px;background:#fff;height:100%;display:flex;flex-direction:column;gap:8px}
+  .app-dash .app-top{display:flex;justify-content:space-between;align-items:center;padding:2px 4px}
+  .app-dash .app-top .greet{font-family:var(--font-head);font-size:11px;font-weight:600;color:var(--rj-navy);letter-spacing:-0.01em}
+  .app-dash .app-top .greet .s{font-family:var(--font-mono);font-size:7px;color:var(--rj-muted-text);letter-spacing:0.12em;text-transform:uppercase;font-weight:600;margin-top:1px}
+  .app-dash .app-top .av{width:22px;height:22px;border-radius:50%;background:var(--grad-primary);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:700;font-size:8px}
+
+  .app-dash .kpi-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .app-dash .kpi{background:linear-gradient(135deg,#0f172a,#1e3a8a);color:#fff;border-radius:8px;padding:8px 10px}
+  .app-dash .kpi.b{background:linear-gradient(135deg,#eff6ff,#fff);color:var(--rj-navy);border:1px solid var(--rj-border)}
+  .app-dash .kpi .k{font-family:'Space Grotesk',sans-serif;font-size:7px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;opacity:0.8;margin-bottom:2px}
+  .app-dash .kpi .v{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:18px;letter-spacing:-0.02em;line-height:1}
+  .app-dash .kpi .trend{font-family:'Space Grotesk',sans-serif;font-size:7px;color:#86efac;font-weight:600;margin-top:2px}
+  .app-dash .kpi.b .trend{color:#059669}
+
+  .app-dash .chart{background:linear-gradient(180deg,#eff6ff,#fff);border:1px solid var(--rj-border);border-radius:8px;padding:10px;flex:1;position:relative;overflow:hidden}
+  .app-dash .chart .ct{font-family:'Space Grotesk',sans-serif;font-size:8px;font-weight:600;color:var(--rj-navy);letter-spacing:-0.01em;margin-bottom:4px}
+  .app-dash .chart svg{width:100%;height:calc(100% - 12px)}
+
+  .app-dash .feed{background:#fff;border:1px solid var(--rj-line);border-radius:8px;padding:8px}
+  .app-dash .feed-item{display:flex;gap:6px;align-items:center;padding:4px 0;font-family:'Space Grotesk',sans-serif;font-size:8px}
+  .app-dash .feed-item .dot{width:16px;height:16px;border-radius:5px;background:var(--grad-primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:8px;flex-shrink:0}
+  .app-dash .feed-item .t{color:var(--rj-navy);font-weight:600;font-size:8px}
+  .app-dash .feed-item .s{color:var(--rj-muted-text);font-size:7px;margin-left:auto;text-transform:uppercase;letter-spacing:0.1em;font-weight:600}
+
+  /* App variant · DM view */
+  .app-dm{padding:14px 10px;background:#fff;display:flex;flex-direction:column;gap:6px;height:100%}
+  .app-dm .top-dm{display:flex;align-items:center;gap:6px;padding-bottom:6px;border-bottom:1px solid var(--rj-line)}
+  .app-dm .top-dm .av{width:22px;height:22px;border-radius:50%;background:var(--grad-primary);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:8px}
+  .app-dm .top-dm .info{flex:1}
+  .app-dm .top-dm .n{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:9px;color:var(--rj-navy);letter-spacing:-0.01em}
+  .app-dm .top-dm .status{font-family:'Space Grotesk',sans-serif;font-size:7px;color:#059669;font-weight:600;margin-top:1px}
+  .app-dm .top-dm .tag{background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:3px;font-family:'Space Grotesk',sans-serif;font-size:7px;letter-spacing:0.1em;text-transform:uppercase;font-weight:600}
+
+  .app-dm .msg-a{max-width:78%;padding:6px 10px;border-radius:12px;font-family:'Space Grotesk',sans-serif;font-size:9px;line-height:1.3}
+  .app-dm .msg-a.i{background:#f1f5f9;color:var(--rj-navy);align-self:flex-start;border-bottom-left-radius:2px}
+  .app-dm .msg-a.o{background:linear-gradient(135deg,#2563eb,#0ea5e9);color:#fff;align-self:flex-end;border-bottom-right-radius:2px}
+  .app-dm .ai-tag{display:flex;align-items:center;gap:4px;font-family:'Space Grotesk',sans-serif;font-size:7px;color:var(--rj-blue);text-transform:uppercase;letter-spacing:0.12em;font-weight:600;align-self:flex-end;margin:2px 0}
+  .app-dm .ai-tag::before{content:"";width:4px;height:4px;border-radius:50%;background:#059669;box-shadow:0 0 6px rgba(5,150,105,0.6)}
+
+  .app-dm .action{margin-top:auto;background:linear-gradient(135deg,#2563eb,#0ea5e9);color:#fff;padding:8px;border-radius:8px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:9px;text-align:center}
+
+  /* Big number screen */
+  .app-num{background:var(--grad-dark);color:#fff;height:100%;padding:16px 14px;display:flex;flex-direction:column;justify-content:center;text-align:center;position:relative;overflow:hidden}
+  .app-num::after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(20px)}
+  .app-num .lbl-n{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600;position:relative;z-index:1}
+  .app-num .big-n{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:80px;letter-spacing:-0.05em;line-height:1;background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent;position:relative;z-index:1;margin:10px 0}
+  .app-num .sub-n{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#cbd5e1;position:relative;z-index:1}
+</style>
+</head>
+<body>
+
+<div>
+  <div class="lbl">App Store Screenshots · 6 Marketing Frames · iPhone 15 Pro Max · 1290 × 2796</div>
+
+  <div class="row">
+
+    <!-- SS 01 — Hero -->
+    <div class="ss dark">
+      <div class="status"><span>9:41</span><div class="r">●●● 5G 100%</div></div>
+      <div class="marketing">
+        <div class="kicker-a">● 01</div>
+        <h2>Turn DMs into<br/><span>booked calls.</span></h2>
+        <div class="sub">Your AI-powered growth engine — in your pocket.</div>
+      </div>
+      <div class="device">
+        <div class="app-dash">
+          <div class="app-top"><div class="greet">Hi, Sarah<div class="s">Friday · Jul 17</div></div><div class="av">SD</div></div>
+          <div class="kpi-row">
+            <div class="kpi"><div class="k">MRR</div><div class="v">$28.9K</div><div class="trend">↑ 24%</div></div>
+            <div class="kpi b"><div class="k">Booked</div><div class="v">142</div><div class="trend">↑ 47</div></div>
+          </div>
+          <div class="chart">
+            <div class="ct">Growth Trend · 30D</div>
+            <svg viewBox="0 0 200 60" preserveAspectRatio="none">
+              <path d="M 0,50 L 30,42 L 60,35 L 90,28 L 120,18 L 150,12 L 180,8 L 200,4 L 200,60 L 0,60 Z" fill="rgba(37,99,235,0.2)"/>
+              <path d="M 0,50 L 30,42 L 60,35 L 90,28 L 120,18 L 150,12 L 180,8 L 200,4" fill="none" stroke="#2563eb" stroke-width="1.5"/>
+              <circle cx="200" cy="4" r="2.5" fill="#2563eb"/>
+            </svg>
+          </div>
+          <div class="feed">
+            <div class="feed-item"><div class="dot">✓</div><div class="t">New call booked</div><div class="s">2m</div></div>
+            <div class="feed-item"><div class="dot">$</div><div class="t">Payment received</div><div class="s">7m</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SS 02 · Feature: AI DMs -->
+    <div class="ss gradient">
+      <div class="status"><span>9:41</span><div class="r">●●● 5G 100%</div></div>
+      <div class="marketing">
+        <div class="kicker-a">● 02</div>
+        <h2>AI that <span>talks like<br/>your brand.</span></h2>
+        <div class="sub">Reply in seconds. Flag hot leads. Never lose one.</div>
+      </div>
+      <div class="device">
+        <div class="app-dm">
+          <div class="top-dm"><div class="av">MJ</div><div class="info"><div class="n">Marcus J.</div><div class="status">● Active now</div></div><div class="tag">HOT</div></div>
+          <div class="msg-a i">Yo — can you break down what the growth engine actually does?</div>
+          <div class="msg-a o">Absolutely — it's a system, not a tool. It handles DMs, follow-up, booking, and reporting in one loop. Want the 3-min breakdown?</div>
+          <div class="ai-tag">AI Replied · 84ms</div>
+          <div class="msg-a i">Yes send it</div>
+          <div class="action">Book Call · Send Loom</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SS 03 · Big metric -->
+    <div class="ss light">
+      <div class="status"><span>9:41</span><div class="r">●●● 5G 100%</div></div>
+      <div class="marketing">
+        <div class="kicker-a">● 03</div>
+        <h2>Real numbers.<br/><span>Real revenue.</span></h2>
+        <div class="sub">One client. 30 days. See what happens.</div>
+      </div>
+      <div class="device">
+        <div class="app-num">
+          <div class="lbl-n">30-Day Client Result</div>
+          <div class="big-n">+312%</div>
+          <div class="sub-n">Month-over-month revenue lift<br/>Apex Credit Solutions · verified</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:32px">
+
+    <!-- SS 04 -->
+    <div class="ss dark">
+      <div class="status"><span>9:41</span><div class="r">●●● 5G 100%</div></div>
+      <div class="marketing">
+        <div class="kicker-a">● 04</div>
+        <h2>Pipeline <span>on autopilot.</span></h2>
+        <div class="sub">Every lead. Every stage. Nothing slips.</div>
+      </div>
+      <div class="device">
+        <div class="app-dash">
+          <div class="app-top"><div class="greet">Pipeline<div class="s">Updated 2m ago</div></div><div class="av">SD</div></div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex:1">
+            <div style="background:linear-gradient(90deg,#eff6ff,#fff);padding:8px 10px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;border-left:2px solid var(--rj-blue)">
+              <div><div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:9px;color:var(--rj-navy)">New Leads</div><div style="font-family:'Space Grotesk',sans-serif;font-size:7px;color:var(--rj-muted-text);margin-top:1px">Awaiting AI qualification</div></div>
+              <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:16px;color:var(--rj-blue);letter-spacing:-0.02em">47</div>
+            </div>
+            <div style="background:linear-gradient(90deg,#eff6ff,#fff);padding:8px 10px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;border-left:2px solid var(--rj-blue)">
+              <div><div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:9px;color:var(--rj-navy)">Qualified</div><div style="font-family:'Space Grotesk',sans-serif;font-size:7px;color:var(--rj-muted-text);margin-top:1px">Ready to route</div></div>
+              <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:16px;color:var(--rj-blue);letter-spacing:-0.02em">28</div>
+            </div>
+            <div style="background:linear-gradient(90deg,#eff6ff,#fff);padding:8px 10px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;border-left:2px solid var(--rj-blue)">
+              <div><div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:9px;color:var(--rj-navy)">Booked</div><div style="font-family:'Space Grotesk',sans-serif;font-size:7px;color:var(--rj-muted-text);margin-top:1px">This week</div></div>
+              <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:16px;color:var(--rj-blue);letter-spacing:-0.02em">18</div>
+            </div>
+            <div style="background:linear-gradient(90deg,#dcfce7,#fff);padding:8px 10px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;border-left:2px solid #059669">
+              <div><div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:9px;color:var(--rj-navy)">Closed Won</div><div style="font-family:'Space Grotesk',sans-serif;font-size:7px;color:var(--rj-muted-text);margin-top:1px">Month-to-date</div></div>
+              <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:16px;color:#059669;letter-spacing:-0.02em">9</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SS 05 · Compliance -->
+    <div class="ss light">
+      <div class="status"><span>9:41</span><div class="r">●●● 5G 100%</div></div>
+      <div class="marketing">
+        <div class="kicker-a">● 05</div>
+        <h2>Built with <span>guardrails.</span></h2>
+        <div class="sub">FCRA · FDCPA · TCPA · Every workflow, compliant.</div>
+      </div>
+      <div class="device" style="background:linear-gradient(180deg,#0f172a,#1e3a8a)">
+        <div style="padding:16px 14px;color:#fff;height:100%;display:flex;flex-direction:column;gap:8px">
+          <div style="font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600;margin-bottom:4px">● Active Guardrails</div>
+          <div style="background:rgba(255,255,255,0.08);border:1px solid rgba(14,165,233,0.3);border-radius:8px;padding:10px;display:flex;align-items:center;gap:8px"><div style="width:24px;height:24px;background:rgba(14,165,233,0.2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px">🛡</div><div style="flex:1"><div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:10px">FCRA § 611</div><div style="font-family:'Space Grotesk',sans-serif;font-size:7px;color:#94a3b8;letter-spacing:0.12em;text-transform:uppercase;margin-top:1px;font-weight:600">Dispute workflow armed</div></div><div style="color:#86efac;font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700">ON</div></div>
+          <div style="background:rgba(255,255,255,0.08);border:1px solid rgba(14,165,233,0.3);border-radius:8px;padding:10px;display:flex;align-items:center;gap:8px"><div style="width:24px;height:24px;background:rgba(14,165,233,0.2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px">🔐</div><div style="flex:1"><div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:10px">TCPA Opt-in Log</div><div style="font-family:'Space Grotesk',sans-serif;font-size:7px;color:#94a3b8;letter-spacing:0.12em;text-transform:uppercase;margin-top:1px;font-weight:600">Consent verified</div></div><div style="color:#86efac;font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700">ON</div></div>
+          <div style="background:rgba(255,255,255,0.08);border:1px solid rgba(14,165,233,0.3);border-radius:8px;padding:10px;display:flex;align-items:center;gap:8px"><div style="width:24px;height:24px;background:rgba(14,165,233,0.2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px">📋</div><div style="flex:1"><div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:10px">Audit Trail</div><div style="font-family:'Space Grotesk',sans-serif;font-size:7px;color:#94a3b8;letter-spacing:0.12em;text-transform:uppercase;margin-top:1px;font-weight:600">Every reply logged</div></div><div style="color:#86efac;font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700">ON</div></div>
+          <div style="background:rgba(255,255,255,0.08);border:1px solid rgba(14,165,233,0.3);border-radius:8px;padding:10px;display:flex;align-items:center;gap:8px"><div style="width:24px;height:24px;background:rgba(14,165,233,0.2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px">🎯</div><div style="flex:1"><div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:10px">Delegated Access</div><div style="font-family:'Space Grotesk',sans-serif;font-size:7px;color:#94a3b8;letter-spacing:0.12em;text-transform:uppercase;margin-top:1px;font-weight:600">Role-based only</div></div><div style="color:#86efac;font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700">ON</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SS 06 · CTA -->
+    <div class="ss gradient">
+      <div class="status"><span>9:41</span><div class="r">●●● 5G 100%</div></div>
+      <div class="marketing">
+        <div class="kicker-a">● 06</div>
+        <h2>Download.<br/><span>Book. Grow.</span></h2>
+        <div class="sub">7-day launch. Real audit. Zero fluff.</div>
+      </div>
+      <div class="device">
+        <div style="height:100%;background:linear-gradient(135deg,#0f172a,#1e3a8a);color:#fff;padding:20px 16px;display:flex;flex-direction:column;justify-content:space-between;text-align:center;position:relative;overflow:hidden">
+          <div style="position:absolute;right:-30px;top:-30px;width:150px;height:150px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(30px)"></div>
+          <div style="position:relative;z-index:1">
+            <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="" style="width:52px;height:52px;border-radius:12px;margin:0 auto"/>
+            <div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12px;margin-top:8px">RJ Business Solutions</div>
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-top:3px;font-weight:600">Growth Engine · Mobile</div>
+          </div>
+          <div style="position:relative;z-index:1">
+            <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:26px;letter-spacing:-0.02em;line-height:1;background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent">Systems.<br/>Not slogans.</div>
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:9px;color:#cbd5e1;margin-top:10px;line-height:1.4">Built by Rick Jefferson.<br/>For founders who ship.</div>
+          </div>
+          <div style="background:linear-gradient(135deg,#2563eb,#0ea5e9);color:#fff;padding:10px;border-radius:8px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:11px;position:relative;z-index:1;box-shadow:0 8px 20px rgba(37,99,235,0.4)">Book Free Audit →</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

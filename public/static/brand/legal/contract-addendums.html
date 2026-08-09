@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Contract Addendums</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;flex-direction:column;gap:24px;align-items:center}
+  .page{width:794px;min-height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden;page-break-after:always;position:relative}
+
+  .top{background:var(--grad-dark);color:#fff;padding:32px 56px 24px;position:relative;overflow:hidden}
+  .top::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .top .row{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1;margin-bottom:16px}
+  .top .brand{display:flex;align-items:center;gap:12px}
+  .top .brand img{width:40px;height:40px;border-radius:9px}
+  .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:15px}
+  .top .brand .t{font-family:var(--font-mono);font-size:9px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:3px;font-weight:600}
+  .top .meta{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);text-align:right;font-weight:600}
+  .top .meta b{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:block;margin-top:2px}
+  .top h1{font-family:var(--font-head);font-size:36px;font-weight:600;letter-spacing:-0.02em;margin:0;position:relative;z-index:1;line-height:1}
+  .top h1 span{color:var(--rj-sky)}
+  .top .sub{font-family:var(--font-head);color:#cbd5e1;font-size:13px;margin-top:8px;position:relative;z-index:1}
+  .thin{height:3px;background:var(--grad-primary)}
+
+  .body{padding:28px 56px;flex:1;display:flex;flex-direction:column;gap:18px;font-family:var(--font-body);font-size:12px;line-height:1.7;color:var(--rj-text)}
+
+  h3{font-family:var(--font-head);font-size:16px;font-weight:600;color:var(--rj-navy);margin:0 0 8px 0;letter-spacing:-0.01em;display:flex;align-items:center;gap:10px}
+  h3::before{content:"";width:4px;height:18px;background:var(--rj-blue);border-radius:2px}
+
+  .party{display:grid;grid-template-columns:1fr 1fr;gap:20px;background:var(--rj-light);padding:16px 20px;border-radius:10px}
+  .party .k{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:4px}
+  .party .v{font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy);letter-spacing:-0.01em}
+  .party .a{font-size:11px;color:var(--rj-muted-text);margin-top:2px;line-height:1.5}
+
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--rj-line);border-radius:10px;overflow:hidden}
+  th{background:var(--rj-navy);color:#fff;padding:10px 14px;text-align:left;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+  th:last-child{text-align:right}
+  td{padding:10px 14px;font-size:12px;border-bottom:1px solid var(--rj-line)}
+  td:last-child{text-align:right;font-family:var(--font-mono);font-weight:600;color:var(--rj-navy)}
+  tr:last-child td{border:none}
+  tr.total td{background:var(--rj-light);font-family:var(--font-head);font-weight:600;color:var(--rj-navy);font-size:13px}
+  td .desc{color:var(--rj-muted-text);font-size:10px;margin-top:2px}
+
+  .clause{background:#f8fafc;border-left:3px solid var(--rj-blue);padding:12px 16px;border-radius:6px;font-size:11px;line-height:1.6}
+  .clause b{font-family:var(--font-head);color:var(--rj-navy);font-weight:600}
+
+  .sig-block{margin-top:auto;padding-top:20px;border-top:1px solid var(--rj-line);display:grid;grid-template-columns:1fr 1fr;gap:32px}
+  .sig-line{border-bottom:1.5px solid var(--rj-navy);padding-bottom:6px;font-family:'Space Grotesk',serif;font-style:italic;font-size:22px;color:var(--rj-blue);font-weight:500;min-height:36px}
+  .sig-meta{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);margin-top:6px;font-weight:600}
+  .sig-meta b{color:var(--rj-navy);display:block;margin-top:2px;font-family:var(--font-head);font-size:12px;letter-spacing:0.02em;text-transform:none;font-weight:600}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:12px 56px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+
+  ol{padding-left:20px;margin:0 0 8px 0}
+  ol li{padding:3px 0;font-size:12px;line-height:1.6}
+
+  .stamp{position:absolute;top:100px;right:24px;padding:6px 16px 6px 22px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;transform:rotate(3deg);border-radius:4px;z-index:2}
+  .stamp::before{content:"● ";color:currentColor}
+  .stamp.change{background:var(--rj-warning);color:#fff}
+  .stamp.nda{background:var(--rj-danger);color:#fff}
+  .stamp.sow{background:var(--rj-success);color:#fff}
+
+  @media print{body{background:#fff;padding:0;gap:0}.page{box-shadow:none}}
+</style>
+</head>
+<body>
+
+<!-- ADDENDUM A · CHANGE ORDER -->
+<div class="page">
+  <div class="top">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Contract Addendum A · Change Order</div></div></div>
+      <div class="meta">Ref MSA-2026-0001<b>Addendum A · CO-01</b></div>
+    </div>
+    <h1>Change <span>Order.</span></h1>
+    <div class="sub">Amends the Master Service Agreement dated July 17, 2026</div>
+  </div>
+  <div class="thin"></div>
+  <div class="stamp change">For Signature</div>
+
+  <div class="body">
+    <div class="party">
+      <div>
+        <div class="k">Service Provider</div>
+        <div class="v">RJ Business Solutions</div>
+        <div class="a">1342 NM 333, Tijeras NM 87059</div>
+      </div>
+      <div>
+        <div class="k">Client</div>
+        <div class="v">[Client Legal Name]</div>
+        <div class="a">[Client Address]</div>
+      </div>
+    </div>
+
+    <div>
+      <h3>1. Purpose</h3>
+      <p>This Change Order ("Addendum A") amends the scope, deliverables, and investment of the Master Service Agreement referenced above. All other terms, including confidentiality, ownership, and termination clauses, remain in full force.</p>
+    </div>
+
+    <div>
+      <h3>2. Amended Scope</h3>
+      <table>
+        <thead><tr><th>Item</th><th>Type</th><th>Delta</th></tr></thead>
+        <tbody>
+          <tr><td>Add · Credit Monitoring API Integration<div class="desc">Bureau data pipe · scoring · alerts</div></td><td>New Deliverable</td><td>+$5,000</td></tr>
+          <tr><td>Add · Client Portal (Auth + Billing)<div class="desc">Delegated access · role-based permissions</div></td><td>New Deliverable</td><td>+$3,500</td></tr>
+          <tr><td>Remove · Facebook Ads Management<div class="desc">Client bringing in-house</div></td><td>Descoped</td><td>−$497/mo</td></tr>
+          <tr class="total"><td colspan="2">Net Change · One-time + Monthly</td><td>+$8,500 · −$497/mo</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div>
+      <h3>3. Timeline Impact</h3>
+      <p>New deliverables extend the launch window by <b>14 business days</b>. New target go-live: <b>August 15, 2026</b>. All other milestones remain unchanged.</p>
+    </div>
+
+    <div class="clause">
+      <b>Effective Date:</b> Upon dual signature below. New monthly rate takes effect on the next billing cycle following execution.
+    </div>
+
+    <div class="sig-block">
+      <div>
+        <div class="sig-line">Signature</div>
+        <div class="sig-meta">Client<b>[Full Name · Title · Date]</b></div>
+      </div>
+      <div>
+        <div class="sig-line">Rick Jefferson</div>
+        <div class="sig-meta">RJ Business Solutions<b>Rick Jefferson · Founder · July 17, 2026</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Addendum A · Change Order · Page 01</div></div>
+</div>
+
+<!-- ADDENDUM B · MUTUAL NDA -->
+<div class="page">
+  <div class="top">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Contract Addendum B · NDA</div></div></div>
+      <div class="meta">Ref NDA-2026-0142<b>Mutual · Bilateral</b></div>
+    </div>
+    <h1>Non-Disclosure <span>Agreement.</span></h1>
+    <div class="sub">Mutual confidentiality between the Parties named below</div>
+  </div>
+  <div class="thin"></div>
+  <div class="stamp nda">Confidential</div>
+
+  <div class="body">
+    <div class="party">
+      <div>
+        <div class="k">Party A · Disclosing / Receiving</div>
+        <div class="v">RJ Business Solutions</div>
+        <div class="a">1342 NM 333, Tijeras NM 87059</div>
+      </div>
+      <div>
+        <div class="k">Party B · Disclosing / Receiving</div>
+        <div class="v">[Counterparty Legal Name]</div>
+        <div class="a">[Counterparty Address]</div>
+      </div>
+    </div>
+
+    <div>
+      <h3>1. Definition of Confidential Information</h3>
+      <p>"Confidential Information" means any non-public information disclosed by one Party ("Disclosing Party") to the other Party ("Receiving Party"), including business plans, client data, financial information, source code, system architectures, proprietary workflows, credit-adjacent data, and any material marked confidential or that a reasonable person would understand to be confidential.</p>
+    </div>
+
+    <div>
+      <h3>2. Obligations of Receiving Party</h3>
+      <ol>
+        <li>Hold Confidential Information in strict confidence.</li>
+        <li>Not disclose to any third party without prior written consent.</li>
+        <li>Use Confidential Information solely for the Purpose of evaluating or performing the underlying business relationship.</li>
+        <li>Apply protections no less rigorous than those used for its own comparable information (minimum: reasonable care).</li>
+      </ol>
+    </div>
+
+    <div>
+      <h3>3. Exclusions</h3>
+      <p>Confidential Information does not include information that: (a) is or becomes public through no breach of this Agreement, (b) was known prior to disclosure without confidentiality obligation, (c) is independently developed without reference to Confidential Information, or (d) is required to be disclosed by law (with prompt notice to the Disclosing Party).</p>
+    </div>
+
+    <div>
+      <h3>4. Term &amp; Return of Materials</h3>
+      <p>Obligations survive for <b>three (3) years</b> from the Effective Date. Trade secrets remain protected indefinitely. Upon written request, Receiving Party shall return or destroy all Confidential Information within 15 business days.</p>
+    </div>
+
+    <div class="clause">
+      <b>Governing Law:</b> New Mexico, USA. Any dispute shall be resolved by binding arbitration in Bernalillo County, NM.
+    </div>
+
+    <div class="sig-block">
+      <div>
+        <div class="sig-line">Signature</div>
+        <div class="sig-meta">Party B<b>[Full Name · Title · Date]</b></div>
+      </div>
+      <div>
+        <div class="sig-line">Rick Jefferson</div>
+        <div class="sig-meta">RJ Business Solutions<b>Rick Jefferson · Founder · July 17, 2026</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Addendum B · NDA · Page 01</div></div>
+</div>
+
+<!-- ADDENDUM C · SOW -->
+<div class="page">
+  <div class="top">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Contract Addendum C · Statement of Work</div></div></div>
+      <div class="meta">Ref SOW-2026-0027<b>Scope · Deliverables</b></div>
+    </div>
+    <h1>Statement <span>of Work.</span></h1>
+    <div class="sub">Attached to and governed by the referenced Master Service Agreement</div>
+  </div>
+  <div class="thin"></div>
+  <div class="stamp sow">Approved</div>
+
+  <div class="body">
+    <div class="party">
+      <div>
+        <div class="k">Provider</div>
+        <div class="v">RJ Business Solutions</div>
+        <div class="a">Rick Jefferson · Founder</div>
+      </div>
+      <div>
+        <div class="k">Client</div>
+        <div class="v">[Client Legal Name]</div>
+        <div class="a">SOW Effective: July 17, 2026</div>
+      </div>
+    </div>
+
+    <div>
+      <h3>1. Project Overview</h3>
+      <p>Build and deploy the RJ <b>Growth Engine</b> system for Client — an AI-powered DM management, CRM automation, follow-up sequence, and reporting stack. Full launch within 7 business days from signed SOW + received deposit.</p>
+    </div>
+
+    <div>
+      <h3>2. Deliverables &amp; Milestones</h3>
+      <table>
+        <thead><tr><th>Milestone</th><th>Owner</th><th>Due</th></tr></thead>
+        <tbody>
+          <tr><td>Kickoff Call + Access Setup<div class="desc">Delegated permissions · brand voice doc</div></td><td>Both</td><td>Day 1</td></tr>
+          <tr><td>CRM + Pipeline Buildout<div class="desc">Stages · integrations · booking calendar</div></td><td>Provider</td><td>Day 3</td></tr>
+          <tr><td>AI DM System + Voice Training<div class="desc">Reply templates · escalation logic</div></td><td>Provider</td><td>Day 5</td></tr>
+          <tr><td>QA + Client Review<div class="desc">Dry-runs · sign-off on replies</div></td><td>Client</td><td>Day 6</td></tr>
+          <tr><td>Full Launch + Reporting Cadence<div class="desc">All traffic live · weekly reports</div></td><td>Provider</td><td>Day 7</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div>
+      <h3>3. Investment</h3>
+      <table>
+        <thead><tr><th>Line Item</th><th>Type</th><th>Amount</th></tr></thead>
+        <tbody>
+          <tr><td>Growth Engine · Launch Setup</td><td>One-time · at signing</td><td>$1,997.00</td></tr>
+          <tr><td>Monthly Management</td><td>Recurring · $997/mo</td><td>$997.00/mo</td></tr>
+          <tr class="total"><td colspan="2">Due at Signing (Setup + Month 1)</td><td>$2,994.00</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="clause">
+      <b>Assumptions:</b> Client provides delegated access within 48 hours of kickoff. Delays caused by access, brand voice input, or asset delivery may extend timeline day-for-day.
+    </div>
+
+    <div class="sig-block">
+      <div>
+        <div class="sig-line">Signature</div>
+        <div class="sig-meta">Client<b>[Full Name · Title · Date]</b></div>
+      </div>
+      <div>
+        <div class="sig-line">Rick Jefferson</div>
+        <div class="sig-meta">RJ Business Solutions<b>Rick Jefferson · Founder · July 17, 2026</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Addendum C · Statement of Work · Page 01</div></div>
+</div>
+
+</body>
+</html>

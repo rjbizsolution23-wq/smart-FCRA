@@ -672,11 +672,17 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       return `<div class="min-h-screen flex items-center justify-center p-4">
         <div class="w-full max-w-lg">
           <div class="text-center mb-6">
-            <div class="inline-flex items-center justify-center mb-4"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-16 w-auto rounded-2xl border border-cyan-500/30 object-cover shadow-[0_0_20px_rgba(6,182,212,0.25)]" alt="RJ Business Solutions"></div>
-            <h1 class="text-2xl font-bold text-white">Start with MyFreeScoreNow</h1>
-            <p class="text-gray-400 mt-1 text-sm">Only memberships from our official affiliate links are accepted. Enroll below, then pull your report into your portal.</p>
+            <div class="inline-flex items-center justify-center mb-4"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-16 w-auto rounded-2xl border border-blue-500/40 object-cover shadow-[0_0_24px_rgba(37,99,235,0.35)]" alt="RJ Business Solutions"></div>
+            <div class="text-[10px] uppercase tracking-[0.18em] font-bold text-sky-300 mb-2">RJ Business Solutions</div>
+            <h1 class="text-2xl font-bold text-white font-display">Start with MyFreeScoreNow</h1>
+            <p class="text-gray-400 mt-1 text-sm">Empowering Generational Wealth — enroll under our affiliate, then open your Smart FCRA portal.</p>
+            <div class="mt-3 flex flex-wrap justify-center gap-2 text-[11px]">
+              <a href="/forms/credit-qualify" class="px-2.5 py-1 rounded-lg border border-blue-500/30 text-blue-200 hover:bg-blue-500/10">Credit Qualify</a>
+              <a href="/forms/funding-qualify" class="px-2.5 py-1 rounded-lg border border-sky-500/30 text-sky-200 hover:bg-sky-500/10">Funding Qualify</a>
+              <a href="/brand" target="_blank" class="px-2.5 py-1 rounded-lg border border-white/10 text-gray-300 hover:bg-white/5">Brand Library</a>
+            </div>
           </div>
-          <div class="glass rounded-2xl p-6 border border-cyan-500/20">
+          <div class="glass rounded-2xl p-6 border border-blue-500/25">
             <form id="mfsn-signup-form" class="space-y-3.5">
               <div class="rounded-xl border border-cyan-500/25 bg-cyan-950/20 p-3 space-y-2">
                 <div class="text-xs font-semibold text-cyan-200">Step 1 — Enroll under our affiliate</div>
@@ -740,11 +746,17 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     return `<div class="min-h-screen flex items-center justify-center p-4">
       <div class="w-full max-w-md">
         <div class="text-center mb-8">
-          <div class="inline-flex items-center justify-center mb-4"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-16 w-auto rounded-2xl border border-blue-500/30 object-cover shadow-[0_0_20px_rgba(10,102,255,0.2)]" alt="RJ Business Solutions"></div>
-          <h1 class="text-2xl font-bold text-white">Smart FCRA Supreme</h1>
-          <p class="text-gray-400 mt-1 text-sm">Enterprise credit violation & dispute CRM</p>
+          <div class="inline-flex items-center justify-center mb-4"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-16 w-auto rounded-2xl border border-blue-500/40 object-cover shadow-[0_0_24px_rgba(37,99,235,0.35)]" alt="RJ Business Solutions"></div>
+          <div class="text-[10px] uppercase tracking-[0.18em] font-bold text-sky-300 mb-2">RJ Business Solutions</div>
+          <h1 class="text-2xl font-bold text-white font-display">Smart FCRA</h1>
+          <p class="text-gray-400 mt-1 text-sm">Empowering Generational Wealth · Credit advocacy CRM</p>
+          <div class="mt-3 flex flex-wrap justify-center gap-2 text-[11px]">
+            <a href="/forms/credit-qualify" class="px-2.5 py-1 rounded-lg border border-blue-500/30 text-blue-200 hover:bg-blue-500/10">Credit Qualify</a>
+            <a href="/?signup=mfsn" class="px-2.5 py-1 rounded-lg border border-cyan-500/30 text-cyan-200 hover:bg-cyan-500/10">MFSN Signup</a>
+            <a href="/brand" target="_blank" class="px-2.5 py-1 rounded-lg border border-white/10 text-gray-300 hover:bg-white/5">Brand Library</a>
+          </div>
         </div>
-        <div class="glass rounded-2xl p-6">
+        <div class="glass rounded-2xl p-6 border border-blue-500/20">
           <div id="auth-mfa" class="hidden space-y-4">
             <h2 class="text-lg font-semibold text-white">Multi-Factor Authentication</h2>
             <p class="text-sm text-gray-400">Enter the 6-digit code from your authenticator app.</p>
@@ -788,10 +800,10 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
             <div class="p-3 bg-amber-900/20 border border-amber-600/30 rounded-lg mt-2">
               <p class="text-[10px] text-amber-300 leading-relaxed"><strong>FCRA NOTICE:</strong> We prepare dispute documents only. NOT legal advice. See <a href="/compliance/disclaimers" class="underline hover:text-amber-200">disclaimers</a>.</p>
             </div>
-            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition text-sm">Sign In</button>
+            <button type="submit" class="w-full btn-rj font-semibold py-2.5 rounded-lg transition text-sm">Sign In</button>
           </form>
-            <a href="/?signup=mfsn" class="mt-3 flex items-center justify-center gap-2 w-full rounded-lg border border-cyan-500/40 bg-cyan-950/30 hover:bg-cyan-900/40 text-cyan-200 text-sm font-semibold py-2.5 transition">
-              <i class="fas fa-bolt text-cyan-400"></i> New client? Sign up with MyFreeScoreNow
+            <a href="/?signup=mfsn" class="mt-3 flex items-center justify-center gap-2 w-full rounded-lg border border-sky-500/40 bg-sky-950/30 hover:bg-sky-900/40 text-sky-100 text-sm font-semibold py-2.5 transition">
+              <i class="fas fa-bolt text-sky-300"></i> New client? Sign up with MyFreeScoreNow
             </a>
             <div class="mt-4 rounded-xl border border-cyan-500/25 bg-gradient-to-br from-slate-950 via-cyan-950/20 to-slate-950 p-3.5 space-y-2.5">
               <div class="flex items-center justify-between gap-2">
@@ -1082,6 +1094,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'founder-os', icon: 'fa-briefcase', label: 'Founder OS' },
         { id: 'sales-tools', icon: 'fa-chart-pie', label: 'Sales Tools' },
         { id: 'tradelines', icon: 'fa-layer-group', label: 'Tradelines' },
+        { id: 'brand-library', icon: 'fa-palette', label: 'Brand Library' },
         { id: 'roi-calculator', icon: 'fa-calculator', label: 'ROI Calculator' },
         { id: 'team', icon: 'fa-user-friends', label: 'Team' },
         { id: 'settings', icon: 'fa-cog', label: 'Settings' },
@@ -1135,7 +1148,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       <aside id="mobile-nav" class="w-56 bg-gray-900/80 border-r border-gray-800 flex flex-col shrink-0 fixed md:relative inset-y-0 left-0 z-40 md:translate-x-0 -translate-x-full transition-transform md:flex" aria-label="${t('a11y.mainNavigation')}">
         <div class="p-4 border-b border-gray-800"><div class="flex items-center gap-2.5">
           ${FCRA_LOGO ? `<img src="${FCRA_LOGO}" alt="RJ Business Solutions" class="w-12 h-12 rounded-xl object-cover border border-blue-500/20 shadow-[0_0_15px_rgba(10,102,255,0.15)]">` : `<div class="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center"><i class="fas fa-shield-alt text-blue-400 text-xs"></i></div>`}
-          <div class="min-w-0"><div class="text-xs font-bold text-white truncate">FCRA Detector</div><div class="text-[10px] text-gray-500 truncate">${state.org?.name||'Org'}</div></div>
+          <div class="min-w-0"><div class="text-xs font-bold text-white truncate font-display">Smart FCRA</div><div class="text-[10px] text-sky-300/80 truncate">RJ Business Solutions</div><div class="text-[10px] text-gray-500 truncate">${state.org?.name||'Org'}</div></div>
         </div>
         <div class="mt-3">
           <label for="locale-switcher" class="sr-only">${t('a11y.localeSwitcher')}</label>
@@ -1190,6 +1203,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'founder-os': await pgFounderOS(el); break;
         case 'sales-tools': await pgSalesTools(el); break;
         case 'tradelines': await pgTradelines(el); break;
+        case 'brand-library': await pgBrandLibrary(el); break;
         case 'roi-calculator': await pgROICalculator(el); break;
         case 'team': await pgTeam(el); break;
         case 'settings': await pgSettings(el); break;

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — Term Sheet</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;justify-content:center}
+  .sheet{width:794px;min-height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden;position:relative}
+  .top{background:var(--grad-dark);color:#fff;padding:28px 48px 22px;position:relative;overflow:hidden}
+  .top::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .top .row{display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1;margin-bottom:12px}
+  .top .brand{display:flex;align-items:center;gap:12px}
+  .top .brand img{width:36px;height:36px;border-radius:8px}
+  .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:14px}
+  .top .brand .t{font-family:var(--font-mono);font-size:9px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:2px;font-weight:600}
+  .top .doc{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);text-align:right;font-weight:600}
+  .top .doc b{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:block;margin-top:2px}
+  .top h1{font-family:var(--font-head);font-size:32px;font-weight:600;letter-spacing:-0.02em;margin:0;position:relative;z-index:1;line-height:1}
+  .top h1 span{color:var(--rj-sky)}
+  .top .sub{font-family:var(--font-head);color:#cbd5e1;font-size:12px;margin-top:6px;position:relative;z-index:1}
+  .thin{height:3px;background:var(--grad-primary)}
+  .binding-badge{position:absolute;top:96px;right:24px;background:var(--rj-warning);color:#fff;padding:5px 14px 5px 20px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;transform:rotate(3deg);border-radius:4px;z-index:2}
+  .binding-badge::before{content:"● ";color:#fff}
+
+  .body{padding:24px 48px;flex:1;display:flex;flex-direction:column;gap:14px;font-family:var(--font-body);font-size:11px;line-height:1.6;color:var(--rj-text)}
+
+  .meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;background:var(--rj-light);padding:14px 18px;border-radius:10px}
+  .meta .k{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:3px}
+  .meta .v{font-family:var(--font-head);font-weight:600;font-size:12px;color:var(--rj-navy);letter-spacing:-0.01em}
+
+  table.terms{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--rj-line);border-radius:10px;overflow:hidden;font-size:11px}
+  table.terms th{background:var(--rj-navy);color:#fff;padding:10px 14px;text-align:left;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+  table.terms td{padding:10px 14px;border-bottom:1px solid var(--rj-line);vertical-align:top}
+  table.terms td:first-child{width:32%;font-family:var(--font-head);font-weight:600;color:var(--rj-navy);font-size:12px;letter-spacing:-0.01em}
+  table.terms td b{color:var(--rj-navy);font-family:var(--font-head);font-weight:600}
+  table.terms tr:last-child td{border:none}
+
+  h3{font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--rj-navy);margin:0 0 6px 0;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+  h3::before{content:"";width:3px;height:16px;background:var(--rj-blue);border-radius:2px}
+
+  .disclosure{background:#fef3c7;border-left:3px solid var(--rj-warning);padding:12px 16px;border-radius:0 8px 8px 0;font-size:10px;line-height:1.55;color:#78350f}
+  .disclosure b{color:#78350f;font-family:var(--font-head);font-weight:700}
+
+  .sig-block{margin-top:auto;padding-top:16px;border-top:1px solid var(--rj-line);display:grid;grid-template-columns:1fr 1fr;gap:28px}
+  .sig-line{border-bottom:1.5px solid var(--rj-navy);padding-bottom:5px;font-family:'Space Grotesk',serif;font-style:italic;font-size:20px;color:var(--rj-blue);font-weight:500;min-height:32px}
+  .sig-meta{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);margin-top:5px;font-weight:600}
+  .sig-meta b{color:var(--rj-navy);display:block;margin-top:2px;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:600}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:10px 48px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+  @media print{body{background:#fff;padding:0}.sheet{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="top">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Founder Docs · Seed Term Sheet</div></div></div>
+      <div class="doc">Doc<b>TS-2026-v1</b></div>
+    </div>
+    <h1>Seed Round <span>Term Sheet.</span></h1>
+    <div class="sub">Non-binding summary of proposed terms · For discussion only</div>
+  </div>
+  <div class="thin"></div>
+  <div class="binding-badge">Non-Binding</div>
+
+  <div class="body">
+    <div class="meta">
+      <div><div class="k">Company</div><div class="v">RJ Business Solutions, LLC</div></div>
+      <div><div class="k">Round Size</div><div class="v">$500,000 USD</div></div>
+      <div><div class="k">Pre-Money</div><div class="v">$2,800,000</div></div>
+    </div>
+
+    <h3>Core Terms</h3>
+    <table class="terms">
+      <tbody>
+        <tr><td>Security</td><td>Series Seed Preferred Stock, convertible into Common Stock at the option of the holder and automatically upon a Qualified Financing.</td></tr>
+        <tr><td>Round Size</td><td>Aggregate <b>$500,000</b> raised from lead + syndicate investors, with option to expand to $650,000 for strategic operators.</td></tr>
+        <tr><td>Valuation</td><td>Pre-money: <b>$2,800,000</b> · Post-money: <b>$3,300,000</b> (fully diluted, including 12% option pool refresh).</td></tr>
+        <tr><td>Price Per Share</td><td>$0.35 per share (based on 8,000,000 fully-diluted shares outstanding pre-round).</td></tr>
+        <tr><td>Option Pool</td><td>Company will maintain a <b>12% fully-diluted</b> employee option pool, refreshed pre-money as needed.</td></tr>
+        <tr><td>Dividends</td><td>Non-cumulative; when-and-if declared by Board, pro-rata basis to preferred + common.</td></tr>
+        <tr><td>Liquidation Preference</td><td><b>1× non-participating</b> preferred, then participating with common on as-converted basis.</td></tr>
+        <tr><td>Anti-Dilution</td><td><b>Broad-based weighted average</b> anti-dilution protection for down rounds.</td></tr>
+        <tr><td>Voting</td><td>Preferred votes on as-converted basis with common. Protective provisions on: sale of company, new class of stock, incurring debt &gt; $250K, changes to Bylaws / Certificate.</td></tr>
+        <tr><td>Board</td><td>3-member board: <b>2 Founder</b> (Rick Jefferson) · <b>1 Investor Director</b> (elected by Series Seed).</td></tr>
+        <tr><td>Information Rights</td><td>Quarterly financials + annual audited (once revenue &gt; $2M). Investor observer right at Board meetings.</td></tr>
+        <tr><td>Pro Rata Rights</td><td>Major Investors ($100K+ commitment) receive pro rata rights in subsequent rounds through Series A.</td></tr>
+        <tr><td>Founder Vesting</td><td>Founder shares subject to <b>4-year vesting</b>, 1-year cliff, monthly thereafter. Double-trigger acceleration on change of control.</td></tr>
+        <tr><td>Right of First Refusal</td><td>Company + Major Investors have ROFR on secondary sales of preferred or common.</td></tr>
+        <tr><td>Legal Fees</td><td>Company pays Investor legal fees up to <b>$15,000</b> at close.</td></tr>
+        <tr><td>Closing Conditions</td><td>Standard: satisfactory DD · IP assignments in place · updated cap table · investor rights + voting agreements · founder employment agreements.</td></tr>
+        <tr><td>Target Close</td><td>September 30, 2026 (30 days from signing this term sheet, subject to DD).</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Exclusivity &amp; No-Shop</h3>
+    <table class="terms">
+      <tbody>
+        <tr><td>No-Shop Period</td><td>Company agrees to <b>30 days</b> of exclusivity following signature. During this window, Company will not solicit competing offers from other institutional investors.</td></tr>
+        <tr><td>Break-Up Fee</td><td>If Company terminates in bad faith, reimburses Investor DD costs up to $10K.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="disclosure">
+      <b>NON-BINDING:</b> This term sheet is a summary of proposed terms only and does not constitute a legally binding agreement, except for the No-Shop and Confidentiality provisions above. Any binding agreement is subject to (i) satisfactory completion of due diligence, (ii) execution of definitive agreements (Stock Purchase Agreement, Investor Rights Agreement, Voting Agreement, ROFR/Co-Sale Agreement), and (iii) Board and shareholder approvals. Not investment advice. Consult counsel.
+    </div>
+
+    <div class="sig-block">
+      <div>
+        <div class="sig-line">Signature</div>
+        <div class="sig-meta">Lead Investor<b>[Investor Name · Title · Date]</b></div>
+      </div>
+      <div>
+        <div class="sig-line">Rick Jefferson</div>
+        <div class="sig-meta">Company<b>Rick Jefferson · Founder · Aug 7, 2026</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>TS-2026-v1 · Confidential · Non-binding</div></div>
+</div>
+</body>
+</html>

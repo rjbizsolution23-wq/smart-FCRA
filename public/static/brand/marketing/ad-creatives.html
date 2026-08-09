@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Ad Creatives</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px;display:flex;flex-direction:column;gap:32px;align-items:center}
+  .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:12px}
+  .card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 20px 40px rgba(15,23,42,0.1)}
+  .row{display:flex;gap:24px;align-items:flex-start}
+
+  .ad{position:relative;overflow:hidden;box-shadow:0 20px 40px rgba(15,23,42,0.2);border-radius:12px}
+
+  /* Meta Feed 1080x1080 */
+  .meta{width:540px;height:540px;background:var(--grad-dark);color:#fff;padding:40px;display:flex;flex-direction:column;justify-content:space-between}
+  .meta::after{content:"";position:absolute;right:-80px;top:-80px;width:350px;height:350px;background:radial-gradient(circle,rgba(14,165,233,0.5) 0%,transparent 60%);filter:blur(40px)}
+  .meta .top{display:flex;align-items:center;gap:10px;position:relative;z-index:1}
+  .meta .top img{width:32px;height:32px;border-radius:7px}
+  .meta .top .n{font-family:var(--font-head);font-weight:600;font-size:12px}
+  .meta .middle{position:relative;z-index:1}
+  .meta .kicker{display:inline-block;padding:5px 12px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);border-radius:999px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600;margin-bottom:14px}
+  .meta h1{font-family:var(--font-head);font-size:44px;font-weight:700;letter-spacing:-0.02em;line-height:1;margin:0}
+  .meta h1 span{color:var(--rj-sky)}
+  .meta .cta{display:inline-block;padding:12px 22px;background:#fff;color:var(--rj-blue);border-radius:10px;font-family:var(--font-head);font-weight:700;font-size:14px;position:relative;z-index:1;align-self:flex-start;letter-spacing:-0.01em}
+
+  /* Meta Story 1080x1920 */
+  .story{width:280px;height:498px;background:var(--grad-dark);color:#fff;padding:32px 24px;display:flex;flex-direction:column;justify-content:space-between}
+  .story::after{content:"";position:absolute;left:-60px;top:20%;width:280px;height:280px;background:radial-gradient(circle,rgba(37,99,235,0.5) 0%,transparent 60%);filter:blur(40px)}
+  .story .top{display:flex;align-items:center;gap:8px;position:relative;z-index:1}
+  .story .top img{width:28px;height:28px;border-radius:6px}
+  .story .top .n{font-family:var(--font-head);font-weight:600;font-size:11px}
+  .story .middle{position:relative;z-index:1;text-align:center}
+  .story .kicker{display:inline-block;padding:4px 10px;background:var(--rj-danger);color:#fff;border-radius:6px;font-family:var(--font-head);font-weight:700;font-size:10px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:16px}
+  .story h1{font-family:var(--font-head);font-size:32px;font-weight:700;letter-spacing:-0.02em;line-height:1;margin:0}
+  .story h1 span{color:var(--rj-sky)}
+  .story .cta-block{position:relative;z-index:1;text-align:center}
+  .story .cta-block .btn{display:inline-block;padding:10px 20px;background:#fff;color:var(--rj-navy);border-radius:999px;font-family:var(--font-head);font-weight:700;font-size:12px;letter-spacing:-0.01em}
+  .story .cta-block .swipe{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.7);margin-top:10px;font-weight:600}
+
+  /* LinkedIn 1200x627 */
+  .li{width:800px;height:418px;background:var(--grad-dark);color:#fff;padding:48px 56px;display:flex;flex-direction:column;justify-content:space-between}
+  .li::after{content:"";position:absolute;right:-100px;bottom:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.5) 0%,transparent 60%);filter:blur(50px)}
+  .li .top{display:flex;align-items:center;gap:12px;position:relative;z-index:1}
+  .li .top img{width:40px;height:40px;border-radius:9px}
+  .li .top .n{font-family:var(--font-head);font-weight:600;font-size:15px}
+  .li .top .h{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-top:3px;font-weight:600}
+  .li .middle{position:relative;z-index:1}
+  .li .kicker{display:inline-block;padding:5px 12px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);border-radius:999px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600;margin-bottom:16px}
+  .li h1{font-family:var(--font-head);font-size:42px;font-weight:600;letter-spacing:-0.02em;line-height:1.05;margin:0}
+  .li h1 span{color:var(--rj-sky)}
+  .li .foot{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1;padding-top:14px;border-top:1px solid rgba(255,255,255,0.15)}
+  .li .foot .url{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600}
+  .li .foot .cta{background:#fff;color:var(--rj-blue);padding:8px 16px;border-radius:8px;font-family:var(--font-head);font-weight:600;font-size:12px}
+
+  /* Google Display 300x250 & 728x90 */
+  .gd-mrec{width:300px;height:250px;background:var(--grad-dark);color:#fff;padding:20px;display:flex;flex-direction:column;justify-content:space-between}
+  .gd-mrec::after{content:"";position:absolute;right:-40px;bottom:-40px;width:150px;height:150px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(20px)}
+  .gd-mrec .top{display:flex;align-items:center;gap:8px;position:relative;z-index:1}
+  .gd-mrec .top img{width:22px;height:22px;border-radius:5px}
+  .gd-mrec .top .n{font-family:var(--font-head);font-weight:600;font-size:10px}
+  .gd-mrec h2{font-family:var(--font-head);font-size:22px;font-weight:700;letter-spacing:-0.02em;line-height:1.05;margin:0;position:relative;z-index:1}
+  .gd-mrec h2 span{color:var(--rj-sky)}
+  .gd-mrec .cta{background:var(--grad-primary);color:#fff;padding:8px 14px;border-radius:6px;font-family:var(--font-head);font-weight:600;font-size:11px;text-align:center;position:relative;z-index:1}
+
+  .gd-lead{width:728px;height:90px;background:var(--grad-dark);color:#fff;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+  .gd-lead::after{content:"";position:absolute;right:-40px;top:-40px;width:200px;height:200px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(30px)}
+  .gd-lead .left{display:flex;align-items:center;gap:12px;position:relative;z-index:1}
+  .gd-lead img{width:36px;height:36px;border-radius:8px}
+  .gd-lead .txt .n{font-family:var(--font-head);font-weight:600;font-size:12px}
+  .gd-lead .txt .h{font-family:var(--font-head);font-weight:700;font-size:18px;color:#fff;letter-spacing:-0.01em;margin-top:2px}
+  .gd-lead .txt .h span{color:var(--rj-sky)}
+  .gd-lead .cta{background:#fff;color:var(--rj-blue);padding:10px 18px;border-radius:8px;font-family:var(--font-head);font-weight:700;font-size:12px;position:relative;z-index:1;white-space:nowrap}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="lbl">Meta / IG Feed · 1080 × 1080</div>
+  <div class="row">
+    <div class="ad meta">
+      <div class="top"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+      <div class="middle">
+        <div class="kicker">● Done-For-You Growth</div>
+        <h1>Turn your DMs into<br/><span>booked calls</span><br/>in 7 days.</h1>
+      </div>
+      <div class="cta">Book Free Growth Call →</div>
+    </div>
+
+    <div class="ad meta" style="background:var(--grad-primary)">
+      <div class="top"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="" style="background:#fff;padding:2px"/><div class="n">RJ Business Solutions</div></div>
+      <div class="middle">
+        <div class="kicker" style="background:rgba(255,255,255,0.2);border-color:rgba(255,255,255,0.3);color:#fff">● New Systems Brief</div>
+        <h1 style="font-size:52px">$1,997.<br/>7 days.<br/><span style="color:#fff;text-decoration:underline;text-decoration-thickness:4px">1 system.</span></h1>
+      </div>
+      <div class="cta" style="background:var(--rj-navy);color:#fff">Start My 7-Day Launch →</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Meta / IG Story · 1080 × 1920 (2 variants shown at scale)</div>
+  <div class="row">
+    <div class="ad story">
+      <div class="top"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">rj_business_solutions</div></div>
+      <div class="middle">
+        <div class="kicker">Limited Slots</div>
+        <h1>DMs →<br/><span>Booked Calls.</span><br/>In 7 Days.</h1>
+      </div>
+      <div class="cta-block">
+        <div class="btn">Get Yours →</div>
+        <div class="swipe">Swipe up · rjbusinesssolutions.org</div>
+      </div>
+    </div>
+
+    <div class="ad story" style="background:linear-gradient(180deg,#2563eb,#0ea5e9)">
+      <div class="top"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="" style="background:#fff;padding:2px"/><div class="n">rj_business_solutions</div></div>
+      <div class="middle">
+        <div class="kicker" style="background:#fff;color:var(--rj-navy)">Founder Note</div>
+        <h1>Your leads<br/>should not<br/><span style="color:#fff;text-decoration:underline">disappear<br/>in DMs.</span></h1>
+      </div>
+      <div class="cta-block">
+        <div class="btn">Fix It →</div>
+        <div class="swipe">— Rick Jefferson</div>
+      </div>
+    </div>
+
+    <div class="ad story" style="background:#fff;color:var(--rj-navy)">
+      <div class="top"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n" style="color:var(--rj-navy)">rj_business_solutions</div></div>
+      <div class="middle">
+        <div class="kicker" style="background:var(--rj-navy);color:#fff">Case Study</div>
+        <h1 style="color:var(--rj-navy)">47 booked<br/>calls in<br/><span style="color:var(--rj-blue)">30 days.</span></h1>
+      </div>
+      <div class="cta-block">
+        <div class="btn" style="background:var(--rj-blue);color:#fff">See How →</div>
+        <div class="swipe" style="color:var(--rj-muted-text)">Verified client · 2026</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">LinkedIn Sponsored · 1200 × 627</div>
+  <div class="ad li">
+    <div class="top"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="h">Sponsored · AI Automation</div></div></div>
+    <div class="middle">
+      <div class="kicker">● For Fintech &amp; Credit Operators</div>
+      <h1>We build the <span>automation backbone</span><br/>behind scalable businesses.</h1>
+    </div>
+    <div class="foot">
+      <div class="url">rjbusinesssolutions.org</div>
+      <div class="cta">Book a Call →</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Google Display · MREC 300×250 · Leaderboard 728×90</div>
+  <div class="row" style="align-items:flex-start">
+    <div class="ad gd-mrec">
+      <div class="top"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+      <h2>DMs → <span>Booked Calls.</span><br/>In 7 Days.</h2>
+      <div class="cta">Start Now →</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="ad gd-lead">
+        <div class="left">
+          <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+          <div class="txt">
+            <div class="n">RJ Business Solutions</div>
+            <div class="h">Turn business chaos into <span>automated growth.</span></div>
+          </div>
+        </div>
+        <div class="cta">Book Free Call →</div>
+      </div>
+      <div class="ad gd-lead" style="background:var(--grad-primary)">
+        <div class="left">
+          <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="" style="background:#fff;padding:2px"/>
+          <div class="txt">
+            <div class="n">RJ Business Solutions</div>
+            <div class="h">AI systems built for <span style="color:#fff;text-decoration:underline">real revenue.</span></div>
+          </div>
+        </div>
+        <div class="cta" style="background:var(--rj-navy);color:#fff">Start My System →</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

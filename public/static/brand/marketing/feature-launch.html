@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Feature Launch Cards</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px;display:flex;flex-direction:column;gap:32px;align-items:center}
+  .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:12px}
+  .card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 20px 40px rgba(15,23,42,0.1)}
+
+  .row{display:flex;gap:24px;align-items:flex-start}
+
+  /* Email header 600×340 */
+  .email-hero{width:600px;height:340px;background:var(--grad-dark);color:#fff;border-radius:12px;overflow:hidden;position:relative;padding:40px 44px;display:flex;flex-direction:column;justify-content:space-between}
+  .email-hero::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(50px)}
+  .email-hero .brand{display:flex;align-items:center;gap:10px;position:relative;z-index:1}
+  .email-hero .brand img{width:32px;height:32px;border-radius:7px}
+  .email-hero .brand .n{font-family:var(--font-head);font-weight:600;font-size:12px}
+  .email-hero .middle{position:relative;z-index:1}
+  .email-hero .badge{display:inline-block;padding:5px 12px;background:var(--rj-danger);color:#fff;border-radius:6px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;margin-bottom:14px;box-shadow:0 6px 16px rgba(239,68,68,0.4)}
+  .email-hero h1{font-family:var(--font-head);font-size:44px;font-weight:700;letter-spacing:-0.03em;line-height:0.95;margin:0}
+  .email-hero h1 span{background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .email-hero .sub{font-family:var(--font-head);color:#cbd5e1;font-size:14px;margin-top:10px;font-weight:500}
+  .email-hero .cta-row{display:flex;align-items:center;gap:12px;position:relative;z-index:1}
+  .email-hero .cta-row .btn{background:var(--grad-primary);color:#fff;padding:12px 20px;border-radius:10px;font-family:var(--font-head);font-weight:600;font-size:13px;box-shadow:0 8px 20px rgba(37,99,235,0.4)}
+  .email-hero .cta-row .ver{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600}
+
+  /* IG post 540×540 */
+  .ig-post{width:540px;height:540px;border-radius:14px;overflow:hidden;position:relative;background:var(--grad-primary);color:#fff;padding:44px;display:flex;flex-direction:column;justify-content:space-between}
+  .ig-post::after{content:"";position:absolute;right:-100px;top:-100px;width:350px;height:350px;background:radial-gradient(circle,rgba(255,255,255,0.2) 0%,transparent 60%);filter:blur(40px)}
+  .ig-post .top{display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1}
+  .ig-post .brand{display:flex;align-items:center;gap:10px}
+  .ig-post .brand img{width:32px;height:32px;border-radius:7px;background:#fff;padding:2px}
+  .ig-post .brand .n{font-family:var(--font-head);font-weight:600;font-size:12px}
+  .ig-post .badge{padding:5px 12px;background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:999px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+  .ig-post .middle{position:relative;z-index:1;text-align:center}
+  .ig-post h2{font-family:var(--font-head);font-weight:700;font-size:60px;letter-spacing:-0.04em;line-height:0.9;margin:0}
+  .ig-post h2 span{color:#fff;text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:6px}
+  .ig-post .foot-row{position:relative;z-index:1;font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;text-align:center;color:#e0f2fe;font-weight:600}
+
+  /* IG story 320×568 */
+  .ig-story{width:320px;height:568px;border-radius:16px;overflow:hidden;position:relative;background:var(--grad-dark);color:#fff;padding:36px 26px;display:flex;flex-direction:column;justify-content:space-between}
+  .ig-story::after{content:"";position:absolute;left:-80px;top:20%;width:250px;height:250px;background:radial-gradient(circle,rgba(37,99,235,0.5) 0%,transparent 60%);filter:blur(40px)}
+  .ig-story .brand{display:flex;align-items:center;gap:8px;position:relative;z-index:1}
+  .ig-story .brand img{width:28px;height:28px;border-radius:6px}
+  .ig-story .brand .n{font-family:var(--font-head);font-weight:600;font-size:11px}
+  .ig-story .middle{position:relative;z-index:1;text-align:center}
+  .ig-story .badge{display:inline-block;padding:5px 12px;background:var(--rj-danger);color:#fff;border-radius:6px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;margin-bottom:14px}
+  .ig-story h2{font-family:var(--font-head);font-weight:700;font-size:36px;letter-spacing:-0.03em;line-height:0.95;margin:0}
+  .ig-story h2 span{color:var(--rj-sky)}
+  .ig-story .cta{position:relative;z-index:1;text-align:center}
+  .ig-story .cta .btn{display:inline-block;padding:10px 20px;background:#fff;color:var(--rj-navy);border-radius:999px;font-family:var(--font-head);font-weight:700;font-size:12px}
+  .ig-story .cta .swipe{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-top:10px;font-weight:600}
+
+  /* In-app modal 480×420 */
+  .app-modal{width:480px;height:420px;border-radius:14px;overflow:hidden;position:relative;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.25)}
+  .app-modal .banner{background:var(--grad-primary);color:#fff;padding:36px 32px;position:relative;overflow:hidden}
+  .app-modal .banner::after{content:"";position:absolute;right:-60px;top:-60px;width:200px;height:200px;background:radial-gradient(circle,rgba(255,255,255,0.2) 0%,transparent 60%);filter:blur(30px)}
+  .app-modal .banner .badge{display:inline-block;padding:4px 10px;background:rgba(255,255,255,0.2);color:#fff;border-radius:999px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;margin-bottom:10px;position:relative;z-index:1}
+  .app-modal .banner h3{font-family:var(--font-head);font-weight:700;font-size:26px;letter-spacing:-0.02em;line-height:1;margin:0;position:relative;z-index:1;color:#fff}
+  .app-modal .banner h3 span{color:#fff;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
+  .app-modal .banner .sub{font-family:var(--font-head);font-size:12px;color:rgba(255,255,255,0.9);margin-top:6px;position:relative;z-index:1;font-weight:500}
+  .app-modal .body-m{padding:24px 32px;display:flex;flex-direction:column;gap:14px}
+  .app-modal .features{display:flex;flex-direction:column;gap:8px}
+  .app-modal .feat{display:flex;gap:10px;align-items:flex-start}
+  .app-modal .feat .ic{width:28px;height:28px;background:var(--rj-light);border-radius:7px;color:var(--rj-blue);display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:700;font-size:12px;flex-shrink:0}
+  .app-modal .feat .txt{font-size:11px;line-height:1.5;color:var(--rj-text)}
+  .app-modal .feat .txt b{color:var(--rj-navy);font-family:var(--font-head);font-weight:600}
+  .app-modal .actions{display:flex;gap:10px;margin-top:6px}
+  .app-modal .actions .btn{flex:1;padding:12px;border-radius:8px;font-family:var(--font-head);font-weight:600;font-size:12px;text-align:center}
+  .app-modal .actions .btn.p{background:var(--grad-primary);color:#fff;box-shadow:0 6px 14px rgba(37,99,235,0.35)}
+  .app-modal .actions .btn.s{background:transparent;color:var(--rj-muted-text);border:1px solid var(--rj-line)}
+
+  /* Push notification 380×140 */
+  .push{width:380px;background:rgba(15,23,42,0.85);color:#fff;border-radius:14px;padding:12px 16px;backdrop-filter:blur(20px);display:flex;gap:12px;align-items:center;position:relative;box-shadow:0 20px 40px rgba(15,23,42,0.4)}
+  .push .ic{width:36px;height:36px;border-radius:8px;background:var(--grad-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--font-head);font-weight:700;font-size:14px;flex-shrink:0}
+  .push .txt{flex:1;min-width:0}
+  .push .n{font-family:var(--font-head);font-weight:600;font-size:12px;letter-spacing:-0.01em;display:flex;align-items:center;gap:6px}
+  .push .n .tag{background:var(--rj-danger);color:#fff;padding:1px 6px;border-radius:3px;font-family:var(--font-mono);font-size:8px;letter-spacing:0.14em;font-weight:700}
+  .push .body-p{font-size:11px;line-height:1.4;color:#cbd5e1;margin-top:2px}
+  .push .body-p b{color:var(--rj-sky);font-family:var(--font-head);font-weight:600}
+  .push .time{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;font-weight:600;align-self:flex-start;margin-top:1px}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="lbl">Email Header · 600 × 340 · Launch announcement top-of-email</div>
+  <div class="email-hero">
+    <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+    <div class="middle">
+      <div class="badge">● NEW · JUST SHIPPED</div>
+      <h1>Credit Monitoring<br/><span>API is live.</span></h1>
+      <div class="sub">Real-time bureau data, scoring, alerts. Now in every Growth Engine.</div>
+    </div>
+    <div class="cta-row">
+      <div class="btn">See What's New →</div>
+      <div class="ver">v3.2 · July 18, 2026</div>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+
+  <div class="card">
+    <div class="lbl">Instagram Post · 1080 × 1080 · Feed announcement</div>
+    <div class="ig-post">
+      <div class="top">
+        <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+        <div class="badge">● Just Shipped</div>
+      </div>
+      <div class="middle">
+        <h2>Credit<br/><span>API is<br/>live.</span></h2>
+      </div>
+      <div class="foot-row">Now in every Growth Engine · Link in bio →</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="lbl">Instagram Story · 1080 × 1920 · Vertical launch card</div>
+    <div class="ig-story">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">rj_business_solutions</div></div>
+      <div class="middle">
+        <div class="badge">● Shipping Today</div>
+        <h2>Credit<br/>API →<br/><span>LIVE.</span></h2>
+      </div>
+      <div class="cta">
+        <div class="btn">Read the Post →</div>
+        <div class="swipe">Swipe up · rjbusinesssolutions.org/api</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">In-App Announcement Modal · 480 × 420 · Client dashboard "what's new"</div>
+  <div class="app-modal">
+    <div class="banner">
+      <div class="badge">● NEW FEATURE · v3.2</div>
+      <h3>Credit Monitoring API<br/>is now <span>live.</span></h3>
+      <div class="sub">Real-time bureau data, scoring, and alerts inside every Growth Engine.</div>
+    </div>
+    <div class="body-m">
+      <div class="features">
+        <div class="feat"><div class="ic">01</div><div class="txt"><b>Real-time bureau sync</b> — Experian, Equifax, TransUnion pipes wired.</div></div>
+        <div class="feat"><div class="ic">02</div><div class="txt"><b>Score alerts</b> — Push + email notifications when a client's score moves &gt;5 points.</div></div>
+        <div class="feat"><div class="ic">03</div><div class="txt"><b>Compliance built in</b> — FCRA § 611 dispute workflow armed by default.</div></div>
+      </div>
+      <div class="actions">
+        <div class="btn p">Enable Now →</div>
+        <div class="btn s">Remind Me Later</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Push Notification · 380 × ~140 · Mobile lock screen preview</div>
+  <div class="push">
+    <div class="ic">RJ</div>
+    <div class="txt">
+      <div class="n">RJ Business Solutions <span class="tag">NEW</span></div>
+      <div class="body-p"><b>Credit API is live.</b> Real-time bureau data + scoring now in your Growth Engine. Tap to activate.</div>
+    </div>
+    <div class="time">Now</div>
+  </div>
+</div>
+
+</body>
+</html>

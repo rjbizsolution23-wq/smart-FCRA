@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — Rate Card</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;justify-content:center}
+  .sheet{width:794px;min-height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden}
+
+  .top{background:var(--grad-dark);color:#fff;padding:44px 56px;position:relative;overflow:hidden}
+  .top::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .top .row{display:flex;align-items:center;gap:14px;position:relative;z-index:1;margin-bottom:24px}
+  .top .row img{width:44px;height:44px;border-radius:10px}
+  .top .row .n{font-family:var(--font-head);font-weight:600;font-size:16px}
+  .top .row .t{font-family:var(--font-mono);font-size:10px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:3px}
+  .top h1{font-family:var(--font-head);font-size:46px;font-weight:600;letter-spacing:-0.02em;line-height:1.05;margin:0;position:relative;z-index:1}
+  .top h1 span{color:var(--rj-sky)}
+  .top .sub{font-family:var(--font-head);color:#cbd5e1;font-size:15px;margin-top:10px;position:relative;z-index:1}
+
+  .thin{height:4px;background:var(--grad-primary)}
+
+  .body{padding:36px 56px;flex:1;display:flex;flex-direction:column;gap:24px}
+
+  .section-lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:10px}
+  .section-lbl::before{content:"";width:24px;height:2px;background:var(--rj-blue)}
+
+  .tier-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .tier{background:#fff;border:1px solid var(--rj-line);border-radius:14px;padding:22px;display:flex;flex-direction:column}
+  .tier.featured{background:var(--grad-dark);border:none;color:#fff;position:relative;overflow:hidden;box-shadow:0 20px 40px rgba(37,99,235,0.3)}
+  .tier.featured::after{content:"";position:absolute;right:-60px;top:-60px;width:200px;height:200px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(30px)}
+  .tier .tag{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:6px;position:relative;z-index:1}
+  .tier.featured .tag{color:var(--rj-sky)}
+  .tier h3{font-family:var(--font-head);font-size:20px;font-weight:600;color:var(--rj-navy);margin:0;position:relative;z-index:1;letter-spacing:-0.01em}
+  .tier.featured h3{color:#fff}
+  .tier .price{font-family:var(--font-head);font-size:36px;font-weight:600;color:var(--rj-navy);margin-top:12px;letter-spacing:-0.02em;line-height:1;position:relative;z-index:1}
+  .tier.featured .price{color:#fff}
+  .tier .price small{font-size:13px;color:var(--rj-muted-text);font-weight:400}
+  .tier.featured .price small{color:#94a3b8}
+  .tier .desc{font-size:11px;color:var(--rj-muted-text);margin-top:10px;line-height:1.5;position:relative;z-index:1}
+  .tier.featured .desc{color:#cbd5e1}
+  .tier ul{list-style:none;padding:0;margin:16px 0 0 0;font-size:11px;line-height:1.7;color:var(--rj-text);position:relative;z-index:1}
+  .tier.featured ul{color:#e2e8f0}
+  .tier li{padding-left:16px;position:relative}
+  .tier li::before{content:"✓";position:absolute;left:0;color:var(--rj-blue);font-weight:700}
+  .tier.featured li::before{color:var(--rj-sky)}
+
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;padding:10px 12px;background:var(--rj-navy);color:#fff;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+  th:last-child{text-align:right;border-radius:0 8px 0 0}
+  th:first-child{border-radius:8px 0 0 0}
+  td{padding:12px;border-bottom:1px solid var(--rj-line);font-size:12px}
+  td:last-child{text-align:right;font-family:var(--font-mono);font-weight:600;color:var(--rj-navy)}
+  td .desc{color:var(--rj-muted-text);font-size:10px;margin-top:3px}
+
+  .callout{background:var(--grad-primary);color:#fff;padding:18px 24px;border-radius:12px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 10px 24px rgba(37,99,235,0.3)}
+  .callout .t{font-family:var(--font-head);font-weight:600;font-size:16px}
+  .callout .s{font-family:var(--font-head);font-size:12px;opacity:0.9;margin-top:2px}
+  .callout .btn{background:#fff;color:var(--rj-blue);padding:10px 16px;border-radius:8px;font-family:var(--font-head);font-weight:600;font-size:12px}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:16px 56px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:12px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+
+  @media print{body{background:#fff;padding:0}.sheet{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="top">
+    <div class="row">
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+      <div>
+        <div class="n">RJ Business Solutions</div>
+        <div class="t">Rate Card · Effective July 2026</div>
+      </div>
+    </div>
+    <h1>Pricing that scales <span>with the system.</span></h1>
+    <div class="sub">Transparent tiers, transparent rates. Every engagement ships as a working system.</div>
+  </div>
+  <div class="thin"></div>
+
+  <div class="body">
+    <div>
+      <div class="section-lbl">Core Packages</div>
+      <div class="tier-grid">
+        <div class="tier">
+          <div class="tag">Launch</div>
+          <h3>Growth Starter</h3>
+          <div class="price">$1,997<small> setup</small></div>
+          <div class="desc">7-day launch, social + DM system, CRM basics.</div>
+          <ul>
+            <li>Content system</li>
+            <li>AI DM replies</li>
+            <li>CRM sync</li>
+            <li>Booking flow</li>
+            <li>Compliance guardrails</li>
+          </ul>
+        </div>
+        <div class="tier featured">
+          <div class="tag">Most Popular</div>
+          <h3>Growth Engine</h3>
+          <div class="price">$997<small>/mo</small></div>
+          <div class="desc">Full-managed growth system. Setup + monthly ops.</div>
+          <ul>
+            <li>Everything in Launch</li>
+            <li>Monthly content ops</li>
+            <li>Follow-up sequences</li>
+            <li>No-show recovery</li>
+            <li>Human escalation</li>
+            <li>Monthly reporting</li>
+          </ul>
+        </div>
+        <div class="tier">
+          <div class="tag">Enterprise</div>
+          <h3>White-Label Fleet</h3>
+          <div class="price">Custom</div>
+          <div class="desc">Full platform, dedicated infra, SLA.</div>
+          <ul>
+            <li>White-label SaaS</li>
+            <li>Credit tech + APIs</li>
+            <li>Dedicated portal</li>
+            <li>SLA + audit</li>
+            <li>Priority support</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-lbl">À La Carte Services</div>
+      <table>
+        <thead>
+          <tr><th>Service</th><th>Type</th><th>Rate</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Landing Page + Funnel Build<div class="desc">Hero, offer, checkout, analytics wiring</div></td><td>Project</td><td>$2,500</td></tr>
+          <tr><td>CRM + Pipeline Setup<div class="desc">Full pipeline, automations, integrations</div></td><td>Project</td><td>$1,500</td></tr>
+          <tr><td>Client Portal / Dashboard Build<div class="desc">Auth, billing, custom views</div></td><td>Project</td><td>$3,500+</td></tr>
+          <tr><td>Credit Monitoring API Integration<div class="desc">Bureau data, scoring, alerts</div></td><td>Project</td><td>$5,000+</td></tr>
+          <tr><td>Conversational AI Agent<div class="desc">Trained on brand voice, escalation logic</div></td><td>Project</td><td>$3,000+</td></tr>
+          <tr><td>Strategy Consulting<div class="desc">Architecture, review, roadmap</div></td><td>Hourly</td><td>$275/hr</td></tr>
+          <tr><td>White-Label SaaS Deployment<div class="desc">Custom domain, branding, tenant setup</div></td><td>Setup</td><td>$7,500+</td></tr>
+          <tr><td>Compliance Audit + Workflow Design<div class="desc">FCRA/FDCPA-informed review</div></td><td>Project</td><td>$4,500+</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <div>
+        <div class="t">Multi-service discount available</div>
+        <div class="s">Bundle 3+ services → 15% off setup fees. Ask for a custom scope.</div>
+      </div>
+      <div class="btn">Book a Call →</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="brand">RJ Business Solutions</div>
+    <div>Rates valid 90 days from issue · support@rjbusinesssolutions.org</div>
+  </div>
+</div>
+</body>
+</html>

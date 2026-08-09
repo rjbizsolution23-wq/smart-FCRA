@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — Financial Model</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;justify-content:center}
+  .sheet{width:794px;min-height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden}
+  .top{background:var(--grad-dark);color:#fff;padding:28px 48px 22px;position:relative;overflow:hidden}
+  .top::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .top .row{display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1;margin-bottom:12px}
+  .top .brand{display:flex;align-items:center;gap:12px}
+  .top .brand img{width:36px;height:36px;border-radius:8px}
+  .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:14px}
+  .top .brand .t{font-family:var(--font-mono);font-size:9px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:2px;font-weight:600}
+  .top .doc{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);text-align:right;font-weight:600}
+  .top .doc b{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:block;margin-top:2px}
+  .top h1{font-family:var(--font-head);font-size:30px;font-weight:600;letter-spacing:-0.02em;margin:0;position:relative;z-index:1;line-height:1}
+  .top h1 span{color:var(--rj-sky)}
+  .top .sub{font-family:var(--font-head);color:#cbd5e1;font-size:12px;margin-top:4px;position:relative;z-index:1}
+  .thin{height:3px;background:var(--grad-primary)}
+
+  .body{padding:22px 48px;flex:1;display:flex;flex-direction:column;gap:14px;font-family:var(--font-body);font-size:11px;line-height:1.6}
+  h3{font-family:var(--font-head);font-size:13px;font-weight:600;color:var(--rj-navy);margin:0 0 6px 0;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+  h3::before{content:"";width:3px;height:14px;background:var(--rj-blue);border-radius:2px}
+
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--rj-line);border-radius:10px;overflow:hidden;font-size:11px}
+  th{background:var(--rj-navy);color:#fff;padding:8px 12px;text-align:left;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+  th.r{text-align:right}
+  td{padding:8px 12px;border-bottom:1px solid var(--rj-line)}
+  td.r{text-align:right;font-family:ui-monospace,Menlo,monospace;font-weight:600;color:var(--rj-navy)}
+  td .n{font-family:var(--font-head);font-weight:600;color:var(--rj-navy);font-size:11px}
+  td .d{color:var(--rj-muted-text);font-size:9px}
+  tr.subtotal td{background:#f8fafc;font-family:var(--font-head);font-weight:700;color:var(--rj-navy);font-size:12px}
+  tr.total td{background:var(--grad-dark);color:#fff;font-family:var(--font-head);font-weight:700;font-size:12px;border:none}
+  tr.total td.r{color:var(--rj-sky);font-family:ui-monospace,Menlo,monospace}
+  tr.negative td.r{color:var(--rj-danger)}
+  tr.positive td.r{color:var(--rj-success)}
+
+  .kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .kpi{background:linear-gradient(180deg,#fff,var(--rj-light));border:1px solid var(--rj-border);border-radius:10px;padding:12px 14px;text-align:center}
+  .kpi .v{font-family:var(--font-head);font-weight:700;font-size:22px;color:var(--rj-blue);letter-spacing:-0.02em;line-height:1}
+  .kpi .l{font-family:var(--font-head);font-size:10px;color:var(--rj-navy);font-weight:600;margin-top:4px;letter-spacing:-0.01em}
+  .kpi .d{font-family:var(--font-mono);font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);margin-top:3px;font-weight:600}
+
+  .assumptions{background:#f8fafc;border-left:3px solid var(--rj-muted-text);padding:10px 14px;border-radius:0 8px 8px 0;font-size:10px;line-height:1.5;color:var(--rj-muted-text)}
+  .assumptions b{color:var(--rj-navy);font-family:var(--font-head);font-weight:600}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:10px 48px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600;margin-top:auto}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+  @media print{body{background:#fff;padding:0}.sheet{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="top">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Financial Model · 3-Year P&amp;L</div></div></div>
+      <div class="doc">Doc<b>FM-2026-v1</b></div>
+    </div>
+    <h1>Financial <span>Model.</span></h1>
+    <div class="sub">3-Year forecast · Base case · Unit economics summary</div>
+  </div>
+  <div class="thin"></div>
+
+  <div class="body">
+
+    <h3>Unit Economics · At Steady State</h3>
+    <div class="kpi-strip">
+      <div class="kpi"><div class="v">$16,940</div><div class="l">Avg Contract Value</div><div class="d">Setup + 12mo</div></div>
+      <div class="kpi"><div class="v">$1,200</div><div class="l">CAC</div><div class="d">Blended</div></div>
+      <div class="kpi"><div class="v">14.1×</div><div class="l">LTV : CAC</div><div class="d">Industry &gt; 3× is healthy</div></div>
+      <div class="kpi"><div class="v">72%</div><div class="l">Gross Margin</div><div class="d">Services + software blend</div></div>
+    </div>
+
+    <h3>P&amp;L Forecast · Base Case</h3>
+    <table>
+      <thead>
+        <tr><th>Line Item</th><th class="r">FY 2026</th><th class="r">FY 2027</th><th class="r">FY 2028</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><div class="n">Revenue · Growth Engine (SaaS)</div><div class="d">$997/mo × active clients</div></td><td class="r">$412,000</td><td class="r">$1,247,000</td><td class="r">$2,890,000</td></tr>
+        <tr><td><div class="n">Revenue · Launch Fees (One-Time)</div><div class="d">$1,997 × new clients</div></td><td class="r">$217,000</td><td class="r">$484,000</td><td class="r">$798,000</td></tr>
+        <tr><td><div class="n">Revenue · Credit Tech Platform</div><div class="d">Enterprise + white-label</div></td><td class="r">$78,000</td><td class="r">$450,000</td><td class="r">$1,240,000</td></tr>
+        <tr><td><div class="n">Revenue · À La Carte</div><div class="d">Portals · APIs · Consulting</div></td><td class="r">$35,000</td><td class="r">$120,000</td><td class="r">$280,000</td></tr>
+        <tr class="subtotal"><td>Total Revenue</td><td class="r">$742,000</td><td class="r">$2,301,000</td><td class="r">$5,208,000</td></tr>
+
+        <tr><td><div class="n">COGS · Hosting + Third-Party APIs</div><div class="d">Cloudflare, Stripe, bureau APIs</div></td><td class="r">($42,000)</td><td class="r">($134,000)</td><td class="r">($312,000)</td></tr>
+        <tr><td><div class="n">COGS · Direct Delivery Labor</div><div class="d">Onboarding + client success</div></td><td class="r">($164,000)</td><td class="r">($480,000)</td><td class="r">($990,000)</td></tr>
+        <tr class="subtotal"><td>Gross Profit</td><td class="r">$536,000</td><td class="r">$1,687,000</td><td class="r">$3,906,000</td></tr>
+
+        <tr><td><div class="n">Operating Expenses · Salaries</div><div class="d">Engineering, ops, growth team</div></td><td class="r">($285,000)</td><td class="r">($720,000)</td><td class="r">($1,540,000)</td></tr>
+        <tr><td><div class="n">Marketing &amp; Sales</div><div class="d">Ads, content, partnerships</div></td><td class="r">($67,000)</td><td class="r">($230,000)</td><td class="r">($520,000)</td></tr>
+        <tr><td><div class="n">General &amp; Administrative</div><div class="d">Legal, accounting, tools, office</div></td><td class="r">($54,000)</td><td class="r">($140,000)</td><td class="r">($285,000)</td></tr>
+        <tr class="subtotal"><td>Total OpEx</td><td class="r">($406,000)</td><td class="r">($1,090,000)</td><td class="r">($2,345,000)</td></tr>
+
+        <tr class="total"><td>EBITDA</td><td class="r">$130,000</td><td class="r">$597,000</td><td class="r">$1,561,000</td></tr>
+        <tr class="subtotal positive"><td>EBITDA Margin</td><td class="r">17.5%</td><td class="r">25.9%</td><td class="r">30.0%</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Growth Drivers</h3>
+    <table>
+      <thead><tr><th>Driver</th><th class="r">2026</th><th class="r">2027</th><th class="r">2028</th></tr></thead>
+      <tbody>
+        <tr><td>Active Growth Engine Clients (avg)</td><td class="r">35</td><td class="r">104</td><td class="r">242</td></tr>
+        <tr><td>New Client Launches</td><td class="r">142</td><td class="r">304</td><td class="r">502</td></tr>
+        <tr><td>White-Label Deployments</td><td class="r">3</td><td class="r">18</td><td class="r">48</td></tr>
+        <tr><td>Monthly Retention Rate</td><td class="r">98%</td><td class="r">97%</td><td class="r">96%</td></tr>
+        <tr><td>Team Headcount (avg)</td><td class="r">4</td><td class="r">9</td><td class="r">18</td></tr>
+      </tbody>
+    </table>
+
+    <div class="assumptions">
+      <b>Model Assumptions:</b> Base case assumes 60% YoY new-client growth Y1→Y2, tapering to 45% Y2→Y3. Retention holds at 96%+ throughout. White-label revenue accelerates as fleet operators multiply. Marketing spend scales as % of prior-year revenue (9→10→10%). Team headcount +5–9 net adds annually. All figures USD, unaudited. Not a projection for public offering purposes. Consult qualified accountants + counsel.
+    </div>
+  </div>
+
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>FM-2026-v1 · Confidential · Base Case · Prepared Aug 7, 2026</div></div>
+</div>
+</body>
+</html>

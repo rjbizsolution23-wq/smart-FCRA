@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — Credit Report</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;justify-content:center}
+  .sheet{width:794px;min-height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden}
+
+  .top{background:var(--grad-dark);color:#fff;padding:32px 56px 28px;position:relative;overflow:hidden}
+  .top::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .top .brand-row{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1;margin-bottom:20px}
+  .top .brand-row .brand{display:flex;align-items:center;gap:12px}
+  .top .brand-row .brand img{width:40px;height:40px;border-radius:9px}
+  .top .brand-row .brand .n{font-family:var(--font-head);font-weight:600;font-size:14px}
+  .top .brand-row .brand .t{font-family:var(--font-mono);font-size:9px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:2px;font-weight:600}
+  .top .brand-row .meta{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);text-align:right;font-weight:600}
+  .top .brand-row .meta b{color:#fff;font-weight:500;display:block;margin-top:2px;font-size:11px}
+  .top h1{font-family:var(--font-head);font-size:32px;font-weight:600;letter-spacing:-0.02em;margin:0;position:relative;z-index:1}
+  .top h1 span{color:var(--rj-sky)}
+  .top .sub{font-family:var(--font-head);color:#cbd5e1;font-size:13px;margin-top:6px;position:relative;z-index:1}
+
+  .thin{height:3px;background:var(--grad-primary)}
+
+  .body{padding:24px 40px;flex:1;display:flex;flex-direction:column;gap:20px}
+
+  /* Client info bar */
+  .client-bar{background:var(--rj-light);border-radius:10px;padding:16px 20px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  .client-bar .k{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:4px}
+  .client-bar .v{font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy);letter-spacing:-0.01em}
+
+  /* Score panel */
+  .score-panel{display:grid;grid-template-columns:1fr 2fr;gap:16px}
+  .score-card{background:var(--grad-dark);color:#fff;border-radius:14px;padding:24px;position:relative;overflow:hidden;text-align:center}
+  .score-card::after{content:"";position:absolute;right:-60px;top:-60px;width:200px;height:200px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(30px)}
+  .score-card .lbl{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);position:relative;z-index:1;font-weight:600;margin-bottom:8px}
+  .score-card .score{font-family:var(--font-head);font-size:72px;font-weight:700;letter-spacing:-0.03em;line-height:1;background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent;position:relative;z-index:1}
+  .score-card .range{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;position:relative;z-index:1;margin-top:4px;font-weight:600}
+  .score-card .rating{position:relative;z-index:1;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.15);font-family:var(--font-head);font-weight:600;font-size:16px;letter-spacing:-0.01em}
+  .score-card .rating .delta{font-size:11px;color:#86efac;font-family:var(--font-mono);letter-spacing:0.1em;text-transform:uppercase;font-weight:600;margin-top:2px}
+
+  /* Bureau breakdown */
+  .bureaus{background:#fff;border:1px solid var(--rj-line);border-radius:14px;padding:20px 24px}
+  .bureaus h3{font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--rj-navy);margin:0 0 16px 0;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+  .bureaus h3::before{content:"";width:4px;height:16px;background:var(--rj-blue);border-radius:2px}
+  .bureau-row{display:grid;grid-template-columns:100px 1fr 90px;gap:16px;align-items:center;padding:10px 0;border-bottom:1px solid var(--rj-line)}
+  .bureau-row:last-child{border:none}
+  .bureau-row .name{font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy)}
+  .bureau-row .bar-wrap{background:var(--rj-light);border-radius:8px;height:24px;position:relative;overflow:hidden}
+  .bureau-row .bar-fill{height:100%;background:var(--grad-primary);border-radius:8px;display:flex;align-items:center;padding:0 12px;color:#fff;font-family:var(--font-head);font-weight:600;font-size:11px}
+  .bureau-row .delta{text-align:right;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0.06em;padding:4px 10px;border-radius:6px}
+  .bureau-row .delta.up{background:#dcfce7;color:#166534}
+  .bureau-row .delta.down{background:#fee2e2;color:#991b1b}
+
+  /* Section */
+  .sec h3{font-family:var(--font-head);font-size:15px;font-weight:600;color:var(--rj-navy);margin:0 0 10px 0;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+  .sec h3::before{content:"";width:4px;height:18px;background:var(--rj-blue);border-radius:2px}
+
+  /* Factors table */
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--rj-line);border-radius:10px;overflow:hidden}
+  th{text-align:left;padding:10px 14px;background:var(--rj-navy);color:#fff;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+  th:last-child{text-align:right}
+  td{padding:10px 14px;font-size:12px;border-bottom:1px solid var(--rj-line)}
+  td:last-child{text-align:right;font-family:var(--font-mono);font-weight:600}
+  tr:last-child td{border:none}
+  .impact{padding:3px 8px;border-radius:4px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;font-weight:600}
+  .impact.high{background:#dcfce7;color:#166534}
+  .impact.med{background:#fef3c7;color:#92400e}
+  .impact.low{background:#fee2e2;color:#991b1b}
+
+  /* Accounts */
+  .accts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .acct{background:#fff;border:1px solid var(--rj-line);border-radius:10px;padding:14px 16px}
+  .acct .top-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .acct .n{font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy);letter-spacing:-0.01em}
+  .acct .status{padding:3px 8px;border-radius:4px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;font-weight:600}
+  .acct .status.good{background:#dcfce7;color:#166534}
+  .acct .status.warn{background:#fef3c7;color:#92400e}
+  .acct .status.bad{background:#fee2e2;color:#991b1b}
+  .acct .details{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px}
+  .acct .details .k{color:var(--rj-muted-text);font-family:var(--font-mono);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;font-weight:600;margin-bottom:2px}
+  .acct .details .v{color:var(--rj-navy);font-family:var(--font-head);font-weight:600;font-size:12px}
+
+  .action-plan{background:var(--grad-primary);color:#fff;padding:16px 20px;border-radius:12px;box-shadow:0 8px 20px rgba(37,99,235,0.35)}
+  .action-plan .lbl{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;margin-bottom:6px;opacity:0.9}
+  .action-plan h4{font-family:var(--font-head);font-size:16px;font-weight:600;margin:0 0 8px 0;letter-spacing:-0.01em}
+  .action-plan ol{padding-left:20px;margin:0;font-size:12px;line-height:1.6}
+  .action-plan li{padding:2px 0}
+  .action-plan li b{font-weight:600}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:14px 40px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+
+  @media print{body{background:#fff;padding:0}.sheet{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="top">
+    <div class="brand-row">
+      <div class="brand">
+        <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+        <div><div class="n">RJ Business Solutions</div><div class="t">Credit Technology Reporting</div></div>
+      </div>
+      <div class="meta">Report № RJ-CR-2026-0142<b>Issued: July 17, 2026</b></div>
+    </div>
+    <h1>Credit Health <span>Report.</span></h1>
+    <div class="sub">Monthly snapshot · Data aggregated across Experian, Equifax, TransUnion</div>
+  </div>
+  <div class="thin"></div>
+
+  <div class="body">
+    <!-- Client info -->
+    <div class="client-bar">
+      <div><div class="k">Client</div><div class="v">[Client Full Name]</div></div>
+      <div><div class="k">Client ID</div><div class="v">CL-2026-0142</div></div>
+      <div><div class="k">Enrollment Date</div><div class="v">March 4, 2026</div></div>
+      <div><div class="k">Reporting Period</div><div class="v">June 17 → July 17</div></div>
+    </div>
+
+    <!-- Score -->
+    <div class="score-panel">
+      <div class="score-card">
+        <div class="lbl">Blended Score</div>
+        <div class="score">687</div>
+        <div class="range">FICO 8 · 300–850</div>
+        <div class="rating">Good<div class="delta">↑ +34 pts this period</div></div>
+      </div>
+      <div class="bureaus">
+        <h3>Bureau Breakdown</h3>
+        <div class="bureau-row">
+          <div class="name">Experian</div>
+          <div class="bar-wrap"><div class="bar-fill" style="width:82%">691 / 850</div></div>
+          <div class="delta up">↑ +38</div>
+        </div>
+        <div class="bureau-row">
+          <div class="name">Equifax</div>
+          <div class="bar-wrap"><div class="bar-fill" style="width:80%">683 / 850</div></div>
+          <div class="delta up">↑ +31</div>
+        </div>
+        <div class="bureau-row">
+          <div class="name">TransUnion</div>
+          <div class="bar-wrap"><div class="bar-fill" style="width:81%">687 / 850</div></div>
+          <div class="delta up">↑ +33</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Factors -->
+    <div class="sec">
+      <h3>Key Score Factors</h3>
+      <table>
+        <thead><tr><th>Factor</th><th>Status</th><th>Impact</th><th>Weight</th></tr></thead>
+        <tbody>
+          <tr><td>Payment History</td><td>100% on-time · last 24 mo</td><td><span class="impact high">Positive</span></td><td>35%</td></tr>
+          <tr><td>Credit Utilization</td><td>24% overall · target &lt; 30%</td><td><span class="impact high">Positive</span></td><td>30%</td></tr>
+          <tr><td>Length of Credit History</td><td>Avg age 4.2 yrs · oldest 7.1 yrs</td><td><span class="impact med">Neutral</span></td><td>15%</td></tr>
+          <tr><td>Credit Mix</td><td>3 revolving · 2 installment</td><td><span class="impact high">Positive</span></td><td>10%</td></tr>
+          <tr><td>New Credit / Inquiries</td><td>4 hard inquiries · last 12 mo</td><td><span class="impact low">Watch</span></td><td>10%</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Accounts -->
+    <div class="sec">
+      <h3>Account Snapshot</h3>
+      <div class="accts">
+        <div class="acct">
+          <div class="top-row"><div class="n">Chase Sapphire ••4210</div><div class="status good">Current</div></div>
+          <div class="details">
+            <div><div class="k">Balance</div><div class="v">$1,240</div></div>
+            <div><div class="k">Limit</div><div class="v">$8,000</div></div>
+            <div><div class="k">Util</div><div class="v">16%</div></div>
+          </div>
+        </div>
+        <div class="acct">
+          <div class="top-row"><div class="n">Amex Everyday ••7712</div><div class="status good">Current</div></div>
+          <div class="details">
+            <div><div class="k">Balance</div><div class="v">$820</div></div>
+            <div><div class="k">Limit</div><div class="v">$5,500</div></div>
+            <div><div class="k">Util</div><div class="v">15%</div></div>
+          </div>
+        </div>
+        <div class="acct">
+          <div class="top-row"><div class="n">Discover it ••3305</div><div class="status warn">High Util</div></div>
+          <div class="details">
+            <div><div class="k">Balance</div><div class="v">$2,890</div></div>
+            <div><div class="k">Limit</div><div class="v">$6,000</div></div>
+            <div><div class="k">Util</div><div class="v">48%</div></div>
+          </div>
+        </div>
+        <div class="acct">
+          <div class="top-row"><div class="n">Toyota Auto Loan ••0192</div><div class="status good">Current</div></div>
+          <div class="details">
+            <div><div class="k">Balance</div><div class="v">$14,300</div></div>
+            <div><div class="k">Original</div><div class="v">$22,000</div></div>
+            <div><div class="k">Paid</div><div class="v">35%</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action plan -->
+    <div class="action-plan">
+      <div class="lbl">30-Day Action Plan</div>
+      <h4>Three moves to add +25 to +40 points this month.</h4>
+      <ol>
+        <li><b>Pay Discover to under $1,800</b> · brings utilization to 30% → est. +15 pts</li>
+        <li><b>Dispute one late-payment marker</b> on TransUnion (2023 · Verizon) → est. +12 pts</li>
+        <li><b>Freeze new credit applications</b> for 90 days → reinquiry damping</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="brand">RJ Business Solutions · Credit Technology Reporting</div>
+    <div>Report № RJ-CR-2026-0142 · support@rjbusinesssolutions.org</div>
+  </div>
+</div>
+</body>
+</html>

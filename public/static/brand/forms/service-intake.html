@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Client Intake — RJ Business Solutions</title>
+<link rel="stylesheet" href="../brand.css">
+<link rel="stylesheet" href="forms.css">
+</head>
+<body class="forms-page">
+
+<div class="form-shell" id="app">
+  <div class="form-header">
+    <div class="brand">
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+      <div><div class="n">RJ Business Solutions</div><div class="t">Post-Signature Client Intake</div></div>
+    </div>
+    <div class="save-tag">Auto-saving</div>
+  </div>
+
+  <div class="form-title-block">
+    <div class="kicker">● Day 1 · Launch Kickoff</div>
+    <h1>Let's get <span>everything we need</span> to launch you.</h1>
+    <div class="sub">You just signed. This intake gets us to Day 7 launch — brand voice, access, priorities, escalation rules. 6 minutes.</div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-steps">
+      <div class="fill-line" id="fill-line" style="width:0%"></div>
+      <div class="pstep active" data-step="1"><div class="circ">1</div><div class="lbl">Brand Voice</div></div>
+      <div class="pstep" data-step="2"><div class="circ">2</div><div class="lbl">Access</div></div>
+      <div class="pstep" data-step="3"><div class="circ">3</div><div class="lbl">Escalation</div></div>
+      <div class="pstep" data-step="4"><div class="circ">4</div><div class="lbl">Priorities</div></div>
+      <div class="pstep" data-step="5"><div class="circ">5</div><div class="lbl">Assets</div></div>
+    </div>
+  </div>
+
+  <form onsubmit="return false">
+
+    <div class="step-panel active" data-panel="1">
+      <h2><span class="step-of">Step 01 of 05</span>Your brand voice</h2>
+      <div class="step-sub">This trains the AI. Answer like you're teaching a new hire.</div>
+      <div class="field"><label>3 words that describe how you sound</label>
+        <input type="text" name="voiceWords" placeholder="e.g., direct, warm, no-fluff"/>
+      </div>
+      <div class="field"><label>Write 2–3 sentences the way you'd DM a hot lead</label>
+        <textarea name="voiceSample" placeholder="Hey [name] — saw your comment on my post..."></textarea>
+      </div>
+      <div class="field"><label>Words / phrases we should NEVER use</label>
+        <input type="text" name="bannedPhrases" placeholder="e.g., 'circle back', 'synergy', 'game-changer'"/>
+      </div>
+      <div class="field"><label>Emoji use?</label>
+        <div class="chip-group" data-single="emoji">
+          <div class="chip" data-val="none">None</div>
+          <div class="chip" data-val="light">Light · occasional</div>
+          <div class="chip" data-val="heavy">Heavy · brand-forward</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-panel" data-panel="2">
+      <h2><span class="step-of">Step 02 of 05</span>Delegated access</h2>
+      <div class="step-sub">Never share passwords. Add us via role-based access on each platform.</div>
+      <div class="field-row">
+        <div class="field"><label>Instagram Business Handle</label><input type="text" name="igHandle" placeholder="@yourbrand"/></div>
+        <div class="field"><label>TikTok Handle</label><input type="text" name="ttHandle" placeholder="@yourbrand"/></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Current CRM</label>
+          <select name="crm"><option value="">Select…</option><option>GoHighLevel</option><option>HubSpot</option><option>Close</option><option>Pipedrive</option><option>Salesforce</option><option>Custom</option><option>None yet</option></select>
+        </div>
+        <div class="field"><label>Booking Platform</label>
+          <select name="booking"><option value="">Select…</option><option>Calendly</option><option>Cal.com</option><option>Google Calendar</option><option>Acuity</option><option>Built into CRM</option><option>None yet</option></select>
+        </div>
+      </div>
+      <div class="field"><label>Access Method</label>
+        <div class="chip-group" data-single="accessMethod">
+          <div class="chip" data-val="1password">1Password Shared Vault</div>
+          <div class="chip" data-val="role">Role Invite</div>
+          <div class="chip" data-val="delegate">Meta Business Manager</div>
+          <div class="chip" data-val="loom">Loom Walkthrough</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-panel" data-panel="3">
+      <h2><span class="step-of">Step 03 of 05</span>Escalation rules</h2>
+      <div class="step-sub">When should AI stop and hand off to a human?</div>
+      <div class="field"><label>Escalate to human when a lead mentions… (multi)</label>
+        <div class="chip-group" data-multi="escalate">
+          <div class="chip" data-val="pricing">Specific pricing</div>
+          <div class="chip" data-val="refund">Refund / cancel</div>
+          <div class="chip" data-val="lawyer">Lawyer / legal</div>
+          <div class="chip" data-val="complaint">Complaint / negative review</div>
+          <div class="chip" data-val="press">Media / press</div>
+          <div class="chip" data-val="partnership">Partnership</div>
+          <div class="chip" data-val="urgent">"Urgent" / crisis</div>
+          <div class="chip" data-val="celebrity">VIP / high-profile</div>
+        </div>
+      </div>
+      <div class="field"><label>Who's the escalation contact?</label>
+        <div class="field-row">
+          <div class="field"><label>Name</label><input type="text" name="escName"/></div>
+          <div class="field"><label>Phone/Email</label><input type="text" name="escContact"/></div>
+        </div>
+      </div>
+      <div class="field"><label>SLA on human response</label>
+        <div class="chip-group" data-single="sla">
+          <div class="chip" data-val="15m">15 minutes</div>
+          <div class="chip" data-val="1h">1 hour</div>
+          <div class="chip" data-val="4h">4 business hours</div>
+          <div class="chip" data-val="next-day">Next business day</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-panel" data-panel="4">
+      <h2><span class="step-of">Step 04 of 05</span>What matters most</h2>
+      <div class="step-sub">30-day priorities in order.</div>
+      <div class="field"><label>Top 3 outcomes for Month 1</label>
+        <textarea name="priorities" placeholder="1. Response time under 90s&#10;2. 20+ booked calls&#10;3. CRM fully synced" style="min-height:120px"></textarea>
+      </div>
+      <div class="field"><label>Metrics you already track</label>
+        <div class="chip-group" data-multi="metrics">
+          <div class="chip" data-val="dm-vol">DM volume</div>
+          <div class="chip" data-val="response-time">Response time</div>
+          <div class="chip" data-val="booked">Booked calls</div>
+          <div class="chip" data-val="show-rate">Show rate</div>
+          <div class="chip" data-val="close-rate">Close rate</div>
+          <div class="chip" data-val="mrr">MRR</div>
+          <div class="chip" data-val="none">None yet</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step-panel" data-panel="5">
+      <h2><span class="step-of">Step 05 of 05</span>Asset drop</h2>
+      <div class="step-sub">Send links to logo, brand kit, product deck, and top-performing content. Any format works.</div>
+      <div class="field"><label>Logo &amp; brand assets URL</label><input type="text" name="brandUrl" placeholder="Google Drive · Dropbox · Notion"/></div>
+      <div class="field"><label>Best-performing content URLs (comma-separated)</label>
+        <textarea name="contentUrls" placeholder="https://instagram.com/p/... , https://tiktok.com/@you/video/..."></textarea>
+      </div>
+      <div class="field"><label>Anything else the team should know?</label>
+        <textarea name="finalNotes" placeholder="Product photos, testimonial videos, competitor references, launch dates..."></textarea>
+      </div>
+      <div class="turnstile-placeholder"><b>Cloudflare Turnstile</b> · Silent check on submit.</div>
+    </div>
+
+    <div class="success-state" id="success">
+      <div class="check">✓</div>
+      <h2>Intake <span>received.</span></h2>
+      <p>Your onboarding specialist has everything to start Day 2 architecture. Expect a Slack channel invite within the next hour.</p>
+      <div class="next-steps">
+        <h4>● Days 2–7</h4>
+        <ol>
+          <li>System design locked</li>
+          <li>CRM + DM automation built</li>
+          <li>Voice training on your samples</li>
+          <li>Soft launch Day 6, full launch Day 7</li>
+        </ol>
+      </div>
+      <p style="font-size:12px;color:var(--rj-muted-text)">Reference № <b id="refnum" style="color:var(--rj-navy);font-family:ui-monospace,Menlo,monospace">—</b></p>
+    </div>
+
+    <div class="form-actions" id="actions">
+      <button type="button" class="btn ghost" id="backBtn" style="visibility:hidden">← Back</button>
+      <button type="button" class="btn primary" id="nextBtn">Next Step →</button>
+    </div>
+  </form>
+
+  <div class="backend-note">
+    <b>// Backend</b> · POST /api/intake/service → D1 <code>client_intake</code> table → auto-creates Slack channel + Notion page + fires "Day 2 kickoff" cadence.
+  </div>
+</div>
+
+<script>
+(() => {
+  const FORM_ID = 'service-intake'; const TOTAL = 5; let step = 1;
+  const state = { form: FORM_ID, escalate: [], metrics: [] };
+  try { Object.assign(state, JSON.parse(localStorage.getItem('rj-' + FORM_ID) || '{}')); } catch (e) {}
+  const $ = s => document.querySelector(s), $$ = s => document.querySelectorAll(s);
+  const save = () => localStorage.setItem('rj-' + FORM_ID, JSON.stringify(state));
+  function goStep(n){
+    step = Math.max(1, Math.min(TOTAL, n));
+    $$('.step-panel').forEach(p => p.classList.toggle('active', +p.dataset.panel === step));
+    $$('.pstep').forEach(ps => { const s = +ps.dataset.step; ps.classList.toggle('active', s === step); ps.classList.toggle('done', s < step); });
+    $('#fill-line').style.width = ((step - 1) / (TOTAL - 1)) * 100 + '%';
+    $('#backBtn').style.visibility = step === 1 ? 'hidden' : 'visible';
+    $('#nextBtn').textContent = step === TOTAL ? 'Submit →' : 'Next Step →';
+  }
+  $('#nextBtn').onclick = () => {
+    const panel = document.querySelector(`.step-panel[data-panel="${step}"]`);
+    panel.querySelectorAll('input, select, textarea').forEach(el => { if (el.type === 'checkbox') state[el.name] = el.checked; else if (el.name) state[el.name] = el.value; });
+    save();
+    if (step === TOTAL) submit(); else goStep(step + 1);
+  };
+  $('#backBtn').onclick = () => goStep(step - 1);
+  document.addEventListener('click', e => {
+    const chip = e.target.closest('.chip'); if (chip){
+      const group = chip.closest('[data-multi]') || chip.closest('[data-single]'); if (!group) return;
+      const key = group.dataset.multi || group.dataset.single;
+      if (group.dataset.multi){ chip.classList.toggle('selected'); state[key] = [...group.querySelectorAll('.chip.selected')].map(c=>c.dataset.val); }
+      else { group.querySelectorAll('.chip').forEach(c=>c.classList.toggle('selected', c===chip)); state[key] = chip.dataset.val; }
+      save();
+    }
+  });
+  function submit(){
+    const ref = 'RJ-IN-' + Date.now().toString(36).toUpperCase();
+    state.ref = ref; state.submittedAt = new Date().toISOString(); save();
+    try { fetch('/api/public/lead/' + FORM_ID, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(state) }).catch(()=>{}); } catch(e){}
+    console.log('[RJ INTAKE SUBMIT]', state);
+    $('#refnum').textContent = ref;
+    $('#success').classList.add('active');
+    document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+    $('#actions').style.display = 'none';
+    document.querySelector('.progress-wrap').style.display = 'none';
+  }
+  document.querySelectorAll('input[name], select[name], textarea[name]').forEach(el => { if (state[el.name] !== undefined) { if (el.type === 'checkbox') el.checked = !!state[el.name]; else el.value = state[el.name]; } });
+  document.querySelectorAll('[data-multi]').forEach(g => { const key = g.dataset.multi; if (Array.isArray(state[key])) g.querySelectorAll('.chip').forEach(c=>c.classList.toggle('selected', state[key].includes(c.dataset.val))); });
+  document.querySelectorAll('[data-single]').forEach(g => { const key = g.dataset.single; if (state[key]) g.querySelectorAll('.chip').forEach(c=>c.classList.toggle('selected', c.dataset.val === state[key])); });
+  goStep(step);
+})();
+</script>
+
+</body>
+</html>

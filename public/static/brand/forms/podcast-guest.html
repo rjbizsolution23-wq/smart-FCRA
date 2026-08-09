@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Podcast Guest Request — RJ Business Solutions</title>
+<link rel="stylesheet" href="../brand.css">
+<link rel="stylesheet" href="forms.css">
+</head>
+<body class="forms-page">
+
+<div class="form-shell" id="app">
+  <div class="form-header">
+    <div class="brand">
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+      <div><div class="n">RJ Business Solutions</div><div class="t">Podcast Guest · Media Request</div></div>
+    </div>
+    <div class="save-tag">Auto-saving</div>
+  </div>
+
+  <div class="form-title-block">
+    <div class="kicker">● Podcast · Interview · Speaking</div>
+    <h1>Have Rick on <span>your show.</span></h1>
+    <div class="sub">Podcasts, panels, keynotes, media interviews. Fill out below — Rick's team reviews weekly and books 2–4 weeks out.</div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-steps">
+      <div class="fill-line" id="fill-line" style="width:0%"></div>
+      <div class="pstep active" data-step="1"><div class="circ">1</div><div class="lbl">Show / Event</div></div>
+      <div class="pstep" data-step="2"><div class="circ">2</div><div class="lbl">Topic</div></div>
+      <div class="pstep" data-step="3"><div class="circ">3</div><div class="lbl">Logistics</div></div>
+    </div>
+  </div>
+
+  <form onsubmit="return false">
+
+    <div class="step-panel active" data-panel="1">
+      <h2><span class="step-of">Step 01 of 03</span>About your show / event</h2>
+      <div class="step-sub">Give us the picture.</div>
+      <div class="field-row">
+        <div class="field"><label>Show / Event Name <span class="req">*</span></label><input type="text" name="showName" required/><div class="error">Required</div></div>
+        <div class="field"><label>Host / Organizer Name <span class="req">*</span></label><input type="text" name="hostName" required/><div class="error">Required</div></div>
+      </div>
+      <div class="field">
+        <label>Format</label>
+        <div class="chip-group" data-single="format">
+          <div class="chip" data-val="podcast">Podcast</div>
+          <div class="chip" data-val="youtube">YouTube Show</div>
+          <div class="chip" data-val="panel">Panel</div>
+          <div class="chip" data-val="keynote">Keynote</div>
+          <div class="chip" data-val="webinar">Webinar</div>
+          <div class="chip" data-val="live">Live Room / X Space</div>
+          <div class="chip" data-val="interview">Written Interview</div>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Audience Size (avg)</label>
+          <select name="audienceSize"><option value="">Select…</option><option>Under 1K</option><option>1K–10K</option><option>10K–50K</option><option>50K–250K</option><option>250K+</option></select>
+        </div>
+        <div class="field"><label>Show URL / Sample Episode</label><input type="text" name="showUrl" placeholder="https://"/></div>
+      </div>
+    </div>
+
+    <div class="step-panel" data-panel="2">
+      <h2><span class="step-of">Step 02 of 03</span>Topic + angle</h2>
+      <div class="step-sub">What you'd love to unpack with Rick.</div>
+      <div class="field">
+        <label>Topic area (multi)</label>
+        <div class="chip-group" data-multi="topics">
+          <div class="chip" data-val="credit">Credit Repair / Tech</div>
+          <div class="chip" data-val="funding">Business Funding</div>
+          <div class="chip" data-val="ai">AI Automation</div>
+          <div class="chip" data-val="growth">Growth Systems</div>
+          <div class="chip" data-val="fleet">Fleet Ops</div>
+          <div class="chip" data-val="compliance">Compliance</div>
+          <div class="chip" data-val="founder">Founder Story</div>
+          <div class="chip" data-val="wealth">Generational Wealth</div>
+        </div>
+      </div>
+      <div class="field"><label>Proposed episode angle · 2–3 sentences</label>
+        <textarea name="angle" placeholder="What you want to explore · why your audience needs this now · what's unique about Rick's take."></textarea>
+      </div>
+      <div class="field"><label>Sample questions (optional but helpful)</label>
+        <textarea name="questions" placeholder="3–5 questions or the topics you'd cover."></textarea>
+      </div>
+    </div>
+
+    <div class="step-panel" data-panel="3">
+      <h2><span class="step-of">Step 03 of 03</span>Logistics + contact</h2>
+      <div class="step-sub">Timing, length, and where to send you.</div>
+      <div class="field-row">
+        <div class="field"><label>Episode Length</label>
+          <select name="length"><option value="">Select…</option><option>15–20 min</option><option>30 min</option><option>45–60 min</option><option>60–90 min</option><option>Flexible</option></select>
+        </div>
+        <div class="field"><label>Recording Timeline</label>
+          <select name="timeline"><option value="">Select…</option><option>Next 2 weeks</option><option>Next month</option><option>Next quarter</option><option>Flexible</option></select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Your Email <span class="req">*</span></label><input type="email" name="email" required/><div class="error">Valid email required</div></div>
+        <div class="field"><label>Phone (optional)</label><input type="tel" name="phone"/></div>
+      </div>
+      <div class="field">
+        <label>Anything else?</label>
+        <textarea name="notes" placeholder="Sponsors · release schedule · co-hosts · special format · press embargo…"></textarea>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:6px">
+        <label class="cb-row"><input type="checkbox" name="tcpa" required/><div class="cb-t"><b>Contact consent (required)</b> · I agree to receive a follow-up email / call about this request.</div></label>
+      </div>
+      <div class="turnstile-placeholder"><b>Cloudflare Turnstile</b> · Silent check on submit.</div>
+    </div>
+
+    <div class="success-state" id="success">
+      <div class="check">◎</div>
+      <h2>Request <span>received.</span></h2>
+      <p>Rick's team reviews podcast + speaking requests every Friday. Expect a yes / no / needs-more-info response within <b>7 business days</b>.</p>
+      <div class="next-steps">
+        <h4>● If Confirmed</h4>
+        <ol>
+          <li>Calendar invite with your recording slot</li>
+          <li>Rick's media kit + approved quotes</li>
+          <li>Promo assets 48hr before recording</li>
+          <li>Post-episode: RJ team amplifies on our socials</li>
+        </ol>
+      </div>
+      <p style="font-size:12px;color:var(--rj-muted-text)">Reference № <b id="refnum" style="color:var(--rj-navy);font-family:ui-monospace,Menlo,monospace">—</b></p>
+    </div>
+
+    <div class="form-actions" id="actions">
+      <button type="button" class="btn ghost" id="backBtn" style="visibility:hidden">← Back</button>
+      <button type="button" class="btn primary" id="nextBtn">Next Step →</button>
+    </div>
+  </form>
+
+  <div class="backend-note"><b>// Backend</b> · POST /api/media/podcast → D1 <code>media_requests</code> + Slack ping to Rick's team + auto-sends Media Kit link.</div>
+</div>
+
+<script>
+(() => {
+  const FORM_ID='podcast-guest'; const TOTAL=3; let step=1;
+  const state={form:FORM_ID,topics:[]};
+  try{Object.assign(state,JSON.parse(localStorage.getItem('rj-'+FORM_ID)||'{}'));}catch(e){}
+  const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
+  const save=()=>localStorage.setItem('rj-'+FORM_ID,JSON.stringify(state));
+  function goStep(n){
+    step=Math.max(1,Math.min(TOTAL,n));
+    $$('.step-panel').forEach(p=>p.classList.toggle('active',+p.dataset.panel===step));
+    $$('.pstep').forEach(ps=>{const s=+ps.dataset.step;ps.classList.toggle('active',s===step);ps.classList.toggle('done',s<step);});
+    $('#fill-line').style.width=((step-1)/(TOTAL-1))*100+'%';
+    $('#backBtn').style.visibility=step===1?'hidden':'visible';
+    $('#nextBtn').textContent=step===TOTAL?'Submit Request →':'Next Step →';
+  }
+  function validate(){
+    let ok=true;
+    const panel=document.querySelector(`.step-panel[data-panel="${step}"]`);
+    panel.querySelectorAll('input[required]').forEach(el=>{
+      const f=el.closest('.field')||el.closest('.cb-row');
+      if(el.type==='checkbox'){if(!el.checked)ok=false;}
+      else if(!el.value?.trim()||(el.type==='email'&&!/^\S+@\S+\.\S+$/.test(el.value))){f?.classList?.add('err');ok=false;}
+      else f?.classList?.remove('err');
+    });
+    return ok;
+  }
+  $('#nextBtn').onclick=()=>{
+    const panel=document.querySelector(`.step-panel[data-panel="${step}"]`);
+    panel.querySelectorAll('input,select,textarea').forEach(el=>{if(el.type==='checkbox')state[el.name]=el.checked;else if(el.name)state[el.name]=el.value;});
+    save(); if(!validate())return;
+    if(step===TOTAL)submit(); else goStep(step+1);
+  };
+  $('#backBtn').onclick=()=>goStep(step-1);
+  document.addEventListener('click',e=>{
+    const chip=e.target.closest('.chip'); if(chip){
+      const group=chip.closest('[data-multi]')||chip.closest('[data-single]'); if(!group)return;
+      const key=group.dataset.multi||group.dataset.single;
+      if(group.dataset.multi){chip.classList.toggle('selected');state[key]=[...group.querySelectorAll('.chip.selected')].map(c=>c.dataset.val);}
+      else {group.querySelectorAll('.chip').forEach(c=>c.classList.toggle('selected',c===chip));state[key]=chip.dataset.val;}
+      save();
+    }
+  });
+  function submit(){
+    const ref='RJ-MD-'+Date.now().toString(36).toUpperCase();
+    state.ref = ref; state.submittedAt = new Date().toISOString(); save();
+    try { fetch('/api/public/lead/' + FORM_ID, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(state) }).catch(()=>{}); } catch(e){}
+    console.log('[RJ MEDIA REQUEST]',state);
+    $('#refnum').textContent=ref;
+    $('#success').classList.add('active');
+    document.querySelectorAll('.step-panel').forEach(p=>p.classList.remove('active'));
+    $('#actions').style.display='none';
+    document.querySelector('.progress-wrap').style.display='none';
+  }
+  document.querySelectorAll('input[name],select[name],textarea[name]').forEach(el=>{if(state[el.name]!==undefined){if(el.type==='checkbox')el.checked=!!state[el.name];else el.value=state[el.name];}});
+  document.querySelectorAll('[data-multi]').forEach(g=>{const key=g.dataset.multi;if(Array.isArray(state[key]))g.querySelectorAll('.chip').forEach(c=>c.classList.toggle('selected',state[key].includes(c.dataset.val)));});
+  document.querySelectorAll('[data-single]').forEach(g=>{const key=g.dataset.single;if(state[key])g.querySelectorAll('.chip').forEach(c=>c.classList.toggle('selected',c.dataset.val===state[key]));});
+  goStep(step);
+})();
+</script>
+
+</body>
+</html>

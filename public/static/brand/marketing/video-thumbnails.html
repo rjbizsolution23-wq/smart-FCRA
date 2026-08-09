@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Video Thumbnails</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px;display:flex;flex-direction:column;gap:32px;align-items:center}
+  .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:12px}
+  .card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 20px 40px rgba(15,23,42,0.1)}
+
+  /* YouTube 1280x720 */
+  .yt{width:1280px;height:720px;border-radius:12px;overflow:hidden;position:relative;box-shadow:0 20px 40px rgba(15,23,42,0.2)}
+
+  /* YT 1 · Big statement */
+  .yt1{background:var(--grad-dark);color:#fff;padding:70px 80px;display:flex;flex-direction:column;justify-content:space-between}
+  .yt1::after{content:"";position:absolute;right:-100px;top:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(14,165,233,0.5) 0%,transparent 60%);filter:blur(60px)}
+  .yt1 .top{display:flex;align-items:center;gap:16px;position:relative;z-index:1}
+  .yt1 .top img{width:60px;height:60px;border-radius:14px}
+  .yt1 .top .n{font-family:var(--font-head);font-weight:600;font-size:22px}
+  .yt1 .top .h{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-top:4px;font-weight:600}
+  .yt1 h1{font-family:var(--font-head);font-size:120px;font-weight:700;letter-spacing:-0.04em;line-height:0.9;margin:0;position:relative;z-index:1}
+  .yt1 h1 span{background:linear-gradient(135deg,#0ea5e9 0%,#60a5fa 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .yt1 .badge{position:absolute;bottom:70px;right:80px;background:var(--rj-danger);color:#fff;padding:14px 26px;border-radius:12px;font-family:var(--font-head);font-weight:700;font-size:22px;letter-spacing:-0.01em;transform:rotate(-4deg);box-shadow:0 15px 30px rgba(239,68,68,0.5);z-index:2}
+
+  /* YT 2 · Personality thumb */
+  .yt2{background:var(--grad-dark);color:#fff;padding:60px;display:grid;grid-template-columns:1fr auto;gap:40px;align-items:center}
+  .yt2::after{content:"";position:absolute;left:-100px;bottom:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(37,99,235,0.5) 0%,transparent 60%);filter:blur(60px)}
+  .yt2 .txt{position:relative;z-index:1}
+  .yt2 .kicker{display:inline-block;padding:8px 16px;background:var(--rj-danger);color:#fff;border-radius:6px;font-family:var(--font-head);font-weight:700;font-size:16px;letter-spacing:-0.01em;margin-bottom:20px;text-transform:uppercase;box-shadow:0 8px 20px rgba(239,68,68,0.4)}
+  .yt2 h1{font-family:var(--font-head);font-size:88px;font-weight:700;letter-spacing:-0.03em;line-height:0.95;margin:0}
+  .yt2 h1 span{color:var(--rj-sky)}
+  .yt2 .who{margin-top:24px;font-family:var(--font-mono);font-size:14px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;font-weight:600}
+  .yt2 .avatar{width:320px;height:320px;border-radius:24px;background:var(--grad-primary);display:flex;align-items:center;justify-content:center;position:relative;z-index:1;box-shadow:0 30px 60px rgba(37,99,235,0.5);font-family:var(--font-head);font-weight:700;font-size:180px;color:#fff;letter-spacing:-0.05em}
+
+  /* Podcast (square 1080x1080 shown scaled) */
+  .pod{width:600px;height:600px;border-radius:16px;overflow:hidden;position:relative;box-shadow:0 20px 40px rgba(15,23,42,0.2);background:var(--grad-dark);color:#fff;padding:48px;display:flex;flex-direction:column;justify-content:space-between}
+  .pod::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .pod .top{display:flex;align-items:center;gap:12px;position:relative;z-index:1}
+  .pod .top img{width:44px;height:44px;border-radius:10px}
+  .pod .top .n{font-family:var(--font-head);font-weight:600;font-size:14px}
+  .pod .top .h{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600}
+  .pod .middle{position:relative;z-index:1}
+  .pod .ep{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-bottom:14px;font-weight:600}
+  .pod h1{font-family:var(--font-head);font-size:48px;font-weight:600;letter-spacing:-0.02em;line-height:1;margin:0}
+  .pod h1 span{color:var(--rj-sky)}
+  .pod .guest{position:relative;z-index:1;padding-top:20px;border-top:1px solid rgba(255,255,255,0.15);display:flex;align-items:center;gap:12px}
+  .pod .guest .av{width:44px;height:44px;border-radius:50%;background:var(--grad-primary);display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:700;color:#fff;font-size:16px}
+  .pod .guest .name{font-family:var(--font-head);font-weight:600;font-size:14px}
+  .pod .guest .role{font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-top:2px;font-weight:600}
+
+  /* Shorts / Reel 1080x1920 preview */
+  .short{width:340px;height:604px;border-radius:16px;overflow:hidden;position:relative;box-shadow:0 20px 40px rgba(15,23,42,0.2);background:var(--grad-dark);color:#fff;padding:40px 28px;display:flex;flex-direction:column;justify-content:space-between}
+  .short::after{content:"";position:absolute;left:-80px;bottom:-80px;width:300px;height:300px;background:radial-gradient(circle,rgba(37,99,235,0.5) 0%,transparent 60%);filter:blur(40px)}
+  .short .top{display:flex;align-items:center;gap:8px;position:relative;z-index:1}
+  .short .top img{width:32px;height:32px;border-radius:8px}
+  .short .top .n{font-family:var(--font-head);font-weight:600;font-size:11px}
+  .short .middle{position:relative;z-index:1;text-align:center}
+  .short .badge{display:inline-block;padding:6px 12px;background:var(--rj-danger);color:#fff;border-radius:6px;font-family:var(--font-head);font-weight:700;font-size:11px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:14px}
+  .short h1{font-family:var(--font-head);font-size:36px;font-weight:700;letter-spacing:-0.02em;line-height:1;margin:0}
+  .short h1 span{color:var(--rj-sky)}
+  .short .cta{position:relative;z-index:1;text-align:center;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600}
+
+  .row{display:flex;gap:24px}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="lbl">YouTube · Long-form · 1280 × 720 · Big Statement</div>
+  <div class="yt yt1">
+    <div class="top"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">Rick Jefferson</div><div class="h">RJ Business Solutions</div></div></div>
+    <h1>DMs → <span>Booked Calls.</span><br/>In 7 Days.</h1>
+    <div class="badge">FREE SYSTEM</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">YouTube · Personality · 1280 × 720 · Creator Style</div>
+  <div class="yt yt2">
+    <div class="txt">
+      <div class="kicker">STOP DOING THIS</div>
+      <h1>Your CRM<br/>is a <span>graveyard.</span></h1>
+      <div class="who">Rick Jefferson · Systems Brief</div>
+    </div>
+    <div class="avatar">RJ</div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="card">
+    <div class="lbl">Podcast Cover · 1080 × 1080</div>
+    <div class="pod">
+      <div class="top"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">Systems Brief</div><div class="h">RJ Business Solutions · Podcast</div></div></div>
+      <div class="middle">
+        <div class="ep">Episode 24</div>
+        <h1>Why credit tech is<br/>the next <span>fintech gold rush.</span></h1>
+      </div>
+      <div class="guest">
+        <div class="av">RJ</div>
+        <div>
+          <div class="name">With Rick Jefferson</div>
+          <div class="role">Founder · Credit Tech Architect</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="lbl">Shorts / Reels / TikTok · 1080 × 1920</div>
+    <div class="short">
+      <div class="top"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">@rick_jeff_solution</div></div>
+      <div class="middle">
+        <div class="badge">HOT TAKE</div>
+        <h1>Automation<br/>only works<br/>when the<br/><span>strategy<br/>is clean.</span></h1>
+      </div>
+      <div class="cta">→ Watch to the end</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

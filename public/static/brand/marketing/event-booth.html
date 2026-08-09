@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Event Booth Graphics</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px;display:flex;flex-direction:column;gap:32px;align-items:center}
+  .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:12px}
+  .card{background:#fff;border-radius:16px;padding:24px;box-shadow:0 20px 40px rgba(15,23,42,0.1)}
+
+  /* RETRACTABLE BANNER · 33.5" x 78.7" scaled */
+  .banner-stage{display:flex;justify-content:center;gap:40px;align-items:flex-end}
+  .banner{width:335px;height:787px;background:var(--grad-dark);color:#fff;border-radius:6px 6px 0 0;padding:60px 40px 100px;position:relative;overflow:hidden;box-shadow:0 30px 60px rgba(15,23,42,0.3);display:flex;flex-direction:column;justify-content:space-between}
+  .banner::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .banner::before{content:"";position:absolute;left:-80px;bottom:100px;width:300px;height:300px;background:radial-gradient(circle,rgba(37,99,235,0.35) 0%,transparent 60%);filter:blur(40px)}
+  .banner-base{width:390px;height:12px;background:#0f172a;border-radius:0 0 8px 8px;margin-top:-4px}
+  .banner .top{position:relative;z-index:1;display:flex;align-items:center;gap:10px}
+  .banner .top img{width:36px;height:36px;border-radius:8px}
+  .banner .top .n{font-family:var(--font-head);font-weight:600;font-size:14px}
+  .banner .middle{position:relative;z-index:1;text-align:center}
+  .banner .kicker{display:inline-block;padding:5px 12px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);border-radius:999px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-bottom:20px;font-weight:600}
+  .banner h1{font-family:var(--font-head);font-size:52px;font-weight:700;letter-spacing:-0.03em;line-height:0.95;margin:0}
+  .banner h1 span{background:linear-gradient(135deg,#0ea5e9 0%,#60a5fa 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .banner .sub{font-family:var(--font-head);color:#cbd5e1;font-size:14px;margin-top:20px;line-height:1.35}
+  .banner .qr-block{position:relative;z-index:1;text-align:center}
+  .banner .qr{width:110px;height:110px;background:#fff;margin:0 auto 12px;border-radius:8px;display:grid;grid-template-columns:repeat(10,1fr);gap:2px;padding:8px}
+  .banner .qr .qb{background:#0f172a;border-radius:1px}
+  .banner .qr-cta{font-family:var(--font-head);font-weight:600;font-size:14px;color:var(--rj-sky)}
+  .banner .qr-url{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;margin-top:4px;font-weight:600}
+
+  /* BANNER V2 · light variant */
+  .banner.light{background:#fff;color:var(--rj-navy)}
+  .banner.light::after{background:radial-gradient(circle,rgba(37,99,235,0.25) 0%,transparent 60%)}
+  .banner.light::before{background:radial-gradient(circle,rgba(14,165,233,0.2) 0%,transparent 60%)}
+  .banner.light .top .n{color:var(--rj-navy)}
+  .banner.light .kicker{background:var(--rj-light);border-color:var(--rj-border);color:var(--rj-blue)}
+  .banner.light .sub{color:var(--rj-muted-text)}
+  .banner.light h1 span{background:linear-gradient(135deg,#2563eb,#0ea5e9);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .banner.light .qr-cta{color:var(--rj-blue)}
+  .banner.light .qr-url{color:var(--rj-muted-text)}
+
+  /* TABLE RUNNER · 6ft x 30in ratio scaled */
+  .runner{width:960px;height:200px;background:var(--grad-dark);color:#fff;border-radius:8px;padding:40px 60px;display:flex;align-items:center;gap:32px;position:relative;overflow:hidden;box-shadow:0 20px 40px rgba(15,23,42,0.25)}
+  .runner::after{content:"";position:absolute;right:-100px;bottom:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(50px)}
+  .runner::before{content:"";position:absolute;left:0;top:0;bottom:0;width:8px;background:var(--grad-primary)}
+  .runner img{width:90px;height:90px;border-radius:20px;position:relative;z-index:1;flex-shrink:0}
+  .runner .txt{position:relative;z-index:1}
+  .runner .n{font-family:var(--font-head);font-weight:600;font-size:38px;letter-spacing:-0.02em;line-height:1}
+  .runner .n span{color:var(--rj-sky)}
+  .runner .s{font-family:var(--font-head);color:#cbd5e1;font-size:18px;margin-top:8px}
+  .runner .url{position:absolute;right:60px;top:50%;transform:translateY(-50%);z-index:1;text-align:right}
+  .runner .url .k{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;font-weight:600}
+  .runner .url .v{font-family:var(--font-head);font-weight:600;font-size:16px;color:var(--rj-sky);margin-top:4px}
+
+  /* ATTENDEE BADGE */
+  .badge-stage{display:flex;gap:24px;justify-content:center}
+  .badge{width:280px;height:400px;background:#fff;border-radius:14px;box-shadow:0 20px 40px rgba(15,23,42,0.15);overflow:hidden;display:flex;flex-direction:column;position:relative}
+  .badge .hook{position:absolute;top:20px;left:50%;transform:translateX(-50%);width:60px;height:8px;background:#e2e8f0;border-radius:4px}
+  .badge .hole{position:absolute;top:14px;left:50%;transform:translateX(-50%);width:24px;height:24px;background:#0f172a;border-radius:50%;border:3px solid #fff;z-index:2}
+  .badge .header{background:var(--grad-dark);color:#fff;padding:44px 24px 20px;text-align:center;position:relative;overflow:hidden}
+  .badge .header::after{content:"";position:absolute;right:-50px;top:-50px;width:200px;height:200px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(30px)}
+  .badge .header .brand{display:flex;align-items:center;justify-content:center;gap:8px;position:relative;z-index:1;margin-bottom:6px}
+  .badge .header .brand img{width:24px;height:24px;border-radius:5px}
+  .badge .header .brand .n{font-family:var(--font-head);font-weight:600;font-size:11px}
+  .badge .header .event{position:relative;z-index:1;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600}
+  .badge .body{flex:1;padding:24px 20px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:6px}
+  .badge .name{font-family:var(--font-head);font-weight:700;font-size:28px;letter-spacing:-0.02em;color:var(--rj-navy);line-height:1.05}
+  .badge .company{font-family:var(--font-head);font-size:14px;color:var(--rj-muted-text);font-weight:500}
+  .badge .role-tag{margin-top:10px;padding:6px 14px;border-radius:999px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+  .badge .role-tag.speaker{background:var(--rj-navy);color:#fff}
+  .badge .role-tag.attendee{background:var(--rj-light);color:var(--rj-blue)}
+  .badge .role-tag.vip{background:var(--grad-primary);color:#fff}
+  .badge .foot{background:var(--rj-soft);padding:12px;text-align:center;border-top:1px solid var(--rj-line);font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+
+  /* FLYER 5.5x8.5 */
+  .flyer{width:440px;height:680px;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 20px 40px rgba(15,23,42,0.2);display:flex;flex-direction:column}
+  .flyer .top{background:var(--grad-dark);color:#fff;padding:36px 32px;position:relative;overflow:hidden}
+  .flyer .top::after{content:"";position:absolute;right:-80px;top:-80px;width:280px;height:280px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(30px)}
+  .flyer .top .brand{display:flex;align-items:center;gap:10px;position:relative;z-index:1;margin-bottom:24px}
+  .flyer .top .brand img{width:36px;height:36px;border-radius:8px}
+  .flyer .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:14px}
+  .flyer .top h1{font-family:var(--font-head);font-size:44px;font-weight:700;letter-spacing:-0.03em;line-height:0.95;margin:0;position:relative;z-index:1}
+  .flyer .top h1 span{color:var(--rj-sky)}
+  .flyer .top .sub{font-family:var(--font-head);color:#cbd5e1;font-size:14px;margin-top:10px;position:relative;z-index:1;font-weight:500}
+  .flyer .body{padding:28px 32px;flex:1;display:flex;flex-direction:column;gap:16px}
+  .flyer .body .lbl{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600}
+  .flyer .body h2{font-family:var(--font-head);font-size:20px;font-weight:600;color:var(--rj-navy);margin:0;letter-spacing:-0.01em}
+  .flyer ul{list-style:none;padding:0;margin:0}
+  .flyer li{padding:8px 0 8px 22px;position:relative;font-size:13px;color:var(--rj-text);line-height:1.4}
+  .flyer li::before{content:"→";position:absolute;left:0;color:var(--rj-blue);font-weight:700}
+  .flyer .cta-block{margin-top:auto;background:var(--grad-primary);color:#fff;padding:20px;border-radius:12px;text-align:center}
+  .flyer .cta-block .t{font-family:var(--font-head);font-weight:700;font-size:16px;letter-spacing:-0.01em}
+  .flyer .cta-block .s{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;margin-top:4px;font-weight:600;opacity:0.9}
+  .flyer .foot{padding:14px 32px;border-top:1px solid var(--rj-line);display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="lbl">Retractable Roll-Up Banner · 33.5" × 78.7" · Two variants</div>
+  <div class="banner-stage">
+    <div>
+      <div class="banner">
+        <div class="top"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+        <div class="middle">
+          <div class="kicker">● AI Growth Systems</div>
+          <h1>Turn business chaos<br/>into <span>automated growth.</span></h1>
+          <div class="sub">Done-for-you social · CRM · Follow-up · Credit tech · Portals · Payments.</div>
+        </div>
+        <div class="qr-block">
+          <div class="qr" id="qr1"></div>
+          <div class="qr-cta">Scan to Book a Call</div>
+          <div class="qr-url">rjbusinesssolutions.org</div>
+        </div>
+      </div>
+      <div class="banner-base"></div>
+    </div>
+    <div>
+      <div class="banner light">
+        <div class="top"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+        <div class="middle">
+          <div class="kicker">● Founder-Led</div>
+          <h1>We build the<br/><span>automation backbone.</span></h1>
+          <div class="sub">Meet Rick Jefferson · Founder · Credit Technology Architect.</div>
+        </div>
+        <div class="qr-block">
+          <div class="qr" id="qr2" style="background:var(--rj-navy)"></div>
+          <div class="qr-cta">Scan to Connect</div>
+          <div class="qr-url">/in/rick-jefferson-314998235</div>
+        </div>
+      </div>
+      <div class="banner-base"></div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Table Runner · 6ft × 30" · Front-facing print</div>
+  <div class="runner">
+    <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+    <div class="txt">
+      <div class="n">RJ Business <span>Solutions.</span></div>
+      <div class="s">AI Systems · Automation · Credit Technology · Growth Infrastructure</div>
+    </div>
+    <div class="url">
+      <div class="k">Visit</div>
+      <div class="v">rjbusinesssolutions.org</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Attendee Lanyard Badges · 3 role variants</div>
+  <div class="badge-stage">
+    <div class="badge">
+      <div class="hook"></div><div class="hole"></div>
+      <div class="header">
+        <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+        <div class="event">Growth Systems Summit · 2026</div>
+      </div>
+      <div class="body">
+        <div class="name">Rick Jefferson</div>
+        <div class="company">RJ Business Solutions</div>
+        <div class="role-tag speaker">● Speaker</div>
+      </div>
+      <div class="foot">Badge №001 · Access All Areas</div>
+    </div>
+
+    <div class="badge">
+      <div class="hook"></div><div class="hole"></div>
+      <div class="header">
+        <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+        <div class="event">Growth Systems Summit · 2026</div>
+      </div>
+      <div class="body">
+        <div class="name">[Guest Name]</div>
+        <div class="company">[Company]</div>
+        <div class="role-tag attendee">Attendee</div>
+      </div>
+      <div class="foot">Badge №028 · Main Hall</div>
+    </div>
+
+    <div class="badge">
+      <div class="hook"></div><div class="hole"></div>
+      <div class="header">
+        <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+        <div class="event">Growth Systems Summit · 2026</div>
+      </div>
+      <div class="body">
+        <div class="name">[VIP Name]</div>
+        <div class="company">[Company]</div>
+        <div class="role-tag vip">VIP · Backstage</div>
+      </div>
+      <div class="foot">Badge №V07 · All Access</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="lbl">Booth Flyer · 5.5" × 8.5" · Handout</div>
+  <div class="flyer">
+    <div class="top">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+      <h1>DMs → <span>booked calls.</span><br/>In 7 days.</h1>
+      <div class="sub">The Done-For-You Growth Engine</div>
+    </div>
+    <div class="body">
+      <div class="lbl">What you get</div>
+      <ul>
+        <li>AI-powered DM system trained on your brand voice</li>
+        <li>CRM + pipeline sync (works with what you have)</li>
+        <li>Follow-up sequences + no-show recovery</li>
+        <li>Compliance-aware workflows (FCRA/FDCPA-informed)</li>
+        <li>Monthly reporting + human escalation queue</li>
+      </ul>
+      <div class="cta-block">
+        <div class="t">Scan the QR at our booth</div>
+        <div class="s">Free 15-min system audit</div>
+      </div>
+    </div>
+    <div class="foot">
+      <span>rjbusinesssolutions.org</span>
+      <span>Booth 24 · Growth Summit '26</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Deterministic QR-lookalike pattern generator
+  function fillQR(id){
+    const el = document.getElementById(id);
+    const seed = id.charCodeAt(2) || 7;
+    for(let i=0;i<100;i++){
+      const d = document.createElement('div');
+      d.className = 'qb';
+      const on = ((i * seed * 31) % 100 < 55);
+      // corner squares (positioning markers) — leave visible + block
+      const r = Math.floor(i/10), c = i%10;
+      const inCorner = (r<3&&c<3) || (r<3&&c>6) || (r>6&&c<3);
+      if(!on && !inCorner) d.style.background = 'transparent';
+      el.appendChild(d);
+    }
+  }
+  fillQR('qr1');
+  fillQR('qr2');
+</script>
+</body>
+</html>

@@ -52,13 +52,13 @@ export type OrgLetterhead = {
 };
 
 const DEFAULTS: OrgBrand = {
-  name: 'Smart FCRA',
-  owner: 'Rick Jefferson Solutions',
-  address: '',
+  name: 'RJ Business Solutions',
+  owner: 'Rick Jefferson',
+  address: '1342 NM 333, Tijeras, New Mexico 87059',
   website: 'https://rjbusinesssolutions.org',
   supportEmail: 'support@rjbusinesssolutions.org',
-  logoUrl: '',
-  fromName: 'Smart FCRA',
+  logoUrl: 'https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg',
+  fromName: 'RJ Business Solutions',
 };
 
 function safeParseSettings(raw: unknown): any {

@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — Case Study</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;flex-direction:column;gap:24px;align-items:center}
+  .page{width:794px;min-height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden;page-break-after:always}
+
+  /* PG 1 · HERO */
+  .hero{background:var(--grad-dark);color:#fff;padding:48px 56px 40px;position:relative;overflow:hidden}
+  .hero::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .hero .top{display:flex;align-items:center;gap:14px;position:relative;z-index:1;margin-bottom:32px}
+  .hero .top img{width:40px;height:40px;border-radius:9px}
+  .hero .top .n{font-family:var(--font-head);font-weight:600;font-size:15px}
+  .hero .kicker{display:inline-block;padding:5px 12px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);border-radius:999px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-bottom:16px;position:relative;z-index:1;font-weight:600}
+  .hero h1{font-family:var(--font-head);font-size:44px;font-weight:600;letter-spacing:-0.02em;line-height:1.05;margin:0;position:relative;z-index:1;max-width:600px}
+  .hero .client-line{margin-top:20px;font-family:var(--font-head);font-size:16px;color:var(--rj-sky);position:relative;z-index:1}
+
+  .metrics{background:#fff;padding:0 56px;margin-top:-40px;position:relative;z-index:2}
+  .metrics-inner{background:#fff;border:1px solid var(--rj-line);border-radius:16px;padding:24px;display:grid;grid-template-columns:repeat(3,1fr);gap:24px;box-shadow:0 20px 40px rgba(15,23,42,0.08)}
+  .metric .k{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:6px}
+  .metric .v{font-family:var(--font-head);font-size:36px;font-weight:600;color:var(--rj-blue);letter-spacing:-0.02em;line-height:1}
+  .metric .d{font-size:11px;color:var(--rj-muted-text);margin-top:4px}
+
+  .body{padding:32px 56px;flex:1;display:flex;flex-direction:column;gap:24px}
+  .body h2{font-family:var(--font-head);font-size:22px;font-weight:600;color:var(--rj-navy);margin:0 0 10px 0;letter-spacing:-0.01em;display:flex;align-items:center;gap:10px}
+  .body h2::before{content:"";width:5px;height:22px;background:var(--rj-blue);border-radius:3px}
+  .body p{font-size:13px;line-height:1.7;color:var(--rj-text);margin:0 0 10px 0}
+
+  .facts{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;background:var(--rj-light);border-radius:12px;padding:20px 24px}
+  .facts .k{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:4px}
+  .facts .v{font-family:var(--font-head);font-size:13px;color:var(--rj-navy);font-weight:600}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:16px 56px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:12px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+
+  /* PG 2 */
+  .inner{padding:40px 56px;flex:1;display:flex;flex-direction:column;gap:24px}
+  .inner .head{display:flex;justify-content:space-between;align-items:center;padding-bottom:16px;border-bottom:2px solid var(--rj-blue);margin-bottom:8px}
+  .inner .head .brand{display:flex;align-items:center;gap:10px;font-family:var(--font-head);font-weight:600;font-size:13px}
+  .inner .head .brand img{width:28px;height:28px;border-radius:6px}
+  .inner .head .pnum{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text)}
+
+  .quote-box{background:var(--grad-primary);color:#fff;padding:28px 32px;border-radius:14px;position:relative;overflow:hidden;box-shadow:0 20px 40px rgba(37,99,235,0.3)}
+  .quote-box::before{content:"\201C";position:absolute;top:0;left:20px;font-family:var(--font-head);font-size:120px;color:rgba(255,255,255,0.2);line-height:1}
+  .quote-box p{font-family:var(--font-head);font-size:18px;line-height:1.4;font-weight:500;margin:0 0 12px 0;padding-left:44px;letter-spacing:-0.01em;position:relative;z-index:1}
+  .quote-box .who{padding-left:44px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#e0f2fe;position:relative;z-index:1;font-weight:600}
+
+  .cta-row{background:var(--rj-navy);color:#fff;padding:20px 28px;border-radius:12px;display:flex;justify-content:space-between;align-items:center}
+  .cta-row .t{font-family:var(--font-head);font-weight:600;font-size:15px}
+  .cta-row .s{font-size:11px;color:#94a3b8;margin-top:2px}
+  .cta-row .btn{background:var(--grad-primary);color:#fff;padding:10px 18px;border-radius:8px;font-family:var(--font-head);font-weight:600;font-size:12px;box-shadow:0 6px 16px rgba(37,99,235,0.4)}
+
+  @media print{body{background:#fff;padding:0;gap:0}.page{box-shadow:none}}
+</style>
+</head>
+<body>
+
+<!-- PG 1 -->
+<div class="page">
+  <div class="hero">
+    <div class="top">
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+      <div class="n">RJ Business Solutions · Case Study</div>
+    </div>
+    <div class="kicker">● Client Win · 2026</div>
+    <h1>[Client] turned dead DMs into 47 booked calls in 30 days.</h1>
+    <div class="client-line">[Client Company] · [Industry] · [City]</div>
+  </div>
+
+  <div class="metrics">
+    <div class="metrics-inner">
+      <div class="metric"><div class="k">Booked Calls</div><div class="v">47</div><div class="d">In 30 days · from 0</div></div>
+      <div class="metric"><div class="k">Response Time</div><div class="v">&lt;90s</div><div class="d">Down from 6+ hrs</div></div>
+      <div class="metric"><div class="k">Revenue Lift</div><div class="v">+312%</div><div class="d">Month-over-month</div></div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div>
+      <h2>The situation</h2>
+      <p>[Client] was drowning in social DMs — 30-50 messages a day across Instagram and TikTok, most going unanswered for hours. Leads were slipping. Sales calls weren't showing. The team was manually copy-pasting the same 5 replies until burnout hit.</p>
+    </div>
+
+    <div>
+      <h2>Why now</h2>
+      <p>The business had product-market fit. Content was working. Attention was there. The bottleneck wasn't marketing — it was <b>follow-up infrastructure</b>. Every hour without a reply meant a warmer competitor closed the loop first.</p>
+    </div>
+
+    <div class="facts">
+      <div><div class="k">Industry</div><div class="v">[Vertical]</div></div>
+      <div><div class="k">Team Size</div><div class="v">4</div></div>
+      <div><div class="k">Timeline</div><div class="v">7-day launch</div></div>
+      <div><div class="k">Engagement</div><div class="v">Growth Engine</div></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="brand">RJ Business Solutions</div>
+    <div>Case Study 2026-01 · Page 01 · rjbusinesssolutions.org</div>
+  </div>
+</div>
+
+<!-- PG 2 -->
+<div class="page">
+  <div class="inner">
+    <div class="head">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Business Solutions</div>
+      <div class="pnum">Case Study · Page 02</div>
+    </div>
+
+    <div>
+      <h2>What we built</h2>
+      <p>A connected DM-to-booked-call engine — trained AI replies in [Client]'s brand voice, qualification logic that flags hot leads in under 90 seconds, booking calendar synced to their CRM, follow-up sequences for cold leads, and a no-show recovery loop that runs on its own.</p>
+    </div>
+
+    <div>
+      <h2>What changed</h2>
+      <p>DM response time dropped from 6+ hours to under 90 seconds. Lead qualification went from gut-feel to system-tagged. The team stopped living in the inbox. Sales calls started showing up because reminders and recovery ran automatically. Monthly reporting made every optimization measurable.</p>
+    </div>
+
+    <div>
+      <h2>The result</h2>
+      <p>Inside 30 days: 47 booked strategy calls, a 312% month-over-month revenue lift, and — for the first time — a founder who could take a weekend off without leads dying in silence.</p>
+    </div>
+
+    <div class="quote-box">
+      <p>Our DMs used to be a graveyard. Now they're the biggest revenue channel we have — and I don't touch a keyboard for the first three messages.</p>
+      <div class="who">— [Client Name] · Founder · [Client Company]</div>
+    </div>
+
+    <div class="cta-row">
+      <div>
+        <div class="t">Want the same system?</div>
+        <div class="s">7-day launch. Real audit. Real plan.</div>
+      </div>
+      <div class="btn">Book a Call →</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="brand">RJ Business Solutions</div>
+    <div>Case Study 2026-01 · Page 02 · support@rjbusinesssolutions.org</div>
+  </div>
+</div>
+
+</body>
+</html>

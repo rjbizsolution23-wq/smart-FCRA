@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — Pitch Deck</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#000}
+  deck-stage{background:#000}
+  section{
+    width:1920px;height:1080px;
+    background:var(--rj-soft);
+    color:var(--rj-text);
+    font-family:var(--font-body);
+    display:flex;flex-direction:column;
+    position:relative;overflow:hidden;
+    padding:100px 120px;
+  }
+  section.dark{background:var(--grad-dark);color:#fff}
+  section.dark::after{content:"";position:absolute;right:-200px;top:-200px;width:800px;height:800px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(80px);pointer-events:none}
+  section.light-blue{background:var(--grad-light)}
+
+  .brand-mark{position:absolute;top:56px;left:120px;display:flex;align-items:center;gap:12px;z-index:2}
+  .brand-mark img{width:36px;height:36px;border-radius:8px}
+  .brand-mark .n{font-family:var(--font-head);font-weight:600;font-size:16px;letter-spacing:-0.01em}
+  section.dark .brand-mark .n{color:#fff}
+
+  .slide-num{position:absolute;top:56px;right:120px;font-family:var(--font-mono);font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);z-index:2}
+  section.dark .slide-num{color:#94a3b8}
+
+  .kicker{display:inline-block;padding:8px 18px;background:var(--rj-light);color:var(--rj-blue);border-radius:999px;font-family:var(--font-mono);font-size:14px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;margin-bottom:32px;position:relative;z-index:1}
+  section.dark .kicker{background:rgba(14,165,233,0.15);color:var(--rj-sky);border:1px solid rgba(14,165,233,0.3)}
+
+  h1{font-family:var(--font-head);font-size:120px;font-weight:600;letter-spacing:-0.04em;line-height:0.95;margin:0;position:relative;z-index:1}
+  h2{font-family:var(--font-head);font-size:88px;font-weight:600;letter-spacing:-0.03em;line-height:1;margin:0 0 32px 0;position:relative;z-index:1}
+  h3{font-family:var(--font-head);font-size:36px;font-weight:600;letter-spacing:-0.01em;margin:0 0 16px 0}
+  .lead{font-size:32px;line-height:1.4;color:var(--rj-muted-text);max-width:1200px;position:relative;z-index:1;margin-top:32px}
+  section.dark .lead{color:#cbd5e1}
+
+  /* Slide 1 — cover */
+  .cover-slide{justify-content:space-between}
+  .cover-slide .middle{position:relative;z-index:1}
+  .cover-slide h1{max-width:1500px}
+  .cover-slide h1 span{background:linear-gradient(135deg,#0ea5e9 0%,#60a5fa 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .cover-slide .footline{display:flex;justify-content:space-between;align-items:flex-end;padding-top:32px;border-top:1px solid rgba(255,255,255,0.15);position:relative;z-index:1;font-family:var(--font-head)}
+  .cover-slide .footline .k{font-family:var(--font-mono);font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;margin-bottom:8px}
+  .cover-slide .footline .v{font-size:22px;color:#fff}
+
+  /* Two column */
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:80px;flex:1;align-items:center;position:relative;z-index:1;margin-top:60px}
+  .three-col{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;flex:1;position:relative;z-index:1;margin-top:60px;align-content:center}
+  .four-col{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;flex:1;position:relative;z-index:1;margin-top:60px;align-content:center}
+
+  .stat-block{background:#fff;border:1px solid var(--rj-line);border-radius:24px;padding:48px}
+  section.dark .stat-block{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.12)}
+  .stat-block .big{font-family:var(--font-head);font-size:96px;font-weight:600;letter-spacing:-0.03em;line-height:1;color:var(--rj-blue);margin-bottom:16px}
+  section.dark .stat-block .big{color:var(--rj-sky)}
+  .stat-block .lbl{font-family:var(--font-head);font-size:24px;font-weight:500;color:var(--rj-navy)}
+  section.dark .stat-block .lbl{color:#fff}
+  .stat-block .sub{font-size:16px;color:var(--rj-muted-text);margin-top:8px}
+  section.dark .stat-block .sub{color:#94a3b8}
+
+  .pain-card{background:#fff;border-radius:20px;padding:40px;border-left:4px solid var(--rj-danger)}
+  .pain-card .icon{font-family:var(--font-head);font-weight:700;font-size:20px;color:var(--rj-danger);margin-bottom:16px;font-family:var(--font-mono);letter-spacing:0.14em;text-transform:uppercase}
+  .pain-card h4{font-family:var(--font-head);font-size:26px;font-weight:600;color:var(--rj-navy);margin:0 0 12px 0;letter-spacing:-0.01em}
+  .pain-card p{font-size:17px;color:var(--rj-muted-text);line-height:1.5;margin:0}
+
+  .sol-card{background:linear-gradient(180deg,#fff 0%,var(--rj-light) 100%);border:1px solid var(--rj-border);border-radius:20px;padding:40px}
+  .sol-card .num{width:56px;height:56px;background:var(--grad-primary);border-radius:14px;display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--font-head);font-weight:700;font-size:22px;margin-bottom:20px;box-shadow:0 8px 20px rgba(37,99,235,0.3)}
+  .sol-card h4{font-family:var(--font-head);font-size:24px;font-weight:600;color:var(--rj-navy);margin:0 0 10px 0;letter-spacing:-0.01em}
+  .sol-card p{font-size:16px;color:var(--rj-muted-text);line-height:1.5;margin:0}
+
+  .service-list{background:#fff;border-radius:20px;padding:48px;border:1px solid var(--rj-line)}
+  .service-list ul{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:16px 40px}
+  .service-list li{font-family:var(--font-head);font-size:22px;font-weight:500;color:var(--rj-navy);padding:16px 0;border-bottom:1px solid var(--rj-line);display:flex;align-items:center;gap:16px}
+  .service-list li::before{content:"→";color:var(--rj-blue);font-weight:700}
+
+  /* Traction / metrics */
+  .metric-tile{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:40px;backdrop-filter:blur(10px)}
+  .metric-tile .k{font-family:var(--font-mono);font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-bottom:12px}
+  .metric-tile .v{font-family:var(--font-head);font-size:72px;font-weight:600;color:#fff;letter-spacing:-0.03em;line-height:1}
+  .metric-tile .d{font-size:16px;color:#cbd5e1;margin-top:12px;line-height:1.4}
+
+  /* Team / founder */
+  .founder-card{display:flex;gap:48px;align-items:center;background:#fff;padding:56px;border-radius:24px;border:1px solid var(--rj-line);position:relative;z-index:1}
+  .founder-card .photo{width:220px;height:220px;border-radius:24px;background:var(--grad-dark);display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--font-head);font-weight:700;font-size:88px;letter-spacing:-0.03em;flex-shrink:0}
+  .founder-card h3{font-family:var(--font-head);font-size:52px;letter-spacing:-0.02em;margin:0 0 10px 0}
+  .founder-card .role{font-family:var(--font-mono);font-size:14px;letter-spacing:0.12em;text-transform:uppercase;color:var(--rj-blue);margin-bottom:20px;font-weight:600}
+  .founder-card p{font-size:19px;line-height:1.5;color:var(--rj-muted-text);margin:0;max-width:800px}
+
+  /* Pricing */
+  .price-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;position:relative;z-index:1;margin-top:60px}
+  .price-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:24px;padding:48px;color:#fff}
+  .price-card.featured{background:var(--grad-primary);border-color:transparent;transform:scale(1.05);box-shadow:0 30px 60px rgba(37,99,235,0.4)}
+  .price-card .tier{font-family:var(--font-mono);font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-bottom:16px;font-weight:600}
+  .price-card.featured .tier{color:#fff}
+  .price-card .price{font-family:var(--font-head);font-size:64px;font-weight:600;letter-spacing:-0.03em;line-height:1}
+  .price-card .price small{font-size:20px;color:#94a3b8;font-weight:400}
+  .price-card.featured .price small{color:rgba(255,255,255,0.7)}
+  .price-card ul{list-style:none;padding:0;margin:32px 0 0 0;font-size:16px;line-height:1.7;color:#cbd5e1}
+  .price-card.featured ul{color:#fff}
+  .price-card li{padding:6px 0;padding-left:28px;position:relative}
+  .price-card li::before{content:"✓";position:absolute;left:0;color:var(--rj-sky);font-weight:700}
+  .price-card.featured li::before{color:#fff}
+
+  /* Closing CTA */
+  .close-slide{align-items:center;justify-content:center;text-align:center}
+  .close-slide h1{font-size:180px;text-align:center;max-width:none}
+  .close-slide h1 span{color:var(--rj-sky)}
+  .close-slide .url{font-family:var(--font-mono);font-size:24px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-top:56px;position:relative;z-index:1}
+  .close-slide .contact-row{display:flex;gap:48px;margin-top:24px;position:relative;z-index:1;font-family:var(--font-head);font-size:20px;color:#cbd5e1}
+</style>
+</head>
+<body>
+<deck-stage>
+
+<!-- 01 COVER -->
+<section class="dark cover-slide">
+  <div class="brand-mark">
+    <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+    <div class="n" style="color:#fff">RJ Business Solutions</div>
+  </div>
+  <div class="slide-num">01 / 10</div>
+
+  <div class="middle" style="margin-top:auto">
+    <div class="kicker">● Investor / Partner Deck · 2026</div>
+    <h1>We build the <span>automation backbone</span><br/>behind scalable businesses.</h1>
+    <div class="lead">AI systems · Credit technology · Growth infrastructure · For operators ready to scale.</div>
+  </div>
+
+  <div class="footline">
+    <div style="display:flex;gap:80px">
+      <div><div class="k">Founder</div><div class="v">Rick Jefferson</div></div>
+      <div><div class="k">HQ</div><div class="v">Tijeras, NM</div></div>
+      <div><div class="k">Domain</div><div class="v">rjbusinesssolutions.org</div></div>
+    </div>
+    <div><div class="k">Version</div><div class="v">Deck v1.0 · 2026</div></div>
+  </div>
+</section>
+
+<!-- 02 THE PROBLEM -->
+<section>
+  <div class="brand-mark"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+  <div class="slide-num">02 / 10 · The Problem</div>
+
+  <div style="margin-top:120px">
+    <div class="kicker">The Problem</div>
+    <h2>Most businesses lose more<br/>leads to bad follow-up<br/>than to bad marketing.</h2>
+  </div>
+
+  <div class="three-col">
+    <div class="pain-card">
+      <div class="icon">Pain 01</div>
+      <h4>DMs die in silence</h4>
+      <p>Leads message on social, then vanish. No CRM. No routing. No follow-up.</p>
+    </div>
+    <div class="pain-card">
+      <div class="icon">Pain 02</div>
+      <h4>Manual work eats margin</h4>
+      <p>Owners are stuck in the inbox instead of building the business.</p>
+    </div>
+    <div class="pain-card">
+      <div class="icon">Pain 03</div>
+      <h4>Systems don't talk to each other</h4>
+      <p>Content, CRM, payments, credit tools — five tools, zero handshake.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 03 THE SOLUTION -->
+<section class="light-blue">
+  <div class="brand-mark"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+  <div class="slide-num">03 / 10 · The Solution</div>
+
+  <div style="margin-top:120px">
+    <div class="kicker">The Solution</div>
+    <h2>Connected systems.<br/>Not more tools.</h2>
+    <div class="lead">RJ Business Solutions builds AI-powered infrastructure that ties content, DMs, CRM, credit tech, payments, and follow-up into one working system.</div>
+  </div>
+
+  <div class="three-col">
+    <div class="sol-card">
+      <div class="num">1</div>
+      <h4>Capture</h4>
+      <p>Content + DMs + funnels feed one pipeline. Zero leads slip through cracks.</p>
+    </div>
+    <div class="sol-card">
+      <div class="num">2</div>
+      <h4>Automate</h4>
+      <p>AI qualifies, routes, follows up — with brand voice + compliance guardrails.</p>
+    </div>
+    <div class="sol-card">
+      <div class="num">3</div>
+      <h4>Scale</h4>
+      <p>Portals, payments, reporting. The whole backend runs while you sleep.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 04 WHAT WE BUILD -->
+<section>
+  <div class="brand-mark"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+  <div class="slide-num">04 / 10 · What We Build</div>
+
+  <div style="margin-top:120px">
+    <div class="kicker">What We Build</div>
+    <h2>Fifteen services.<br/>One connected system.</h2>
+  </div>
+
+  <div style="margin-top:60px;position:relative;z-index:1">
+    <div class="service-list">
+      <ul>
+        <li>AI Business Automation</li>
+        <li>Credit Technology Platforms</li>
+        <li>Done-For-You Social + DMs</li>
+        <li>Credit Monitoring APIs</li>
+        <li>Lead Follow-Up Systems</li>
+        <li>Conversational AI Agents</li>
+        <li>CRM + Pipeline Automation</li>
+        <li>Client Portals + Dashboards</li>
+        <li>Payment + Subscription Infra</li>
+        <li>White-Label SaaS / FinTech</li>
+        <li>Compliance-Aware Workflows</li>
+        <li>Funnel + Landing Systems</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 05 MARKET -->
+<section class="dark">
+  <div class="brand-mark"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n" style="color:#fff">RJ Business Solutions</div></div>
+  <div class="slide-num">05 / 10 · Market</div>
+
+  <div style="margin-top:120px">
+    <div class="kicker">Market Opportunity</div>
+    <h2 style="color:#fff">Credit + FinTech + service<br/>businesses need infrastructure.</h2>
+  </div>
+
+  <div class="three-col">
+    <div class="metric-tile">
+      <div class="k">Credit Repair Industry</div>
+      <div class="v">$4.4B</div>
+      <div class="d">US market, growing 6% YoY. Underserved by modern software.</div>
+    </div>
+    <div class="metric-tile">
+      <div class="k">SMB Automation Spend</div>
+      <div class="v">$100B+</div>
+      <div class="d">Small businesses now spending on AI + workflow tooling.</div>
+    </div>
+    <div class="metric-tile">
+      <div class="k">Service Business TAM</div>
+      <div class="v">30M+</div>
+      <div class="d">US service businesses that need a real growth backend.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 06 TRACTION -->
+<section>
+  <div class="brand-mark"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+  <div class="slide-num">06 / 10 · Traction</div>
+
+  <div style="margin-top:120px">
+    <div class="kicker">Momentum</div>
+    <h2>Built systems.<br/>Real infrastructure.<br/>Ready to scale.</h2>
+  </div>
+
+  <div class="four-col">
+    <div class="stat-block"><div class="big">15+</div><div class="lbl">Core Services</div><div class="sub">Live and delivered</div></div>
+    <div class="stat-block"><div class="big">AI-Native</div><div class="lbl">Infrastructure</div><div class="sub">Built for scale</div></div>
+    <div class="stat-block"><div class="big">24/7</div><div class="lbl">Automation</div><div class="sub">Never sleeps</div></div>
+    <div class="stat-block"><div class="big">100%</div><div class="lbl">Compliance-Aware</div><div class="sub">FCRA / FDCPA workflows</div></div>
+  </div>
+</section>
+
+<!-- 07 BUSINESS MODEL -->
+<section class="dark">
+  <div class="brand-mark"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n" style="color:#fff">RJ Business Solutions</div></div>
+  <div class="slide-num">07 / 10 · Business Model</div>
+
+  <div style="margin-top:100px">
+    <div class="kicker">Pricing</div>
+    <h2 style="color:#fff">Setup + monthly recurring.<br/>Predictable revenue.</h2>
+  </div>
+
+  <div class="price-grid">
+    <div class="price-card">
+      <div class="tier">Launch</div>
+      <div class="price">$1,997<small> setup</small></div>
+      <ul>
+        <li>Social + DM system</li>
+        <li>CRM sync + follow-up</li>
+        <li>Compliance guardrails</li>
+        <li>7-day launch</li>
+      </ul>
+    </div>
+    <div class="price-card featured">
+      <div class="tier">Growth · Most Popular</div>
+      <div class="price">$997<small>/mo</small></div>
+      <ul>
+        <li>Everything in Launch</li>
+        <li>AI DM management</li>
+        <li>Monthly reporting</li>
+        <li>Human escalation rules</li>
+        <li>No-show recovery</li>
+      </ul>
+    </div>
+    <div class="price-card">
+      <div class="tier">Enterprise</div>
+      <div class="price">Custom</div>
+      <ul>
+        <li>White-label platform</li>
+        <li>Credit tech + APIs</li>
+        <li>Dedicated infrastructure</li>
+        <li>SLA + compliance audit</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 08 FOUNDER -->
+<section class="light-blue">
+  <div class="brand-mark"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+  <div class="slide-num">08 / 10 · Founder</div>
+
+  <div style="margin-top:120px">
+    <div class="kicker">Founder</div>
+    <h2>Built by an operator.</h2>
+  </div>
+
+  <div style="margin-top:60px;position:relative;z-index:1">
+    <div class="founder-card">
+      <div class="photo">RJ</div>
+      <div>
+        <h3>Rick Jefferson</h3>
+        <div class="role">Founder · Credit Technology Architect · CEO</div>
+        <p>Credit technology architect, AI systems builder, and business automation strategist. Operates at the intersection of credit expertise, fintech infrastructure, enterprise software, and real growth execution. Founder of Rick Jefferson Solutions and lead operator at RJ Business Solutions.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 09 THE ASK -->
+<section>
+  <div class="brand-mark"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+  <div class="slide-num">09 / 10 · The Ask</div>
+
+  <div style="margin-top:120px">
+    <div class="kicker">The Ask</div>
+    <h2>Partners. Capital. Distribution.</h2>
+    <div class="lead">We're expanding the fleet — new verticals, new white-label deployments, deeper credit-tech infrastructure. Looking for the right operators, distribution partners, and strategic capital.</div>
+  </div>
+
+  <div class="three-col">
+    <div class="sol-card">
+      <div class="num">$</div>
+      <h4>Strategic Capital</h4>
+      <p>To accelerate credit-tech platform buildout + white-label deployments.</p>
+    </div>
+    <div class="sol-card">
+      <div class="num">◊</div>
+      <h4>Distribution Partners</h4>
+      <p>Agencies, brokers, credit orgs with client bases that need our infrastructure.</p>
+    </div>
+    <div class="sol-card">
+      <div class="num">◎</div>
+      <h4>Strategic Operators</h4>
+      <p>Fintech, compliance, and enterprise sales leaders to expand the fleet.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 10 CLOSING -->
+<section class="dark close-slide">
+  <div class="brand-mark"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n" style="color:#fff">RJ Business Solutions</div></div>
+  <div class="slide-num">10 / 10</div>
+
+  <h1>Let's build<br/><span>the backbone.</span></h1>
+  <div class="url">rjbusinesssolutions.org</div>
+  <div class="contact-row">
+    <span>Rick Jefferson</span>
+    <span>·</span>
+    <span>support@rjbusinesssolutions.org</span>
+    <span>·</span>
+    <span>Tijeras, NM</span>
+  </div>
+</section>
+
+</deck-stage>
+<script src="deck_stage.js"></script>
+</body>
+</html>

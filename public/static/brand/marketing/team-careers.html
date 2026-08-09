@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — Team &amp; Careers</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:var(--rj-white)}
+
+  /* NAV */
+  .nav{position:sticky;top:0;background:rgba(255,255,255,0.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--rj-line);z-index:100;padding:16px 0}
+  .nav-inner{max-width:1280px;margin:0 auto;padding:0 40px;display:flex;align-items:center;justify-content:space-between}
+  .nav .brand{display:flex;align-items:center;gap:10px;font-family:var(--font-head);font-weight:600;font-size:15px;color:var(--rj-navy);text-decoration:none}
+  .nav .brand img{width:32px;height:32px;border-radius:7px}
+  .nav ul{list-style:none;padding:0;margin:0;display:flex;gap:32px}
+  .nav ul a{color:var(--rj-muted-text);text-decoration:none;font-size:14px;font-weight:500}
+  .nav ul a.active{color:var(--rj-blue);font-weight:600}
+  .nav .cta-btn{background:var(--rj-blue);color:#fff;padding:9px 18px;border-radius:8px;text-decoration:none;font-family:var(--font-head);font-weight:600;font-size:13px;box-shadow:0 4px 14px rgba(37,99,235,0.3)}
+
+  /* HERO */
+  .hero{background:var(--grad-dark);color:#fff;padding:100px 0 80px;position:relative;overflow:hidden}
+  .hero::after{content:"";position:absolute;right:-200px;top:-200px;width:800px;height:800px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(60px)}
+  .hero-inner{max-width:1280px;margin:0 auto;padding:0 40px;position:relative;z-index:1;text-align:center}
+  .hero .kicker{display:inline-flex;padding:6px 14px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);border-radius:999px;font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-bottom:28px;font-weight:600}
+  .hero h1{font-family:var(--font-head);font-size:88px;font-weight:600;letter-spacing:-0.04em;line-height:0.98;margin:0}
+  .hero h1 span{background:linear-gradient(135deg,#0ea5e9,#60a5fa);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero .sub{font-size:22px;color:#cbd5e1;margin:24px auto 0;max-width:640px;line-height:1.5}
+
+  .section{padding:100px 0;background:#fff}
+  .section.tinted{background:var(--rj-light)}
+  .section.dark{background:var(--rj-navy);color:#fff}
+  .section-inner{max-width:1280px;margin:0 auto;padding:0 40px}
+  .eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:14px}
+  .section.dark .eyebrow{color:var(--rj-sky)}
+  h2{font-family:var(--font-head);font-size:56px;font-weight:600;letter-spacing:-0.03em;line-height:1;margin:0 0 20px 0;color:var(--rj-navy)}
+  .section.dark h2{color:#fff}
+  h2 span{background:linear-gradient(135deg,#2563eb,#0ea5e9);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lead-text{font-size:18px;color:var(--rj-muted-text);max-width:700px;line-height:1.5;margin:0 0 56px 0}
+  .section.dark .lead-text{color:#94a3b8}
+
+  /* ORG CHART */
+  .org{position:relative;padding:20px 0 40px}
+
+  .org-node{background:linear-gradient(135deg,#fff,var(--rj-light));border:1px solid var(--rj-border);border-radius:16px;padding:24px;text-align:center;box-shadow:0 15px 30px rgba(15,23,42,0.08);position:relative;transition:transform .2s}
+  .org-node:hover{transform:translateY(-3px)}
+  .org-node.founder{background:var(--grad-dark);color:#fff;border:none;box-shadow:0 20px 40px rgba(15,23,42,0.25)}
+  .org-node.founder::after{content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(20px);border-radius:50%;pointer-events:none}
+  .org-node .av{width:64px;height:64px;border-radius:14px;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:700;font-size:22px;letter-spacing:-0.02em;position:relative;z-index:1}
+  .org-node.founder .av{background:var(--grad-primary);color:#fff;box-shadow:0 8px 20px rgba(37,99,235,0.4)}
+  .org-node:not(.founder) .av{background:var(--rj-navy);color:#fff}
+  .org-node .name{font-family:var(--font-head);font-weight:600;font-size:16px;letter-spacing:-0.01em;position:relative;z-index:1}
+  .org-node.founder .name{color:#fff}
+  .org-node:not(.founder) .name{color:var(--rj-navy)}
+  .org-node .role{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);margin-top:4px;font-weight:600;position:relative;z-index:1}
+  .org-node.founder .role{color:var(--rj-sky)}
+  .org-node .dept{font-family:var(--font-head);font-size:11px;color:var(--rj-muted-text);margin-top:6px;font-weight:500;position:relative;z-index:1}
+  .org-node.founder .dept{color:#cbd5e1}
+
+  .founder-row{display:flex;justify-content:center;margin-bottom:60px;position:relative}
+  .founder-row .org-node{width:280px}
+  .founder-row::after{content:"";position:absolute;bottom:-30px;left:50%;transform:translateX(-50%);width:2px;height:30px;background:linear-gradient(180deg,var(--rj-blue),transparent)}
+
+  .leads-row{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;margin-bottom:60px;position:relative;max-width:960px;margin-left:auto;margin-right:auto}
+  .leads-row::before{content:"";position:absolute;top:-30px;left:16.6%;right:16.6%;height:2px;background:linear-gradient(90deg,var(--rj-blue),var(--rj-sky),var(--rj-blue))}
+  .leads-row .org-node{position:relative}
+  .leads-row .org-node::before{content:"";position:absolute;top:-30px;left:50%;transform:translateX(-50%);width:2px;height:30px;background:linear-gradient(180deg,var(--rj-blue),transparent)}
+  .leads-row .org-node::after{content:"";position:absolute;bottom:-30px;left:50%;transform:translateX(-50%);width:2px;height:30px;background:linear-gradient(180deg,transparent,var(--rj-blue))}
+
+  .ic-team{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:960px;margin:0 auto}
+  .ic-col{background:#fff;border:1px dashed var(--rj-border);border-radius:14px;padding:20px;text-align:center}
+  .ic-col .col-title{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:12px}
+  .ic-col .col-title span{background:var(--rj-light);padding:3px 8px;border-radius:4px;margin-left:4px}
+  .ic-col .members{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  .ic-col .m{width:38px;height:38px;background:var(--grad-primary);border-radius:9px;color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:700;font-size:12px}
+  .ic-col .m.open{background:#fff;color:var(--rj-blue);border:2px dashed var(--rj-blue);font-size:14px}
+  .ic-col .desc{font-family:var(--font-head);font-size:13px;color:var(--rj-navy);font-weight:500;letter-spacing:-0.01em}
+  .ic-col .desc small{font-family:var(--font-mono);font-size:9px;color:var(--rj-muted-text);letter-spacing:0.12em;text-transform:uppercase;font-weight:600;display:block;margin-top:4px}
+
+  /* Values */
+  .values-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+  .val-card{background:#fff;border:1px solid rgba(255,255,255,0.12);border-radius:16px;padding:28px 24px;background:rgba(255,255,255,0.05);backdrop-filter:blur(10px)}
+  .val-card .n{font-family:var(--font-head);font-weight:700;font-size:32px;letter-spacing:-0.03em;color:var(--rj-sky);margin-bottom:10px;line-height:1}
+  .val-card h4{font-family:var(--font-head);font-weight:600;font-size:17px;color:#fff;margin:0 0 6px 0;letter-spacing:-0.01em}
+  .val-card p{font-size:13px;color:#cbd5e1;line-height:1.5;margin:0}
+
+  /* Open roles */
+  .roles-list{display:flex;flex-direction:column;gap:14px}
+  .role-card{background:#fff;border:1px solid var(--rj-line);border-radius:16px;padding:24px 28px;display:grid;grid-template-columns:auto 1fr auto auto;gap:24px;align-items:center;transition:all .2s}
+  .role-card:hover{border-color:var(--rj-blue);box-shadow:0 15px 30px rgba(37,99,235,0.12);transform:translateY(-2px)}
+  .role-card .dept-tag{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;background:var(--rj-light);padding:6px 12px;border-radius:6px;white-space:nowrap}
+  .role-card .info h3{font-family:var(--font-head);font-weight:600;font-size:18px;color:var(--rj-navy);margin:0 0 4px 0;letter-spacing:-0.01em}
+  .role-card .info .d{font-size:12px;color:var(--rj-muted-text);line-height:1.5}
+  .role-card .meta{font-family:var(--font-mono);font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--rj-muted-text);text-align:right;font-weight:600}
+  .role-card .meta b{color:var(--rj-navy);font-family:var(--font-head);font-size:13px;letter-spacing:-0.01em;text-transform:none;display:block;margin-top:2px;font-weight:600}
+  .role-card .apply{background:var(--grad-primary);color:#fff;padding:12px 20px;border-radius:10px;font-family:var(--font-head);font-weight:600;font-size:13px;text-decoration:none;box-shadow:0 6px 14px rgba(37,99,235,0.3);white-space:nowrap}
+
+  /* Perks */
+  .perks-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  .perk{background:linear-gradient(180deg,#fff,var(--rj-light));border:1px solid var(--rj-border);border-radius:14px;padding:24px}
+  .perk .ic{width:48px;height:48px;background:var(--grad-primary);border-radius:12px;color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:700;font-size:18px;margin-bottom:14px;box-shadow:0 6px 14px rgba(37,99,235,0.35)}
+  .perk h4{font-family:var(--font-head);font-weight:600;font-size:15px;color:var(--rj-navy);margin:0 0 6px 0;letter-spacing:-0.01em}
+  .perk p{font-size:13px;color:var(--rj-muted-text);line-height:1.5;margin:0}
+
+  /* Final CTA */
+  .final-cta{background:var(--grad-primary);color:#fff;padding:80px 0;position:relative;overflow:hidden;text-align:center}
+  .final-cta::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 70% 30%,rgba(255,255,255,0.15) 0%,transparent 60%)}
+  .final-cta-inner{max-width:800px;margin:0 auto;padding:0 40px;position:relative;z-index:1}
+  .final-cta h2{color:#fff;font-size:56px;margin:0 0 16px 0}
+  .final-cta p{font-family:var(--font-head);font-size:18px;color:rgba(255,255,255,0.9);margin:0 0 32px 0}
+  .final-cta .btn-c{background:#fff;color:var(--rj-blue);padding:18px 36px;border-radius:14px;font-family:var(--font-head);font-weight:600;font-size:16px;text-decoration:none;box-shadow:0 20px 40px rgba(0,0,0,0.15);display:inline-block}
+
+  /* Footer */
+  .footer{background:var(--rj-navy);color:#94a3b8;padding:32px 0}
+  .footer-inner{max-width:1280px;margin:0 auto;padding:0 40px;display:flex;justify-content:space-between;align-items:center;font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+  .footer-inner .brand{color:#fff;font-family:var(--font-head);font-size:14px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:flex;align-items:center;gap:10px}
+  .footer-inner .brand img{width:32px;height:32px;border-radius:7px}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="#" class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Business Solutions</a>
+    <ul>
+      <li><a href="#">Services</a></li>
+      <li><a href="#">Case Studies</a></li>
+      <li><a href="#">Pricing</a></li>
+      <li><a href="#" class="active">Team &amp; Careers</a></li>
+    </ul>
+    <a href="#" class="cta-btn">Book Call →</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-inner">
+    <div class="kicker">● Team &amp; Careers · 2026</div>
+    <h1>Build the <span>backbone.</span><br/>With us.</h1>
+    <div class="sub">A small team shipping outsized systems for credit, fintech, and service-based operators. We're hiring senior builders who don't need to be told twice.</div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="eyebrow">● Org Chart</div>
+    <h2>Small team.<br/><span>High leverage.</span></h2>
+    <p class="lead-text">Fewer than 10 humans, doing what most companies need 50 to do. Every seat is load-bearing.</p>
+
+    <div class="org">
+      <div class="founder-row">
+        <div class="org-node founder">
+          <div class="av">RJ</div>
+          <div class="name">Rick Jefferson</div>
+          <div class="role">Founder · CEO · CTO</div>
+          <div class="dept">Company / Vision / Product</div>
+        </div>
+      </div>
+
+      <div class="leads-row">
+        <div class="org-node">
+          <div class="av">MK</div>
+          <div class="name">M. Kimura</div>
+          <div class="role">Head of Engineering</div>
+          <div class="dept">Platform · Credit Tech</div>
+        </div>
+        <div class="org-node">
+          <div class="av">SB</div>
+          <div class="name">S. Barrera</div>
+          <div class="role">Head of Ops</div>
+          <div class="dept">Client Success · Fleet Ops</div>
+        </div>
+        <div class="org-node">
+          <div class="av">DP</div>
+          <div class="name">D. Patel</div>
+          <div class="role">Head of Growth</div>
+          <div class="dept">GTM · Partnerships</div>
+        </div>
+      </div>
+
+      <div class="ic-team">
+        <div class="ic-col">
+          <div class="col-title">Engineering <span>3 + 2 open</span></div>
+          <div class="members">
+            <div class="m">AT</div><div class="m">JL</div><div class="m">RC</div>
+            <div class="m open">+</div><div class="m open">+</div>
+          </div>
+          <div class="desc">Full-stack + AI/ML<small>2 open roles</small></div>
+        </div>
+        <div class="ic-col">
+          <div class="col-title">Client Success <span>2 + 1 open</span></div>
+          <div class="members">
+            <div class="m">EM</div><div class="m">KT</div>
+            <div class="m open">+</div>
+          </div>
+          <div class="desc">Onboarding + support<small>1 open role</small></div>
+        </div>
+        <div class="ic-col">
+          <div class="col-title">Growth <span>1 + 1 open</span></div>
+          <div class="members">
+            <div class="m">NH</div>
+            <div class="m open">+</div>
+          </div>
+          <div class="desc">Content + partnerships<small>1 open role</small></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section dark">
+  <div class="section-inner">
+    <div class="eyebrow">● Operating Values</div>
+    <h2 style="color:#fff">How we <span>run.</span></h2>
+    <p class="lead-text">The four rules that shape every decision we make.</p>
+
+    <div class="values-grid">
+      <div class="val-card"><div class="n">01</div><h4>Ship &gt; Perfect</h4><p>Momentum compounds. 7-day launches are our default. We iterate live, not in Figma.</p></div>
+      <div class="val-card"><div class="n">02</div><h4>Systems, not slogans</h4><p>Every offer ships as infrastructure. If it can't be measured or automated, we don't sell it.</p></div>
+      <div class="val-card"><div class="n">03</div><h4>Compliance-first</h4><p>Automation without guardrails is a lawsuit. FCRA, FDCPA, TCPA built in from day one.</p></div>
+      <div class="val-card"><div class="n">04</div><h4>Write it down</h4><p>If it's not in a doc, it didn't happen. Memory doesn't scale. Documentation does.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section tinted">
+  <div class="section-inner">
+    <div class="eyebrow">● Open Roles · 5 Positions</div>
+    <h2>We're <span>hiring.</span></h2>
+    <p class="lead-text">Senior builders. Remote-first. Compliance-aware. If you've shipped systems that survived contact with real users, we want you.</p>
+
+    <div class="roles-list">
+      <div class="role-card">
+        <div class="dept-tag">Engineering</div>
+        <div class="info">
+          <h3>Senior Full-Stack Engineer</h3>
+          <div class="d">Next.js · TypeScript · Cloudflare Workers · Supabase. Own the client-portal + Growth Engine platform.</div>
+        </div>
+        <div class="meta">Remote<b>Full-time · Sr</b></div>
+        <a href="#" class="apply">Apply →</a>
+      </div>
+      <div class="role-card">
+        <div class="dept-tag">Engineering</div>
+        <div class="info">
+          <h3>AI/ML Engineer · Conversational Agents</h3>
+          <div class="d">LangGraph · CrewAI · MCP. Build the reply-generation + escalation logic across every client.</div>
+        </div>
+        <div class="meta">Remote<b>Full-time · Sr</b></div>
+        <a href="#" class="apply">Apply →</a>
+      </div>
+      <div class="role-card">
+        <div class="dept-tag">Client Success</div>
+        <div class="info">
+          <h3>Client Onboarding Lead</h3>
+          <div class="d">Own the 7-day launch protocol end-to-end. Kickoff to live. Client-facing. Ops-native.</div>
+        </div>
+        <div class="meta">Remote<b>Full-time</b></div>
+        <a href="#" class="apply">Apply →</a>
+      </div>
+      <div class="role-card">
+        <div class="dept-tag">Growth</div>
+        <div class="info">
+          <h3>Partnerships Manager</h3>
+          <div class="d">Referral partner program. Fleet expansion. Credit-tech network relationships.</div>
+        </div>
+        <div class="meta">Hybrid · NM<b>Full-time</b></div>
+        <a href="#" class="apply">Apply →</a>
+      </div>
+      <div class="role-card">
+        <div class="dept-tag">Design</div>
+        <div class="info">
+          <h3>Product Designer · Contract-to-Hire</h3>
+          <div class="d">Design system + dashboard iteration. 3-month contract with hire path.</div>
+        </div>
+        <div class="meta">Remote<b>Contract</b></div>
+        <a href="#" class="apply">Apply →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="eyebrow">● Perks &amp; Benefits</div>
+    <h2>What we <span>offer.</span></h2>
+
+    <div class="perks-grid">
+      <div class="perk"><div class="ic">$</div><h4>Competitive base + equity</h4><p>Market-rate cash + real ownership for full-time hires. Vesting on standard 4-year cliff.</p></div>
+      <div class="perk"><div class="ic">◐</div><h4>Remote-first, async-first</h4><p>Work from anywhere. Overlap 3 hours with US Mountain time. No timezone theater.</p></div>
+      <div class="perk"><div class="ic">✚</div><h4>Full health / dental / vision</h4><p>100% employer-paid for you, 50% for dependents. FSA + HSA options included.</p></div>
+      <div class="perk"><div class="ic">☰</div><h4>Unlimited PTO · minimum 3 weeks</h4><p>Real minimums, not vibes. We enforce time off. Burnout kills systems.</p></div>
+      <div class="perk"><div class="ic">◆</div><h4>Equipment budget · $3K</h4><p>Laptop, monitor, chair, whatever you need to ship. Refreshed every 3 years.</p></div>
+      <div class="perk"><div class="ic">★</div><h4>Annual team offsite</h4><p>Once a year we get everyone in one room. Real conversations. Real strategy. Real food.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="final-cta">
+  <div class="final-cta-inner">
+    <h2>Don't see your role?</h2>
+    <p>Send us your work anyway. We hire people, not job descriptions.</p>
+    <a href="#" class="btn-c">Send Your Work →</a>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Business Solutions</div>
+    <div>© 2026 · Tijeras NM · careers@rjbusinesssolutions.org</div>
+  </div>
+</footer>
+
+</body>
+</html>

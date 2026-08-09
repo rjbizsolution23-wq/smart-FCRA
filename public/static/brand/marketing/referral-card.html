@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Referral Card</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:60px 40px;display:flex;flex-direction:column;gap:40px;align-items:center}
+  .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:16px;text-align:center}
+  .stage{display:flex;gap:40px;justify-content:center;flex-wrap:wrap}
+
+  /* 4x6 postcard scaled */
+  .ref{width:520px;height:340px;border-radius:16px;overflow:hidden;position:relative;box-shadow:0 30px 60px rgba(15,23,42,0.25)}
+
+  /* FRONT */
+  .front{background:var(--grad-dark);color:#fff;padding:36px 40px;display:flex;flex-direction:column;justify-content:space-between}
+  .front::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(50px)}
+  .front::before{content:"";position:absolute;left:-80px;bottom:-80px;width:300px;height:300px;background:radial-gradient(circle,rgba(37,99,235,0.35) 0%,transparent 60%);filter:blur(40px)}
+  .front .top{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1}
+  .front .top .brand{display:flex;align-items:center;gap:10px}
+  .front .top .brand img{width:36px;height:36px;border-radius:8px}
+  .front .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:14px}
+  .front .top .kicker{padding:5px 12px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);border-radius:999px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600}
+
+  .front .middle{position:relative;z-index:1}
+  .front h1{font-family:var(--font-head);font-size:52px;font-weight:700;letter-spacing:-0.03em;line-height:0.95;margin:0}
+  .front h1 span{background:linear-gradient(135deg,#0ea5e9 0%,#60a5fa 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .front .sub{font-family:var(--font-head);color:#cbd5e1;font-size:14px;margin-top:12px;font-weight:500;line-height:1.4}
+
+  .front .footline{display:flex;justify-content:space-between;align-items:flex-end;padding-top:20px;border-top:1px solid rgba(255,255,255,0.15);position:relative;z-index:1}
+  .front .footline .k{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;font-weight:600;margin-bottom:3px}
+  .front .footline .v{font-family:var(--font-head);font-weight:600;font-size:13px}
+  .front .footline .v.blue{color:var(--rj-sky)}
+
+  /* BACK */
+  .back{background:#fff;color:var(--rj-navy);padding:0;display:grid;grid-template-columns:1.4fr 1fr}
+  .back .l-col{padding:32px 32px 24px;display:flex;flex-direction:column;gap:14px;position:relative}
+  .back .l-col::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--grad-primary)}
+  .back .l-col .lbl-back{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600}
+  .back .l-col h3{font-family:var(--font-head);font-size:22px;font-weight:600;color:var(--rj-navy);margin:0;letter-spacing:-0.01em;line-height:1.15}
+  .back .l-col ul{list-style:none;padding:0;margin:0}
+  .back .l-col li{padding:6px 0 6px 20px;position:relative;font-size:12px;color:var(--rj-text);line-height:1.4}
+  .back .l-col li::before{content:"→";position:absolute;left:0;color:var(--rj-blue);font-weight:700}
+  .back .l-col .foot-r{margin-top:auto;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+
+  .back .r-col{background:linear-gradient(180deg,var(--rj-light),#fff);padding:32px 24px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:14px;border-left:1px dashed var(--rj-border)}
+  .back .r-col .code-lbl{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+  .back .r-col .code{font-family:var(--font-head);font-weight:700;font-size:22px;color:var(--rj-navy);letter-spacing:0.05em;background:#fff;padding:12px 20px;border-radius:8px;border:2px dashed var(--rj-blue);box-shadow:0 4px 12px rgba(37,99,235,0.15)}
+  .back .r-col .url{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600}
+  .back .r-col .qr{width:90px;height:90px;background:#fff;border-radius:6px;display:grid;grid-template-columns:repeat(10,1fr);gap:2px;padding:6px;box-shadow:0 4px 10px rgba(0,0,0,0.1)}
+  .back .r-col .qr .qb{background:#0f172a;border-radius:1px}
+</style>
+</head>
+<body>
+
+<div>
+  <div class="lbl">Referral Card · Front · 4" × 6" · Pass-Along</div>
+  <div class="stage">
+    <div class="ref front">
+      <div class="top">
+        <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+        <div class="kicker">● Refer &amp; Earn</div>
+      </div>
+      <div class="middle">
+        <h1>Send a friend.<br/>Both get <span>$500 credit.</span></h1>
+        <div class="sub">You get $500 off your next month. They get $500 off their launch. Win/win.</div>
+      </div>
+      <div class="footline">
+        <div><div class="k">Program</div><div class="v">RJ Refer 2×</div></div>
+        <div><div class="k">Redeem At</div><div class="v blue">rjbusinesssolutions.org/refer</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div>
+  <div class="lbl">Referral Card · Back · Personal Code + Steps</div>
+  <div class="stage">
+    <div class="ref back">
+      <div class="l-col">
+        <div class="lbl-back">How It Works</div>
+        <h3>Three steps.<br/>Two winners.</h3>
+        <ul>
+          <li>Share your unique code with a founder who needs the system.</li>
+          <li>They book a call and start any RJ package with your code.</li>
+          <li>You both get $500 credited — automatically.</li>
+        </ul>
+        <div class="foot-r">© 2026 RJ Business Solutions · Terms apply</div>
+      </div>
+      <div class="r-col">
+        <div class="code-lbl">Your Code</div>
+        <div class="code">RICK-500</div>
+        <div class="qr" id="qr-ref"></div>
+        <div class="url">rjbusinesssolutions.org/refer</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function fillQR(id){
+    const el = document.getElementById(id);
+    const seed = 11;
+    for(let i=0;i<100;i++){
+      const d = document.createElement('div');
+      d.className = 'qb';
+      const on = ((i * seed * 17) % 100 < 55);
+      const r = Math.floor(i/10), c = i%10;
+      const inCorner = (r<3&&c<3) || (r<3&&c>6) || (r>6&&c<3);
+      if(!on && !inCorner) d.style.background = 'transparent';
+      el.appendChild(d);
+    }
+  }
+  fillQR('qr-ref');
+</script>
+</body>
+</html>

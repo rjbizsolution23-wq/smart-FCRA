@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ SMS Templates</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#f1f5f9;padding:40px;display:flex;flex-direction:column;gap:32px;align-items:center}
+  h1{font-family:var(--font-head);font-size:32px;font-weight:600;color:var(--rj-navy);letter-spacing:-0.02em;margin:0 0 6px 0}
+  .lead{font-family:var(--font-head);color:var(--rj-muted-text);font-size:16px;margin:0 0 24px 0}
+
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;width:1320px}
+
+  .cat-card{background:#fff;border-radius:20px;box-shadow:0 20px 40px rgba(15,23,42,0.08);overflow:hidden;display:flex;flex-direction:column}
+  .cat-head{background:var(--grad-dark);color:#fff;padding:18px 22px;position:relative;overflow:hidden}
+  .cat-head::after{content:"";position:absolute;right:-40px;top:-40px;width:180px;height:180px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(20px)}
+  .cat-head .lbl{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);position:relative;z-index:1;font-weight:600;margin-bottom:4px}
+  .cat-head h3{font-family:var(--font-head);font-size:20px;font-weight:600;margin:0;letter-spacing:-0.01em;position:relative;z-index:1}
+  .cat-head .desc{font-family:var(--font-head);font-size:12px;color:#cbd5e1;margin-top:4px;position:relative;z-index:1;font-weight:500}
+
+  .phone{padding:20px;background:linear-gradient(180deg,#f8fafc 0%,#fff 100%);flex:1;display:flex;flex-direction:column;gap:10px;min-height:340px}
+
+  .msg{max-width:82%;padding:10px 14px;border-radius:18px;font-family:var(--font-body);font-size:13px;line-height:1.45;position:relative}
+  .msg.incoming{background:#e5e7eb;color:var(--rj-navy);align-self:flex-start;border-bottom-left-radius:4px}
+  .msg.outgoing{background:linear-gradient(135deg,#2563eb,#0ea5e9);color:#fff;align-self:flex-end;border-bottom-right-radius:4px;box-shadow:0 4px 10px rgba(37,99,235,0.3)}
+  .msg .time{position:absolute;bottom:-16px;font-family:var(--font-mono);font-size:8px;letter-spacing:0.1em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+  .msg.incoming .time{left:14px}
+  .msg.outgoing .time{right:14px;color:var(--rj-blue)}
+  .msg .tag{display:inline-block;padding:2px 8px;background:rgba(255,255,255,0.2);border-radius:4px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600;margin-right:6px}
+  .msg.incoming .tag{background:rgba(0,0,0,0.08);color:var(--rj-muted-text)}
+
+  .divider-t{display:flex;align-items:center;gap:8px;margin:14px 0 4px}
+  .divider-t::before,.divider-t::after{content:"";flex:1;height:1px;background:var(--rj-line)}
+  .divider-t span{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+
+  .footer-note{padding:12px 22px;background:#f8fafc;border-top:1px solid var(--rj-line);font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;display:flex;justify-content:space-between}
+  .footer-note b{color:var(--rj-blue);font-family:var(--font-head);text-transform:none;letter-spacing:0.02em;font-size:11px;font-weight:600}
+
+  .compliance{background:#fff;border-radius:16px;padding:24px 28px;box-shadow:0 20px 40px rgba(15,23,42,0.08);width:1320px;display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:center;border-left:4px solid var(--rj-warning)}
+  .compliance .icon{width:44px;height:44px;background:#fef3c7;color:#92400e;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:700;font-size:20px}
+  .compliance h4{font-family:var(--font-head);font-size:15px;font-weight:600;color:var(--rj-navy);margin:0 0 4px 0;letter-spacing:-0.01em}
+  .compliance p{margin:0;font-size:12px;color:var(--rj-muted-text);line-height:1.5}
+  .compliance p b{color:var(--rj-navy);font-family:var(--font-head);font-weight:600}
+</style>
+</head>
+<body>
+
+<div style="width:1320px">
+  <h1>SMS / Text Message Playbook</h1>
+  <p class="lead">TCPA-aware templates. Sub-160-char first messages. Every send tied to a consented opt-in.</p>
+</div>
+
+<div class="grid">
+
+  <!-- 01 · WELCOME -->
+  <div class="cat-card">
+    <div class="cat-head">
+      <div class="lbl">Sequence 01</div>
+      <h3>New Lead Welcome</h3>
+      <div class="desc">Fires 60s after form fill / opt-in</div>
+    </div>
+    <div class="phone">
+      <div class="msg outgoing">
+        <span class="tag">T+60s</span>Hey [First Name] — Rick from RJ Business Solutions 👋 Thanks for grabbing the Growth Playbook. Real quick — are you more focused on <b>DMs</b>, <b>follow-up</b>, or <b>bookings</b> right now?
+        <span class="time">9:42 AM</span>
+      </div>
+      <div class="msg incoming">
+        Follow-up honestly. Losing leads all week.
+        <span class="time">9:44 AM</span>
+      </div>
+      <div class="msg outgoing">
+        Got it. That's the one we fix fastest. Want me to send you a 3-min Loom breaking down the exact system?
+        <span class="time">9:45 AM</span>
+      </div>
+    </div>
+    <div class="footer-note"><span>Reply STOP to end</span><b>RJ Business Solutions</b></div>
+  </div>
+
+  <!-- 02 · BOOKING CONFIRM -->
+  <div class="cat-card">
+    <div class="cat-head">
+      <div class="lbl">Sequence 02</div>
+      <h3>Booking Confirmation</h3>
+      <div class="desc">Fires immediately after call is scheduled</div>
+    </div>
+    <div class="phone">
+      <div class="msg outgoing">
+        <span class="tag">Confirm</span>You're locked in, [First Name] ✅<br/><br/>📅 Tue, July 22 · 2:00 PM MST<br/>🎥 zoom.us/j/[ID]<br/>⏱ 15 min<br/><br/>Add to calendar → rjbusinesssolutions.org/cal
+        <span class="time">10:02 AM</span>
+      </div>
+      <div class="divider-t"><span>24hr Before</span></div>
+      <div class="msg outgoing">
+        Quick reminder — our call is tomorrow at 2 PM MST. Any prep questions? Reply here.
+        <span class="time">Mon 2:00</span>
+      </div>
+      <div class="divider-t"><span>1hr Before</span></div>
+      <div class="msg outgoing">
+        We're on in 1 hour, [First Name]. Zoom link: [link]. See you soon 🚀
+        <span class="time">Tue 1:00</span>
+      </div>
+    </div>
+    <div class="footer-note"><span>Reply STOP to end</span><b>RJ Business Solutions</b></div>
+  </div>
+
+  <!-- 03 · NO-SHOW RECOVERY -->
+  <div class="cat-card">
+    <div class="cat-head">
+      <div class="lbl">Sequence 03</div>
+      <h3>No-Show Recovery</h3>
+      <div class="desc">Fires 15 min after missed appointment</div>
+    </div>
+    <div class="phone">
+      <div class="msg outgoing">
+        <span class="tag">T+15m</span>Hey [First Name] — looks like the timing didn't work out today. Life happens 🤝<br/><br/>Want to grab a spot later this week? Here: rjbusinesssolutions.org/rebook
+        <span class="time">2:15 PM</span>
+      </div>
+      <div class="divider-t"><span>Next Day</span></div>
+      <div class="msg outgoing">
+        Following up gently — this system pays for itself in month 1 with clients like you. Worth 15 min?
+        <span class="time">Wed 10:00</span>
+      </div>
+      <div class="msg incoming">
+        Yeah sorry about yesterday. Send times?
+        <span class="time">Wed 10:04</span>
+      </div>
+      <div class="msg outgoing">
+        No worries. Grab any slot here → [link]. See you soon.
+        <span class="time">Wed 10:05</span>
+      </div>
+    </div>
+    <div class="footer-note"><span>Reply STOP to end</span><b>RJ Business Solutions</b></div>
+  </div>
+
+  <!-- 04 · PAYMENT REMINDER -->
+  <div class="cat-card">
+    <div class="cat-head">
+      <div class="lbl">Sequence 04</div>
+      <h3>Payment Reminder</h3>
+      <div class="desc">Client billing · 3 escalation steps</div>
+    </div>
+    <div class="phone">
+      <div class="msg outgoing">
+        <span class="tag">Due Today</span>Heads up [First Name] — your July RJ invoice is due today. Quick pay: rjbusinesssolutions.org/pay/[ID]
+        <span class="time">9:00 AM</span>
+      </div>
+      <div class="divider-t"><span>+3 Days</span></div>
+      <div class="msg outgoing">
+        <span class="tag">Past Due</span>Friendly nudge — invoice is 3 days past due. Card decline? Reply here and we'll help sort it.
+        <span class="time">Mon 9:00</span>
+      </div>
+      <div class="divider-t"><span>+7 Days</span></div>
+      <div class="msg outgoing">
+        <span class="tag">Final</span>Last one, [First Name] — need to pause the system if we don't hear back today. Reply anytime. — Rick
+        <span class="time">Fri 9:00</span>
+      </div>
+    </div>
+    <div class="footer-note"><span>Reply STOP to end</span><b>RJ Business Solutions</b></div>
+  </div>
+
+  <!-- 05 · UPSELL / EXPANSION -->
+  <div class="cat-card">
+    <div class="cat-head">
+      <div class="lbl">Sequence 05</div>
+      <h3>Upsell · Month 3</h3>
+      <div class="desc">Client hit 90-day mark · time to expand</div>
+    </div>
+    <div class="phone">
+      <div class="msg outgoing">
+        Big milestone — you're 90 days into the system 🎉 Your metrics this month:<br/><br/>📈 47 booked calls<br/>⚡ &lt;90s response time<br/>💰 +312% MRR
+        <span class="time">10:00 AM</span>
+      </div>
+      <div class="msg outgoing">
+        Ready to layer on the credit tech platform? Would 10× your ceiling. Want the 5-min breakdown?
+        <span class="time">10:01 AM</span>
+      </div>
+      <div class="msg incoming">
+        Yeah send it.
+        <span class="time">10:03 AM</span>
+      </div>
+      <div class="msg outgoing">
+        On it. Sending now → [link]. Loom is 5 min, worth every second.
+        <span class="time">10:04 AM</span>
+      </div>
+    </div>
+    <div class="footer-note"><span>Reply STOP to end</span><b>RJ Business Solutions</b></div>
+  </div>
+
+  <!-- 06 · WIN-BACK -->
+  <div class="cat-card">
+    <div class="cat-head">
+      <div class="lbl">Sequence 06</div>
+      <h3>Win-Back · Cold Lead</h3>
+      <div class="desc">Fires 30 days after last touchpoint</div>
+    </div>
+    <div class="phone">
+      <div class="msg outgoing">
+        Hey [First Name] — Rick again. Been a minute. Real question: did you end up fixing the DM problem, or is it still bleeding leads?
+        <span class="time">11:00 AM</span>
+      </div>
+      <div class="msg incoming">
+        Ha still broken tbh
+        <span class="time">11:07 AM</span>
+      </div>
+      <div class="msg outgoing">
+        Yeah, that's the pattern. Want the fix built in 7 days? No pitch, just a plan. → rjbusinesssolutions.org/audit
+        <span class="time">11:08 AM</span>
+      </div>
+    </div>
+    <div class="footer-note"><span>Reply STOP to end</span><b>RJ Business Solutions</b></div>
+  </div>
+
+</div>
+
+<div class="compliance">
+  <div class="icon">⚠</div>
+  <div>
+    <h4>Compliance Guardrail — TCPA + STIR/SHAKEN</h4>
+    <p>Every message ships tied to a <b>documented opt-in</b> (form, checkbox, verbal + written confirmation). Include <b>STOP</b> and <b>HELP</b> keyword handling. Register your 10DLC brand + campaign before any bulk sends. Never send marketing SMS outside 8am–9pm local recipient time. RJ systems auto-log consent + honor opt-outs system-wide.</p>
+  </div>
+</div>
+
+</body>
+</html>

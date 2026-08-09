@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — Certificate</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;justify-content:center}
+  .sheet{width:1123px;height:794px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);position:relative;overflow:hidden;padding:60px 80px;display:flex;flex-direction:column}
+
+  /* Corner ornaments */
+  .sheet::before{content:"";position:absolute;top:0;left:0;width:250px;height:250px;background:radial-gradient(circle at top left,rgba(37,99,235,0.15) 0%,transparent 60%);pointer-events:none}
+  .sheet::after{content:"";position:absolute;bottom:0;right:0;width:250px;height:250px;background:radial-gradient(circle at bottom right,rgba(14,165,233,0.18) 0%,transparent 60%);pointer-events:none}
+
+  /* Border frame */
+  .frame{position:absolute;inset:24px;border:1px solid var(--rj-border);border-radius:4px;pointer-events:none}
+  .frame-inner{position:absolute;inset:32px;border:2px solid var(--rj-blue);border-radius:2px;pointer-events:none}
+
+  /* Corner accents */
+  .corner{position:absolute;width:80px;height:80px;pointer-events:none}
+  .corner.tl{top:32px;left:32px;border-top:6px solid var(--rj-blue);border-left:6px solid var(--rj-blue);border-top-left-radius:8px}
+  .corner.tr{top:32px;right:32px;border-top:6px solid var(--rj-sky);border-right:6px solid var(--rj-sky);border-top-right-radius:8px}
+  .corner.bl{bottom:32px;left:32px;border-bottom:6px solid var(--rj-sky);border-left:6px solid var(--rj-sky);border-bottom-left-radius:8px}
+  .corner.br{bottom:32px;right:32px;border-bottom:6px solid var(--rj-blue);border-right:6px solid var(--rj-blue);border-bottom-right-radius:8px}
+
+  /* Watermark */
+  .watermark{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:var(--font-head);font-weight:700;font-size:400px;color:#f1f5f9;letter-spacing:-0.06em;line-height:1;z-index:0;pointer-events:none;opacity:0.9}
+
+  .body{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;padding:16px 40px}
+
+  .top-row{display:flex;align-items:center;gap:16px;margin-bottom:32px}
+  .top-row img{width:64px;height:64px;border-radius:14px}
+  .top-row .brand{text-align:left}
+  .top-row .brand .n{font-family:var(--font-head);font-weight:700;font-size:20px;color:var(--rj-navy);letter-spacing:-0.01em}
+  .top-row .brand .t{font-family:var(--font-mono);font-size:10px;color:var(--rj-blue);letter-spacing:0.14em;text-transform:uppercase;margin-top:4px;font-weight:600}
+
+  .cert-label{font-family:var(--font-mono);font-size:14px;letter-spacing:0.4em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:14px}
+  .title{font-family:var(--font-head);font-size:56px;font-weight:600;color:var(--rj-navy);letter-spacing:-0.03em;line-height:1;margin:0 0 24px 0}
+  .title span{background:linear-gradient(135deg,#2563eb 0%,#0ea5e9 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+  .presented{font-family:var(--font-head);font-size:15px;color:var(--rj-muted-text);letter-spacing:0.05em;margin-bottom:14px;font-style:italic}
+
+  .recipient{font-family:'Space Grotesk',serif;font-size:72px;font-weight:600;letter-spacing:-0.02em;color:var(--rj-navy);border-bottom:2px solid var(--rj-blue);padding-bottom:14px;min-width:600px;margin:0 auto 24px;font-style:italic;background:linear-gradient(135deg,#0f172a 0%,#2563eb 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+  .description{font-family:var(--font-body);font-size:15px;color:var(--rj-text);max-width:700px;line-height:1.5;margin:0 auto 32px;font-weight:400}
+  .description strong{font-family:var(--font-head);color:var(--rj-navy);font-weight:600}
+
+  .sign-row{display:grid;grid-template-columns:1fr auto 1fr;gap:60px;align-items:center;width:100%;max-width:800px;margin-top:auto}
+  .sign{text-align:center}
+  .sign .line{border-bottom:1.5px solid var(--rj-navy);padding-bottom:6px;font-family:'Space Grotesk',serif;font-style:italic;font-size:28px;color:var(--rj-blue);font-weight:500;min-height:44px}
+  .sign .lbl{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);margin-top:8px;font-weight:600}
+  .sign .name{font-family:var(--font-head);font-size:13px;color:var(--rj-navy);margin-top:4px;font-weight:600}
+
+  .seal{width:100px;height:100px;border-radius:50%;background:var(--grad-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--font-head);font-weight:700;font-size:28px;letter-spacing:-0.04em;box-shadow:0 12px 30px rgba(37,99,235,0.4);position:relative;border:4px solid #fff}
+  .seal::before{content:"";position:absolute;inset:-14px;border:2px dashed var(--rj-blue);border-radius:50%;opacity:0.4}
+
+  .cert-meta{position:absolute;bottom:60px;left:80px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;z-index:1}
+  .cert-meta b{color:var(--rj-navy);display:block;margin-top:2px;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none}
+
+  .verify{position:absolute;bottom:60px;right:80px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;text-align:right;z-index:1}
+  .verify b{color:var(--rj-blue);display:block;margin-top:2px;font-family:var(--font-mono);font-size:10px;text-transform:none}
+
+  @media print{body{background:#fff;padding:0}.sheet{box-shadow:none}}
+</style>
+</head>
+<body>
+
+<div class="sheet">
+  <div class="frame"></div>
+  <div class="frame-inner"></div>
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
+  <div class="watermark">RJ</div>
+
+  <div class="body">
+    <div class="top-row">
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+      <div class="brand">
+        <div class="n">RJ Business Solutions</div>
+        <div class="t">Certified Partner Program</div>
+      </div>
+    </div>
+
+    <div class="cert-label">Certificate of Completion</div>
+    <h1 class="title">Certified Growth <span>Systems Partner</span></h1>
+
+    <div class="presented">This certifies that</div>
+    <div class="recipient">[Recipient Full Name]</div>
+
+    <p class="description">has successfully completed the <strong>RJ Business Solutions Growth Systems curriculum</strong>, demonstrating proficiency in AI-powered automation, credit technology infrastructure, CRM workflow design, and compliance-aware system architecture. Authorized to design, deploy, and manage RJ-certified growth systems on behalf of client businesses.</p>
+
+    <div class="sign-row">
+      <div class="sign">
+        <div class="line">Rick Jefferson</div>
+        <div class="lbl">Signature</div>
+        <div class="name">Rick Jefferson · Founder</div>
+      </div>
+      <div class="seal">RJ</div>
+      <div class="sign">
+        <div class="line">July 17, 2026</div>
+        <div class="lbl">Issue Date</div>
+        <div class="name">Valid 2 Years</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cert-meta">Certificate №<b>RJ-CERT-2026-0001</b></div>
+  <div class="verify">Verify at<b>rjbusinesssolutions.org/verify</b></div>
+</div>
+
+</body>
+</html>

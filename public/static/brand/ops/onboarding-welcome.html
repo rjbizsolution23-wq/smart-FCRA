@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — Welcome Kit</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;flex-direction:column;gap:24px;align-items:center}
+  .page{width:794px;min-height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden;page-break-after:always}
+
+  /* PG 1 · WELCOME */
+  .hero{background:var(--grad-dark);color:#fff;padding:56px 60px 48px;position:relative;overflow:hidden;flex:1;display:flex;flex-direction:column;justify-content:space-between}
+  .hero::after{content:"";position:absolute;right:-150px;top:-150px;width:600px;height:600px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(60px)}
+  .hero .top{display:flex;align-items:center;gap:14px;position:relative;z-index:1}
+  .hero .top img{width:44px;height:44px;border-radius:10px}
+  .hero .top .n{font-family:var(--font-head);font-weight:600;font-size:16px}
+
+  .hero .middle{position:relative;z-index:1}
+  .hero .kicker{display:inline-block;padding:6px 14px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);border-radius:999px;font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-bottom:20px;font-weight:600}
+  .hero h1{font-family:var(--font-head);font-size:60px;font-weight:600;letter-spacing:-0.03em;line-height:1;margin:0}
+  .hero h1 span{background:linear-gradient(135deg,#0ea5e9 0%,#60a5fa 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero .sub{font-family:var(--font-head);color:#cbd5e1;font-size:20px;margin-top:16px;max-width:520px;line-height:1.4}
+
+  .hero .sig{position:relative;z-index:1;padding-top:28px;border-top:1px solid rgba(255,255,255,0.15);display:flex;justify-content:space-between;align-items:flex-end}
+  .hero .sig .from{}
+  .hero .sig .from .k{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;font-weight:600}
+  .hero .sig .from .v{font-family:var(--font-head);font-size:18px;font-weight:600;color:#fff}
+  .hero .sig .from .role{font-family:var(--font-mono);font-size:10px;color:var(--rj-sky);letter-spacing:0.12em;text-transform:uppercase;margin-top:4px;font-weight:600}
+  .hero .sig .signature-mark{font-family:var(--font-head);font-style:italic;font-size:32px;color:var(--rj-sky);opacity:0.9}
+
+  .thin{height:4px;background:var(--grad-primary)}
+
+  /* PG 2 · WHAT HAPPENS NEXT */
+  .inner{padding:44px 60px;flex:1;display:flex;flex-direction:column;gap:24px}
+  .inner .head{display:flex;justify-content:space-between;align-items:center;padding-bottom:16px;border-bottom:2px solid var(--rj-blue)}
+  .inner .head .brand{display:flex;align-items:center;gap:10px;font-family:var(--font-head);font-weight:600;font-size:13px}
+  .inner .head .brand img{width:28px;height:28px;border-radius:6px}
+  .inner .head .pnum{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text)}
+
+  .inner h2{font-family:var(--font-head);font-size:32px;font-weight:600;color:var(--rj-navy);margin:0 0 20px 0;letter-spacing:-0.02em}
+  .inner p{font-size:13px;line-height:1.7;color:var(--rj-text);margin:0 0 12px 0}
+
+  .step{display:flex;gap:20px;padding:20px 24px;background:var(--rj-light);border-radius:12px;border-left:4px solid var(--rj-blue)}
+  .step .num{width:44px;height:44px;background:var(--grad-primary);border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--font-head);font-weight:700;font-size:18px;flex-shrink:0;box-shadow:0 6px 14px rgba(37,99,235,0.35)}
+  .step h4{font-family:var(--font-head);font-size:16px;font-weight:600;color:var(--rj-navy);margin:0 0 4px 0}
+  .step .meta{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);margin-bottom:6px;font-weight:600}
+  .step p{font-size:12px;line-height:1.6;color:var(--rj-muted-text);margin:0}
+  .steps{display:flex;flex-direction:column;gap:12px}
+
+  .contact-card{background:var(--rj-navy);color:#fff;border-radius:14px;padding:24px 28px;display:grid;grid-template-columns:auto 1fr auto;gap:20px;align-items:center;position:relative;overflow:hidden}
+  .contact-card::after{content:"";position:absolute;right:-80px;top:-80px;width:250px;height:250px;background:radial-gradient(circle,rgba(14,165,233,0.35) 0%,transparent 60%);filter:blur(30px)}
+  .contact-card img{width:56px;height:56px;border-radius:12px;position:relative;z-index:1}
+  .contact-card .info{position:relative;z-index:1}
+  .contact-card .info .k{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600;margin-bottom:6px}
+  .contact-card .info .n{font-family:var(--font-head);font-weight:600;font-size:16px}
+  .contact-card .info .l{font-size:12px;color:#cbd5e1;margin-top:4px}
+  .contact-card .cta{background:var(--grad-primary);color:#fff;padding:12px 20px;border-radius:10px;font-family:var(--font-head);font-weight:600;font-size:13px;position:relative;z-index:1;box-shadow:0 8px 20px rgba(37,99,235,0.4)}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:16px 60px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:12px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+
+  @media print{body{background:#fff;padding:0;gap:0}.page{box-shadow:none}}
+</style>
+</head>
+<body>
+
+<!-- PG 1 · WELCOME LETTER -->
+<div class="page">
+  <div class="hero">
+    <div class="top">
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+      <div class="n">RJ Business Solutions</div>
+    </div>
+
+    <div class="middle">
+      <div class="kicker">● Welcome Aboard · Client Onboarding</div>
+      <h1>Welcome to<br/>the <span>system.</span></h1>
+      <div class="sub">You just built infrastructure. Here's what happens next — and what to expect over the next 7 days.</div>
+    </div>
+
+    <div class="sig">
+      <div class="from">
+        <div class="k">From</div>
+        <div class="v">Rick Jefferson</div>
+        <div class="role">Founder · RJ Business Solutions</div>
+      </div>
+      <div class="signature-mark">Rick.</div>
+    </div>
+  </div>
+  <div class="thin"></div>
+</div>
+
+<!-- PG 2 · NEXT STEPS + CONTACT -->
+<div class="page">
+  <div class="inner">
+    <div class="head">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>RJ Business Solutions</div>
+      <div class="pnum">Welcome Kit · Page 02</div>
+    </div>
+
+    <div>
+      <h2>The next 7 days</h2>
+      <p>Every RJ engagement follows the same disciplined ramp — no guesswork, no surprises, no ambiguity. Here's the map.</p>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="num">1</div>
+        <div>
+          <div class="meta">Day 1</div>
+          <h4>Kickoff Call &amp; Access Setup</h4>
+          <p>30-minute working session. Delegated access setup, credential vault, brand voice deep-dive. You leave with a Slack channel and a signed access log.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <div>
+          <div class="meta">Days 2–3</div>
+          <h4>System Design &amp; Buildout Begins</h4>
+          <p>Architecture locked. CRM, pipeline, DM automation, and follow-up sequences built in staging. Nothing goes live yet.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="num">3</div>
+        <div>
+          <div class="meta">Days 4–5</div>
+          <h4>Voice Training &amp; QA</h4>
+          <p>AI trained on your voice, escalation rules wired, dry-runs on real data. You review every reply before we go live.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="num">4</div>
+        <div>
+          <div class="meta">Day 6</div>
+          <h4>Soft Launch</h4>
+          <p>System flipped on for a subset of traffic. Live monitoring. Rapid tuning based on real conversations.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="num">5</div>
+        <div>
+          <div class="meta">Day 7 &amp; beyond</div>
+          <h4>Full Launch + Monthly Ops</h4>
+          <p>Full traffic switched over. First reporting cadence starts. Human escalation queue live. You're officially running an automated growth system.</p>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h2 style="font-size:24px;margin-top:8px">Your direct line</h2>
+      <div class="contact-card">
+        <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+        <div class="info">
+          <div class="k">Client Support</div>
+          <div class="n">support@rjbusinesssolutions.org</div>
+          <div class="l">Response inside 4 business hours · Priority queue for active clients</div>
+        </div>
+        <div class="cta">Slack Us →</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="brand">RJ Business Solutions</div>
+    <div>Welcome Kit · Page 02 · rjbusinesssolutions.org</div>
+  </div>
+</div>
+
+</body>
+</html>

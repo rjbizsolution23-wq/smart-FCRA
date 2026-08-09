@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Digital Business Card</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px;display:flex;flex-direction:column;gap:32px;align-items:center}
+  .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:14px;text-align:center}
+  .row{display:flex;gap:32px;align-items:flex-start;justify-content:center}
+
+  /* Mobile phone frame */
+  .phone{width:380px;height:770px;border-radius:44px;overflow:hidden;position:relative;background:#000;border:10px solid #0f172a;box-shadow:0 40px 80px rgba(15,23,42,0.35)}
+  .notch{position:absolute;top:14px;left:50%;transform:translateX(-50%);width:100px;height:26px;background:#000;border-radius:20px;z-index:10}
+
+  .dc-page{width:100%;height:100%;background:var(--rj-soft);overflow-y:auto;position:relative;padding-top:44px}
+
+  /* Hero card */
+  .dc-hero{background:var(--grad-dark);color:#fff;padding:36px 24px 32px;position:relative;overflow:hidden;text-align:center}
+  .dc-hero::after{content:"";position:absolute;right:-80px;top:-80px;width:280px;height:280px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .dc-hero::before{content:"";position:absolute;left:-60px;bottom:-60px;width:200px;height:200px;background:radial-gradient(circle,rgba(37,99,235,0.35) 0%,transparent 60%);filter:blur(30px)}
+
+  .dc-hero .brand{display:flex;align-items:center;justify-content:center;gap:8px;position:relative;z-index:1;margin-bottom:20px}
+  .dc-hero .brand img{width:26px;height:26px;border-radius:6px}
+  .dc-hero .brand .n{font-family:var(--font-head);font-weight:600;font-size:12px}
+
+  .dc-hero .avatar{width:110px;height:110px;border-radius:26px;background:var(--grad-primary);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:700;font-size:44px;letter-spacing:-0.04em;margin:0 auto 16px;box-shadow:0 15px 30px rgba(37,99,235,0.5);position:relative;z-index:1;border:3px solid rgba(255,255,255,0.15)}
+
+  .dc-hero .name{font-family:var(--font-head);font-weight:700;font-size:26px;letter-spacing:-0.02em;position:relative;z-index:1;line-height:1}
+  .dc-hero .role{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);margin-top:8px;font-weight:600;position:relative;z-index:1}
+  .dc-hero .company{font-family:var(--font-head);font-size:14px;color:#cbd5e1;margin-top:6px;font-weight:500;position:relative;z-index:1}
+
+  .dc-hero .cta-row{display:flex;gap:8px;margin-top:20px;position:relative;z-index:1;padding:0 12px}
+  .dc-hero .cta-row .btn{flex:1;padding:12px 8px;border-radius:10px;font-family:var(--font-head);font-weight:600;font-size:12px;letter-spacing:-0.01em}
+  .dc-hero .cta-row .btn.p{background:var(--grad-primary);color:#fff;box-shadow:0 6px 14px rgba(37,99,235,0.4)}
+  .dc-hero .cta-row .btn.s{background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);backdrop-filter:blur(10px)}
+
+  /* Contact rows */
+  .dc-body{padding:20px 20px 30px}
+  .section-l{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin:16px 0 8px;padding-left:2px}
+
+  .contact-list{display:flex;flex-direction:column;gap:6px}
+  .contact-row{background:#fff;border:1px solid var(--rj-line);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:12px}
+  .contact-row .ic{width:36px;height:36px;background:var(--rj-light);color:var(--rj-blue);border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:700;font-size:14px;flex-shrink:0}
+  .contact-row .ic.blue{background:var(--grad-primary);color:#fff}
+  .contact-row .info{flex:1;min-width:0}
+  .contact-row .k{font-family:var(--font-mono);font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600;margin-bottom:1px}
+  .contact-row .v{font-family:var(--font-head);font-weight:600;font-size:12px;color:var(--rj-navy);letter-spacing:-0.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .contact-row .chev{color:var(--rj-muted-text);font-family:var(--font-head);font-size:16px;font-weight:400}
+
+  /* Social */
+  .social-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .social-row{background:#fff;border:1px solid var(--rj-line);border-radius:10px;padding:12px 8px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
+  .social-row .ic{width:32px;height:32px;background:var(--rj-navy);color:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-weight:700;font-size:11px}
+  .social-row .l{font-family:var(--font-mono);font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);font-weight:600}
+
+  /* Bio card */
+  .bio-c{background:linear-gradient(135deg,#fff,var(--rj-light));border:1px solid var(--rj-border);border-radius:12px;padding:14px 16px}
+  .bio-c p{margin:0;font-size:11px;line-height:1.55;color:var(--rj-text)}
+
+  /* Save button */
+  .save-cta{background:var(--grad-dark);color:#fff;padding:16px;border-radius:14px;display:flex;align-items:center;gap:12px;box-shadow:0 12px 24px rgba(15,23,42,0.25);margin-top:12px}
+  .save-cta .ic{width:44px;height:44px;background:var(--grad-primary);border-radius:11px;display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--font-head);font-weight:700;font-size:18px;flex-shrink:0}
+  .save-cta .txt{flex:1}
+  .save-cta .t{font-family:var(--font-head);font-weight:600;font-size:13px;letter-spacing:-0.01em}
+  .save-cta .d{font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--rj-sky);margin-top:2px;font-weight:600}
+  .save-cta .arrow{color:var(--rj-sky);font-family:var(--font-head);font-size:18px;font-weight:600}
+
+  /* SHARE SHEET (iOS-style modal) */
+  .share-modal{width:380px;background:rgba(240,240,244,0.98);border-radius:14px;box-shadow:0 40px 80px rgba(15,23,42,0.4);padding:16px;backdrop-filter:blur(30px)}
+  .share-modal .hdr{padding:6px 10px 12px;font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy);border-bottom:1px solid rgba(15,23,42,0.08);text-align:center}
+  .share-modal .preview{background:#fff;border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;margin-top:12px;border:1px solid rgba(15,23,42,0.08)}
+  .share-modal .preview img{width:44px;height:44px;border-radius:10px}
+  .share-modal .preview .info{flex:1;min-width:0}
+  .share-modal .preview .t{font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy);letter-spacing:-0.01em}
+  .share-modal .preview .u{font-size:11px;color:var(--rj-muted-text);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .share-modal .apps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
+  .share-modal .app{display:flex;flex-direction:column;align-items:center;gap:4px}
+  .share-modal .app .ic{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--font-head);font-weight:700;font-size:16px}
+  .share-modal .app .ic.msg{background:#22c55e}
+  .share-modal .app .ic.mail{background:#3b82f6}
+  .share-modal .app .ic.wa{background:#059669}
+  .share-modal .app .ic.airdrop{background:linear-gradient(135deg,#3b82f6,#0ea5e9)}
+  .share-modal .app .ic.copy{background:#64748b}
+  .share-modal .app .ic.slack{background:#4a154b}
+  .share-modal .app .ic.linkedin{background:#0a66c2}
+  .share-modal .app .ic.qr{background:var(--rj-navy)}
+  .share-modal .app .l{font-family:'Space Grotesk',sans-serif;font-size:9px;color:var(--rj-navy);font-weight:500;text-align:center}
+  .share-modal .btn-close{margin-top:14px;background:#fff;border:1px solid rgba(15,23,42,0.08);padding:14px;border-radius:12px;text-align:center;font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-danger)}
+</style>
+</head>
+<body>
+
+<div class="row">
+
+  <div>
+    <div class="lbl">Digital Business Card · Mobile · Public link</div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="dc-page">
+        <div class="dc-hero">
+          <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div class="n">RJ Business Solutions</div></div>
+          <div class="avatar">RJ</div>
+          <div class="name">Rick Jefferson</div>
+          <div class="role">Founder · Credit Tech Architect</div>
+          <div class="company">RJ Business Solutions</div>
+          <div class="cta-row">
+            <div class="btn p">Book Call →</div>
+            <div class="btn s">Save Contact</div>
+          </div>
+        </div>
+
+        <div class="dc-body">
+          <div class="section-l">● Direct Lines</div>
+          <div class="contact-list">
+            <div class="contact-row">
+              <div class="ic blue">✉</div>
+              <div class="info"><div class="k">Email</div><div class="v">rick@rjbusinesssolutions.org</div></div>
+              <div class="chev">›</div>
+            </div>
+            <div class="contact-row">
+              <div class="ic">🌐</div>
+              <div class="info"><div class="k">Website</div><div class="v">rjbusinesssolutions.org</div></div>
+              <div class="chev">›</div>
+            </div>
+            <div class="contact-row">
+              <div class="ic">📍</div>
+              <div class="info"><div class="k">Office</div><div class="v">Tijeras, NM · 1342 NM 333</div></div>
+              <div class="chev">›</div>
+            </div>
+          </div>
+
+          <div class="section-l">● Follow</div>
+          <div class="social-grid">
+            <div class="social-row"><div class="ic">in</div><div class="l">LinkedIn</div></div>
+            <div class="social-row"><div class="ic">TT</div><div class="l">TikTok</div></div>
+            <div class="social-row"><div class="ic">X</div><div class="l">Twitter</div></div>
+            <div class="social-row"><div class="ic">IG</div><div class="l">Instagram</div></div>
+          </div>
+
+          <div class="section-l">● About</div>
+          <div class="bio-c">
+            <p>Credit technology architect and AI systems builder. Founder of RJ Business Solutions — we build the automation backbone behind scalable businesses.</p>
+          </div>
+
+          <div class="save-cta">
+            <div class="ic">+</div>
+            <div class="txt"><div class="t">Save to Contacts</div><div class="d">One-tap vCard download</div></div>
+            <div class="arrow">›</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="lbl">iOS Share Sheet · When user taps Share</div>
+    <div class="share-modal">
+      <div class="hdr">Share Rick Jefferson's Card</div>
+      <div class="preview">
+        <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+        <div class="info">
+          <div class="t">Rick Jefferson · RJ Business Solutions</div>
+          <div class="u">rjbusinesssolutions.org/rick</div>
+        </div>
+      </div>
+      <div class="apps">
+        <div class="app"><div class="ic airdrop">◈</div><div class="l">AirDrop</div></div>
+        <div class="app"><div class="ic msg">💬</div><div class="l">Messages</div></div>
+        <div class="app"><div class="ic mail">✉</div><div class="l">Mail</div></div>
+        <div class="app"><div class="ic wa">📱</div><div class="l">WhatsApp</div></div>
+        <div class="app"><div class="ic linkedin">in</div><div class="l">LinkedIn</div></div>
+        <div class="app"><div class="ic slack">#</div><div class="l">Slack</div></div>
+        <div class="app"><div class="ic qr">▦</div><div class="l">QR Code</div></div>
+        <div class="app"><div class="ic copy">⧉</div><div class="l">Copy Link</div></div>
+      </div>
+      <div class="btn-close">Cancel</div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

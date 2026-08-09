@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>RJ Business Solutions — Quote</title>
+<link rel="stylesheet" href="../brand.css">
+<style>
+  body{background:#e2e8f0;padding:40px 0;display:flex;justify-content:center}
+  .sheet{width:794px;min-height:1123px;background:#fff;box-shadow:0 30px 60px rgba(15,23,42,0.15);display:flex;flex-direction:column;overflow:hidden;position:relative}
+
+  .top{background:var(--grad-dark);color:#fff;padding:32px 56px 26px;position:relative;overflow:hidden}
+  .top::after{content:"";position:absolute;right:-100px;top:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(14,165,233,0.4) 0%,transparent 60%);filter:blur(40px)}
+  .top .row{display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1;margin-bottom:16px}
+  .top .brand{display:flex;align-items:center;gap:12px}
+  .top .brand img{width:40px;height:40px;border-radius:9px}
+  .top .brand .n{font-family:var(--font-head);font-weight:600;font-size:15px}
+  .top .brand .t{font-family:var(--font-mono);font-size:9px;color:var(--rj-sky);letter-spacing:0.14em;text-transform:uppercase;margin-top:2px;font-weight:600}
+  .top .doc{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);text-align:right;font-weight:600}
+  .top .doc b{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:-0.01em;text-transform:none;font-weight:600;display:block;margin-top:2px}
+  .top h1{font-family:var(--font-head);font-size:36px;font-weight:600;letter-spacing:-0.02em;margin:0;position:relative;z-index:1;line-height:1}
+  .top h1 span{color:var(--rj-sky)}
+  .top .sub{font-family:var(--font-head);color:#cbd5e1;font-size:13px;margin-top:6px;position:relative;z-index:1}
+  .thin{height:3px;background:var(--grad-primary)}
+
+  .body{padding:28px 56px;flex:1;display:flex;flex-direction:column;gap:18px;font-family:var(--font-body);font-size:12px;line-height:1.65;color:var(--rj-text)}
+
+  .meta-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+  .meta-cell{background:var(--rj-light);padding:14px 16px;border-radius:10px}
+  .meta-cell .k{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-blue);font-weight:600;margin-bottom:4px}
+  .meta-cell .v{font-family:var(--font-head);font-weight:600;font-size:13px;color:var(--rj-navy);letter-spacing:-0.01em}
+  .meta-cell .a{font-size:11px;color:var(--rj-muted-text);margin-top:2px;line-height:1.5}
+
+  h3{font-family:var(--font-head);font-size:14px;font-weight:600;color:var(--rj-navy);margin:0 0 8px 0;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+  h3::before{content:"";width:3px;height:16px;background:var(--rj-blue);border-radius:2px}
+
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--rj-line);border-radius:10px;overflow:hidden}
+  th{background:var(--rj-navy);color:#fff;padding:10px 14px;text-align:left;font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+  th:last-child{text-align:right}
+  td{padding:12px 14px;font-size:12px;border-bottom:1px solid var(--rj-line);vertical-align:top}
+  td:last-child{text-align:right;font-family:var(--font-mono);font-weight:600;color:var(--rj-navy)}
+  tr:last-child td{border:none}
+  td .desc{color:var(--rj-muted-text);font-size:11px;margin-top:3px;line-height:1.5}
+  td .badge{display:inline-block;padding:2px 8px;background:var(--rj-light);color:var(--rj-blue);border-radius:4px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;font-weight:600;margin-top:4px}
+  td .badge.opt{background:#fef3c7;color:#92400e}
+
+  .totals{display:flex;justify-content:flex-end;margin-top:14px}
+  .totals-box{width:320px;background:linear-gradient(135deg,#fff,var(--rj-light));border:1px solid var(--rj-border);border-radius:12px;padding:16px 20px}
+  .totals-box .row{display:flex;justify-content:space-between;padding:6px 0;font-size:12px;color:var(--rj-muted-text)}
+  .totals-box .row.total{background:var(--grad-dark);color:#fff;border-radius:10px;padding:14px 18px;margin-top:8px}
+  .totals-box .row.total .lbl{font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600}
+  .totals-box .row.total .val{font-family:var(--font-head);font-size:22px;font-weight:600;letter-spacing:-0.01em}
+
+  .validity{background:var(--rj-navy);color:#fff;padding:14px 18px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;position:relative;overflow:hidden}
+  .validity::after{content:"";position:absolute;right:-40px;top:-40px;width:150px;height:150px;background:radial-gradient(circle,rgba(14,165,233,0.35) 0%,transparent 60%);filter:blur(20px)}
+  .validity .txt{position:relative;z-index:1}
+  .validity .lbl-v{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-sky);font-weight:600;margin-bottom:3px}
+  .validity .n{font-family:var(--font-head);font-weight:600;font-size:15px;letter-spacing:-0.01em}
+  .validity .cta{background:var(--grad-primary);color:#fff;padding:10px 18px;border-radius:8px;font-family:var(--font-head);font-weight:600;font-size:12px;position:relative;z-index:1;box-shadow:0 6px 16px rgba(37,99,235,0.4)}
+
+  .terms{background:#f8fafc;border-left:3px solid var(--rj-muted-text);padding:12px 16px;border-radius:0 8px 8px 0;font-size:10px;line-height:1.6;color:var(--rj-muted-text)}
+  .terms b{color:var(--rj-navy);font-family:var(--font-head);font-weight:600}
+
+  .sig-block{margin-top:auto;padding-top:16px;border-top:1px solid var(--rj-line);display:grid;grid-template-columns:1fr 1fr;gap:28px}
+  .sig-line{border-bottom:1.5px solid var(--rj-navy);padding-bottom:5px;font-family:'Space Grotesk',serif;font-style:italic;font-size:20px;color:var(--rj-blue);font-weight:500;min-height:32px}
+  .sig-meta{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--rj-muted-text);margin-top:5px;font-weight:600}
+  .sig-meta b{color:var(--rj-navy);display:block;margin-top:2px;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:600}
+
+  .foot{background:var(--rj-navy);color:#94a3b8;padding:12px 56px;display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600}
+  .foot .brand{color:#fff;font-family:var(--font-head);font-size:11px;letter-spacing:0.02em;text-transform:none;font-weight:500}
+
+  @media print{body{background:#fff;padding:0}.sheet{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="top">
+    <div class="row">
+      <div class="brand"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/><div><div class="n">RJ Business Solutions</div><div class="t">Quote &amp; Estimate</div></div></div>
+      <div class="doc">Quote<b>Q-2026-0328</b></div>
+    </div>
+    <h1>Quote <span>&amp; Estimate.</span></h1>
+    <div class="sub">Fixed pricing on scope · Valid 30 days from issue</div>
+  </div>
+  <div class="thin"></div>
+
+  <div class="body">
+    <div class="meta-grid">
+      <div class="meta-cell"><div class="k">Prepared For</div><div class="v">[Client Name]</div><div class="a">[Client Company]<br/>[Contact Email]</div></div>
+      <div class="meta-cell"><div class="k">Prepared By</div><div class="v">Rick Jefferson</div><div class="a">RJ Business Solutions<br/>rick@rjbusinesssolutions.org</div></div>
+      <div class="meta-cell"><div class="k">Details</div><div class="v">Issued: Aug 7, 2026</div><div class="a">Valid Through: Sep 6, 2026<br/>Currency: USD</div></div>
+    </div>
+
+    <h3>Scope · Fixed Pricing</h3>
+    <table>
+      <thead>
+        <tr><th style="width:56%">Deliverable</th><th style="width:14%">Type</th><th>Amount</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Growth Engine · Launch Setup<div class="desc">CRM, DM automation, brand voice training, booking flow, compliance guardrails, 7-day launch.</div><span class="badge">Included</span></td>
+          <td>One-time</td>
+          <td>$1,997.00</td>
+        </tr>
+        <tr>
+          <td>Monthly Management<div class="desc">AI DM ops · sequences · no-show recovery · human escalation · monthly reporting.</div><span class="badge">Included</span></td>
+          <td>$997/mo</td>
+          <td>$997.00</td>
+        </tr>
+        <tr>
+          <td>Landing Page + Funnel Build<div class="desc">Hero, offer, checkout, analytics wiring — added scope.</div><span class="badge">Included</span></td>
+          <td>Project</td>
+          <td>$2,500.00</td>
+        </tr>
+        <tr>
+          <td>Client Portal · Auth + Billing<div class="desc">Delegated access, role-based permissions, custom views.</div><span class="badge opt">Optional</span></td>
+          <td>Project</td>
+          <td>+$3,500.00</td>
+        </tr>
+        <tr>
+          <td>Credit Monitoring API Integration<div class="desc">Bureau data pipe, scoring, alerts, dispute workflow.</div><span class="badge opt">Optional</span></td>
+          <td>Project</td>
+          <td>+$5,000.00</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="totals">
+      <div class="totals-box">
+        <div class="row"><span>Subtotal (Included Scope)</span><span>$5,494.00</span></div>
+        <div class="row"><span>Multi-service Bundle Discount (15%)</span><span>−$824.10</span></div>
+        <div class="row"><span>Optional Add-ons (if selected)</span><span>+$8,500.00</span></div>
+        <div class="row total"><span class="lbl">Estimate · Included</span><span class="val">$4,669.90</span></div>
+      </div>
+    </div>
+
+    <h3>Timeline</h3>
+    <div class="meta-grid">
+      <div class="meta-cell"><div class="k">Kickoff</div><div class="v">Day 1</div><div class="a">Within 5 business days of signed acceptance + deposit received.</div></div>
+      <div class="meta-cell"><div class="k">Launch</div><div class="v">Day 7</div><div class="a">Full system live and traffic-tested.</div></div>
+      <div class="meta-cell"><div class="k">Add-ons</div><div class="v">+14–21 days</div><div class="a">Client Portal and Credit API extend timeline if selected.</div></div>
+    </div>
+
+    <div class="validity">
+      <div class="txt">
+        <div class="lbl-v">● Validity</div>
+        <div class="n">This estimate is valid for 30 days from issue.</div>
+      </div>
+      <div class="cta">Accept &amp; Sign →</div>
+    </div>
+
+    <div class="terms">
+      <b>Assumptions:</b> Estimate assumes delegated access provided within 48 hours of kickoff. Delays caused by asset availability or brand voice input may extend timeline day-for-day. <b>Payment:</b> Deposit (Launch fee + Month 1) due at acceptance via Stripe or ACH. Recurring monthly billed on same date each month. Net 15 unless negotiated. <b>Non-binding:</b> This quote is not an invoice — signature converts it to a Statement of Work under the RJ Master Service Agreement.
+    </div>
+
+    <div class="sig-block">
+      <div>
+        <div class="sig-line">Signature</div>
+        <div class="sig-meta">Client Acceptance<b>[Full Name · Title · Date]</b></div>
+      </div>
+      <div>
+        <div class="sig-line">Rick Jefferson</div>
+        <div class="sig-meta">RJ Business Solutions<b>Rick Jefferson · Founder · Aug 7, 2026</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><div class="brand">RJ Business Solutions</div><div>Quote Q-2026-0328 · Valid 30 days · support@rjbusinesssolutions.org</div></div>
+</div>
+</body>
+</html>
