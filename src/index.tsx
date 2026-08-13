@@ -119,7 +119,7 @@ import { CITIZENSHIP_STATUSES, GENDER_OPTIONS, MARITAL_STATUS_OPTIONS } from './
 import { listTradelineEducation } from './data/tradeline-education';
 import { sendSms } from './lib/alerts';
 import sampleMfsnReport from './data/sample-mfsn-report.json';
-import { spaAppSource, pwaSwSource, pwaManifestSource } from './generated/spa-source';
+import { spaAppSource, pwaSwSource, pwaManifestSource, marketingLandingHtml } from './generated/spa-source';
 import { persistCreditTwinFromParsed } from './lib/credit-twin';
 import { registerClientIntelligenceRoutes } from './lib/client-intelligence-routes';
 import { inspectUpload, decodeBase64Bytes, sanitizeFileName } from './lib/upload-hygiene';
@@ -943,6 +943,8 @@ const BRAND_FORM_IDS = new Set([
   'whitelabel',
   'partnership',
   'podcast-guest',
+  'saas-demo',
+  'smart-fcra-demo',
 ]);
 
 /** Public RJ brand lead capture (interactive forms). */
@@ -1078,18 +1080,28 @@ app.get('/api/brand/catalog', authMiddleware, async (c) => {
       { id: 'whitelabel-app', title: 'Whitelabel Application', url: '/forms/whitelabel' },
       { id: 'partnership', title: 'Partnership Application', url: '/forms/partnership' },
       { id: 'podcast-guest', title: 'Podcast Guest', url: '/forms/podcast-guest' },
+      { id: 'saas-demo', title: 'Smart FCRA SaaS Demo', url: '/#demo' },
     ],
     brand: {
       name: 'RJ Business Solutions',
+      product: 'Smart FCRA',
       tagline: 'Empowering Generational Wealth',
       colors: { blue: '#2563eb', sky: '#0ea5e9', deep: '#1e3a8a', navy: '#0f172a' },
       fonts: { head: 'Space Grotesk', body: 'Inter' },
       logo: 'https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg',
       web: 'https://rjbusinesssolutions.org',
+      marketing: '/',
       email: 'support@rjbusinesssolutions.org',
     },
   });
 });
+
+/** Public Smart FCRA sales funnel (software landing). */
+app.get('/', (c) => c.html(marketingLandingHtml));
+app.get('/pricing', (c) => c.redirect('/#pricing', 302));
+app.get('/demo', (c) => c.redirect('/#demo', 302));
+app.get('/login', (c) => c.html(getAppHtml()));
+app.get('/app', (c) => c.html(getAppHtml()));
 
 /** Friendly short URLs into the brand library */
 app.get('/brand', (c) => c.redirect('/static/brand/', 302));
@@ -10219,7 +10231,7 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/app.js?v=20260813-prod-ops"></script>
+  <script src="/static/app.js?v=20260813-saas-funnel"></script>
 </body>
 </html>`;
 }

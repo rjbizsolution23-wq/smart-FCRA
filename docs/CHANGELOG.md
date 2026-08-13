@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.6.0] - 2026-08-13
+### Added
+- Public **Smart FCRA by RJ Business Solutions** sales funnel at `/` (`public/static/marketing/index.html`): full-bleed hero, product, compliance posture, SaaS pricing ($497 / $2,500 / $9,997), demo lead form → `POST /api/public/lead/saas-demo`.
+- App shell moved to `/login` and `/app`. `/pricing` and `/demo` redirect to landing anchors.
+
+### Changed
+- Brand library hub links to the software site and Sign in. Auth flows keep users on `/login` / `/app` instead of the marketing root.
+
 ## [3.5.0] - 2026-08-13
 ### Added
 - Original report files stored in R2 (`credit_reports.r2_key`) and opened beside the paper sandbox.

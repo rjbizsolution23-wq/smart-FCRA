@@ -751,7 +751,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
               <button type="submit" id="mfsn-signup-btn" class="w-full btn-rj font-semibold py-3 rounded-lg text-sm"><i class="fas fa-bolt mr-2"></i>Pull Report & Create My Portal</button>
             </form>
             <div id="mfsn-signup-result" class="hidden mt-4 rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-4 text-sm text-emerald-100 space-y-2"></div>
-            <p class="text-center text-xs text-gray-500 mt-4">Already have access? <a href="/" class="text-cyan-400 hover:text-cyan-300">Sign in</a></p>
+            <p class="text-center text-xs text-gray-500 mt-4">Already have access? <a href="/login" class="text-cyan-400 hover:text-cyan-300">Sign in</a></p>
           </div>
         </div>
       </div>`;
@@ -765,19 +765,20 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           <div><label class="block text-xs text-gray-400 mb-1.5">New Password</label><input type="password" name="password" required minlength="8" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none"></div>
           <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg text-sm">Update Password</button>
         </form>
-        <p class="text-center text-xs text-gray-500 mt-4"><a href="/" class="text-blue-400">Back to sign in</a></p>
+        <p class="text-center text-xs text-gray-500 mt-4"><a href="/login" class="text-blue-400">Back to sign in</a></p>
       </div></div>`;
     }
     return `<div class="min-h-screen flex items-center justify-center p-4">
       <div class="w-full max-w-md">
         <div class="text-center mb-8">
           <div class="inline-flex items-center justify-center mb-4"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-16 w-auto rounded-2xl border border-blue-500/40 object-cover shadow-[0_0_24px_rgba(37,99,235,0.35)]" alt="RJ Business Solutions"></div>
-          <div class="text-[10px] uppercase tracking-[0.18em] font-bold text-sky-300 mb-2">RJ Business Solutions</div>
+          <div class="text-[10px] uppercase tracking-[0.18em] font-bold text-sky-300 mb-2">by RJ Business Solutions</div>
           <h1 class="text-2xl font-bold text-white font-display">Smart FCRA</h1>
           <p class="text-gray-400 mt-1 text-sm">Empowering Generational Wealth · Credit advocacy CRM</p>
           <div class="mt-3 flex flex-wrap justify-center gap-2 text-[11px]">
+            <a href="/" class="px-2.5 py-1 rounded-lg border border-white/10 text-gray-300 hover:bg-white/5">Marketing site</a>
             <a href="/forms/credit-qualify" class="px-2.5 py-1 rounded-lg border border-blue-500/30 text-blue-200 hover:bg-blue-500/10">Credit Qualify</a>
-            <a href="/?signup=mfsn" class="px-2.5 py-1 rounded-lg border border-cyan-500/30 text-cyan-200 hover:bg-cyan-500/10">MFSN Signup</a>
+            <a href="/login?signup=mfsn" class="px-2.5 py-1 rounded-lg border border-cyan-500/30 text-cyan-200 hover:bg-cyan-500/10">MFSN Signup</a>
             <a href="/brand" target="_blank" class="px-2.5 py-1 rounded-lg border border-white/10 text-gray-300 hover:bg-white/5">Brand Library</a>
           </div>
         </div>
@@ -828,7 +829,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
             <button type="submit" class="w-full btn-rj font-semibold py-2.5 rounded-lg transition text-sm">Sign In</button>
             <button type="button" data-pwa-install class="hidden w-full rounded-lg border border-sky-500/40 bg-sky-950/30 text-sky-100 text-sm font-semibold py-2.5" onclick="window._installPwa()"><i class="fas fa-download mr-2"></i>Install Smart FCRA</button>
           </form>
-            <a href="/?signup=mfsn" class="mt-3 flex items-center justify-center gap-2 w-full rounded-lg border border-sky-500/40 bg-sky-950/30 hover:bg-sky-900/40 text-sky-100 text-sm font-semibold py-2.5 transition">
+            <a href="/login?signup=mfsn" class="mt-3 flex items-center justify-center gap-2 w-full rounded-lg border border-sky-500/40 bg-sky-950/30 hover:bg-sky-900/40 text-sky-100 text-sm font-semibold py-2.5 transition">
               <i class="fas fa-bolt text-sky-300"></i> New client? Sign up with MyFreeScoreNow
             </a>
             <div class="mt-4 rounded-xl border border-cyan-500/25 bg-gradient-to-br from-slate-950 via-cyan-950/20 to-slate-950 p-3.5 space-y-2.5">
@@ -887,9 +888,12 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   function bindAuth() {
     const params = new URLSearchParams(location.search);
     const verifyEmail = params.get('verifyEmail');
+    if (params.get('mode') === 'register' || params.get('plan')) {
+      try { window._switchTab('register'); } catch (_) {}
+    }
     if (verifyEmail) {
       api('/auth/verify-email', { method:'POST', body: JSON.stringify({ token: verifyEmail }) })
-        .then(() => { toast('Email verified — you can sign in now', 'success'); history.replaceState({}, '', '/'); })
+        .then(() => { toast('Email verified — you can sign in now', 'success'); history.replaceState({}, '', '/login'); })
         .catch(err => toast(err.message, 'error'));
     }
 
@@ -971,7 +975,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
                 <div>Reports: ${d.reportsImported || 0} · Findings prepared (locked): ${d.violationsFound || 0}</div>
               </div>
               <p class="text-[11px] text-emerald-200/70">Check your email for the same login. Analysis stays locked until our team confirms payment.</p>
-              <a href="/" class="inline-flex mt-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg">Go to Sign In</a>`;
+              <a href="/login" class="inline-flex mt-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg">Go to Sign In</a>`;
           }
           toast('Portal ready — check your email', 'success');
           e.target.classList.add('opacity-60', 'pointer-events-none');
@@ -999,6 +1003,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         }
         setState({token:d.token,user:d.user,org:d.org});
         toast('Welcome — demo ready','success');
+        history.replaceState({}, '', '/app');
         render();
       } catch (err) { toast(err.message || 'Demo login failed', 'error'); }
     }
@@ -1019,6 +1024,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         }
         setState({token:d.token,user:d.user,org:d.org});
         toast('Welcome back!','success');
+        history.replaceState({}, '', '/app');
         render();
       } catch(err) {
         if (err.code === 'EMAIL_NOT_VERIFIED') {
@@ -1036,6 +1042,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         const d = await api('/auth/mfa/challenge', { method:'POST', body:JSON.stringify({ userId: fd.get('userId'), tempToken: fd.get('tempToken'), code: fd.get('code') })});
         setState({token:d.token,user:d.user,org:d.org});
         toast('MFA verified','success');
+        history.replaceState({}, '', '/app');
         render();
       } catch(err) { toast(err.message,'error'); }
     };
@@ -1054,7 +1061,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       try {
         await api('/auth/reset-password', { method:'POST', body:JSON.stringify({ token: fd.get('token'), password: fd.get('password') })});
         toast('Password updated — sign in with your new password', 'success');
-        history.replaceState({}, '', '/');
+        history.replaceState({}, '', '/login');
         render();
       } catch(err) { toast(err.message,'error'); }
     };
@@ -1072,6 +1079,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         }
         setState({token:d.token,user:d.user,org:d.org});
         toast('Account created!','success');
+        history.replaceState({}, '', '/app');
         render();
       } catch(err) { toast(err.message,'error'); }
     };
@@ -5898,7 +5906,7 @@ Status: Discharged`;
           <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-link text-cyan-400"></i> MyFreeScoreNow Affiliate Offers (A8289)</h2>
           <p class="text-xs text-gray-500 mb-4">Only members enrolled under these links can use public signup / partner report pull. Commission is staff-only knowledge.</p>
           <div id="mfsn-affiliate-staff-table" class="text-xs text-gray-400">Loading offers…</div>
-          <p class="text-[10px] text-gray-600 mt-3">Public signup: <a class="text-cyan-400" href="/?signup=mfsn" target="_blank">/?signup=mfsn</a></p>
+          <p class="text-[10px] text-gray-600 mt-3">Public signup: <a class="text-cyan-400" href="/login?signup=mfsn" target="_blank">/login?signup=mfsn</a></p>
         </div>
 
         <div class="glass rounded-xl p-6 border border-orange-900/40" id="ghl-mfsn-sync-panel">
@@ -8528,7 +8536,7 @@ async function pgAdminConsole(el) {
     const sections = [
       { title: 'Public (no login)', items: [
         ['Login / Register / MFA', 'Email, password, forgot/reset, MFA, email verify'],
-        ['MFSN signup', '/?signup=mfsn — affiliate A8289, MAPIK# token, analysis locked until staff unlock'],
+        ['MFSN signup', '/login?signup=mfsn — affiliate A8289, MAPIK# token, analysis locked until staff unlock'],
         ['Brand hub', '/brand — 69 RJ assets (forms, marketing, legal, ops, founder)'],
         ['Lead forms', '8 interactive forms POST to /api/public/lead/:formId → D1 + ops email + GHL'],
         ['Legal', '/legal/terms, /legal/privacy, /compliance/disclaimers'],

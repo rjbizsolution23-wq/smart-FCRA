@@ -15,7 +15,7 @@ This is the operator map of **everything the app does today**, plus **what is st
 |---|---|---|
 | **Staff / admin / super_admin** | Email + password, MFA, demo `demo@example.com` | Full ops console: clients, reports, violations, letters, mailing, tradelines, brand library, billing, admin |
 | **Client (consumer)** | Invite, register, MFSN signup, or demo `salisha.mcdowell@example.com` | Client portal: cockpit, journey, vault, fundability, tradelines, tutors, documents |
-| **Public visitor** | No login | Login, register, forgot password, MFSN signup (`/?signup=mfsn`), brand forms (`/forms/*`), `/brand`, legal pages, API docs |
+| **Public visitor** | No login | Software sales funnel (`/`), login (`/login`), MFSN signup (`/login?signup=mfsn`), brand forms (`/forms/*`), `/brand`, legal pages, API docs |
 | **Partner / GHL / MFSN** | Webhooks + affiliate links | Inbound leads, MFSN members, CRM sync |
 
 ---
@@ -24,9 +24,10 @@ This is the operator map of **everything the app does today**, plus **what is st
 
 | URL / entry | What it does |
 |---|---|
-| `/` | SPA shell. Login by default. `?signup=mfsn` opens MFSN partner signup. Hash routes after login (`#dashboard`, `#client-cockpit`, …). |
-| `/login` `/register` `/forgot-password` `/reset-password` `/verify-email` `/mfa` | Auth screens |
-| `/brand` | RJ Business Solutions brand library hub (69 assets: forms, marketing, legal, ops, founder) |
+| `/` | Smart FCRA by RJ Business Solutions sales funnel (product, pricing, demo lead). |
+| `/login` `/app` | SPA shell. `/login?signup=mfsn` opens MFSN partner signup; `/login?mode=register` opens Create Account. Hash routes after login (`#dashboard`, `#client-cockpit`, …). |
+| `/pricing` `/demo` | Redirect to `/#pricing` and `/#demo`. |
+| `/brand` | RJ Business Solutions brand library hub (forms, marketing, legal, ops, founder) |
 | `/forms/credit-qualify` | Interactive credit / dispute qualification |
 | `/forms/funding-qualify` | Business funding qualification |
 | `/forms/universal-funnel` | Combined credit + funding + consulting |
