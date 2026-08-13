@@ -1073,20 +1073,30 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     let navItems = [];
     if (state.user?.role === 'client' || state.impersonateClientId) {
       navItems = [
-        { id: 'client-cockpit', icon: 'fa-rocket', label: t('nav.myCockpit') },
+        { id: 'client-cockpit', icon: 'fa-home', label: 'Dashboard' },
+        { id: 'client-credit', icon: 'fa-chart-bar', label: 'My Credit' },
+        { id: 'client-case', icon: 'fa-balance-scale', label: 'My Credit Case' },
+        { id: 'client-attest', icon: 'fa-clipboard-check', label: 'Confirm Facts' },
+        { id: 'client-disputes', icon: 'fa-file-signature', label: 'Disputes' },
+        { id: 'client-actions', icon: 'fa-tasks', label: 'Action Plan' },
+        { id: 'client-progress', icon: 'fa-chart-line', label: 'Progress' },
+        { id: 'client-rights', icon: 'fa-landmark', label: 'Consumer Rights' },
         { id: 'client-journey', icon: 'fa-route', label: t('nav.myJourney') },
         { id: 'client-self-onboard', icon: 'fa-file-upload', label: t('nav.getStarted') },
         { id: 'client-messages', icon: 'fa-comments', label: t('nav.messages'), badgeId: 'notif-badge-msg' },
-        { id: 'client-uploads', icon: 'fa-cloud-upload-alt', label: t('nav.vault') },
-        { id: 'client-fundability', icon: 'fa-chart-line', label: t('nav.fundability') },
+        { id: 'client-uploads', icon: 'fa-folder-open', label: 'Documents' },
+        { id: 'client-fundability', icon: 'fa-house-user', label: 'Readiness' },
         { id: 'client-tradelines', icon: 'fa-handshake', label: t('nav.boostTools') },
         { id: 'tradelines', icon: 'fa-layer-group', label: 'AU Tradelines' },
         { id: 'client-tutor', icon: 'fa-user-graduate', label: t('nav.tutor') },
-        { id: 'client-documents', icon: 'fa-file-signature', label: t('nav.documents') },
-        { id: 'client-legal', icon: 'fa-balance-scale', label: 'Legal & Notary' },
+        { id: 'client-documents', icon: 'fa-file-alt', label: 'Letters' },
+        { id: 'client-legal', icon: 'fa-gavel', label: 'Legal & Notary' },
         { id: 'client-video', icon: 'fa-video', label: 'Video' },
-        { id: 'client-knowledge', icon: 'fa-graduation-cap', label: t('nav.education') },
-        { id: 'client-settings', icon: 'fa-user-shield', label: t('nav.security') },
+        { id: 'client-knowledge', icon: 'fa-graduation-cap', label: 'Academy' },
+        { id: 'client-billing', icon: 'fa-credit-card', label: 'Billing' },
+        { id: 'client-consents', icon: 'fa-check-double', label: 'Consents' },
+        { id: 'client-settings', icon: 'fa-user-shield', label: 'Privacy & Security' },
+        { id: 'client-cancel', icon: 'fa-ban', label: 'Cancel Services' },
         { id: 'ai-studio', icon: 'fa-robot', label: t('nav.aiMentors') },
       ];
       if (state.impersonateClientId) {
@@ -1154,7 +1164,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       ? `<div class="bg-amber-600/90 text-white text-xs font-semibold px-4 py-2.5 flex items-center justify-between z-[1000] border-b border-amber-500/30">
           <div class="flex items-center gap-2">
             <i class="fas fa-user-shield text-sm animate-pulse"></i>
-            <span><strong>Impersonation Mode:</strong> Currently previewing the secure customer portal for client <strong>${escapeHtml(state.impersonateClientName || state.impersonateClientId)}</strong></span>
+            <span><strong>Impersonation Mode:</strong> Previewing the portal for <strong>${escapeHtml(state.impersonateClientName || state.impersonateClientId)}</strong>. Signatures, attestations, dispute approvals, and cancellation are blocked.</span>
           </div>
           <button onclick="window._stopImpersonating()" class="bg-black/30 hover:bg-black/50 px-3 py-1 rounded-lg transition text-[10px] uppercase tracking-wider font-extrabold flex items-center gap-1 border border-white/20"><i class="fas fa-times-circle"></i>Exit Preview</button>
          </div>`
@@ -1194,8 +1204,18 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           <button type="button" onclick="window._logout()" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-gray-500 hover:bg-red-900/20 hover:text-red-400 transition"><i class="fas fa-sign-out-alt" aria-hidden="true"></i>${t('nav.signOut')}</button>
         </div>
       </aside>
-      <main class="flex-1 overflow-y-auto md:ml-0 ml-0" id="main-content" role="main"><div class="p-6 pt-16 md:pt-6" id="page-content" tabindex="-1"><div class="flex items-center justify-center h-40" role="status" aria-live="polite"><i class="fas fa-spinner fa-spin text-blue-400 text-xl" aria-hidden="true"></i><span class="sr-only">${t('common.loading')}</span></div></div></main>
+      <main class="flex-1 overflow-y-auto md:ml-0 ml-0" id="main-content" role="main"><div class="p-6 pt-16 md:pt-6 ${(state.user?.role === 'client' || state.impersonateClientId) ? 'pb-24 md:pb-6' : ''}" id="page-content" tabindex="-1"><div class="flex items-center justify-center h-40" role="status" aria-live="polite"><i class="fas fa-spinner fa-spin text-blue-400 text-xl" aria-hidden="true"></i><span class="sr-only">${t('common.loading')}</span></div></div></main>
       </div>
+      ${(state.user?.role === 'client' || state.impersonateClientId) ? `
+      <nav class="md:hidden fixed bottom-0 inset-x-0 z-50 bg-gray-950/95 border-t border-gray-800 flex justify-around pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]" aria-label="Primary">
+        ${[
+          ['client-cockpit','fa-home','Home'],
+          ['client-credit','fa-chart-bar','Credit'],
+          ['client-case','fa-balance-scale','Case'],
+          ['client-actions','fa-tasks','Actions'],
+          ['client-settings','fa-ellipsis-h','More'],
+        ].map(([id,icon,label]) => `<button type="button" onclick="window._nav('${id}')" class="flex flex-col items-center min-w-[44px] min-h-[44px] text-[10px] ${state.currentPage===id?'text-sky-300':'text-gray-400'}"><i class="fas ${icon} text-sm mb-0.5" aria-hidden="true"></i>${label}</button>`).join('')}
+      </nav>` : ''}
     </div>`;
   }
 
@@ -1251,6 +1271,16 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         
         // Secure Self-Service Client Portal Pages
         case 'client-cockpit': await pgClientCockpit(el); break;
+        case 'client-credit': await pgClientCredit(el); break;
+        case 'client-case': await pgClientCase(el); break;
+        case 'client-attest': await pgClientAttest(el); break;
+        case 'client-disputes': await pgClientDisputes(el); break;
+        case 'client-actions': await pgClientActions(el); break;
+        case 'client-progress': await pgClientProgress(el); break;
+        case 'client-rights': await pgClientRights(el); break;
+        case 'client-billing': await pgClientBilling(el); break;
+        case 'client-consents': await pgClientConsents(el); break;
+        case 'client-cancel': await pgClientCancel(el); break;
         case 'client-journey': await pgClientJourney(el); break;
         case 'client-self-onboard': await pgClientSelfOnboard(el, state.pageData); break;
         case 'client-messages': await pgClientMessages(el); break;
@@ -8491,12 +8521,15 @@ async function pgAdminConsole(el) {
         ['AI Studio / Legal / Admin', 'Mentors, in-app legal, super-admin console'],
       ]},
       { title: 'Client portal', items: [
-        ['Cockpit / Journey / Get Started', 'Scores, 6-stage pipeline, intake wizard'],
+        ['Dashboard', 'Named-model scores, next action, results taxonomy (not every change is a deletion), credit health'],
+        ['My Credit / Case / Confirm Facts / Disputes', 'Tri-bureau compare, event ledger, evidence-first attestations, letter approval'],
+        ['Action Plan / Progress / Consumer Rights', 'One primary NBA, measured changes, FCRA/CROA/FDCPA education'],
+        ['Cancel Services / Consents / Billing', 'CROA cancellation in-portal; separate consents; client invoices without internal billing rules'],
         ['Messages / Vault', 'Client ↔ staff chat; ID, SSN, proof, reports in R2'],
         ['Fundability / Boost / AU Tradelines', 'Deterministic fundability + educational AU catalog'],
-        ['Tutor / Documents / Legal & Notary', 'Alex Rivera tutor, letters, RON (Proof/BlueNotary ceremony when live keys set)'],
+        ['Tutor / Letters / Legal & Notary', 'Alex Rivera tutor, letters, RON (Proof/BlueNotary ceremony when live keys set)'],
         ['Video', 'Twilio Video JS — live room when keys set, local camera preview otherwise'],
-        ['Education / Security / Mentors', 'Lessons, MFA, Rick / Alex / Maya / Jordan chat'],
+        ['Academy / Privacy & Security / Mentors', 'Lessons, MFA, Rick / Alex / Maya / Jordan chat'],
       ]},
       { title: 'Engines & integrations', items: [
         ['Violation engine', 'FCRA / FDCPA / ECOA / Metro2 / state / BK + fact-check, LVS, damages'],
@@ -8520,7 +8553,7 @@ async function pgAdminConsole(el) {
       'Shipped: Per-tenant CSS tokens from Settings → branding.',
       'Shipped: src/frontend archived as non-production prototypes.',
       'Shipped: Mobile PWA (manifest, service worker, install, overlay nav).',
-      'Shipped: Playwright login → upload → detect → letter as a required CI gate.',
+      'Shipped: Client intelligence portal — evidence-first disputes, attestations, CROA cancel, named score models, no deletion simulator.',
     ];
     el.innerHTML = `<div class="fade-in space-y-6">
       <div class="rounded-2xl border border-blue-500/25 bg-gradient-to-r from-slate-950 via-blue-950/30 to-slate-950 p-6">
@@ -9300,9 +9333,10 @@ async function pgAdminConsole(el) {
   async function pgClientCockpit(el) {
     try {
       const dashQs = state.impersonateClientId ? `?clientId=${state.impersonateClientId}` : '';
-      const [d, journeyPayload] = await Promise.all([
+      const [d, journeyPayload, intel] = await Promise.all([
         api('/client-portal/dashboard' + dashQs),
         api('/client-portal/journey' + dashQs).catch(() => null),
+        api('/client-portal/intelligence' + dashQs).catch(() => null),
       ]);
       let journeyData = journeyPayload;
       const client = d.client || {};
@@ -9370,553 +9404,133 @@ async function pgAdminConsole(el) {
         return;
       }
 
-      const violations = actualViolations.map((v, i) => {
-        const liftEntry = (d.scoreProjection?.lifts || []).find((l) => l.id === v.id);
-        const lift = liftEntry?.lift ?? (v.severity === 'critical' ? 40 : (v.severity === 'high' ? 25 : 15));
-        return {
-          id: v.id || `v-act-${i}`,
-          account_name: v.account_name || 'Inaccurate Record',
-          bureau: v.bureau || 'Experian',
-          severity: v.severity || 'high',
-          statute: v.statute || '15 U.S.C. § 1681e(b)',
-          error_type: v.error_type || v.subcategory || 'FCRA Inaccuracy',
-          finding_reason: v.finding_reason || v.description || 'Record reporting incorrect credit coordinates.',
-          fico_points: lift,
-        };
-      });
+      const scores = (intel && intel.scores) || [
+        { bureau: 'Experian', score: client.ex_score, scoreModel: 'Score model not identified on this report' },
+        { bureau: 'Equifax', score: client.eq_score, scoreModel: 'Score model not identified on this report' },
+        { bureau: 'TransUnion', score: client.tu_score, scoreModel: 'Score model not identified on this report' },
+      ];
+      const nba = (intel && intel.nextBestAction) || { title: 'Review your credit workspace', detail: 'Confirm facts before any dispute is prepared.', ctaLabel: 'Open case', ctaPage: 'client-case', urgency: 'NORMAL' };
+      const results = (intel && intel.results) || {};
+      const health = (intel && intel.creditHealth) || {};
+      const events = (intel && intel.recentEvents) || [];
+      const greeting = (intel && intel.greeting) || 'Hello';
+      const pct = intel && typeof intel.journeyPercent === 'number' ? intel.journeyPercent : 0;
+      const stageLabel = (intel && intel.client && intel.client.stageLabel) || 'In progress';
+      const changeLine = (s) => {
+        if (s.change == null) return '';
+        const up = s.change > 0;
+        return `<span class="text-xs ${up ? 'text-emerald-400' : s.change < 0 ? 'text-rose-400' : 'text-gray-400'}">${up ? '▲' : s.change < 0 ? '▼' : '•'} ${up ? '+' : ''}${s.change}</span>`;
+      };
 
-      // Local State for interactive features
-      if (!window._cockpitState) {
-        window._cockpitState = {
-          selectedDeletions: {},
-          completedTasks: {
-            verifyAddress: true,
-            readGuide: false,
-            signLetters: documents.some(d => d.status === 'signed' || d.status === 'sent'),
-            uploadId: false
-          },
-          chatHistory: [
-            { sender: 'ai', text: `Hi ${escapeHtml(client.first_name || 'there')}! I am your automated FCRA Legal Counsel Advisor. Ask me anything about your rights under federal law, the dispute process, or your active campaign.` }
-          ]
-        };
-        // Set initial checkbox states
-        violations.forEach(v => {
-          window._cockpitState.selectedDeletions[v.id] = false;
-        });
-      }
+      el.innerHTML = `
+        <div class="fade-in space-y-6 max-w-6xl">
+          <div class="relative overflow-hidden bg-gradient-to-r from-gray-950 via-blue-950/40 to-gray-950 border border-blue-500/20 rounded-2xl p-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div class="flex items-center gap-4">
+                <div class="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-white text-xl font-bold font-display" aria-hidden="true">${escapeHtml((client.first_name || 'C')[0])}</div>
+                <div>
+                  <h1 class="text-2xl font-bold text-white font-display">${escapeHtml(greeting)}, ${escapeHtml(client.first_name || 'there')}</h1>
+                  <p class="text-[11px] uppercase tracking-[0.16em] text-sky-300/80 mt-1">Your credit journey</p>
+                  <div class="flex items-center gap-2 mt-2">
+                    <div class="w-40 h-2 rounded-full bg-gray-900 overflow-hidden border border-gray-800"><div class="h-full bg-sky-500" style="width:${Math.min(100, pct)}%"></div></div>
+                    <span class="text-sm font-mono text-white">${pct}% complete</span>
+                  </div>
+                  <p class="text-[11px] text-gray-400 mt-2">Stage: <span class="text-white">${escapeHtml(stageLabel)}</span>
+                    · Last report: ${escapeHtml((intel && intel.lastReportRefresh) || '—')}
+                    · Monitoring: ${escapeHtml((intel && intel.monitoringStatus) || 'Unknown')}</p>
+                </div>
+              </div>
+              <p class="text-[11px] text-amber-200/90 max-w-xs border border-amber-500/20 bg-amber-950/20 rounded-xl p-3">${escapeHtml((intel && intel.noGuaranteeNotice) || 'No guaranteed deletions, score increases, or lending approvals.')}</p>
+            </div>
+          </div>
 
-      const localState = window._cockpitState;
+          ${journeyData ? renderJourneyWakeupHtml(journeyData, { compact: true, checkInId: 'cockpit-journey-checkin', maxSuggestions: 3 }) : ''}
 
-      // Recalculate and update the workspace layout dynamically
-      function renderState() {
-        const eqBase = client.eq_score || 640;
-        const exBase = client.ex_score || 635;
-        const tuBase = client.tu_score || 645;
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            ${scores.map((s) => `
+              <div class="glass rounded-2xl p-5 border border-gray-800">
+                <div class="text-[10px] uppercase tracking-wider text-gray-400 font-bold">${escapeHtml(s.bureau)}</div>
+                <div class="flex items-end gap-2 mt-1">
+                  <div class="text-3xl font-bold text-white font-mono">${s.score == null ? '—' : s.score}</div>
+                  ${changeLine(s)}
+                </div>
+                <div class="text-[11px] text-sky-200/80 mt-2">Score model: ${escapeHtml(s.scoreModel || 'Score model not identified on this report')}</div>
+                <div class="text-[10px] text-gray-500 mt-1">${s.provider ? escapeHtml(s.provider) + ' · ' : ''}${escapeHtml(s.dateObtained || '')}</div>
+                <p class="text-[10px] text-gray-500 mt-2">This is not necessarily the score a mortgage, auto, or other lender will use.</p>
+              </div>`).join('')}
+          </div>
 
-        // Calculate simulated score improvements
-        let eqSim = eqBase;
-        let exSim = exBase;
-        let tuSim = tuBase;
+          <div class="grid lg:grid-cols-12 gap-4">
+            <div class="lg:col-span-7 space-y-4">
+              <div class="glass rounded-2xl p-5 border border-sky-500/25 bg-sky-950/10">
+                <div class="text-[10px] uppercase tracking-wider text-sky-300 font-bold">Your next action</div>
+                <h2 class="text-lg font-bold text-white mt-1">${escapeHtml(nba.title)}</h2>
+                <p class="text-sm text-gray-300 mt-1">${escapeHtml(nba.detail)}</p>
+                ${nba.due ? `<p class="text-xs text-amber-300 mt-2">Due: ${escapeHtml(nba.due)}</p>` : ''}
+                <button type="button" onclick="window._nav('${escapeHtml(nba.ctaPage || 'client-case')}')" class="mt-3 btn-rj text-xs font-bold px-4 py-2 rounded-lg">${escapeHtml(nba.ctaLabel || 'Continue')}</button>
+                ${(intel && intel.additionalActions && intel.additionalActions.length) ? `<ul class="mt-3 space-y-1">${intel.additionalActions.slice(0,3).map((a) => `<li class="text-xs text-gray-400">• ${escapeHtml(a.title)}</li>`).join('')}</ul>` : ''}
+              </div>
 
-        let totalLift = 0;
+              <div class="glass rounded-2xl p-5 border border-gray-800">
+                <h3 class="text-xs font-bold text-white uppercase tracking-wider mb-3">Credit health</h3>
+                <div class="grid sm:grid-cols-2 gap-2 text-sm">
+                  ${[
+                    ['Payment history', health.paymentHistory || 'See reports'],
+                    ['Utilization', health.utilization != null ? health.utilization + '%' : 'See My Credit'],
+                    ['Derogatories', health.derogatories ?? '—'],
+                    ['Collections', health.collections ?? '—'],
+                    ['Hard inquiries', health.hardInquiries ?? '—'],
+                    ['Account mix', health.accountMix || '—'],
+                  ].map(([k,v]) => `<div class="flex justify-between border border-gray-800 rounded-lg px-3 py-2"><span class="text-gray-400 text-xs">${k}</span><span class="text-white text-xs font-semibold">${escapeHtml(String(v))}</span></div>`).join('')}
+                </div>
+              </div>
+            </div>
+            <div class="lg:col-span-5 space-y-4">
+              <div class="glass rounded-2xl p-5 border border-gray-800">
+                <h3 class="text-xs font-bold text-white uppercase tracking-wider mb-3">Results</h3>
+                <p class="text-[11px] text-gray-500 mb-3">Not every change is a deletion.</p>
+                <div class="grid grid-cols-3 gap-2 text-center">
+                  ${['DELETED','CORRECTED','UPDATED','VERIFIED','NO_CHANGE','RESPONSE_PENDING'].map((k) => `
+                    <div class="rounded-lg bg-black/30 border border-gray-800 p-2">
+                      <div class="text-[9px] uppercase text-gray-500">${k.replace('_',' ')}</div>
+                      <div class="text-lg font-mono text-white">${results[k] || 0}</div>
+                    </div>`).join('')}
+                </div>
+              </div>
+              <div class="glass rounded-2xl p-5 border border-gray-800">
+                <h3 class="text-xs font-bold text-white uppercase tracking-wider mb-3">Since your last report</h3>
+                ${events.length ? events.slice(0,6).map((e) => `<div class="text-xs text-gray-300 py-1.5 border-b border-gray-800/60">${escapeHtml(e.taxonomy || e.eventType)} · ${escapeHtml(e.field || '')} ${e.previousValue != null ? escapeHtml(String(e.previousValue)) + ' → ' : ''}${escapeHtml(String(e.newValue ?? ''))}</div>`).join('') : '<p class="text-xs text-gray-500">No measured changes yet. Import a newer report to compare.</p>'}
+              </div>
+            </div>
+          </div>
 
-        violations.forEach(v => {
-          if (localState.selectedDeletions[v.id]) {
-            totalLift += v.fico_points;
-            if (v.bureau.toLowerCase().includes('equifax')) eqSim += v.fico_points;
-            else if (v.bureau.toLowerCase().includes('experian')) exSim += v.fico_points;
-            else if (v.bureau.toLowerCase().includes('transunion')) tuSim += v.fico_points;
-            else {
-              // Add to all if unspecified
-              eqSim += Math.round(v.fico_points / 2);
-              exSim += Math.round(v.fico_points / 2);
-              tuSim += Math.round(v.fico_points / 2);
-            }
+          <div class="flex flex-wrap gap-2">
+            <button type="button" onclick="window._nav('client-credit')" class="text-[10px] uppercase font-bold px-2.5 py-1 rounded-lg bg-blue-500/15 border border-blue-400/40 text-blue-200">My Credit</button>
+            <button type="button" onclick="window._nav('client-case')" class="text-[10px] uppercase font-bold px-2.5 py-1 rounded-lg bg-violet-500/15 border border-violet-400/40 text-violet-200">Credit case</button>
+            <button type="button" onclick="window._nav('client-attest')" class="text-[10px] uppercase font-bold px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-200">Confirm facts</button>
+            <button type="button" onclick="window._nav('client-rights')" class="text-[10px] uppercase font-bold px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-400/40 text-amber-200">Consumer rights</button>
+            <button type="button" onclick="window._nav('client-cancel')" class="text-[10px] uppercase font-bold px-2.5 py-1 rounded-lg bg-rose-500/15 border border-rose-400/40 text-rose-200">Cancel services</button>
+          </div>
+        </div>`;
+
+      const journeyCheckIn = document.getElementById('cockpit-journey-checkin');
+      if (journeyCheckIn) {
+        journeyCheckIn.onclick = async () => {
+          journeyCheckIn.disabled = true;
+          try {
+            const r = await api('/client-portal/journey/check-in', {
+              method: 'POST',
+              body: JSON.stringify(portalClientBody()),
+            });
+            toast(r.message || 'Checked in — keep going!', 'success');
+            pgClientCockpit(el);
+          } catch (err) {
+            toast(err.message, 'error');
+            journeyCheckIn.disabled = false;
           }
-        });
-
-        eqSim = Math.min(850, eqSim);
-        exSim = Math.min(850, exSim);
-        tuSim = Math.min(850, tuSim);
-
-        // Calculate checklist progress
-        const tasksList = [
-          { id: 'verifyAddress', label: 'Verify Mailing Address Coordinates', weight: 25 },
-          { id: 'signLetters', label: 'E-Sign Pending Dispute Letters', weight: 25 },
-          { id: 'uploadId', label: 'Upload Photo ID & Utility Bill (FCRA Compliance)', weight: 25 },
-          { id: 'readGuide', label: 'Review Educational FCRA Litigation Guide', weight: 25 }
-        ];
-
-        let progressPercent = 0;
-        tasksList.forEach(t => {
-          if (localState.completedTasks[t.id]) {
-            progressPercent += t.weight;
-          }
-        });
-
-        const totalDamagesVal = violations.length * 1000;
-
-        el.innerHTML = `
-          <div class="fade-in space-y-6 max-w-full text-gray-200">
-            <!-- Premium Header Jumbotron with Brand proof -->
-            <div class="relative overflow-hidden bg-gradient-to-r from-gray-950 via-blue-950/40 to-gray-950 border border-blue-500/20 rounded-2xl p-6 shadow-2xl">
-              <div class="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-blue-600/10 rounded-full blur-3xl"></div>
-              <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div>
-                  <h1 class="text-2xl font-bold text-white mb-1">Welcome back, ${escapeHtml(client.first_name)}!</h1>
-                  <p class="text-xs text-gray-400 font-mono">Secure Client Autopilot Dashboard &bull; Case ID: NEL-${client.id || 'Active'}</p>
-                  <div class="flex flex-wrap gap-2 mt-3">
-                    <button onclick="window._nav('client-journey')" class="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-cyan-500/15 border border-cyan-400/40 text-cyan-200">My Journey</button>
-                    <button onclick="window._nav('client-messages')" class="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">Messages</button>
-                    <button onclick="window._nav('client-fundability')" class="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300">Fundability</button>
-                    <button onclick="window._nav('client-tutor')" class="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-violet-500/10 border border-violet-500/30 text-violet-300">My Tutor</button>
-                    <button onclick="window._nav('client-uploads')" class="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">Vault</button>
-                    <button onclick="window._nav('client-tradelines')" class="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-lg bg-teal-500/10 border border-teal-500/30 text-teal-300">Boost Tools</button>
-                  </div>
-                </div>
-                <div class="bg-blue-600/10 border border-blue-500/20 rounded-xl px-4 py-2 flex items-center gap-3">
-                  <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="RJ Business Solutions Logo" class="w-8 h-8 rounded-lg object-cover border border-blue-500/30">
-                  <div>
-                    <div class="text-[10px] text-gray-400 uppercase tracking-wider font-mono">Authorized Advisor</div>
-                    <div class="text-xs font-extrabold text-white">Rick Jefferson</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            ${journeyData ? renderJourneyWakeupHtml(journeyData, { compact: true, checkInId: 'cockpit-journey-checkin', maxSuggestions: 3 }) : ''}
-
-            <!-- Dashboard Fast Stats Row: Scores, Damages & Checklist Progress -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <!-- Score 1 -->
-              ${scoreWidget('Equifax', eqBase, eqSim, 'text-red-500')}
-              <!-- Score 2 -->
-              ${scoreWidget('Experian', exBase, exSim, 'text-blue-500')}
-              <!-- Score 3 -->
-              ${scoreWidget('TransUnion', tuBase, tuSim, 'text-emerald-500')}
-
-              <!-- Statutory Damages Metric Card -->
-              <div class="glass rounded-2xl p-5 border border-red-950/40 bg-red-950/5 flex flex-col justify-between">
-                <div>
-                  <div class="flex items-center justify-between">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider font-mono">Bureau Liabilities</span>
-                    <span class="px-2 py-0.5 bg-red-500/10 text-red-400 text-[9px] font-bold rounded uppercase tracking-wider border border-red-500/20 animate-pulse">Statutory Claim</span>
-                  </div>
-                  <div class="text-2xl font-extrabold text-red-400 font-mono mt-2">$${totalDamagesVal.toLocaleString()}</div>
-                  <div class="text-[10px] text-gray-400 mt-1 leading-relaxed">
-                    Under 15 U.S.C. § 1681n, consumers are entitled to statutory damages of up to <strong>$1,000 per willful violation</strong>, plus punitive damages and attorney fees.
-                  </div>
-                </div>
-                <div class="mt-4 pt-2.5 border-t border-gray-800/80 flex items-center justify-between text-xs">
-                  <span class="text-gray-500 font-medium text-[10px]">Violations Logged:</span>
-                  <span class="font-bold text-white font-mono text-xs">${violations.length} Flagged</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Gamified Onboarding Compliance Task List -->
-            <div class="glass rounded-2xl p-5 border border-gray-800">
-              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                <div>
-                  <h3 class="text-xs font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2">
-                    <i class="fas fa-check-circle text-blue-400"></i> Onboarding & Verification Tracker
-                  </h3>
-                  <p class="text-[11px] text-gray-400 mt-0.5">Complete tasks to establish legal compliance and prevent bureaus from stalling investigations.</p>
-                </div>
-                <div class="flex items-center gap-2 shrink-0">
-                  <span class="text-xs font-mono font-bold text-white">${progressPercent}%</span>
-                  <div class="w-32 bg-gray-950 rounded-full h-2 border border-gray-800 overflow-hidden">
-                    <div class="bg-blue-500 h-full transition-all duration-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]" style="width: ${progressPercent}%"></div>
-                  </div>
-                </div>
-              </div>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                ${tasksList.map(t => `
-                  <div class="p-3 bg-gray-900/40 border ${localState.completedTasks[t.id] ? 'border-green-500/20 bg-green-950/5' : 'border-gray-800 hover:border-gray-700'} rounded-xl transition flex items-start gap-3">
-                    <input type="checkbox" id="chk-tsk-${t.id}" data-task="${t.id}" ${localState.completedTasks[t.id] ? 'checked' : ''} class="task-checkbox w-4.5 h-4.5 rounded border-gray-800 text-blue-600 bg-gray-950 focus:ring-blue-500 mt-0.5 cursor-pointer">
-                    <div class="min-w-0 flex-1">
-                      <label class="block text-xs font-bold ${localState.completedTasks[t.id] ? 'text-green-400 line-through' : 'text-white'} cursor-pointer uppercase font-mono select-none" for="chk-tsk-${t.id}">
-                        ${t.label}
-                      </label>
-                      <p class="text-[10px] text-gray-400 mt-0.5">
-                        ${t.id === 'verifyAddress' ? 'Ensures mailing address coordinates match the credit bureau files exactly.' : ''}
-                        ${t.id === 'signLetters' ? 'Formally authorizes click2mail delivery system to dispatch notices.' : ''}
-                        ${t.id === 'uploadId' ? 'Prevents credit bureaus from falsely claiming "unverified identity" as a stall tactic.' : ''}
-                        ${t.id === 'readGuide' ? 'Empowers you with knowledge on how to counter bureau rejection letters.' : ''}
-                      </p>
-                      ${t.id === 'signLetters' && !localState.completedTasks.signLetters ? `
-                        <button onclick="window._nav('client-documents')" class="mt-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold px-2.5 py-1 rounded transition flex items-center gap-1 uppercase font-mono"><i class="fas fa-signature"></i> Sign letters now</button>
-                      ` : ''}
-                      ${t.id === 'readGuide' && !localState.completedTasks.readGuide ? `
-                        <button onclick="window._nav('client-knowledge')" class="mt-2 bg-purple-600/20 border border-purple-500/30 text-purple-300 text-[10px] font-bold px-2.5 py-1 rounded hover:bg-purple-600/30 transition flex items-center gap-1 uppercase font-mono"><i class="fas fa-graduation-cap"></i> Read Guide</button>
-                      ` : ''}
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              <!-- LEFT COLUMN: What-If Simulator & Bureau Audit Matrix (lg:col-span-7) -->
-              <div class="lg:col-span-7 space-y-6">
-                <!-- What-If Deletion Simulator Card -->
-                <div class="glass rounded-2xl p-5 border border-gray-800 bg-gradient-to-b from-gray-900/50 to-gray-950/20">
-                  <div class="flex items-center justify-between mb-4 border-b border-gray-800/80 pb-3">
-                    <div>
-                      <h3 class="text-xs font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2"><i class="fas fa-magic text-purple-400"></i> FICO Score "What-If" Deletion Simulator</h3>
-                      <p class="text-[11px] text-gray-400 mt-0.5">Toggle checkboxes to simulate removing negative records and watch your FICO scores react dynamically.</p>
-                    </div>
-                    ${totalLift > 0 ? `
-                      <span class="px-2.5 py-1 bg-purple-500/10 text-purple-300 text-xs font-bold rounded-full font-mono animate-bounce flex items-center gap-1 border border-purple-500/20"><i class="fas fa-chart-line"></i> +${totalLift} pts lift!</span>
-                    ` : `
-                      <span class="text-xs text-gray-500 font-mono">Select records</span>
-                    `}
-                  </div>
-
-                  <div class="space-y-2.5">
-                    ${violations.map(v => `
-                      <div class="p-3 bg-gray-950/40 hover:bg-gray-950/85 border ${localState.selectedDeletions[v.id] ? 'border-purple-500/30 bg-purple-950/5' : 'border-gray-800'} rounded-xl transition flex items-center justify-between gap-3 cursor-pointer select-none" onclick="window._toggleSimulatorItem('${v.id}')">
-                        <div class="flex items-center gap-3">
-                          <input type="checkbox" id="sim-chk-${v.id}" ${localState.selectedDeletions[v.id] ? 'checked' : ''} class="w-4 h-4 rounded border-gray-800 text-purple-600 bg-gray-950 focus:ring-purple-500 pointer-events-none">
-                          <div class="min-w-0">
-                            <div class="text-xs font-bold text-white uppercase font-mono truncate">${escapeHtml(v.account_name)}</div>
-                            <div class="text-[11px] text-gray-400 flex items-center gap-1.5 mt-0.5 font-mono">
-                              <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${v.severity === 'critical' ? 'bg-red-500/10 text-red-400' : 'bg-yellow-500/10 text-yellow-400'} uppercase">${v.severity.toUpperCase()}</span>
-                              <span>${v.bureau} &bull; ${v.error_type}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div class="text-right font-mono shrink-0">
-                          <div class="text-xs font-bold text-purple-400">+${v.fico_points} FICO pts</div>
-                          <div class="text-[10px] text-gray-500 uppercase tracking-wider">Est. score lift</div>
-                        </div>
-                      </div>
-                    `).join('')}
-                  </div>
-                </div>
-
-                <!-- Bureau Discrepancy Audits Matrix -->
-                <div class="glass rounded-2xl p-5 border border-gray-800">
-                  <div class="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 class="text-xs font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2"><i class="fas fa-balance-scale text-blue-400"></i> Bureau Discrepancy Audits</h3>
-                      <p class="text-[11px] text-gray-400 mt-0.5">Comparison of credit report data stream against verified database credentials.</p>
-                    </div>
-                    <span class="text-[10px] text-gray-500 font-mono font-bold uppercase">15 U.S.C. § 1681e(b)</span>
-                  </div>
-
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- Name Discrepancies -->
-                    <div class="p-3 bg-gray-950/40 border border-gray-800 rounded-xl">
-                      <div class="flex items-center justify-between mb-2">
-                        <span class="text-xs font-bold text-white uppercase font-mono flex items-center gap-1.5"><i class="fas fa-user text-blue-400"></i> Name Matches</span>
-                        <span class="px-1.5 py-0.5 bg-green-500/10 text-green-400 text-[9px] font-bold rounded uppercase tracking-wider border border-green-500/20">Verified</span>
-                      </div>
-                      <div class="text-[11px] text-gray-400 mt-1 leading-relaxed">
-                        Demographic profile matches the bureau-furnished text file. Zero record cross-contamination / mixed-file risk detected on primary identity.
-                      </div>
-                    </div>
-
-                    <!-- SSN Checks -->
-                    <div class="p-3 bg-gray-950/40 border border-gray-800 rounded-xl">
-                      <div class="flex items-center justify-between mb-2">
-                        <span class="text-xs font-bold text-white uppercase font-mono flex items-center gap-1.5"><i class="fas fa-fingerprint text-blue-400"></i> SSN Audit</span>
-                        <span class="px-1.5 py-0.5 bg-green-500/10 text-green-400 text-[9px] font-bold rounded uppercase tracking-wider border border-green-500/20">Verified</span>
-                      </div>
-                      <div class="text-[11px] text-gray-400 mt-1 leading-relaxed">
-                        Social Security digits validated against credit bureau parsing coordinates. High data-fidelity across Equifax, Experian, and TransUnion.
-                      </div>
-                    </div>
-
-                    <!-- Address Coordinates -->
-                    <div class="p-3 bg-gray-950/40 border border-gray-800 rounded-xl">
-                      <div class="flex items-center justify-between mb-2">
-                        <span class="text-xs font-bold text-white uppercase font-mono flex items-center gap-1.5"><i class="fas fa-map-marked-alt text-blue-400"></i> Addresses</span>
-                        <span class="px-1.5 py-0.5 bg-green-500/10 text-green-400 text-[9px] font-bold rounded uppercase tracking-wider border border-green-500/20">Verified</span>
-                      </div>
-                      <div class="text-[11px] text-gray-400 mt-1 leading-relaxed">
-                        Mailing coordinates cross-checked. Standard identity coordinates matches credit record files correctly.
-                      </div>
-                    </div>
-
-                    <!-- Employer verification -->
-                    <div class="p-3 bg-gray-950/40 border border-gray-800 rounded-xl">
-                      <div class="flex items-center justify-between mb-2">
-                        <span class="text-xs font-bold text-white uppercase font-mono flex items-center gap-1.5"><i class="fas fa-briefcase text-blue-400"></i> Employers</span>
-                        <span class="px-1.5 py-0.5 bg-yellow-500/10 text-yellow-400 text-[9px] font-bold rounded uppercase tracking-wider border border-yellow-500/20">Audit Pending</span>
-                      </div>
-                      <div class="text-[11px] text-gray-400 mt-1 leading-relaxed">
-                        Unlisted historical employers identified on credit profile report. These can be challenged to delete old historical references.
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- RIGHT COLUMN: Certified USPS Tracking & Inline AI Chat Counsel (lg:col-span-5) -->
-              <div class="lg:col-span-5 space-y-6">
-                <!-- USPS Certified Mail Logistics Tracker -->
-                <div class="glass rounded-2xl p-5 border border-gray-800 bg-gradient-to-b from-gray-900/50 to-gray-950/10">
-                  <div class="flex items-center justify-between mb-4 pb-2 border-b border-gray-800">
-                    <h3 class="text-xs font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2"><i class="fas fa-mail-bulk text-purple-400 animate-pulse"></i> Certified Mail Logistics</h3>
-                    <span class="px-2 py-0.5 rounded text-[9px] font-extrabold bg-purple-500/10 text-purple-300 border border-purple-500/20 uppercase tracking-wider font-mono">Sync Active</span>
-                  </div>
-
-                  <div class="space-y-4">
-                    ${documents.some(d => d.status === 'sent') ? `
-                      <div class="p-4 bg-gray-950/50 rounded-xl border border-gray-800 flex items-start gap-3">
-                        <div class="text-purple-400 text-xl mt-1 shrink-0"><i class="fas fa-shipping-fast"></i></div>
-                        <div class="min-w-0 flex-1">
-                          <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-purple-400 uppercase font-mono">USPS Certified Mail</span>
-                            <span class="px-1.5 py-0.5 bg-green-500/10 text-green-400 text-[9px] font-bold rounded uppercase">In Transit</span>
-                          </div>
-                          <div class="text-sm font-mono font-extrabold text-white mt-1">9405 5000 1234 5678 9012 34</div>
-                          <p class="text-[11px] text-gray-400 mt-1 leading-relaxed">Dispatched electronically to Click2Mail Gateway. USPS Certified envelope in transit to credit bureau compliance headquarters.</p>
-                        </div>
-                      </div>
-                    ` : `
-                      <div class="p-5 bg-gray-950/50 rounded-xl text-center border border-gray-800">
-                        <div class="w-12 h-12 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-3">
-                          <i class="fas fa-signature text-xl text-blue-400"></i>
-                        </div>
-                        <h4 class="text-xs font-bold text-white uppercase font-mono">Signature Action Required</h4>
-                        <p class="text-[11px] text-gray-400 mt-1.5 leading-relaxed max-w-sm mx-auto">Your draft litigation letters are complete. Please execute your electronic signature to instantly launch USPS certified mail dispatch.</p>
-                        <button onclick="window._nav('client-documents')" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white text-xs py-2.5 px-4 rounded-lg font-bold transition flex items-center justify-center gap-1.5 mx-auto uppercase font-mono shadow-[0_0_15px_rgba(59,130,246,0.3)]"><i class="fas fa-signature"></i> Access Signature Cockpit</button>
-                      </div>
-                    `}
-
-                    <!-- Case Timeline Steps -->
-                    <div class="relative pl-5 border-l border-gray-800 space-y-5 py-1 text-xs">
-                      <div class="relative pl-2">
-                        <div class="absolute -left-[27px] top-0.5 w-3 h-3 rounded-full bg-blue-500 border-2 border-gray-950"></div>
-                        <span class="font-bold text-white uppercase font-mono text-[10px]">Ingestion Pipeline</span>
-                        <p class="text-[11px] text-gray-400 mt-0.5">Credit files imported and AES-256 encrypted successfully.</p>
-                      </div>
-                      <div class="relative pl-2">
-                        <div class="absolute -left-[27px] top-0.5 w-3 h-3 rounded-full bg-blue-500 border-2 border-gray-950"></div>
-                        <span class="font-bold text-white uppercase font-mono text-[10px]">FCRA Statute Mapping</span>
-                        <p class="text-[11px] text-gray-400 mt-0.5">Automatic parsing located ${violations.length} high-severity statutory infractions.</p>
-                      </div>
-                      <div class="relative pl-2">
-                        <div class="absolute -left-[27px] top-0.5 w-3 h-3 rounded-full ${documents.length > 0 ? 'bg-blue-500' : 'bg-gray-800'} border-2 border-gray-950"></div>
-                        <span class="font-bold ${documents.length > 0 ? 'text-white' : 'text-gray-500'} uppercase font-mono text-[10px]">Dispute Package Drafting</span>
-                        <p class="text-[11px] text-gray-400 mt-0.5">Federal demand letters and verification notices fully generated.</p>
-                      </div>
-                      <div class="relative pl-2">
-                        <div class="absolute -left-[27px] top-0.5 w-3 h-3 rounded-full ${documents.some(d => d.status === 'sent') ? 'bg-blue-500' : 'bg-gray-800'} border-2 border-gray-950"></div>
-                        <span class="font-bold ${documents.some(d => d.status === 'sent') ? 'text-white' : 'text-gray-500'} uppercase font-mono text-[10px]">USPS Certified Dispatch</span>
-                        <p class="text-[11px] text-gray-400 mt-0.5">Mailing coordinates dispatched via click2mail API gateway.</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Educational AI Counsel Chat Companion Widget -->
-                <div class="glass rounded-2xl border border-gray-800 flex flex-col overflow-hidden bg-gradient-to-b from-gray-900 to-gray-950">
-                  <div class="p-4 bg-gray-900/60 border-b border-gray-800 flex items-center justify-between">
-                    <div class="flex items-center gap-2.5">
-                      <div class="w-8 h-8 rounded-lg bg-blue-600/10 border border-blue-500/20 flex items-center justify-center">
-                        <i class="fas fa-robot text-blue-400 text-sm animate-pulse"></i>
-                      </div>
-                      <div>
-                        <h4 class="text-xs font-bold text-white uppercase font-mono tracking-wider">AI FCRA Counsel Advisor</h4>
-                        <div class="text-[9px] text-gray-500 flex items-center gap-1 font-mono"><span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping"></span> Real-time expert advice active</div>
-                      </div>
-                    </div>
-                    <span class="text-[9px] text-gray-500 font-mono uppercase font-bold">15 U.S.C. § 1681</span>
-                  </div>
-
-                  <!-- Chat Message Container -->
-                  <div id="ai-chat-messages" class="p-4 h-48 overflow-y-auto space-y-3.5 text-xs border-b border-gray-800/80">
-                    ${localState.chatHistory.map(m => `
-                      <div class="flex gap-2.5 ${m.sender === 'user' ? 'justify-end' : ''}">
-                        ${m.sender !== 'user' ? `
-                          <div class="w-6 h-6 rounded bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 text-[10px] shrink-0"><i class="fas fa-gavel"></i></div>
-                        ` : ''}
-                        <div class="p-2.5 rounded-xl max-w-[85%] leading-relaxed ${m.sender === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-gray-950 border border-gray-800 rounded-tl-none text-gray-300'}">
-                          ${escapeHtml(m.text)}
-                        </div>
-                      </div>
-                    `).join('')}
-                  </div>
-
-                  <!-- Quick Suggesters -->
-                  <div class="p-3 bg-gray-950/40 border-b border-gray-800/60 flex flex-wrap gap-1.5">
-                    <button class="chat-suggester bg-gray-900 hover:bg-gray-800 border border-gray-800 px-2 py-1 rounded text-[9px] font-mono text-gray-400 hover:text-white transition uppercase" onclick="window._sendChatPreset('What is Section 609?')">What is Section 609?</button>
-                    <button class="chat-suggester bg-gray-900 hover:bg-gray-800 border border-gray-800 px-2 py-1 rounded text-[9px] font-mono text-gray-400 hover:text-white transition uppercase" onclick="window._sendChatPreset('How long do bureaus have?')">How long to respond?</button>
-                    <button class="chat-suggester bg-gray-900 hover:bg-gray-800 border border-gray-800 px-2 py-1 rounded text-[9px] font-mono text-gray-400 hover:text-white transition uppercase" onclick="window._sendChatPreset('How are damages calculated?')">Filing damages?</button>
-                  </div>
-
-                  <!-- Chat Input Console -->
-                  <div class="p-3 bg-gray-950/80 flex items-center gap-2">
-                    <input type="text" id="ai-chat-input" class="w-full bg-gray-900/60 border border-gray-800 focus:border-blue-500/50 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition" placeholder="Ask your AI advisor a credit law question...">
-                    <button id="ai-chat-send" class="bg-blue-600 hover:bg-blue-700 text-white w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition" onclick="window._submitClientChat()"><i class="fas fa-paper-plane text-xs"></i></button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        `;
-
-        // Bind interactive event listeners back to DOM elements
-        bindInteractiveCockpitListeners();
+        };
       }
 
-      // Generate HTML structure for credit scores
-      function scoreWidget(bureau, base, sim, colorClass) {
-        const percent = Math.min(100, Math.max(0, ((sim - 300) / (850 - 300)) * 100));
-        const lift = sim - base;
-        return `
-          <div class="glass rounded-2xl p-5 border border-gray-800 text-center flex flex-col items-center justify-center relative overflow-hidden bg-gradient-to-b from-gray-900 to-gray-950/20">
-            <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 font-mono">${bureau}</div>
-            <div class="relative w-32 h-32 flex items-center justify-center">
-              <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                <circle class="text-gray-850" stroke-width="6" stroke="#1f2937" fill="transparent" r="40" cx="50" cy="50"></circle>
-                <circle class="${colorClass} transition-all duration-700 ease-out" stroke-width="6" stroke-dasharray="251.2" stroke-dashoffset="${251.2 - (251.2 * percent) / 100}" stroke-linecap="round" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50"></circle>
-              </svg>
-              <div class="absolute text-center select-none">
-                <span class="text-2xl font-black text-white font-mono leading-none">${sim}</span>
-                <div class="text-[9px] text-gray-500 font-mono mt-0.5">FICO v8</div>
-              </div>
-            </div>
-            <div class="mt-3 flex items-center gap-1 text-[10px] font-mono">
-              <span class="text-gray-500 font-semibold">Baseline:</span>
-              <span class="text-white font-bold">${base}</span>
-              ${lift > 0 ? `
-                <span class="text-green-400 font-bold ml-1.5 animate-pulse"><i class="fas fa-arrow-up text-[9px]"></i> +${lift} pts</span>
-              ` : ''}
-            </div>
-          </div>
-        `;
-      }
-
-      // Action binding for dynamic DOM updates
-      function bindInteractiveCockpitListeners() {
-        // Gamified task checkboxes
-        document.querySelectorAll('.task-checkbox').forEach(chk => {
-          chk.onchange = (e) => {
-            const taskId = e.target.dataset.task;
-            localState.completedTasks[taskId] = e.target.checked;
-            renderState();
-          };
-        });
-
-        // Chat Input enter key
-        const chatInput = document.getElementById('ai-chat-input');
-        if (chatInput) {
-          chatInput.onkeyup = (e) => {
-            if (e.key === 'Enter') {
-              window._submitClientChat();
-            }
-          };
-        }
-
-        const journeyCheckIn = document.getElementById('cockpit-journey-checkin');
-        if (journeyCheckIn) {
-          journeyCheckIn.onclick = async () => {
-            journeyCheckIn.disabled = true;
-            try {
-              const r = await api('/client-portal/journey/check-in', {
-                method: 'POST',
-                body: JSON.stringify(portalClientBody()),
-              });
-              toast(r.message || 'Checked in — keep going!', 'success');
-              journeyData = await api('/client-portal/journey' + dashQs).catch(() => journeyData);
-              renderState();
-            } catch (err) {
-              toast(err.message, 'error');
-              journeyCheckIn.disabled = false;
-            }
-          };
-        }
-      }
-
-      // Handle checkbox logic in FICO Simulator
-      window._toggleSimulatorItem = function(vid) {
-        localState.selectedDeletions[vid] = !localState.selectedDeletions[vid];
-        renderState();
-      };
-
-      // Direct question dispatchers for Preset Buttons
-      window._sendChatPreset = function(presetText) {
-        const chatInput = document.getElementById('ai-chat-input');
-        if (chatInput) {
-          chatInput.value = presetText;
-          window._submitClientChat();
-        }
-      };
-
-      // Live mentor chat (Client Coach) — falls back to local guidance if AI unavailable
-      window._submitClientChat = async function() {
-        const input = document.getElementById('ai-chat-input');
-        if (!input || !input.value.trim()) return;
-
-        const val = input.value.trim();
-        localState.chatHistory.push({ sender: 'user', text: val });
-        input.value = '';
-        renderChatArea();
-
-        const chatBox = document.getElementById('ai-chat-messages');
-        const typingEl = document.createElement('div');
-        typingEl.className = 'flex gap-2.5 items-center text-xs text-gray-500 italic typing-indicator';
-        typingEl.innerHTML = `
-          <div class="w-6 h-6 rounded bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-[10px] shrink-0"><i class="fas fa-gavel"></i></div>
-          <div class="p-2.5 bg-gray-950 border border-gray-800 rounded-xl rounded-tl-none flex items-center gap-1 text-gray-400">
-            <span class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></span>
-            <span class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 0.15s"></span>
-            <span class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 0.3s"></span>
-          </div>
-        `;
-        chatBox.appendChild(typingEl);
-        chatBox.scrollTop = chatBox.scrollHeight;
-
-        let answer = '';
-        try {
-          const ctx = `Client portal assist. Violations on file: ${(violations || []).length}. Keep answers practical, cite FCRA sections when useful, and never invent account facts.`;
-          const res = await api('/ai/mentors/client-coach/chat', {
-            method: 'POST',
-            body: JSON.stringify({ message: val, context: ctx })
-          });
-          answer = res.reply || res.message || res.content || '';
-        } catch (err) {
-          answer = '';
-        }
-
-        if (!answer) {
-          const lower = val.toLowerCase();
-          if (lower.includes('609')) answer = 'FCRA § 609 (15 U.S.C. § 1681g) requires full file disclosure, including sources of information.';
-          else if (lower.includes('30 days') || lower.includes('how long')) answer = 'Under FCRA § 1681i, CRAs generally have 30 days to complete a reasonable reinvestigation.';
-          else if (lower.includes('damage') || lower.includes('sue')) answer = 'Willful noncompliance under § 1681n can mean $100–$1,000 statutory damages per violation plus actual damages, punitive damages, and attorney fees.';
-          else answer = `You currently have ${(violations || []).length} logged violation(s). Ask about dispute timelines, §609/§611 rights, or signing letters under My Documents.`;
-        }
-
-        const currentTyping = chatBox.querySelector('.typing-indicator');
-        if (currentTyping) currentTyping.remove();
-        localState.chatHistory.push({ sender: 'ai', text: answer });
-        renderChatArea();
-      };
-
-      // Separate fast renderer for chat section
-      function renderChatArea() {
-        const chatBox = document.getElementById('ai-chat-messages');
-        if (!chatBox) return;
-
-        chatBox.innerHTML = localState.chatHistory.map(m => `
-          <div class="flex gap-2.5 ${m.sender === 'user' ? 'justify-end' : ''}">
-            ${m.sender !== 'user' ? `
-              <div class="w-6 h-6 rounded bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 text-[10px] shrink-0"><i class="fas fa-gavel"></i></div>
-            ` : ''}
-            <div class="p-2.5 rounded-xl max-w-[85%] leading-relaxed ${m.sender === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-gray-950 border border-gray-800 rounded-tl-none text-gray-300'}">
-              ${escapeHtml(m.text)}
-            </div>
-          </div>
-        `).join('');
-        chatBox.scrollTop = chatBox.scrollHeight;
-      }
-
-      // Initial Mount render
-      renderState();
 
     } catch (err) {
       el.innerHTML = `
@@ -9944,7 +9558,7 @@ async function pgAdminConsole(el) {
           </svg>
           <div class="absolute text-center">
             <span class="text-2xl font-bold text-white font-mono">${score}</span>
-            <div class="text-[10px] text-gray-500">FICO Score</div>
+            <div class="text-[10px] text-gray-500">Credit score</div>
           </div>
         </div>
       </div>
@@ -9964,6 +9578,298 @@ async function pgAdminConsole(el) {
         </div>
       </div>
     `;
+  }
+
+  function portalStaffBlocked() {
+    if (state.impersonateClientId && state.user?.role !== 'client') {
+      toast('Staff preview cannot attest, approve disputes, or cancel services.', 'error');
+      return true;
+    }
+    return false;
+  }
+
+  async function pgClientCredit(el) {
+    const qs = portalClientQs();
+    const [intel, events, util] = await Promise.all([
+      api('/client-portal/intelligence' + qs).catch(() => ({})),
+      api('/client-portal/credit-events' + qs).catch(() => ({ events: [] })),
+      api('/client-portal/utilization' + qs).catch(() => null),
+    ]);
+    let bureau = null;
+    try {
+      if (intel.client?.id) bureau = await api('/clients/' + intel.client.id + '/bureau-comparison');
+    } catch (_) {}
+    const scores = intel.scores || [];
+    el.innerHTML = `
+      <div class="fade-in space-y-5 max-w-6xl">
+        <div class="rounded-2xl border border-blue-500/20 bg-gradient-to-r from-slate-950 via-blue-950/30 to-slate-950 p-5">
+          <h1 class="text-xl font-bold text-white font-display">My Credit</h1>
+          <p class="text-sm text-gray-400 mt-1">Reports, scores with named models, accounts, and measured changes. Differences across bureaus are flagged for your review — not automatically labeled as legal violations.</p>
+        </div>
+        <div class="grid md:grid-cols-3 gap-3">${scores.map((s) => `
+          <div class="glass rounded-xl p-4 border border-gray-800">
+            <div class="text-[10px] uppercase text-gray-400">${escapeHtml(s.bureau)}</div>
+            <div class="text-2xl font-mono text-white">${s.score == null ? '—' : s.score}</div>
+            <div class="text-[11px] text-sky-200 mt-1">${escapeHtml(s.scoreModel)}</div>
+          </div>`).join('')}</div>
+        ${util ? `<div class="glass rounded-xl p-4 border border-gray-800">
+          <h2 class="text-sm font-bold text-white mb-2">Utilization (educational)</h2>
+          <p class="text-[11px] text-amber-200/80 mb-3">${escapeHtml(util.disclaimer)}</p>
+          <div class="text-sm text-gray-300">Aggregate: <span class="text-white font-mono">${util.aggregatePct == null ? '—' : util.aggregatePct + '%'}</span></div>
+          <div class="mt-2 space-y-1">${(util.cards||[]).map((c) => `<div class="text-xs text-gray-300 flex justify-between border-b border-gray-800/50 py-1"><span>${escapeHtml(c.name)}</span><span class="font-mono">${c.utilizationPct}% · $${(c.differenceToTarget||0).toLocaleString()} to 29% target</span></div>`).join('')}</div>
+        </div>` : ''}
+        ${bureau ? `<div class="glass rounded-xl p-4 overflow-x-auto">
+          <h2 class="text-sm font-bold text-white mb-2">Cross-bureau comparison</h2>
+          <table class="w-full text-xs text-left">
+            <thead><tr class="text-gray-500"><th class="py-2">Bureau</th><th>Score</th><th>Accounts</th><th>Collections</th><th>Inquiries</th></tr></thead>
+            <tbody>${(bureau.bureaus||[]).map((b) => `<tr class="border-t border-gray-800 text-gray-200"><td class="py-2">${escapeHtml(b.bureau)}</td><td class="font-mono">${b.score ?? '—'}</td><td>${b.accountCount}</td><td>${b.collectionCount}</td><td>${b.inquiryCount}</td></tr>`).join('')}</tbody>
+          </table>
+        </div>` : ''}
+        <div class="glass rounded-xl p-4">
+          <h2 class="text-sm font-bold text-white mb-2">Credit event ledger</h2>
+          ${(events.events||[]).slice(0,25).map((e) => `<div class="text-xs text-gray-300 py-1.5 border-b border-gray-800/50">${escapeHtml(e.taxonomy||'')} · ${escapeHtml(e.event_type||'')} · ${escapeHtml(e.bureau||'')} · ${escapeHtml(e.field||'')}</div>`).join('') || '<p class="text-xs text-gray-500">No events yet.</p>'}
+        </div>
+      </div>`;
+  }
+
+  async function pgClientCase(el) {
+    const qs = portalClientQs();
+    const [intel, disputes, findings, receipts] = await Promise.all([
+      api('/client-portal/intelligence' + qs).catch(() => ({})),
+      api('/client-portal/disputes' + qs).catch(() => ({ disputes: [] })),
+      api('/client-portal/findings' + qs).catch(() => ({ findings: [] })),
+      api('/client-portal/action-receipts' + qs).catch(() => ({ receipts: [] })),
+    ]);
+    el.innerHTML = `
+      <div class="fade-in space-y-5 max-w-5xl">
+        <div class="rounded-2xl border border-violet-500/20 bg-violet-950/20 p-5">
+          <h1 class="text-xl font-bold text-white font-display">My Credit Case</h1>
+          <p class="text-sm text-gray-400 mt-1">Stage: <span class="text-white">${escapeHtml(intel.client?.stageLabel || '—')}</span>. Disputes follow account → source data → your statement → evidence — never a random template reason.</p>
+        </div>
+        <div class="space-y-3">${(disputes.disputes||[]).map((d) => `
+          <div class="glass rounded-xl p-4 border border-gray-800">
+            <div class="flex justify-between gap-2">
+              <div class="font-semibold text-white text-sm">${escapeHtml(d.account_name || d.account_key || 'Account')}</div>
+              <span class="text-[10px] uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-200">${escapeHtml(d.status)}</span>
+            </div>
+            <div class="text-xs text-gray-400 mt-1">${escapeHtml(d.recipient_type)} · ${escapeHtml(d.recipient || '')}</div>
+            <div class="text-[11px] text-gray-500 mt-1">Basis: ${escapeHtml(String(d.dispute_basis_json || ''))}</div>
+          </div>`).join('') || '<p class="text-sm text-gray-500">No disputes yet. Confirm facts on detected issues first.</p>'}
+        </div>
+        <div class="glass rounded-xl p-4">
+          <h2 class="text-sm font-bold text-white mb-2">Findings for your review</h2>
+          ${(findings.findings||[]).map((f) => `<div class="text-xs text-gray-300 py-2 border-b border-gray-800/50"><span class="text-amber-300">${escapeHtml(f.severity)}</span> · ${escapeHtml(f.field)} · ${escapeHtml(f.note||'')}</div>`).join('') || '<p class="text-xs text-gray-500">No open findings.</p>'}
+        </div>
+        <div class="glass rounded-xl p-4">
+          <h2 class="text-sm font-bold text-white mb-2">Action receipts</h2>
+          ${(receipts.receipts||[]).map((r) => `<div class="text-xs font-mono text-gray-300 py-1">${escapeHtml(r.confirmation_number)} · ${escapeHtml(r.action)} · ${escapeHtml((r.created_at||'').slice(0,16))}</div>`).join('') || '<p class="text-xs text-gray-500">None yet.</p>'}
+        </div>
+      </div>`;
+  }
+
+  async function pgClientAttest(el) {
+    const qs = portalClientQs();
+    const data = await api('/client-portal/attestations' + qs);
+    const questions = data.questions || [];
+    el.innerHTML = `
+      <div class="fade-in space-y-5 max-w-3xl">
+        <div class="rounded-2xl border border-emerald-500/20 bg-emerald-950/15 p-5">
+          <h1 class="text-xl font-bold text-white font-display">Confirm your facts</h1>
+          <p class="text-sm text-gray-400 mt-1">Nothing about an account is submitted as your statement unless it is in the report or you confirm it. Attestations cannot be silently changed.</p>
+        </div>
+        <form id="attest-form" class="glass rounded-xl p-4 space-y-4 border border-gray-800">
+          <label class="block text-xs text-gray-400">Account key or creditor name
+            <input id="att-account" class="mt-1 w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white" placeholder="e.g. CAPITAL ONE">
+          </label>
+          ${questions.filter((q) => q.questionId !== 'identity_theft').map((q) => `
+            <fieldset class="text-sm">
+              <legend class="text-white text-xs font-semibold mb-1">${escapeHtml(q.prompt)}</legend>
+              ${['YES','NO','UNSURE'].map((v) => `<label class="mr-3 text-gray-300"><input type="radio" name="${escapeHtml(q.questionId)}" value="${v}"> ${v}</label>`).join('')}
+            </fieldset>`).join('')}
+          <fieldset class="text-sm border border-amber-500/20 rounded-lg p-3 bg-amber-950/10">
+            <legend class="text-amber-200 text-xs font-semibold mb-1">Identity theft (separate gate)</legend>
+            <p class="text-[11px] text-gray-400 mb-2">Only select YES if you affirmatively identify this account as identity theft. Do not use this as a deletion tactic.</p>
+            ${['YES','NO','UNSURE'].map((v) => `<label class="mr-3 text-gray-300"><input type="radio" name="identity_theft" value="${v}"> ${v}</label>`).join('')}
+          </fieldset>
+          <label class="block text-xs text-gray-400">Explanation (optional)
+            <textarea id="att-stmt" rows="3" class="mt-1 w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white"></textarea>
+          </label>
+          <button class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold px-4 py-2 rounded-lg">Save attestations</button>
+        </form>
+        <div class="glass rounded-xl p-4">
+          <h2 class="text-xs font-bold uppercase text-white mb-2">Recorded (immutable)</h2>
+          ${(data.attestations||[]).slice(0,20).map((a) => `<div class="text-xs text-gray-300 py-1">${escapeHtml(a.question_id)} · ${escapeHtml(a.response)} · ${escapeHtml((a.accepted_at||'').slice(0,16))}</div>`).join('') || '<p class="text-xs text-gray-500">None yet.</p>'}
+        </div>
+      </div>`;
+    document.getElementById('attest-form').onsubmit = async (e) => {
+      e.preventDefault();
+      if (portalStaffBlocked()) return;
+      const attestations = [];
+      for (const q of questions) {
+        const picked = document.querySelector(`input[name="${q.questionId}"]:checked`);
+        if (picked) attestations.push({ questionId: q.questionId, response: picked.value, accountId: document.getElementById('att-account').value, clientStatement: document.getElementById('att-stmt').value });
+      }
+      try {
+        const r = await api('/client-portal/attestations', { method: 'POST', body: JSON.stringify({ accountKey: document.getElementById('att-account').value, attestations }) });
+        toast('Facts recorded. Hash stored.', 'success');
+        if (r.derived && r.derived.reasons && r.derived.reasons.length) toast('Possible dispute bases: ' + r.derived.reasons.join(', '), 'info');
+        else toast('No dispute reason generated — accurate accounts are not auto-disputed.', 'info');
+        pgClientAttest(el);
+      } catch (err) { toast(err.message, 'error'); }
+    };
+  }
+
+  async function pgClientDisputes(el) {
+    const qs = portalClientQs();
+    const data = await api('/client-portal/disputes' + qs);
+    el.innerHTML = `
+      <div class="fade-in space-y-5 max-w-3xl">
+        <div class="rounded-2xl border border-blue-500/20 p-5 bg-blue-950/20">
+          <h1 class="text-xl font-bold text-white font-display">Dispute review</h1>
+          <p class="text-sm text-gray-400 mt-1">Approve only statements you confirm are accurate. Request changes if anything is wrong.</p>
+        </div>
+        ${(data.disputes||[]).map((d) => `
+          <div class="glass rounded-xl p-4 space-y-2" data-disp="${escapeHtml(d.id)}">
+            <div class="flex justify-between"><span class="text-white font-semibold">${escapeHtml(d.account_name || d.account_key || 'Dispute')}</span><span class="text-[10px] uppercase text-sky-300">${escapeHtml(d.status)}</span></div>
+            <p class="text-xs text-gray-400">You are stating: ${escapeHtml(String(d.dispute_basis_json || '[]'))}</p>
+            ${d.status === 'CLIENT_APPROVAL' || d.status === 'CLIENT_REVIEW' ? `
+              <div class="flex gap-2">
+                <button type="button" class="bg-blue-600 text-white text-xs font-bold px-3 py-2 rounded-lg" onclick="window._approveDispute('${escapeHtml(d.id)}')">I confirm these statements are accurate</button>
+                <button type="button" class="bg-gray-800 text-gray-200 text-xs font-bold px-3 py-2 rounded-lg" onclick="window._nav('client-attest')">Request changes</button>
+              </div>` : ''}
+          </div>`).join('') || '<p class="text-sm text-gray-500">No dispute drafts. Confirm facts first.</p>'}
+        <button type="button" id="btn-create-disp" class="bg-slate-700 text-white text-xs font-bold px-3 py-2 rounded-lg">Prepare dispute from my attestations</button>
+      </div>`;
+    window._approveDispute = async (id) => {
+      if (portalStaffBlocked()) return;
+      try {
+        const r = await api('/client-portal/disputes/' + id + '/approve', { method: 'POST', body: JSON.stringify({ confirmAccurate: true }) });
+        toast('Approved · ' + r.confirmation, 'success');
+        pgClientDisputes(el);
+      } catch (err) { toast(err.message, 'error'); }
+    };
+    const createBtn = document.getElementById('btn-create-disp');
+    if (createBtn) createBtn.onclick = async () => {
+      if (portalStaffBlocked()) return;
+      try {
+        const r = await api('/client-portal/disputes', { method: 'POST', body: '{}' });
+        toast('Draft ready for review', 'success');
+        pgClientDisputes(el);
+      } catch (err) { toast(err.message || err.error, 'error'); }
+    };
+  }
+
+  async function pgClientActions(el) {
+    const intel = await api('/client-portal/intelligence' + portalClientQs()).catch(() => ({}));
+    const nba = intel.nextBestAction || {};
+    el.innerHTML = `
+      <div class="fade-in space-y-5 max-w-3xl">
+        <h1 class="text-xl font-bold text-white font-display">Action plan</h1>
+        <div class="glass rounded-xl p-5 border border-sky-500/30">
+          <div class="text-[10px] uppercase text-sky-300 font-bold">Primary</div>
+          <h2 class="text-lg font-bold text-white mt-1">${escapeHtml(nba.title || 'No urgent action')}</h2>
+          <p class="text-sm text-gray-300 mt-1">${escapeHtml(nba.detail || '')}</p>
+          <button type="button" onclick="window._nav('${escapeHtml(nba.ctaPage || 'client-cockpit')}')" class="mt-3 btn-rj text-xs font-bold px-4 py-2 rounded-lg">${escapeHtml(nba.ctaLabel || 'Continue')}</button>
+        </div>
+        ${(intel.additionalActions||[]).map((a) => `<div class="glass rounded-xl p-4"><div class="text-sm text-white font-semibold">${escapeHtml(a.title)}</div><p class="text-xs text-gray-400 mt-1">${escapeHtml(a.detail)}</p></div>`).join('')}
+      </div>`;
+  }
+
+  async function pgClientProgress(el) {
+    const [intel, events] = await Promise.all([
+      api('/client-portal/intelligence' + portalClientQs()).catch(() => ({})),
+      api('/client-portal/credit-events' + portalClientQs()).catch(() => ({ results: {} })),
+    ]);
+    const r = events.results || intel.results || {};
+    el.innerHTML = `
+      <div class="fade-in space-y-5 max-w-4xl">
+        <h1 class="text-xl font-bold text-white font-display">Progress</h1>
+        <p class="text-sm text-gray-400">Measured from report-to-report changes. We do not treat every status change as a deletion.</p>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">${Object.entries(r).map(([k,v]) => `<div class="glass rounded-xl p-3 text-center"><div class="text-[10px] uppercase text-gray-500">${escapeHtml(k.replace(/_/g,' '))}</div><div class="text-xl font-mono text-white">${v}</div></div>`).join('')}</div>
+      </div>`;
+  }
+
+  async function pgClientRights(el) {
+    const data = await api('/client-portal/rights' + portalClientQs());
+    el.innerHTML = `
+      <div class="fade-in space-y-5 max-w-3xl">
+        <h1 class="text-xl font-bold text-white font-display">Consumer rights</h1>
+        <p class="text-sm text-gray-400">${escapeHtml(data.disclaimer)}</p>
+        ${(data.topics||[]).map((t) => `<div class="glass rounded-xl p-4"><h2 class="text-sm font-bold text-white">${escapeHtml(t.title)}</h2><p class="text-sm text-gray-300 mt-2 leading-relaxed">${escapeHtml(t.body)}</p><div class="text-[10px] text-sky-300 mt-2">${escapeHtml(t.source)}</div></div>`).join('')}
+      </div>`;
+  }
+
+  async function pgClientBilling(el) {
+    const data = await api('/client-portal/billing-center' + portalClientQs());
+    el.innerHTML = `
+      <div class="fade-in space-y-5 max-w-3xl">
+        <h1 class="text-xl font-bold text-white font-display">Billing</h1>
+        <p class="text-sm text-gray-400">${escapeHtml(data.notice)}</p>
+        ${(data.currentServices||[]).map((s) => `<div class="glass rounded-xl p-4 text-sm text-white">${escapeHtml(s.type)} · ${escapeHtml(s.status)}</div>`).join('')}
+        <button type="button" onclick="window._nav('client-cancel')" class="bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold px-3 py-2 rounded-lg">Cancel services</button>
+      </div>`;
+  }
+
+  async function pgClientConsents(el) {
+    const data = await api('/client-portal/consents' + portalClientQs());
+    const byType = Object.fromEntries((data.consents||[]).map((c) => [c.consent_type, c]));
+    el.innerHTML = `
+      <div class="fade-in space-y-5 max-w-3xl">
+        <h1 class="text-xl font-bold text-white font-display">Consents</h1>
+        <p class="text-sm text-gray-400">Each consent is separate. Optional marketing is never pre-selected as required.</p>
+        ${(data.catalog||[]).map((c) => {
+          const row = byType[c.type];
+          const st = row?.status || 'NOT SET';
+          return `<div class="glass rounded-xl p-4 flex justify-between items-center gap-3">
+            <div><div class="text-sm text-white font-semibold">${escapeHtml(c.label)}</div><div class="text-[10px] text-gray-500">${escapeHtml(c.type)} v${escapeHtml(c.version)} · ${escapeHtml(st)}</div></div>
+            <div class="flex gap-2">
+              <button type="button" class="bg-emerald-700 text-white text-[10px] font-bold px-2 py-1 rounded" onclick="window._setConsent('${escapeHtml(c.type)}','${escapeHtml(c.version)}','GRANTED')">Grant</button>
+              <button type="button" class="bg-gray-800 text-gray-200 text-[10px] font-bold px-2 py-1 rounded" onclick="window._setConsent('${escapeHtml(c.type)}','${escapeHtml(c.version)}','REVOKED')">Revoke</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    window._setConsent = async (type, version, status) => {
+      if (portalStaffBlocked()) return;
+      try {
+        await api('/client-portal/consents', { method: 'POST', body: JSON.stringify({ consentType: type, version, status }) });
+        toast(status === 'GRANTED' ? 'Consent granted' : 'Consent revoked', 'success');
+        pgClientConsents(el);
+      } catch (err) { toast(err.message, 'error'); }
+    };
+  }
+
+  async function pgClientCancel(el) {
+    const data = await api('/client-portal/cancel-services' + portalClientQs());
+    const cur = data.currentStatus || {};
+    el.innerHTML = `
+      <div class="fade-in space-y-5 max-w-3xl">
+        <div class="rounded-2xl border border-rose-500/30 bg-rose-950/20 p-5">
+          <h1 class="text-xl font-bold text-white font-display">Cancel credit repair services</h1>
+          <p class="text-sm text-gray-300 mt-2">${escapeHtml(data.rights?.body || '')}</p>
+        </div>
+        <div class="glass rounded-xl p-4 text-sm text-gray-300">
+          <div>Current status: <span class="text-white font-semibold">${escapeHtml(cur.status || 'ACTIVE')}</span></div>
+          ${cur.confirmation_number ? `<div class="font-mono text-xs mt-1">Confirmation ${escapeHtml(cur.confirmation_number)}</div>` : ''}
+          ${cur.effective_at ? `<div class="text-xs mt-1">Effective ${escapeHtml(String(cur.effective_at).slice(0,10))}</div>` : ''}
+          <p class="text-[11px] text-gray-500 mt-3">${escapeHtml(data.statesNote || '')}</p>
+        </div>
+        ${cur.status === 'REQUESTED' ? '' : `<form id="cancel-form" class="glass rounded-xl p-4 space-y-3">
+          <label class="block text-xs text-gray-400">Optional reason<textarea id="cancel-reason" rows="2" class="mt-1 w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white"></textarea></label>
+          <button class="bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold px-4 py-2 rounded-lg">Cancel my services</button>
+        </form>`}
+      </div>`;
+    const form = document.getElementById('cancel-form');
+    if (form) form.onsubmit = async (e) => {
+      e.preventDefault();
+      if (portalStaffBlocked()) return;
+      if (!confirm('Cancel credit repair services? This records a CROA cancellation request.')) return;
+      try {
+        const r = await api('/client-portal/cancel-services', { method: 'POST', body: JSON.stringify({ reason: document.getElementById('cancel-reason').value }) });
+        toast('Cancellation recorded · ' + r.confirmationNumber, 'success');
+        pgClientCancel(el);
+      } catch (err) { toast(err.message, 'error'); }
+    };
   }
 
   async function pgClientSettings(el) {
@@ -10050,6 +9956,7 @@ async function pgAdminConsole(el) {
           <div class="flex flex-wrap gap-2">
             <button id="priv-export" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold px-3 py-2 rounded-lg">Export my data</button>
             <button id="priv-delete" class="bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold px-3 py-2 rounded-lg">Request deletion</button>
+            <button type="button" onclick="window._nav('client-cancel')" class="bg-rose-900/60 hover:bg-rose-800 text-rose-100 text-xs font-bold px-3 py-2 rounded-lg border border-rose-500/30">Cancel services</button>
           </div>
           <pre id="priv-out" class="hidden text-[10px] text-gray-400 bg-black/40 p-3 rounded-lg overflow-auto max-h-48"></pre>
         </div>

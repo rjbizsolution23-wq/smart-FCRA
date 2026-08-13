@@ -90,20 +90,30 @@ Shown when `isClient` is true. Analysis / letters stay **locked** until staff ru
 
 | Nav id | Page | What it does |
 |---|---|---|
-| `client-cockpit` | My Credit | Scores, accounts, next actions |
+| `client-cockpit` | Dashboard | Named-model scores, next-best action, result taxonomy, credit health, recent events. **No deletion/score-lift simulator.** |
+| `client-credit` | My Credit | Tri-bureau compare, utilization (educational), credit event ledger |
+| `client-case` | My Credit Case | Disputes, findings (not auto-labeled as FCRA violations), action receipts |
+| `client-attest` | Confirm Facts | Structured interview; immutable attestations; identity-theft gate |
+| `client-disputes` | Disputes | Evidence-first drafts; client approval required; staff impersonation cannot approve |
+| `client-actions` | Action Plan | One primary consumer action |
+| `client-progress` | Progress | Measured report-to-report changes |
+| `client-rights` | Consumer Rights | FCRA / CROA / TSR / FDCPA / identity-theft education |
+| `client-consents` | Consents | Separate grants/revokes (not a single T&C checkbox) |
+| `client-billing` | Billing | Current/completed services; cancel link |
+| `client-cancel` | Cancel Services | CROA cancellation in-portal (not buried in support) |
 | `client-journey` | My Journey | 6-stage pipeline (New → Funded) |
 | `onboarding-wizard` | Get Started | Intake wizard |
 | `messages` | Messages | Client ↔ staff |
-| `client-vault` | Secure Vault | ID, SSN card, proof of address, reports (R2) |
-| `client-fundability` | Fundability | Deterministic fundability score + lender matches |
+| `client-vault` | Documents / Vault | ID, SSN card, proof of address, reports (R2) |
+| `client-fundability` | Readiness | Deterministic fundability score + lender matches |
 | `client-boost` | Boost Tools | Educational tradeline / utilization guidance |
 | `client-tradelines` | AU Tradelines | Client-facing TradelineMaster catalog + match + order request |
 | `client-tutor` | Credit Tutor | Scripted Alex Rivera tutor |
-| `client-documents` | My Documents | Their letters / PDFs |
+| `client-documents` | Letters | Their letters / PDFs |
 | `client-legal` | Legal & Notary | RON session request (sandbox unless live notary keys) |
-| `client-video` | Video Consultation | Issues Twilio Video **tokens only** — **no in-browser Video SDK yet** |
-| `client-education` | Education Hub | Articles / lessons |
-| `client-security` | Security | Password, MFA, sessions |
+| `client-video` | Video Consultation | Twilio Video JS join |
+| `client-education` | Academy | Articles / lessons |
+| `client-security` | Privacy & Security | Password, MFA, sessions, privacy export/delete, cancel link |
 | `ai-mentors` | AI Mentors | Rick / Alex / Maya / Jordan chat (free-only AI cascade) |
 
 ---
@@ -123,6 +133,12 @@ Shown when `isClient` is true. Analysis / letters stay **locked** until staff ru
 | `lvs.ts` | Legal Vulnerability Score |
 | `damages.ts` | Statutory / actual damage estimates |
 | `documents.ts` | ~45 letter types (dispute, 623, method of verification, C&D, intent to sue, …) |
+| `dispute-attestation.ts` | Structured fact interview; no fabricated reasons; identity-theft gate |
+| `hallucination-firewall.ts` | Source-tagged assertions; blocks guaranteed-outcome copy and ID-theft injection |
+| `credit-events.ts` | Digital twin diffs + result taxonomy (DELETED vs CORRECTED vs BALANCE_CHANGE, …) |
+| `next-best-action.ts` | One primary consumer action + case stage |
+| `metro2-findings.ts` | Cross-bureau variance as REVIEW/OBSERVATION — never auto “FCRA VIOLATION” |
+| `utilization.ts` | Educational utilization targets (no score guarantee) |
 | `letter-strategy.ts` | Which letter, which bureau, which round |
 | `pdf-letterhead.ts` | Branded PDF output |
 | `fundability.ts` | Business / consumer fundability |
@@ -180,7 +196,7 @@ Mentors: Rick Jefferson (strategy), Alex Rivera (credit tutor), Maya Chen (compl
 
 `users`, `clients`, `credit_reports`, `credit_accounts`, `violations`, `generated_documents`, `consent_records`, `mfsn_members`, `brand_leads`, `tradeline_orders`, `ghl_sync_log`, `audit_logs`, `refresh_tokens`, `orgs` / branding, mailing campaigns, journey stages, vault files.
 
-Migrations live in `migrations/` (`0001`–`0020`+). Newest: `0020_brand_leads.sql`.
+Migrations live in `migrations/` (`0001`–`0021`+). Newest: `0021_client_intelligence.sql` (attestations, snapshots, credit events, portal disputes, CROA cancellations, consents, compliance decisions).
 
 ---
 
@@ -209,6 +225,7 @@ Migrations live in `migrations/` (`0001`–`0020`+). Newest: `0020_brand_leads.s
 - **PWA** `/manifest.webmanifest` + `/sw.js`, Add to Home Screen, overlay mobile nav, horizontal table scroll
 - **Playwright CI gate** login → upload → detect → letter (`tests/login-upload-letter.spec.ts`)
 - **Live RON** Proof (`ApiKey` → `https://api.proof.com/transactions`) and BlueNotary (`Bearer` → `https://app.bluenotary.us/api/integrationsv2/sessions`) with ceremony join URLs + HMAC webhooks
+- **Client intelligence portal** — evidence-first disputes, immutable attestations, hallucination firewall, credit event ledger, CROA in-portal cancellation, named score models, mobile Home/Credit/Case/Actions/More nav. Removed FICO deletion simulator / guaranteed-lift copy.
 
 ### Operator secrets still required in Pages (not code)
 

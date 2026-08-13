@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.4.0] - 2026-08-13
+### Added
+- Client portal intelligence: D1 `0021_client_intelligence.sql` (attestations, tradeline snapshots, credit events, findings, disputes, consents, CROA cancellations, compliance decisions, action receipts).
+- Evidence-first dispute engine, AI hallucination firewall, next-best-action, utilization education, CROA/TSR billing gate.
+- Portal screens: My Credit, Credit Case, Confirm Facts, Disputes, Action Plan, Progress, Consumer Rights, Consents, Billing, **Cancel Services**.
+- APIs under `/api/client-portal/intelligence`, attestations, disputes, cancel-services, consents, rights, plus `POST /api/compliance/evaluate`.
+- Mobile bottom nav: Home / Credit / Case / Actions / More.
+- Identity-theft letter generation and letter-strategy gated on affirmative consumer identification.
+
+### Changed
+- Dashboard no longer simulates FICO lifts from “deleting” accounts. Scores show the named model when known.
+- Staff impersonation banner states that attestations, approvals, and cancellation are blocked.
+
 ## [3.3.0] - 2026-08-13
 ### Added
 - Installable PWA: `/manifest.webmanifest`, `/sw.js` (app-shell cache, never caches `/api`), overlay mobile nav, table scroll, Add to Home Screen.

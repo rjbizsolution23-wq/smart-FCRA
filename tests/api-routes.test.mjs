@@ -51,6 +51,8 @@ const mockEnv = {
   assert(spec.paths['/api/health'], 'health path documented');
   assert(spec.paths['/api/client-portal/onboard'], 'client onboard path documented');
   assert(spec.paths['/api/client-portal/journey'], 'client journey path documented');
+  assert(spec.paths['/api/client-portal/intelligence'], 'client intelligence path documented');
+  assert(spec.paths['/api/client-portal/cancel-services'], 'cancel-services path documented');
   assert(spec.paths['/api/cron/daily-motivation'], 'daily motivation cron documented');
 }
 

@@ -120,6 +120,9 @@ import { listTradelineEducation } from './data/tradeline-education';
 import { sendSms } from './lib/alerts';
 import sampleMfsnReport from './data/sample-mfsn-report.json';
 import { spaAppSource, pwaSwSource, pwaManifestSource } from './generated/spa-source';
+import { persistCreditTwinFromParsed } from './lib/credit-twin';
+import { registerClientIntelligenceRoutes } from './lib/client-intelligence-routes';
+import { evaluateIdentityTheftGate } from './engine/dispute-attestation';
 
 // Secure field-level cryptographic helpers mapped to Worker bindings
 async function encryptPII(c: any, text: string): Promise<string> {
@@ -176,6 +179,18 @@ async function persistBureauScores(
     } catch (e) {
       console.warn('[scores] client update skipped', e);
     }
+  }
+
+  try {
+    await persistCreditTwinFromParsed(c.env.DB, {
+      orgId: opts.orgId,
+      clientId: opts.clientId,
+      reportId: opts.reportId,
+      bureau: opts.bureau,
+      parsed: opts.parsed,
+    });
+  } catch (e) {
+    console.warn('[credit-twin] snapshot skipped', e);
   }
 }
 
@@ -7883,6 +7898,22 @@ app.post('/api/documents/generate', authMiddleware, async (c) => {
   const docDef = (DOCUMENT_TYPES as any)[docType];
   if (!docDef) return c.json({ error: 'Unknown document type' }, 400);
 
+  if (String(docType).toLowerCase().includes('identity-theft')) {
+    const att = await c.env.DB.prepare(
+      `SELECT question_id, response FROM client_attestations WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 80`
+    ).bind(clientId, user.org_id).all().catch(() => ({ results: [] as any[] }));
+    const affirmed = (att?.results || []).some((a: any) => a.question_id === 'identity_theft' && String(a.response).toUpperCase() === 'YES');
+    const mine = (att?.results || []).some((a: any) => a.question_id === 'opened_account' && String(a.response).toUpperCase() === 'YES');
+    const gate = evaluateIdentityTheftGate({
+      consumerAffirmedIdentityTheft: affirmed,
+      accountIsMine: mine,
+      promptInjection: !affirmed,
+    });
+    if (gate.blocked) {
+      return c.json({ error: 'IDENTITY_THEFT_BLOCKED', message: gate.reason }, 403);
+    }
+  }
+
   const firmLh = await loadOrgLetterhead(c.env, user.org_id);
   const docData: DocumentData = {
     clientName: `${client.first_name} ${client.last_name}`,
@@ -10083,9 +10114,15 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/app.js?v=20260813-finish-polish"></script>
+  <script src="/static/app.js?v=20260813-client-intel"></script>
 </body>
 </html>`;
 }
+
+registerClientIntelligenceRoutes(app, {
+  authMiddleware,
+  resolvePortalClientSafe,
+  isPortalAnalysisUnlocked,
+});
 
 export default app;
