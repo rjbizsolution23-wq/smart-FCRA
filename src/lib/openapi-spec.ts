@@ -84,6 +84,8 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
     requestBody: { focusGoal: 'mortgage|auto|student|debt|rebuild', motivationOptIn: 'boolean', journeyOptIn: 'boolean' } },
   { method: 'post', path: '/api/client-portal/journey/send-today', summary: 'Generate/send today’s motivational wake-up', tags: ['Client Portal'], security: true },
   { method: 'get', path: '/api/client-portal/intelligence', summary: 'Client intelligence dashboard (scores, NBA, results taxonomy, events)', tags: ['Client Portal'], security: true },
+  { method: 'get', path: '/api/client-portal/reports', summary: 'List the authenticated consumer’s imported credit reports', tags: ['Client Portal'], security: true },
+  { method: 'get', path: '/api/client-portal/reports/{id}', summary: 'Sandboxed interactive report viewer payload (PII-redacted, owner-only)', tags: ['Client Portal'], security: true },
   { method: 'get', path: '/api/client-portal/credit-events', summary: 'Append-only credit event ledger', tags: ['Client Portal'], security: true },
   { method: 'get', path: '/api/client-portal/findings', summary: 'Cross-bureau findings (no auto legal labels)', tags: ['Client Portal'], security: true },
   { method: 'get', path: '/api/client-portal/attestations', summary: 'List consumer attestations', tags: ['Client Portal'], security: true },

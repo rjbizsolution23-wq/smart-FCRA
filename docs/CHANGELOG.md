@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.4.1] - 2026-08-13
+### Added
+- Interactive report sandbox: consumers open a scrollable paper copy of the imported Experian/Equifax/TransUnion file (accounts, payment history, inquiries, source text) in a scriptless iframe.
+- Payment-history legend, hard vs soft inquiry labels, FCRA § 605 DOFD education (no deletion promise), print paper copy, section jump, confidential watermark.
+- `GET /api/client-portal/reports` and `GET /api/client-portal/reports/:id` (owner-only, SSN redacted, view audit).
+- Staff “Paper sandbox” on report detail. Clients are blocked from the staff `/api/reports/:id` payload (litigation pack).
+- CSP `frame-src` allows `about:srcdoc` so the sandbox can render.
+
+### Changed
+- My Credit lists imported reports with **Open report**. Confirm-facts can be launched from a tradeline.
+
 ## [3.4.0] - 2026-08-13
 ### Added
 - Client portal intelligence: D1 `0021_client_intelligence.sql` (attestations, tradeline snapshots, credit events, findings, disputes, consents, CROA cancellations, compliance decisions, action receipts).

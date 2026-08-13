@@ -1272,6 +1272,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         // Secure Self-Service Client Portal Pages
         case 'client-cockpit': await pgClientCockpit(el); break;
         case 'client-credit': await pgClientCredit(el); break;
+        case 'client-report': await pgClientReportSandbox(el, state.pageData); break;
         case 'client-case': await pgClientCase(el); break;
         case 'client-attest': await pgClientAttest(el); break;
         case 'client-disputes': await pgClientDisputes(el); break;
@@ -4109,6 +4110,9 @@ Status: Discharged`;
           </div>
           
           <div class="flex items-center gap-2">
+            <button onclick="window._nav('client-report', { reportId: '${r.id}', clientId: '${r.client_id}' })" class="bg-sky-600/20 border border-sky-500/30 text-sky-300 px-3.5 py-2 rounded-lg text-xs font-semibold hover:bg-sky-600/30 transition flex items-center gap-1.5">
+              <i class="fas fa-file-alt"></i>Paper sandbox
+            </button>
             <button onclick="window._nav('report-comparison', { reportId: '${r.id}' })" class="bg-purple-600/20 border border-purple-500/30 text-purple-300 px-3.5 py-2 rounded-lg text-xs font-semibold hover:bg-purple-600/30 transition flex items-center gap-1.5">
               <i class="fas fa-balance-scale"></i>Compare Report
             </button>
@@ -8522,7 +8526,7 @@ async function pgAdminConsole(el) {
       ]},
       { title: 'Client portal', items: [
         ['Dashboard', 'Named-model scores, next action, results taxonomy (not every change is a deletion), credit health'],
-        ['My Credit / Case / Confirm Facts / Disputes', 'Tri-bureau compare, event ledger, evidence-first attestations, letter approval'],
+        ['My Credit / Report sandbox / Case', 'Open a scrollable paper copy of the imported report (scriptless iframe). Confirm facts. Disputes require attestation.'],
         ['Action Plan / Progress / Consumer Rights', 'One primary NBA, measured changes, FCRA/CROA/FDCPA education'],
         ['Cancel Services / Consents / Billing', 'CROA cancellation in-portal; separate consents; client invoices without internal billing rules'],
         ['Messages / Vault', 'Client ↔ staff chat; ID, SSN, proof, reports in R2'],
@@ -8553,7 +8557,7 @@ async function pgAdminConsole(el) {
       'Shipped: Per-tenant CSS tokens from Settings → branding.',
       'Shipped: src/frontend archived as non-production prototypes.',
       'Shipped: Mobile PWA (manifest, service worker, install, overlay nav).',
-      'Shipped: Client intelligence portal — evidence-first disputes, attestations, CROA cancel, named score models, no deletion simulator.',
+      'Shipped: Interactive report sandbox (scrollable paper view, payment history, owner-only access).',
     ];
     el.innerHTML = `<div class="fade-in space-y-6">
       <div class="rounded-2xl border border-blue-500/25 bg-gradient-to-r from-slate-950 via-blue-950/30 to-slate-950 p-6">
@@ -9612,6 +9616,20 @@ async function pgAdminConsole(el) {
             <div class="text-2xl font-mono text-white">${s.score == null ? '—' : s.score}</div>
             <div class="text-[11px] text-sky-200 mt-1">${escapeHtml(s.scoreModel)}</div>
           </div>`).join('')}</div>
+        ${(intel.reports && intel.reports.length) ? `<div class="glass rounded-xl p-4 border border-gray-800">
+          <h2 class="text-sm font-bold text-white mb-2">Your reports</h2>
+          <p class="text-[11px] text-gray-500 mb-3">Open the sandboxed copy to scroll the actual imported file, accounts, payment history, and inquiries. This is not the bureau website.</p>
+          <div class="space-y-2">${intel.reports.map((r) => `
+            <button type="button" onclick="window._nav('client-report', { reportId: '${escapeHtml(r.id)}' })" class="w-full text-left glass rounded-lg p-3 border border-gray-800 hover:border-sky-500/40">
+              <div class="flex justify-between items-center gap-2">
+                <div>
+                  <div class="text-sm font-semibold text-white">${escapeHtml(r.bureau || 'Report')}</div>
+                  <div class="text-[11px] text-gray-400">${escapeHtml(r.fileName || '')} · ${escapeHtml(r.reportDate || r.importedAt || '')}</div>
+                </div>
+                <span class="text-xs font-bold text-sky-300">Open report</span>
+              </div>
+            </button>`).join('')}</div>
+        </div>` : `<div class="glass rounded-xl p-4 border border-gray-800 text-sm text-gray-400">No report on file yet. <button type="button" class="text-sky-300 underline" onclick="window._nav('client-self-onboard')">Upload or connect a report</button>.</div>`}
         ${util ? `<div class="glass rounded-xl p-4 border border-gray-800">
           <h2 class="text-sm font-bold text-white mb-2">Utilization (educational)</h2>
           <p class="text-[11px] text-amber-200/80 mb-3">${escapeHtml(util.disclaimer)}</p>
@@ -9630,6 +9648,144 @@ async function pgAdminConsole(el) {
           ${(events.events||[]).slice(0,25).map((e) => `<div class="text-xs text-gray-300 py-1.5 border-b border-gray-800/50">${escapeHtml(e.taxonomy||'')} · ${escapeHtml(e.event_type||'')} · ${escapeHtml(e.bureau||'')} · ${escapeHtml(e.field||'')}</div>`).join('') || '<p class="text-xs text-gray-500">No events yet.</p>'}
         </div>
       </div>`;
+  }
+
+  async function pgClientReportSandbox(el, data) {
+    const reportId = (data && data.reportId) || (state.pageData && state.pageData.reportId);
+    if (!reportId) {
+      el.innerHTML = `<div class="fade-in max-w-xl glass rounded-xl p-6"><p class="text-sm text-gray-300">Choose a report from My Credit.</p>
+        <button type="button" onclick="window._nav('client-credit')" class="mt-3 btn-rj text-xs font-bold px-4 py-2 rounded-lg">My Credit</button></div>`;
+      return;
+    }
+    const params = new URLSearchParams();
+    if (state.impersonateClientId) params.set('clientId', state.impersonateClientId);
+    else if (data && data.clientId && state.user?.role !== 'client') params.set('clientId', data.clientId);
+    const qs = params.toString() ? ('?' + params.toString()) : '';
+    let view;
+    try {
+      view = await api('/client-portal/reports/' + encodeURIComponent(reportId) + qs);
+    } catch (err) {
+      el.innerHTML = `<div class="glass rounded-xl p-6 border border-rose-500/30"><p class="text-rose-300">${escapeHtml(err.message)}</p>
+        <button type="button" onclick="window._nav('client-credit')" class="mt-3 text-sm text-sky-300">Back to My Credit</button></div>`;
+      return;
+    }
+    const accounts = [].concat(view.accounts || [], view.collections || []);
+    const phClass = { ok: 'bg-emerald-500/20 text-emerald-300', late30: 'bg-yellow-500/20 text-yellow-200', late60: 'bg-orange-500/20 text-orange-200', late90: 'bg-rose-500/20 text-rose-200', derog: 'bg-rose-900 text-rose-100', none: 'bg-slate-800 text-slate-400', unknown: 'bg-slate-700 text-slate-200' };
+    function money(n) { if (n == null || n === '') return '—'; return '$' + Number(n).toLocaleString(); }
+    function renderDetail(a) {
+      if (!a) return `<p class="text-xs text-gray-500">Select an account to inspect balances, dates, and payment history. Clicking does not create a dispute.</p>`;
+      return `
+        <div class="space-y-3">
+          <div>
+            <div class="text-sm font-bold text-white">${escapeHtml(a.creditorName)}</div>
+            <div class="text-[11px] text-gray-400">${escapeHtml(a.accountType || '')} · ${escapeHtml(a.accountStatus || '')} · ${escapeHtml(a.accountNumberMasked)}</div>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            ${[['Balance', money(a.balance)],['Limit', money(a.creditLimit)],['Opened', a.dateOpened || '—'],['Reported', a.dateReported || '—'],['Past due', money(a.pastDue)],['Monthly', money(a.monthlyPayment)]].map(([k,v]) =>
+              `<div class="border border-gray-800 rounded-lg p-2"><div class="text-[10px] uppercase text-gray-500">${k}</div><div class="text-white font-mono">${escapeHtml(String(v))}</div></div>`).join('')}
+          </div>
+          ${a.dofd ? `<p class="text-[11px] text-gray-400">Date of first delinquency (as reported): ${escapeHtml(a.dofd)}</p>
+          <p class="text-[10px] text-gray-500">Many derogatory items generally must stop being reported seven years from the start of delinquency (FCRA § 605). Educational only — not a promise this item will be removed.</p>` : ''}
+          ${a.remarks ? `<p class="text-[11px] text-gray-400">Remarks: ${escapeHtml(a.remarks)}</p>` : ''}
+          ${a.paymentCells && a.paymentCells.length ? `<div><div class="text-[10px] uppercase text-gray-500 mb-1">Payment history (as reported)</div>
+            <div class="flex flex-wrap gap-1">${a.paymentCells.map((c) => `<span class="w-6 h-6 text-[10px] font-mono rounded flex items-center justify-center ${phClass[c.tone] || 'bg-slate-800'}" title="${escapeHtml(c.label)}">${escapeHtml(c.code)}</span>`).join('')}</div>
+            <p class="text-[10px] text-gray-500 mt-1">C/0 current · 1 = 30 days · 2 = 60 · 3+ = 90+ · 9/L collection or charge-off. Codes are educational Metro 2-style markers from the file. They are not an automatic legal finding.</p>
+          </div>` : ''}
+          <p class="text-[10px] text-gray-500">Confirming facts does not file a bureau dispute. A dispute starts only after you approve a draft.</p>
+          <button type="button" class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold px-3 py-2 rounded-lg" onclick="window._nav('client-attest', { accountKey: '${escapeHtml(a.creditorName)}' })">Confirm facts on this account</button>
+        </div>`;
+    }
+    el.innerHTML = `
+      <div class="fade-in space-y-4 max-w-[1400px]">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <button type="button" onclick="window._nav('client-credit')" class="text-xs text-gray-400 hover:text-white mb-1"><i class="fas fa-arrow-left mr-1"></i>My Credit</button>
+            <h1 class="text-xl font-bold text-white font-display">${escapeHtml(view.report.bureau)} report</h1>
+            <p class="text-[11px] text-gray-400">${escapeHtml(view.report.fileName || '')} · ${escapeHtml(view.report.reportDate || view.report.importedAt || '')}</p>
+          </div>
+          <div class="text-right">
+            <div class="text-2xl font-mono text-white">${view.score == null ? '—' : view.score}</div>
+            <div class="text-[11px] text-sky-200">${escapeHtml(view.scoreModel)}</div>
+          </div>
+        </div>
+        <div class="rounded-xl border border-amber-500/25 bg-amber-950/20 p-3 text-[12px] text-amber-100/90">${escapeHtml(view.notice)}</div>
+        <div class="flex flex-wrap items-center gap-2 text-[10px] uppercase font-bold">
+          <button type="button" data-rs-tab="paper" class="rs-tab px-3 py-1.5 rounded-lg bg-sky-600 text-white">Scrollable report</button>
+          <button type="button" data-rs-tab="source" class="rs-tab px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300">Source text</button>
+          <button type="button" id="rs-print" class="px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300">Print paper copy</button>
+        </div>
+        <div class="flex flex-wrap gap-1.5" id="rs-sections">
+          ${[['personal','Personal'],['accounts','Accounts'],['collections','Collections'],['inquiries','Inquiries'],['records','Public records'],['legend','Payment codes']].map(([id,label]) =>
+            `<button type="button" data-rs-sec="${id}" class="rs-sec px-2.5 py-1 rounded-lg border border-gray-800 text-[11px] text-gray-300 hover:border-sky-500/50">${label}</button>`).join('')}
+        </div>
+        <div class="grid lg:grid-cols-12 gap-4">
+          <aside class="lg:col-span-3 glass rounded-xl p-3 border border-gray-800 max-h-[70vh] overflow-y-auto">
+            <div class="text-[10px] uppercase text-gray-500 font-bold mb-2">Jump to account</div>
+            <input id="rs-filter" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-2 py-1.5 text-xs text-white mb-2" placeholder="Filter creditors">
+            <div id="rs-acct-list" class="space-y-1">
+              ${accounts.map((a) => `<button type="button" data-acct="${escapeHtml(a.id)}" class="rs-acct w-full text-left rounded-lg px-2 py-2 text-xs hover:bg-slate-800 border border-transparent">
+                <div class="text-white font-semibold truncate">${escapeHtml(a.creditorName)}</div>
+                <div class="text-[10px] text-gray-500">${escapeHtml(a.accountStatus || '')} · ${money(a.balance)}</div>
+              </button>`).join('') || '<p class="text-xs text-gray-500">No accounts parsed.</p>'}
+            </div>
+          </aside>
+          <div class="lg:col-span-6">
+            <iframe id="rs-frame" title="Sandboxed credit report" sandbox="allow-same-origin" referrerpolicy="no-referrer"
+              class="w-full h-[70vh] rounded-xl border border-slate-700 bg-white"></iframe>
+            <pre id="rs-source" class="hidden h-[70vh] overflow-auto rounded-xl border border-gray-800 bg-black/50 p-4 text-[11px] text-gray-300 whitespace-pre-wrap font-mono">${escapeHtml(view.sourceText || '')}</pre>
+          </div>
+          <aside class="lg:col-span-3 glass rounded-xl p-4 border border-gray-800 min-h-[12rem]" id="rs-detail">
+            ${renderDetail(null)}
+          </aside>
+        </div>
+      </div>`;
+    const frame = document.getElementById('rs-frame');
+    if (frame) frame.srcdoc = view.sandboxHtml || '<p>No report content.</p>';
+    const selectAcct = (id) => {
+      const a = accounts.find((x) => x.id === id);
+      document.getElementById('rs-detail').innerHTML = renderDetail(a);
+      document.querySelectorAll('.rs-acct').forEach((b) => b.classList.toggle('border-sky-500', b.getAttribute('data-acct') === id));
+      try {
+        const node = frame.contentDocument && frame.contentDocument.getElementById(id);
+        if (node) node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (_) {}
+    };
+    document.querySelectorAll('.rs-acct').forEach((btn) => {
+      btn.onclick = () => selectAcct(btn.getAttribute('data-acct'));
+    });
+    const filter = document.getElementById('rs-filter');
+    if (filter) filter.oninput = () => {
+      const q = filter.value.toLowerCase();
+      document.querySelectorAll('.rs-acct').forEach((b) => {
+        b.classList.toggle('hidden', q && !b.textContent.toLowerCase().includes(q));
+      });
+    };
+    document.querySelectorAll('.rs-tab').forEach((tab) => {
+      tab.onclick = () => {
+        const mode = tab.getAttribute('data-rs-tab');
+        document.querySelectorAll('.rs-tab').forEach((t) => {
+          t.classList.toggle('bg-sky-600', t === tab);
+          t.classList.toggle('text-white', t === tab);
+          t.classList.toggle('bg-gray-800', t !== tab);
+        });
+        document.getElementById('rs-frame').classList.toggle('hidden', mode !== 'paper');
+        document.getElementById('rs-source').classList.toggle('hidden', mode !== 'source');
+      };
+    });
+    document.querySelectorAll('.rs-sec').forEach((btn) => {
+      btn.onclick = () => {
+        document.getElementById('rs-frame').classList.remove('hidden');
+        document.getElementById('rs-source').classList.add('hidden');
+        try {
+          const node = frame.contentDocument && frame.contentDocument.getElementById(btn.getAttribute('data-rs-sec'));
+          if (node) node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (_) {}
+      };
+    });
+    const printBtn = document.getElementById('rs-print');
+    if (printBtn) printBtn.onclick = () => {
+      try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch (_) {}
+    };
   }
 
   async function pgClientCase(el) {
@@ -9679,7 +9835,7 @@ async function pgAdminConsole(el) {
         </div>
         <form id="attest-form" class="glass rounded-xl p-4 space-y-4 border border-gray-800">
           <label class="block text-xs text-gray-400">Account key or creditor name
-            <input id="att-account" class="mt-1 w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white" placeholder="e.g. CAPITAL ONE">
+            <input id="att-account" class="mt-1 w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white" placeholder="e.g. CAPITAL ONE" value="${escapeHtml((state.pageData && state.pageData.accountKey) || '')}">
           </label>
           ${questions.filter((q) => q.questionId !== 'identity_theft').map((q) => `
             <fieldset class="text-sm">

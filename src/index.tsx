@@ -592,7 +592,7 @@ app.use('/api/*', cors());
 // ═══════════════════════════════════════════════════════════════
 app.use('*', async (c, next) => {
   await next();
-  c.res.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://sdk.twilio.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://storage.googleapis.com https://images.unsplash.com https://imagedelivery.net https://api.qrserver.com; media-src 'self' blob: mediastream:; worker-src 'self' blob:; child-src blob: https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://api.stripe.com https://fonts.googleapis.com https://api.groq.com https://openrouter.ai https://api-inference.huggingface.co https://generativelanguage.googleapis.com https://cdn.jsdelivr.net https://sdk.twilio.com https://*.twilio.com wss://*.twilio.com https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+  c.res.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://sdk.twilio.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://storage.googleapis.com https://images.unsplash.com https://imagedelivery.net https://api.qrserver.com; media-src 'self' blob: mediastream:; worker-src 'self' blob:; child-src 'self' blob: about:srcdoc https://challenges.cloudflare.com; frame-src 'self' blob: about:srcdoc https://challenges.cloudflare.com; connect-src 'self' https://api.stripe.com https://fonts.googleapis.com https://api.groq.com https://openrouter.ai https://api-inference.huggingface.co https://generativelanguage.googleapis.com https://cdn.jsdelivr.net https://sdk.twilio.com https://*.twilio.com wss://*.twilio.com https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
   c.res.headers.set('X-Frame-Options', 'DENY');
   c.res.headers.set('X-Content-Type-Options', 'nosniff');
   c.res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -6684,6 +6684,10 @@ app.get('/api/reports/:id', authMiddleware, async (c) => {
   const report = await c.env.DB.prepare('SELECT * FROM credit_reports WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
   if (!report) return c.json({ error: 'Not found' }, 404);
 
+  if (user.role === 'client') {
+    return c.json({ error: 'Open this report from My Credit. Client access uses the sandboxed viewer.' }, 403);
+  }
+
   if (report.raw_text) report.raw_text = await decryptPII(c, report.raw_text);
   if (report.parsed_data) report.parsed_data = await decryptPII(c, report.parsed_data);
 
@@ -10114,7 +10118,7 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/app.js?v=20260813-client-intel"></script>
+  <script src="/static/app.js?v=20260813-report-sandbox-2"></script>
 </body>
 </html>`;
 }
@@ -10123,6 +10127,7 @@ registerClientIntelligenceRoutes(app, {
   authMiddleware,
   resolvePortalClientSafe,
   isPortalAnalysisUnlocked,
+  decryptPII,
 });
 
 export default app;

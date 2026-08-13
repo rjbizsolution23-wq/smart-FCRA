@@ -205,4 +205,40 @@ const { recommendLetterStrategy } = await import(
   console.log('✓ fact interview');
 }
 
+{
+  const { redactSsn, parsePaymentHistory, buildSandboxDocument, accountFromParsed, classifyInquiry } = await import(
+    pathToFileURL(path.join(root, 'src/engine/report-sandbox.ts')).href
+  );
+  assert(redactSsn('SSN 123-45-6789 on file') === 'SSN ***-**-6789 on file', 'ssn dashed redacted');
+  assert(!redactSsn('SSN: 123456789').includes('123456789'), 'ssn compact redacted');
+  const cells = parsePaymentHistory('C1C29');
+  assert(cells[0].tone === 'ok' && cells[1].tone === 'late30' && cells[4].tone === 'derog', 'payment history tones');
+  assert(classifyInquiry('Hard').kind === 'hard', 'hard inquiry');
+  assert(classifyInquiry('PR').kind === 'soft', 'promotional inquiry is soft');
+  const html = buildSandboxDocument({
+    bureau: 'Experian',
+    reportDate: '2026-08-13',
+    importedAt: '2026-08-13',
+    fileName: 'ex.pdf',
+    score: 648,
+    scoreModel: 'VantageScore 3.0',
+    personal: { names: ['Jane Doe'], addresses: ['1 Main'], employers: [], dobs: ['1990-01-01'], ssnLast4: ['6789'] },
+    accounts: [accountFromParsed({ creditorName: 'Capital One', accountNumber: '1234567890', currentBalance: 811, paymentHistory: 'CCC', dofd: '2019-04-01', remarks: 'SSN 111-22-3333' }, 0)],
+    collections: [],
+    inquiries: [{ creditorName: 'Auto Lender', inquiryDate: '2026-01-01', inquiryType: 'Hard' }],
+    publicRecords: [],
+    sourceText: '<script>alert(1)</script> 123-45-6789',
+  });
+  assert(html.includes('Capital One'), 'account in paper view');
+  assert(html.includes('VantageScore 3.0'), 'named model');
+  assert(!html.includes('<script>alert'), 'source script escaped');
+  assert(html.includes('not the bureau'), 'disclaimer present');
+  assert(html.includes('does not file a dispute'), 'viewing is not a dispute');
+  assert(html.includes('FCRA'), '605 educational note when DOFD present');
+  assert(html.includes('Hard · Hard'), 'hard inquiry labeled');
+  assert(!html.includes('111-22-3333'), 'ssn in remarks redacted');
+  assert(html.includes('Current'), 'payment legend');
+  console.log('✓ report sandbox redaction + paper HTML');
+}
+
 console.log('client-intelligence tests passed');

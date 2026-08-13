@@ -91,7 +91,8 @@ Shown when `isClient` is true. Analysis / letters stay **locked** until staff ru
 | Nav id | Page | What it does |
 |---|---|---|
 | `client-cockpit` | Dashboard | Named-model scores, next-best action, result taxonomy, credit health, recent events. **No deletion/score-lift simulator.** |
-| `client-credit` | My Credit | Tri-bureau compare, utilization (educational), credit event ledger |
+| `client-credit` | My Credit | Tri-bureau compare, utilization (educational), credit event ledger, open report sandbox |
+| `client-report` | Report sandbox | Scrollable paper copy in a scriptless iframe; jump to accounts; payment-history legend; hard/soft inquiries; print; Confirm facts. Owner-only. |
 | `client-case` | My Credit Case | Disputes, findings (not auto-labeled as FCRA violations), action receipts |
 | `client-attest` | Confirm Facts | Structured interview; immutable attestations; identity-theft gate |
 | `client-disputes` | Disputes | Evidence-first drafts; client approval required; staff impersonation cannot approve |
@@ -226,6 +227,7 @@ Migrations live in `migrations/` (`0001`–`0021`+). Newest: `0021_client_intell
 - **Playwright CI gate** login → upload → detect → letter (`tests/login-upload-letter.spec.ts`)
 - **Live RON** Proof (`ApiKey` → `https://api.proof.com/transactions`) and BlueNotary (`Bearer` → `https://app.bluenotary.us/api/integrationsv2/sessions`) with ceremony join URLs + HMAC webhooks
 - **Client intelligence portal** — evidence-first disputes, immutable attestations, hallucination firewall, credit event ledger, CROA in-portal cancellation, named score models, mobile Home/Credit/Case/Actions/More nav. Removed FICO deletion simulator / guaranteed-lift copy.
+- **Report sandbox** — scrollable paper copy of the imported report in a scriptless iframe; owner-only API; SSN redacted; payment-history grid + legend; hard vs soft inquiries; FCRA § 605 DOFD education; print paper copy; Confirm facts from a tradeline. Viewing is not a dispute.
 
 ### Operator secrets still required in Pages (not code)
 

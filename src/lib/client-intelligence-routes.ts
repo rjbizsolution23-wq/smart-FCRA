@@ -18,6 +18,14 @@ import { computeNextBestAction, CASE_STAGE_LABELS, type NbaContext } from '../en
 import { aggregateUtilization } from '../engine/utilization';
 import { evaluateBillableEvent, isCoveredCreditRepairService, BILLING_POLICY_VERSION } from './billing-compliance';
 import { findingHasForbiddenLabel } from '../engine/metro2-findings';
+import {
+  accountFromParsed,
+  buildSandboxDocument,
+  classifyInquiry,
+  redactSsn,
+  scoreModelFromParsed,
+  type SandboxAccount,
+} from '../engine/report-sandbox';
 
 const CONSENT_CATALOG = [
   { type: 'ELECTRONIC_COMMUNICATIONS', version: '1.0', label: 'Electronic communications' },
@@ -130,9 +138,10 @@ export function registerClientIntelligenceRoutes(
     authMiddleware: any;
     resolvePortalClientSafe: (c: any, user: any, bodyClientId?: string) => Promise<any | null>;
     isPortalAnalysisUnlocked: (client: any) => boolean;
+    decryptPII: (c: any, text: string) => Promise<string>;
   },
 ) {
-  const { authMiddleware, resolvePortalClientSafe, isPortalAnalysisUnlocked } = deps;
+  const { authMiddleware, resolvePortalClientSafe, isPortalAnalysisUnlocked, decryptPII } = deps;
 
   app.get('/api/client-portal/intelligence', authMiddleware, async (c) => {
     const user = c.get('user');
@@ -268,7 +277,132 @@ export function registerClientIntelligenceRoutes(
       })),
       findings: gate ? [] : findings.filter((f: any) => !findingHasForbiddenLabel(f.note || f.severity || '')),
       disputes: gate ? [] : disputes,
+      reports: reports.slice(0, 12).map((r: any) => ({
+        id: r.id,
+        bureau: r.bureau,
+        reportDate: r.report_date,
+        importedAt: r.created_at,
+        fileName: r.file_name,
+        accountCount: r.total_accounts,
+        collectionCount: r.total_collections,
+        inquiryCount: r.total_inquiries,
+        isCurrent: r.is_current,
+      })),
       noGuaranteeNotice: 'Smart FCRA does not guarantee deletions, score increases, lending approval, homeownership, or funding.',
+    });
+  });
+
+  app.get('/api/client-portal/reports', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+    if (!client) return c.json({ error: 'Client profile not found' }, 404);
+    const rows = await softAll(
+      c.env.DB,
+      `SELECT id, bureau, report_date, file_name, created_at, status, total_accounts, total_collections, total_inquiries, fico_score, vantage_score, is_current
+       FROM credit_reports WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 50`,
+      client.id, user.org_id,
+    );
+    return c.json({ reports: rows });
+  });
+
+  app.get('/api/client-portal/reports/:id', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+    if (!client) return c.json({ error: 'Client profile not found' }, 404);
+    const id = c.req.param('id');
+    const report = await softFirst(
+      c.env.DB,
+      `SELECT * FROM credit_reports WHERE id = ? AND client_id = ? AND org_id = ?`,
+      id, client.id, user.org_id,
+    );
+    if (!report) return c.json({ error: 'Report not found' }, 404);
+
+    let parsed: any = {};
+    if (report.parsed_data) {
+      try { parsed = JSON.parse(await decryptPII(c, report.parsed_data)); } catch { parsed = {}; }
+    }
+    let rawText = '';
+    if (report.raw_text) {
+      try { rawText = await decryptPII(c, report.raw_text); } catch { rawText = ''; }
+    }
+    rawText = redactSsn(rawText);
+
+    const personal = parsed.personalInfo || { names: [], addresses: [], employers: [], ssns: [], dobs: [] };
+    const ssnLast4 = (personal.ssns || []).map((s: any) => String(s).replace(/\D/g, '').slice(-4)).filter((x: string) => x.length === 4);
+    const accounts: SandboxAccount[] = (parsed.accounts || []).map((a: any, i: number) => accountFromParsed(a, i));
+    const collections: SandboxAccount[] = (parsed.collections || []).map((a: any, i: number) => accountFromParsed(a, 1000 + i));
+    const inquiries = (parsed.inquiries || []).map((i: any) => {
+      const inquiryType = String(i.inquiryType || i.purpose || '');
+      return {
+        creditorName: redactSsn(String(i.creditorName || '')),
+        inquiryDate: String(i.inquiryDate || ''),
+        inquiryType,
+        kind: classifyInquiry(inquiryType).kind,
+      };
+    });
+    const publicRecords = (parsed.publicRecords || []).map((r: any) => ({
+      recordType: String(r.recordType || ''),
+      filingDate: String(r.filingDate || ''),
+      status: String(r.status || ''),
+      amount: r.amount,
+    }));
+    const scoreMeta = scoreModelFromParsed(parsed, report);
+    const staffView = user.role !== 'client';
+    const sandboxHtml = buildSandboxDocument({
+      bureau: report.bureau || 'Credit',
+      reportDate: report.report_date,
+      importedAt: report.created_at,
+      fileName: report.file_name,
+      score: scoreMeta.score,
+      scoreModel: scoreMeta.model,
+      personal: {
+        names: (personal.names || []).map((n: any) => redactSsn(String(n))),
+        addresses: (personal.addresses || []).map((n: any) => redactSsn(String(n))),
+        employers: (personal.employers || []).map((n: any) => redactSsn(String(n))),
+        dobs: personal.dobs || [],
+        ssnLast4: staffView ? [] : ssnLast4,
+      },
+      accounts,
+      collections,
+      inquiries,
+      publicRecords,
+      sourceText: rawText,
+    });
+
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO activity_log (id, org_id, client_id, report_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        generateId(), user.org_id, client.id, report.id, user.id, 'REPORT_VIEWED',
+        staffView ? 'Staff previewed client report sandbox' : 'Client opened report sandbox',
+      ).run();
+    } catch { /* soft */ }
+
+    return c.json({
+      report: {
+        id: report.id,
+        bureau: report.bureau,
+        reportDate: report.report_date,
+        importedAt: report.created_at,
+        fileName: report.file_name,
+        status: report.status,
+      },
+      score: scoreMeta.score,
+      scoreModel: scoreMeta.model,
+      personal: {
+        names: (personal.names || []).map((n: any) => redactSsn(String(n))),
+        addresses: (personal.addresses || []).map((n: any) => redactSsn(String(n))),
+        employers: (personal.employers || []).map((n: any) => redactSsn(String(n))),
+        dobs: personal.dobs || [],
+        ssnLast4: staffView ? [] : ssnLast4,
+      },
+      accounts,
+      collections,
+      inquiries,
+      publicRecords,
+      sandboxHtml,
+      sourceText: rawText.slice(0, 200000),
+      notice: 'This is a copy of the report imported into Smart FCRA. It is not the bureau’s live website. This score is not necessarily a lender score. Opening this view does not file a dispute. Field differences are shown for your review and are not automatically labeled as legal violations.',
     });
   });
 
