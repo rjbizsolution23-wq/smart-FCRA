@@ -165,7 +165,7 @@
         <label class="cb-row"><input type="checkbox" name="tcpa" required/><div class="cb-t"><b>Contact consent (required)</b> · I agree to receive a call / text / email with my audit results.</div></label>
         <label class="cb-row"><input type="checkbox" name="newsletter"/><div class="cb-t">Send me the weekly Systems Brief newsletter.</div></label>
       </div>
-      <div class="turnstile-placeholder"><b>Cloudflare Turnstile</b> · Silent check on submit.</div>
+      <div id="cf-turnstile" class="cf-turnstile"></div>
     </div>
 
     <div class="success-state" id="success">
@@ -256,5 +256,6 @@
 })();
 </script>
 
+<script src="/static/brand/turnstile.js"></script>
 </body>
 </html>

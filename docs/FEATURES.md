@@ -196,21 +196,23 @@ Migrations live in `migrations/` (`0001`–`0020`+). Newest: `0020_brand_leads.s
 - Twilio / Email / Stripe org billing / Click2Mail wiring
 - Free-only AI cascade
 - Demo staff + Salisha client
+- **Twilio Video JS** on client Video (live room when keys set; local preview otherwise)
+- **Cloudflare Turnstile** on brand forms (`GET /api/public/turnstile` + siteverify when secret set)
+- **Executive Overview sparkline** bound to last 6 months of paid tradeline orders (falls back to estimated pipeline)
+- **Click2Mail** status from `GET /api/settings/integrations`
+- **Nav** — duplicate Clients + Report History removed from sidebar (history lives on Reports)
+- **Client Stripe checkout** `POST /api/client-portal/unlock/checkout` + webhook `analysis_unlock`
+- **RON sandbox vs live** banners on Legal + Compliance Hub
+- **PDF letterhead** Smart FCRA + RJ blue `#2563eb`; default firm RJ Business Solutions (PDF body uses Helvetica — Workers-safe)
+- **Per-tenant theme** Settings → Portal theme (CSS variables on login)
+- **`src/frontend/`** archived as non-production prototypes
 
-### Still unfinished (finish-up list)
+### Still unfinished (later polish)
 
-1. **Client Video page** — tokens only; embed Twilio Video JS (or ConversationRelay) so a real call starts.
-2. **Brand form Turnstile** — replace the placeholder `<div class="cf-turnstile">` with the real widget + site key.
-3. **Executive Overview sparkline** — bind to real revenue / pipeline series instead of a hardcoded SVG path.
-4. **Mailing hub** — stop hardcoding Click2Mail as CONNECTED; read `/api/settings/integrations`.
-5. **Duplicate nav** — merge `clients` vs `admin-clients`, `reports` vs `report-history` vs `report-detail`, staff tradelines vs client tradelines UX.
-6. **Client payment for analysis unlock** — Stripe Checkout for the consumer; today only staff `unlock-analysis`.
-7. **RON production** — Proof live keys + disclosure when sandbox.
-8. **`src/frontend/` React tree** — unused; live UI is `public/static/app.js`. Either delete or migrate (do not run both).
-9. **Letter PDF letterhead** — confirm every template uses RJ logo + Space Grotesk / Inter, not leftover “FCRA Supreme” chrome.
-10. **Org white-label** — `org-branding.ts` exists; per-tenant CSS in the SPA is still mostly RJ defaults.
-11. **Mobile / PWA polish** — sidebar + tables are desktop-first.
-12. **E2E** — Playwright against login → upload → detect → letter is not a required CI gate today.
+1. **Mobile / PWA polish** — sidebar + tables are desktop-first.
+2. **E2E** — Playwright against login → upload → detect → letter is not a required CI gate today.
+3. **Embed a webfont in PDFs** — jsPDF on Workers uses Helvetica; Space Grotesk would need a bundled TTF.
+4. **Live RON vendor ceremony** — banners and sandbox lock are in place; production still needs `RON_VENDOR` + `RON_VENDOR_API_KEY` in Pages secrets.
 
 ---
 

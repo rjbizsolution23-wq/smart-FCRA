@@ -143,7 +143,7 @@
       <div class="field"><label>Anything else the team should know?</label>
         <textarea name="finalNotes" placeholder="Product photos, testimonial videos, competitor references, launch dates..."></textarea>
       </div>
-      <div class="turnstile-placeholder"><b>Cloudflare Turnstile</b> · Silent check on submit.</div>
+      <div id="cf-turnstile" class="cf-turnstile"></div>
     </div>
 
     <div class="success-state" id="success">
@@ -222,5 +222,6 @@
 })();
 </script>
 
+<script src="/static/brand/turnstile.js"></script>
 </body>
 </html>

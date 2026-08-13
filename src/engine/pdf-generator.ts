@@ -34,8 +34,8 @@ export function generatePDFReport(data: PDFReportData): Uint8Array {
   let y = margin;
 
   // Premium Palette
-  const primaryBlue = [10, 102, 255]; // #0A66FF
-  const deepBlue = [0, 59, 143];      // #003B8F
+  const deepBlue = [37, 99, 235];      // RJ Blue #2563eb
+  const primaryBlue = deepBlue;
   const darkGray = [11, 18, 32];      // #0B1220
   const lightGray = [240, 244, 250];  // #F0F4FA
   const borderGray = [220, 225, 230]; // #DCE1E6
@@ -61,7 +61,7 @@ export function generatePDFReport(data: PDFReportData): Uint8Array {
   doc.setFont('Helvetica', 'bold');
   doc.setFontSize(20);
   doc.setTextColor(255, 255, 255);
-  doc.text('FCRA SUPREME AUDIT REPORT', margin, 15);
+  doc.text('SMART FCRA AUDIT REPORT', margin, 15);
 
   doc.setFont('Helvetica', 'normal');
   doc.setFontSize(10);
@@ -307,7 +307,7 @@ export function generatePDFFromText(title: string, text: string, customLetterhea
 
   let y = customLetterhead?.logoBase64 ? 45 : 55; // Start text lower if we have a default banner
 
-  const deepBlue = [0, 59, 143];      // #003B8F
+  const deepBlue = [37, 99, 235];      // RJ Blue #2563eb
   const darkGray = [11, 18, 32];      // #0B1220
   const borderGray = [220, 225, 230]; // #DCE1E6
 
@@ -357,7 +357,7 @@ export function generatePDFFromText(title: string, text: string, customLetterhea
 
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(9);
-    const subText = customLetterhead?.customSubtext || 'Official Dispute Document | FCRA Compliance Engine';
+    const subText = customLetterhead?.customSubtext || 'RJ Business Solutions • Smart FCRA dispute document';
     doc.text(subText, margin, 26);
   };
 

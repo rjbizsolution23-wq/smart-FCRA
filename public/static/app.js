@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// FCRA SUPREME VIOLATION DETECTOR v3.0 — FULL SPA
+// FCRA Smart FCRA SPA v3.0
 // Multi-tenant SaaS | Full-Process Upload | 10 Document Types
 // ═══════════════════════════════════════════════════════════════════════════
 (function() {
@@ -623,6 +623,19 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   function shortDate(d) { if (!d) return '—'; try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return d; } }
   function sevColor(s) { return { critical: 'red-500', high: 'orange-500', medium: 'yellow-500', low: 'green-500' }[s] || 'gray-400'; }
   function sevBg(s) { return { critical: 'bg-red-900/30 border-red-500', high: 'bg-orange-900/30 border-orange-500', medium: 'bg-yellow-900/30 border-yellow-500', low: 'bg-green-900/30 border-green-500' }[s] || 'bg-gray-800 border-gray-600'; }
+  function applyTenantBrand(theme) {
+    if (!theme) return;
+    const root = document.documentElement;
+    if (theme.primary) root.style.setProperty('--rj-blue', theme.primary);
+    if (theme.sky) root.style.setProperty('--rj-sky', theme.sky);
+    if (theme.navy) root.style.setProperty('--rj-navy', theme.navy);
+    if (theme.deep) root.style.setProperty('--rj-deep', theme.deep);
+    if (theme.gold) root.style.setProperty('--rj-gold', theme.gold);
+    document.querySelectorAll('img[alt="RJ Business Solutions"]').forEach((img) => {
+      if (theme.logoUrl) img.src = theme.logoUrl;
+    });
+  }
+
   function navigate(page, data) { state.currentPage = page; state.pageData = data; render(); }
 
   function render() {
@@ -631,6 +644,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     else {
       app.innerHTML = renderShell();
       loadPage(state.currentPage);
+      api('/settings/org').then((r) => { applyTenantBrand(r.theme); if (r.org) state.org = { ...(state.org || {}), ...r.org }; }).catch(() => {});
       (async () => {
         try {
           const qs = state.impersonateClientId ? `?clientId=${state.impersonateClientId}` : '';
@@ -1084,9 +1098,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'admin-clients', icon: 'fa-address-card', label: 'Client Management' },
         { id: 'admin-violation-queue', icon: 'fa-tasks', label: 'Violation Review QA' },
         { id: 'dashboard', icon: 'fa-chart-line', label: 'Dashboard' },
-        { id: 'clients', icon: 'fa-users', label: 'Clients' },
         { id: 'reports', icon: 'fa-file-alt', label: 'Reports' },
-        { id: 'report-history', icon: 'fa-history', label: 'Report History' },
         { id: 'violations', icon: 'fa-exclamation-triangle', label: 'Violations' },
         { id: 'documents', icon: 'fa-file-contract', label: 'Documents' },
         { id: 'compliance-hub', icon: 'fa-shield-alt', label: 'Compliance Hub' },
@@ -1191,7 +1203,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     try {
       switch(page) {
         case 'dashboard': await pgDashboard(el); break;
-        case 'clients': await pgClients(el); break;
+        case 'clients': await pgAdminClients(el); break;
         case 'global-search': await pgGlobalSearch(el); break;
         case 'client-detail': await pgClientDetail(el, state.pageData); break;
         case 'reports': await pgReports(el); break;
@@ -5235,7 +5247,9 @@ Status: Discharged`;
       const clients = await api('/clients');
       const withReports = clients.clients.filter(c => c.report_count > 0);
       el.innerHTML = `<div class="fade-in">
-        <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">Credit Reports</h1><p class="text-sm text-gray-400">${withReports.length} client${withReports.length!==1?'s':''} with reports</p></div></div>
+        <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">Credit Reports</h1><p class="text-sm text-gray-400">${withReports.length} client${withReports.length!==1?'s':''} with reports</p></div>
+          <button type="button" onclick="window._nav('report-history')" class="text-xs font-semibold px-3 py-2 rounded-lg border border-blue-500/30 text-blue-200 hover:bg-blue-500/10">Version history</button>
+        </div>
         ${withReports.length?`<div class="space-y-2">${withReports.map(c=>`<div onclick="window._nav('client-detail',{clientId:'${c.id}'})" class="glass rounded-xl p-4 card-hover cursor-pointer"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 font-bold text-sm">${(c.first_name||'?')[0]}${(c.last_name||'?')[0]}</div><div class="flex-1"><div class="text-sm font-medium text-white">${c.first_name} ${c.last_name}</div><div class="text-xs text-gray-400">${c.report_count} report(s) &bull; ${c.violation_count} violation(s)</div></div>${c.damages_max?`<div class="text-sm font-bold text-green-400">${money(c.damages_max)}</div>`:''}</div></div>`).join('')}</div>`:'<div class="glass rounded-xl p-8 text-center text-gray-500"><i class="fas fa-file-alt text-3xl mb-3"></i><p>No reports yet</p><p class="text-xs text-gray-600 mt-2">Upload a credit report to get started</p></div>'}
       </div>`;
     } catch(err) {
@@ -5790,6 +5804,19 @@ Status: Discharged`;
           </form>
         </div>
 
+        <div class="glass rounded-xl p-6 border border-blue-700/40">
+          <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-palette text-sky-400"></i> Portal theme (this org)</h2>
+          <p class="text-xs text-gray-500 mb-4">Overrides RJ defaults in the logged-in SPA. Public brand forms stay on RJ tokens.</p>
+          <form id="theme-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div><label class="block text-xs text-gray-400 mb-1">Primary</label><input name="primary" type="color" value="${escapeHtml((settings.branding && settings.branding.primary) || '#2563eb')}" class="h-10 w-full bg-gray-900 border border-gray-700 rounded-lg"></div>
+            <div><label class="block text-xs text-gray-400 mb-1">Sky</label><input name="sky" type="color" value="${escapeHtml((settings.branding && settings.branding.sky) || '#0ea5e9')}" class="h-10 w-full bg-gray-900 border border-gray-700 rounded-lg"></div>
+            <div><label class="block text-xs text-gray-400 mb-1">Navy</label><input name="navy" type="color" value="${escapeHtml((settings.branding && settings.branding.navy) || '#0f172a')}" class="h-10 w-full bg-gray-900 border border-gray-700 rounded-lg"></div>
+            <div><label class="block text-xs text-gray-400 mb-1">Company name</label><input name="companyName" value="${escapeHtml((settings.branding && settings.branding.companyName) || lh.firmName || org.name || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"></div>
+            <div class="md:col-span-2"><label class="block text-xs text-gray-400 mb-1">Logo URL</label><input name="logoUrl" value="${escapeHtml((settings.branding && settings.branding.logoUrl) || lh.logoUrl || '')}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="https://…"></div>
+            <div class="md:col-span-2"><button type="submit" class="btn-rj px-5 py-2 rounded-lg text-sm font-semibold">Save theme</button></div>
+          </form>
+        </div>
+
         <div class="glass rounded-xl p-6 border border-cyan-900/40" id="mfsn-affiliate-staff-panel">
           <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-link text-cyan-400"></i> MyFreeScoreNow Affiliate Offers (A8289)</h2>
           <p class="text-xs text-gray-500 mb-4">Only members enrolled under these links can use public signup / partner report pull. Commission is staff-only knowledge.</p>
@@ -5983,6 +6010,28 @@ Status: Discharged`;
           });
           toast('Letterhead saved — all new letters & PDFs will use this brand', 'success');
           if (state.org) setState({ org: { ...state.org, name: fd.get('orgName') } });
+        } catch (err) { toast(err.message, 'error'); }
+      };
+
+      const themeForm = $('#theme-form');
+      if (themeForm) themeForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          const r = await api('/settings/org', {
+            method: 'PUT',
+            body: JSON.stringify({
+              branding: {
+                primary: fd.get('primary'),
+                sky: fd.get('sky'),
+                navy: fd.get('navy'),
+                companyName: fd.get('companyName'),
+                logoUrl: fd.get('logoUrl'),
+              },
+            }),
+          });
+          applyTenantBrand(r.theme);
+          toast('Theme saved — sidebar and chrome now use this org', 'success');
         } catch (err) { toast(err.message, 'error'); }
       };
 
@@ -8442,14 +8491,16 @@ async function pgAdminConsole(el) {
       ]},
     ];
     const leftover = [
-      'Embed Twilio Video JS on the client Video page (tokens exist today).',
-      'Wire Cloudflare Turnstile on brand forms (placeholder only).',
-      'Bind Executive Overview sparkline to live revenue/pipeline.',
-      'Read Click2Mail status from /api/settings/integrations instead of hardcoding CONNECTED.',
-      'Merge duplicate Clients / Reports nav items.',
-      'Client self-serve Stripe checkout for analysis unlock.',
-      'Proof RON live keys + sandbox disclosure.',
-      'Confirm every letter PDF uses RJ logo + Space Grotesk / Inter.',
+      'Shipped: Twilio Video JS join (live room or local preview).',
+      'Shipped: Cloudflare Turnstile on brand forms + /api/public/turnstile.',
+      'Shipped: Executive Overview sparkline bound to last 6 months of paid orders (or pipeline).',
+      'Shipped: Click2Mail status from /api/settings/integrations.',
+      'Shipped: Duplicate Clients / Report History removed from sidebar.',
+      'Shipped: Client Stripe checkout POST /api/client-portal/unlock/checkout.',
+      'Shipped: RON sandbox vs live vendor banner.',
+      'Shipped: PDF headers use Smart FCRA + RJ blue; default firm name RJ Business Solutions.',
+      'Shipped: Per-tenant CSS tokens from Settings → branding.',
+      'Shipped: src/frontend archived as non-production prototypes.',
     ];
     el.innerHTML = `<div class="fade-in space-y-6">
       <div class="rounded-2xl border border-blue-500/25 bg-gradient-to-r from-slate-950 via-blue-950/30 to-slate-950 p-6">
@@ -8468,7 +8519,7 @@ async function pgAdminConsole(el) {
           </div>
         </div>`).join('')}
       <div class="glass rounded-xl p-5 border border-amber-500/25">
-        <h2 class="text-sm font-bold text-amber-200 font-display mb-3">Still to finish</h2>
+        <h2 class="text-sm font-bold text-emerald-200 font-display mb-3">Finish-up list (this round)</h2>
         <ol class="space-y-2 text-sm text-slate-300 list-decimal list-inside">
           ${leftover.map(x => `<li>${x}</li>`).join('')}
         </ol>
@@ -9259,8 +9310,9 @@ async function pgAdminConsole(el) {
                 <div class="rounded-xl bg-black/30 border border-gray-800 p-3"><div class="text-[10px] uppercase text-gray-500">Report on file</div><div class="text-sm font-bold text-emerald-400 mt-1">${(reports || []).length ? 'Yes' : 'Pending'}</div></div>
                 <div class="rounded-xl bg-black/30 border border-gray-800 p-3"><div class="text-[10px] uppercase text-gray-500">Analysis</div><div class="text-sm font-bold text-amber-300 mt-1">Locked</div></div>
               </div>
-              <p class="text-xs text-gray-400">Payment status: <span class="text-amber-200 font-semibold">${escapeHtml(d.paymentStatus || 'pending')}</span>. You can message your advisor, upload ID/utility bills, and update security settings while you wait.</p>
+              <p class="text-xs text-gray-400">Payment status: <span class="text-amber-200 font-semibold">${escapeHtml(d.paymentStatus || 'pending')}</span>. You can pay now to unlock analysis, or message your advisor and upload ID while you wait.</p>
               <div class="flex flex-wrap gap-2 pt-1">
+                ${d.unlockCheckoutEnabled ? `<button type="button" id="btn-pay-unlock" class="btn-rj text-xs font-bold px-4 py-2 rounded-lg">Pay ${money((d.unlockPriceCents || 29700) / 100)} & unlock</button>` : ''}
                 <button onclick="window._nav('client-messages')" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-4 py-2 rounded-lg">Messages</button>
                 <button onclick="window._nav('client-uploads')" class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-2 rounded-lg">Upload Docs</button>
                 <button onclick="window._nav('client-settings')" class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold px-4 py-2 rounded-lg">Security</button>
@@ -9273,6 +9325,17 @@ async function pgAdminConsole(el) {
               ${client.address_line1 ? `<div class="text-xs text-gray-500 mt-1">${escapeHtml(client.address_line1)}${client.city ? ', ' + escapeHtml(client.city) : ''} ${escapeHtml(client.state || '')} ${escapeHtml(client.zip || '')}</div>` : ''}
             </div>
           </div>`;
+        const payBtn = document.getElementById('btn-pay-unlock');
+        if (payBtn) payBtn.onclick = async () => {
+          payBtn.disabled = true;
+          try {
+            const r = await api('/client-portal/unlock/checkout', { method: 'POST', body: '{}' });
+            if (r.url) location.href = r.url;
+            else if (r.alreadyUnlocked) { toast('Already unlocked', 'success'); pgClientCockpit(el); }
+            else toast(r.error || 'Checkout unavailable', 'error');
+          } catch (err) { toast(err.message, 'error'); }
+          payBtn.disabled = false;
+        };
         return;
       }
 
@@ -10069,7 +10132,7 @@ async function pgAdminConsole(el) {
             <i class="fas fa-lock text-5xl text-amber-400/80 mb-4"></i>
             <h3 class="text-lg font-bold text-white mb-2">Dispute Letters Locked</h3>
             <p class="text-sm text-gray-400 max-w-md mx-auto">${escapeHtml(d.lockMessage || 'Letters unlock after our team confirms payment.')}</p>
-            <button onclick="window._nav('client-cockpit')" class="mt-5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold px-5 py-2.5 rounded-lg">Back to Portal Home</button>
+            <button onclick="window._nav('client-cockpit')" class="mt-5 bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold px-5 py-2.5 rounded-lg">Pay or wait on Portal Home</button>
           </div>`;
         return;
       }
@@ -10371,6 +10434,16 @@ async function pgAdminConsole(el) {
             </div>
           </div>
 
+          ${(overview.ronSandbox !== false && (overview.ronVendor || 'sandbox') === 'sandbox') ? `
+          <div class="rounded-xl border border-amber-500/40 bg-amber-950/30 p-4">
+            <div class="text-xs font-bold text-amber-200 uppercase mb-1">Sandbox notary — not a legal notarial act</div>
+            <p class="text-[12px] text-amber-100/80 leading-relaxed">RON_VENDOR is <strong>${escapeHtml(overview.ronVendor || 'sandbox')}</strong> without a live API key. Completing a session here stores a labeled test certificate in the vault only. Production notarization requires <code>RON_VENDOR=proof|bluenotary</code> plus <code>RON_VENDOR_API_KEY</code>.</p>
+          </div>` : `
+          <div class="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4">
+            <div class="text-xs font-bold text-emerald-300 uppercase mb-1">Live RON vendor: ${escapeHtml(overview.ronVendor || '')}</div>
+            <p class="text-[12px] text-emerald-100/80">Sessions complete through the certified vendor. Do not use sandbox “Seal / complete” as a substitute for the vendor ceremony.</p>
+          </div>`}
+
           <div class="glass rounded-xl p-4 border border-cyan-900/40">
             <div class="text-xs font-bold text-cyan-300 uppercase mb-2">E-SIGN / UETA Disclosure · ${escapeHtml(disclosure.version || '')}</div>
             <pre class="text-[11px] text-gray-300 whitespace-pre-wrap max-h-40 overflow-y-auto mb-3">${escapeHtml(disclosure.text || '')}</pre>
@@ -10429,27 +10502,79 @@ async function pgAdminConsole(el) {
       const q = state.impersonateClientId ? `?clientId=${state.impersonateClientId}` : '';
       const res = await api('/video/sessions' + q);
       const sessions = res.sessions || [];
+      let activeRoom = null;
+
+      function loadTwilioVideo() {
+        if (window.Twilio && window.Twilio.Video) return Promise.resolve(window.Twilio.Video);
+        return new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://sdk.twilio.com/js/video/releases/2.28.1/twilio-video.min.js';
+          s.onload = () => resolve(window.Twilio.Video);
+          s.onerror = () => reject(new Error('Failed to load Twilio Video SDK'));
+          document.head.appendChild(s);
+        });
+      }
+      function attachTrack(track, container) {
+        if (!track || !container) return;
+        const el = track.attach();
+        el.className = 'rounded-lg w-full h-full object-cover bg-black';
+        container.appendChild(el);
+      }
+      async function leaveRoom() {
+        if (activeRoom) { try { activeRoom.disconnect(); } catch {} activeRoom = null; }
+      }
 
       window._joinVideoSession = async (sessionId) => {
         const tok = await api(`/video/sessions/${sessionId}/token`, { method: 'POST', body: '{}' });
         if (tok.error) return toast(tok.error, 'error');
-        el.querySelector('#video-token-box')?.remove();
+        el.querySelector('#video-stage')?.remove();
         const box = document.createElement('div');
-        box.id = 'video-token-box';
-        box.className = 'glass rounded-xl p-4 border border-cyan-800 mt-4';
-        box.innerHTML = `<div class="text-xs text-cyan-300 font-bold mb-2">Access token ${tok.simulated ? '(simulated — configure Twilio API keys for live rooms)' : 'ready'}</div>
-          <div class="text-[11px] text-gray-400 mb-2">Room: <code class="text-white">${escapeHtml(tok.roomName || '')}</code> · expires ${tok.expiresAt || '—'}</div>
-          <textarea readonly class="w-full h-24 bg-gray-950 border border-gray-800 rounded-lg p-2 text-[10px] text-gray-300 font-mono">${escapeHtml(tok.token || '')}</textarea>
-          <p class="text-[11px] text-gray-500 mt-2">Embed Twilio Video JS SDK with this token in production clients. Token is short-lived and scoped to this room.</p>`;
+        box.id = 'video-stage';
+        box.className = 'glass rounded-xl p-4 border border-blue-800 mt-4 space-y-3';
+        box.innerHTML = `
+          <div class="flex items-center justify-between gap-2">
+            <div class="text-xs font-bold ${tok.simulated ? 'text-amber-300' : 'text-emerald-300'}">${tok.simulated ? 'Local preview — Twilio Video keys not configured (not a live room)' : 'Live Twilio Video room'}</div>
+            <button type="button" id="video-leave" class="text-[10px] font-bold bg-rose-700 hover:bg-rose-600 text-white px-3 py-1.5 rounded-lg">Leave</button>
+          </div>
+          <div class="text-[11px] text-gray-400">Room: <code class="text-white">${escapeHtml(tok.roomName || '')}</code></div>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div><div class="text-[10px] uppercase text-gray-500 mb-1">You</div><div id="video-local" class="aspect-video bg-black rounded-lg overflow-hidden"></div></div>
+            <div><div class="text-[10px] uppercase text-gray-500 mb-1">Advisor / guest</div><div id="video-remote" class="aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center text-xs text-gray-500">Waiting for participant…</div></div>
+          </div>`;
         el.appendChild(box);
-        toast('Video token issued', 'success');
+        document.getElementById('video-leave').onclick = async () => { await leaveRoom(); box.remove(); toast('Left conference', 'info'); };
+        const localEl = document.getElementById('video-local');
+        const remoteEl = document.getElementById('video-remote');
+        try {
+          if (tok.simulated) {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+            const v = document.createElement('video');
+            v.autoplay = true; v.muted = true; v.playsInline = true; v.srcObject = stream; v.className = 'w-full h-full object-cover';
+            localEl.appendChild(v);
+            toast('Camera preview only — set TWILIO_API_KEY_* for a live room', 'warning');
+            return;
+          }
+          const Video = await loadTwilioVideo();
+          await leaveRoom();
+          activeRoom = await Video.connect(tok.token, { name: tok.roomName, audio: true, video: { width: 640 } });
+          activeRoom.localParticipant.tracks.forEach((pub) => { if (pub.track) attachTrack(pub.track, localEl); });
+          const hook = (p) => {
+            p.tracks.forEach((pub) => { if (pub.track) { remoteEl.innerHTML = ''; attachTrack(pub.track, remoteEl); } });
+            p.on('trackSubscribed', (track) => { remoteEl.innerHTML = ''; attachTrack(track, remoteEl); });
+          };
+          activeRoom.participants.forEach(hook);
+          activeRoom.on('participantConnected', hook);
+          toast('Connected to video room', 'success');
+        } catch (err) {
+          toast(err.message || 'Could not start video', 'error');
+        }
       };
 
       el.innerHTML = `
         <div class="fade-in space-y-4">
           <div>
             <h2 class="text-xl font-bold text-white">Secure Video Conferences</h2>
-            <p class="text-sm text-gray-400">Advisor consults via Twilio Video (separate from RON). ${res.configured ? 'Twilio configured.' : 'Running in simulated token mode until TWILIO_API_KEY_* secrets are set.'}</p>
+            <p class="text-sm text-gray-400">Advisor consults via Twilio Video (separate from RON). ${res.configured ? 'Twilio configured — Join starts a live room.' : 'Twilio keys not set: Join shows a local camera preview until TWILIO_API_KEY_* secrets are configured.'}</p>
           </div>
           ${sessions.length ? sessions.map(s => `
             <div class="glass rounded-xl p-4 border border-gray-800 flex items-center justify-between gap-3">
@@ -10457,7 +10582,7 @@ async function pgAdminConsole(el) {
                 <div class="text-sm text-white font-semibold">${escapeHtml(s.purpose || 'advisor_consult')} · ${escapeHtml(s.status)}</div>
                 <div class="text-[10px] text-gray-500 font-mono">${escapeHtml(s.room_name || '')}</div>
               </div>
-              <button onclick="window._joinVideoSession('${s.id}')" class="text-xs bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-1.5 rounded-lg">Join / get token</button>
+              <button onclick="window._joinVideoSession('${s.id}')" class="text-xs btn-rj px-3 py-1.5 rounded-lg">Join call</button>
             </div>`).join('') : '<p class="text-sm text-gray-500">No conferences yet. Your advisor will schedule one from Compliance Hub.</p>'}
         </div>`;
     } catch (err) {
@@ -10520,6 +10645,7 @@ async function pgAdminConsole(el) {
           <div>
             <h2 class="text-xl font-bold text-white">Compliance Hub</h2>
             <p class="text-sm text-gray-400">Contracts, E-SIGN, video, RON, and scheduled ops that keep client + CRO operations healthy.</p>
+            ${(overview.ronSandbox || overview.ronVendor === 'sandbox') ? `<p class="text-xs text-amber-300 mt-2"><i class="fas fa-exclamation-triangle mr-1"></i>RON is sandbox — not a legal notarial act until RON_VENDOR + API key are set (${escapeHtml(overview.ronVendor || 'sandbox')}).</p>` : `<p class="text-xs text-emerald-300 mt-2">Live RON vendor: ${escapeHtml(overview.ronVendor)}</p>`}
           </div>
           <div class="glass rounded-xl p-4 border border-gray-800 grid grid-cols-1 md:grid-cols-3 gap-3">
             <input id="hub-client-id" value="${escapeHtml(clientId)}" placeholder="Client ID" class="bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
@@ -11004,25 +11130,27 @@ async function pgAdminConsole(el) {
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- Revenue line trend -->
             <div class="lg:col-span-2 glass rounded-2xl p-5 border border-gray-800 flex flex-col justify-between">
-              <h3 class="text-sm font-bold text-white mb-4"><i class="fas fa-chart-line text-blue-400 mr-2"></i>6-Month Revenue Analytics Series</h3>
+              <h3 class="text-sm font-bold text-white mb-4"><i class="fas fa-chart-line text-blue-400 mr-2"></i>${d.revenueSource === 'pipeline_estimated' ? '6-Month Pipeline (estimated recovery)' : '6-Month Revenue (paid tradeline orders)'}</h3>
               <div class="h-44 relative flex items-end justify-between pt-6 px-4">
                 <svg class="absolute inset-0 w-full h-full px-4 pt-12 pb-6 overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-                  <path d="M 0 85 L 20 75 L 40 68 L 60 55 L 80 42 L 100 15" fill="none" stroke="#0a66ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
-                  <path d="M 0 85 L 20 75 L 40 68 L 60 55 L 80 42 L 100 15 L 100 100 L 0 100 Z" fill="url(#blue-chart-gradient)" opacity="0.05"></path>
+                  <path d="${escapeHtml((d.sparkline && d.sparkline.line) || 'M 0 100 L 100 100')}" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+                  <path d="${escapeHtml((d.sparkline && d.sparkline.area) || 'M 0 100 L 100 100 L 100 100 L 0 100 Z')}" fill="url(#blue-chart-gradient)" opacity="0.12"></path>
                   <defs>
                     <linearGradient id="blue-chart-gradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stop-color="#0a66ff"></stop>
-                      <stop offset="100%" stop-color="#0a66ff" stop-opacity="0"></stop>
+                      <stop offset="0%" stop-color="#2563eb"></stop>
+                      <stop offset="100%" stop-color="#2563eb" stop-opacity="0"></stop>
                     </linearGradient>
                   </defs>
                 </svg>
-                ${monthlyRevenues.map(r => `
+                ${monthlyRevenues.map(r => {
+                  const max = Math.max(...monthlyRevenues.map(x => Number(x.value) || 0), 1);
+                  return `
                   <div class="flex flex-col items-center justify-end h-full z-10 w-12 text-center group">
                     <span class="text-[10px] font-bold text-blue-400 opacity-0 group-hover:opacity-100 transition duration-150 font-mono mb-1">${money(r.value)}</span>
-                    <div class="w-1.5 bg-blue-600/10 hover:bg-blue-600 rounded-t-full transition-all duration-300" style="height: ${Math.round((r.value / 40000) * 80)}%"></div>
-                    <span class="text-[10px] text-gray-500 font-semibold uppercase tracking-wider mt-2">${r.label}</span>
-                  </div>
-                `).join('')}
+                    <div class="w-1.5 bg-blue-600/20 hover:bg-blue-600 rounded-t-full transition-all duration-300" style="height: ${Math.round((Number(r.value) / max) * 80)}%"></div>
+                    <span class="text-[10px] text-gray-500 font-semibold uppercase tracking-wider mt-2">${escapeHtml(r.label)}</span>
+                  </div>`;
+                }).join('')}
               </div>
             </div>
 
@@ -11776,9 +11904,15 @@ async function pgAdminConsole(el) {
       const allDocs = d.documents || [];
       const sent = allDocs.filter(doc => doc.status === 'sent');
       const drafts = allDocs.filter(doc => doc.status === 'draft');
+      let c2m = { configured: false, status: 'unknown', label: 'CHECKING' };
+      try {
+        const integ = await api('/settings/integrations');
+        c2m = integ.click2mail || c2m;
+      } catch { /* soft */ }
 
       const totalSent = sent.length;
       const totalPending = drafts.length;
+      const c2mOn = !!c2m.configured;
 
       el.innerHTML = `
         <div class="fade-in">
@@ -11815,11 +11949,11 @@ async function pgAdminConsole(el) {
             </div>
             <div class="glass border border-gray-800 rounded-2xl p-4 bg-gray-900/10">
               <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">Click2Mail Service</div>
-              <div class="text-2xl font-black text-blue-400 flex items-center gap-2">
-                <i class="fas fa-link text-lg text-blue-400"></i>
-                <span>CONNECTED</span>
+              <div class="text-2xl font-black ${c2mOn ? 'text-blue-400' : 'text-amber-400'} flex items-center gap-2">
+                <i class="fas ${c2mOn ? 'fa-link' : 'fa-unlink'} text-lg"></i>
+                <span>${escapeHtml(c2m.label || (c2mOn ? 'CONNECTED' : 'NOT CONFIGURED'))}</span>
               </div>
-              <div class="text-[9px] text-gray-500 mt-1">REST API Gateway live and operational</div>
+              <div class="text-[9px] text-gray-500 mt-1">${c2mOn ? 'REST API credentials present' : 'Set CLICK2MAIL_USERNAME + CLICK2MAIL_AUTH_BASIC'}</div>
             </div>
             <div class="glass border border-gray-800 rounded-2xl p-4 bg-gray-900/10">
               <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">USPS Resolution SLA</div>

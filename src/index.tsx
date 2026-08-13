@@ -51,6 +51,9 @@ import { MASTER_BUSINESS_VENDORS } from './data/funding/business-credit';
 import { buildInstitutionalProfile, slimInstitutionalReport } from './data/funding/profile-from-client';
 import { DOCUMENT_TYPES, type DocumentData } from './engine/documents';
 import { generatePDFReport, type PDFReportData, generatePDFFromText } from './engine/pdf-generator';
+import { turnstilePublicConfig, verifyTurnstileToken } from './lib/turnstile';
+import { fillSixMonthSeries, sparklinePath } from './lib/overview-metrics';
+import { resolveTenantTheme } from './lib/tenant-theme';
 import { FOUNDER_TEMPLATES } from './engine/founder-templates';
 import { normalizeBureau, resolveBureau, bureauScoreColumn, type BureauName } from './engine/bureau-utils';
 import { buildOpenApiSpec, buildSwaggerUiHtml } from './lib/openapi-spec';
@@ -527,6 +530,9 @@ type Bindings = {
   STAFF_MFA_REQUIRED_ALL?: string;
   /** Shared secret for scheduled daily journey motivation dispatch (GitHub Actions / cron). */
   JOURNEY_CRON_SECRET?: string;
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
+  ANALYSIS_UNLOCK_PRICE_CENTS?: string;
   ENVIRONMENT?: string;
   COMPANY_NAME?: string;
   COMPANY_OWNER?: string;
@@ -569,12 +575,12 @@ app.use('/api/*', cors());
 // ═══════════════════════════════════════════════════════════════
 app.use('*', async (c, next) => {
   await next();
-  c.res.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://storage.googleapis.com https://images.unsplash.com https://imagedelivery.net https://api.qrserver.com; connect-src 'self' https://api.stripe.com https://fonts.googleapis.com https://api.groq.com https://openrouter.ai https://api-inference.huggingface.co https://generativelanguage.googleapis.com https://cdn.jsdelivr.net; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+  c.res.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://sdk.twilio.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://storage.googleapis.com https://images.unsplash.com https://imagedelivery.net https://api.qrserver.com; media-src 'self' blob: mediastream:; worker-src 'self' blob:; child-src blob: https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://api.stripe.com https://fonts.googleapis.com https://api.groq.com https://openrouter.ai https://api-inference.huggingface.co https://generativelanguage.googleapis.com https://cdn.jsdelivr.net https://sdk.twilio.com https://*.twilio.com wss://*.twilio.com https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
   c.res.headers.set('X-Frame-Options', 'DENY');
   c.res.headers.set('X-Content-Type-Options', 'nosniff');
   c.res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   c.res.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
-  c.res.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(self), usb=()');
+  c.res.headers.set('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=(), payment=(self), usb=()');
   c.res.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
   c.res.headers.set('X-Permitted-Cross-Domain-Policies', 'none');
   c.res.headers.set('X-Smart-FCRA-Security', 'aes-gcm;consent-gates;audit-trail;r2-vault');
@@ -888,6 +894,8 @@ const BRAND_FORM_IDS = new Set([
 ]);
 
 /** Public RJ brand lead capture (interactive forms). */
+app.get('/api/public/turnstile', (c) => c.json(turnstilePublicConfig(c.env)));
+
 app.post('/api/public/lead/:formId', async (c) => {
   const formId = String(c.req.param('formId') || '').trim().toLowerCase();
   if (!formId || formId.length > 64) return c.json({ error: 'Invalid form' }, 400);
@@ -897,6 +905,13 @@ app.post('/api/public/lead/:formId', async (c) => {
   const firstName = String(body.firstName || body.FirstName || body.first_name || '').trim();
   const lastName = String(body.lastName || body.LastName || body.last_name || '').trim();
   if (!email && !phone) return c.json({ error: 'Email or phone required' }, 400);
+
+  const turnstile = await verifyTurnstileToken(
+    c.env,
+    body.cfTurnstileToken || body['cf-turnstile-response'] || c.req.header('cf-turnstile-response'),
+    c.req.header('CF-Connecting-IP'),
+  );
+  if (!turnstile.ok) return c.json({ error: 'Bot check failed', detail: turnstile.error }, 403);
 
   const orgId = resolvePublicSignupOrgId(c.env);
   const leadId = generateId();
@@ -2262,8 +2277,10 @@ app.get('/api/client-portal/dashboard', authMiddleware, async (c) => {
     analysisLocked: gateAnalysis,
     paymentStatus: client.payment_status || (gateAnalysis ? 'pending' : 'active'),
     lockMessage: gateAnalysis
-      ? 'Your credit report is in our system and our team is preparing your case. Analysis, FCRA violations, and dispute letters unlock after payment is confirmed.'
+      ? 'Your credit report is in our system. Pay to unlock analysis, FCRA violations, and dispute letters — or wait for your advisor to confirm payment.'
       : null,
+    unlockPriceCents: Number(c.env.ANALYSIS_UNLOCK_PRICE_CENTS || 29700),
+    unlockCheckoutEnabled: stripeConfigured(c.env),
     scoreProjection: gateAnalysis ? { avgScore: null, lifts: [] } : { avgScore, lifts: scoreLifts },
   });
 });
@@ -2767,6 +2784,42 @@ app.post('/api/clients/:id/unlock-analysis', authMiddleware, async (c) => {
     ghlContactId: ghlSync?.contactId || null,
     message: 'Client can now see analysis, violations, and dispute letters in their portal.',
   });
+});
+
+app.post('/api/client-portal/unlock/checkout', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role !== 'client') return c.json({ error: 'Client portal only' }, 403);
+  const client = await c.env.DB.prepare('SELECT * FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  if (isPortalAnalysisUnlocked(client)) return c.json({ ok: true, alreadyUnlocked: true });
+  if (!stripeConfigured(c.env)) {
+    return c.json({ error: 'Card checkout is not configured yet. Your advisor will unlock analysis after payment is received.', stripeConfigured: false }, 503);
+  }
+  const amount = Math.max(100, Number(c.env.ANALYSIS_UNLOCK_PRICE_CENTS || 29700));
+  const stripe = getStripe(c.env);
+  const base = portalBaseUrl(c.env, c.req.url);
+  try {
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: { name: 'Smart FCRA case analysis unlock', metadata: { type: 'analysis_unlock' } },
+          unit_amount: amount,
+        },
+        quantity: 1,
+      }],
+      success_url: `${base}/?page=client-cockpit&unlock=success`,
+      cancel_url: `${base}/?page=client-cockpit&unlock=cancelled`,
+      customer_email: isSyntheticPortalEmail(client.email) ? undefined : client.email,
+      client_reference_id: client.id,
+      metadata: { type: 'analysis_unlock', clientId: client.id, orgId: user.org_id },
+    });
+    return c.json({ ok: true, url: session.url, amountCents: amount });
+  } catch (err: any) {
+    return c.json({ error: err.message || 'Stripe checkout failed' }, 500);
+  }
 });
 
 app.post('/api/clients/:id/lock-analysis', authMiddleware, async (c) => {
@@ -5121,20 +5174,32 @@ app.get('/api/admin/overview-stats', authMiddleware, async (c) => {
   const disputingCount = await c.env.DB.prepare('SELECT COUNT(*) as val FROM clients WHERE org_id = ? AND case_status = "DISPUTING"').bind(user.org_id).first() as any;
   const settledCount = await c.env.DB.prepare('SELECT COUNT(*) as val FROM clients WHERE org_id = ? AND case_status = "SETTLED"').bind(user.org_id).first() as any;
 
-  // Monthly revenue from actual tradeline orders (last 6 months)
+  // Monthly revenue from tradeline orders (last 6 months, always 6 buckets)
   const revenueQuery = await c.env.DB.prepare(
     `SELECT strftime('%Y-%m', paid_at) as month, SUM(amount_cents) as total
      FROM tradeline_orders WHERE org_id = ? AND status = 'paid' AND paid_at > datetime('now', '-6 months')
      GROUP BY month ORDER BY month ASC`
   ).bind(user.org_id).all().catch(() => ({ results: [] }));
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const monthlyRevenues = ((revenueQuery as any)?.results || []).map((r: any) => {
-    const [_y, m] = (r.month || '').split('-');
-    return { label: months[parseInt(m, 10) - 1] || r.month, value: Math.round((r.total || 0) / 100) };
-  });
-  if (!monthlyRevenues.length) {
-    monthlyRevenues.push({ label: 'No data', value: 0 });
+  const centsByMonth: Record<string, number> = {};
+  for (const r of ((revenueQuery as any)?.results || []) as any[]) {
+    if (r.month) centsByMonth[r.month] = Number(r.total || 0);
   }
+  let monthlyRevenues = fillSixMonthSeries(centsByMonth);
+  let revenueSource: 'tradeline_orders' | 'pipeline_estimated' = 'tradeline_orders';
+  if (monthlyRevenues.every((p) => p.value === 0)) {
+    const pipelineQuery = await c.env.DB.prepare(
+      `SELECT strftime('%Y-%m', created_at) as month, SUM(COALESCE(estimated_recovery, 0)) as total
+       FROM clients WHERE org_id = ? AND created_at > datetime('now', '-6 months')
+       GROUP BY month ORDER BY month ASC`
+    ).bind(user.org_id).all().catch(() => ({ results: [] }));
+    const pipelineCents: Record<string, number> = {};
+    for (const r of ((pipelineQuery as any)?.results || []) as any[]) {
+      if (r.month) pipelineCents[r.month] = Math.round(Number(r.total || 0) * 100);
+    }
+    monthlyRevenues = fillSixMonthSeries(pipelineCents);
+    revenueSource = 'pipeline_estimated';
+  }
+  const spark = sparklinePath(monthlyRevenues.map((p) => p.value));
 
   // Litigation outcomes ratios
   const outcomes = [
@@ -5203,6 +5268,8 @@ app.get('/api/admin/overview-stats', authMiddleware, async (c) => {
       settledCount: settledCount?.val || 0
     },
     monthlyRevenues,
+    revenueSource,
+    sparkline: spark,
     outcomes,
     urgentItems
   });
@@ -6234,6 +6301,28 @@ app.post('/api/billing/webhook', async (c) => {
   switch (event.type) {
     case 'checkout.session.completed': {
       const sessionObj: any = event.data.object;
+      if (sessionObj?.metadata?.type === 'analysis_unlock' && sessionObj?.metadata?.clientId) {
+        try {
+          await c.env.DB.prepare(
+            `UPDATE clients SET
+               portal_analysis_unlocked = 1,
+               portal_analysis_unlocked_at = datetime('now'),
+               portal_analysis_unlocked_by = 'stripe',
+               payment_status = 'paid',
+               case_status = CASE WHEN case_status = 'ONBOARDING' THEN 'DISPUTING' ELSE case_status END,
+               updated_at = datetime('now')
+             WHERE id = ? AND org_id = ?`
+          ).bind(sessionObj.metadata.clientId, sessionObj.metadata.orgId).run();
+          await c.env.DB.prepare(
+            'INSERT INTO activity_log (id, org_id, client_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)'
+          ).bind(
+            generateId(), sessionObj.metadata.orgId, sessionObj.metadata.clientId, null,
+            'portal_analysis_unlocked', 'Stripe checkout unlocked portal analysis',
+            JSON.stringify({ paymentIntent: sessionObj.payment_intent || sessionObj.id }),
+          ).run().catch(() => {});
+        } catch (e) { console.warn('[unlock webhook]', e); }
+        break;
+      }
       if (sessionObj?.metadata?.type === 'tradeline' && sessionObj?.metadata?.orderId) {
         try {
           await c.env.DB.prepare(
@@ -6413,7 +6502,9 @@ app.get('/api/settings/org', authMiddleware, async (c) => {
   if (!org) return c.json({ error: 'Organization not found' }, 404);
   let settings = {};
   try { settings = JSON.parse(org.settings || '{}'); } catch { settings = {}; }
-  return c.json({ org: { ...org, settings } });
+  const { letterhead } = normalizeOrgLetterhead(settings, org.name);
+  const theme = resolveTenantTheme(settings, org.name);
+  return c.json({ org: { ...org, settings }, letterhead, theme });
 });
 
 app.put('/api/settings/org', authMiddleware, async (c) => {
@@ -6453,7 +6544,32 @@ app.put('/api/settings/org', authMiddleware, async (c) => {
       .bind(JSON.stringify(settings), user.org_id).run();
   }
 
-  return c.json({ ok: true, settings, letterhead: normalizeOrgLetterhead(settings, displayName).letterhead });
+  return c.json({ ok: true, settings, letterhead: normalizeOrgLetterhead(settings, displayName).letterhead, theme: resolveTenantTheme(settings, displayName) });
+});
+
+app.get('/api/settings/integrations', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  const click2mailOn = !!(c.env.CLICK2MAIL_USERNAME && c.env.CLICK2MAIL_AUTH_BASIC);
+  return c.json({
+    click2mail: {
+      configured: click2mailOn,
+      status: click2mailOn ? 'connected' : 'not_configured',
+      label: click2mailOn ? 'CONNECTED' : 'NOT CONFIGURED',
+    },
+    stripe: { configured: stripeConfigured(c.env) },
+    twilioSms: { configured: !!(c.env.TWILIO_ACCOUNT_SID && c.env.TWILIO_AUTH_TOKEN && c.env.TWILIO_PHONE_NUMBER) },
+    twilioVideo: { configured: videoConfigured(c.env) },
+    ghl: { configured: ghlConfigured(c.env) },
+    mfsn: { configured: !!resolvePartnerMfsnCredentials(c.env as any) },
+    tradelineMaster: { configured: tradelineMasterConfigured(c.env) },
+    turnstile: turnstilePublicConfig(c.env),
+    ron: {
+      vendor: resolveVendor(c.env),
+      sandbox: resolveVendor(c.env) === 'sandbox',
+      live: resolveVendor(c.env) !== 'sandbox',
+    },
+  });
 });
 
 app.get('/api/health/ready', async (c) => {
@@ -8141,7 +8257,7 @@ app.get('/api/documents/:id/pdf', authMiddleware, async (c) => {
     orgName: firmLh.firmName || org?.name || 'RJ Business Solutions',
     logoBase64: firmLh.logoBase64 || undefined,
     headerText: firmLh.firmName || firmLh.headerText || doc.title,
-    customSubtext: firmLh.customSubtext || `Official Dispute Document • FCRA Compliance Engine`,
+    customSubtext: firmLh.customSubtext || `${firmLh.firmName || org?.name || 'RJ Business Solutions'} • Smart FCRA dispute document`,
     isHiredAdvocate,
     repAgreementAttached
   };
@@ -8765,6 +8881,8 @@ app.get('/api/compliance/overview', authMiddleware, async (c) => {
     esignConsentEvents: (esign as any)?.c || 0,
     videoConfigured: videoConfigured(c.env),
     ronVendor: resolveVendor(c.env),
+    ronSandbox: resolveVendor(c.env) === 'sandbox',
+    ronLive: resolveVendor(c.env) !== 'sandbox',
     esignDisclosureVersion: ESIGN_DISCLOSURE_VERSION,
   });
 });
@@ -9912,7 +10030,7 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/app.js?v=20260813-rj-brand-full"></script>
+  <script src="/static/app.js?v=20260813-finish-list"></script>
 </body>
 </html>`;
 }

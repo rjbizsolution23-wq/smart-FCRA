@@ -103,4 +103,12 @@ const mockEnv = {
   assert(Array.isArray(body.types) || Array.isArray(body), 'document types array');
 }
 
+// Public Turnstile config (no secrets)
+{
+  const res = await app.request('/api/public/turnstile', {}, mockEnv);
+  assert(res.status === 200, 'GET /api/public/turnstile returns 200');
+  const body = await res.json();
+  assert(body.enabled === false, 'turnstile disabled without keys');
+}
+
 console.log('PASS: API route integration tests');

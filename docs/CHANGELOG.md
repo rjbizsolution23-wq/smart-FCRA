@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.0] - 2026-08-13
+### Added
+- Twilio Video JS join on the client Video page (live room or camera preview).
+- Cloudflare Turnstile on all 8 brand forms (`/api/public/turnstile` + siteverify).
+- Client Stripe Checkout for analysis unlock (`POST /api/client-portal/unlock/checkout`).
+- `GET /api/settings/integrations` for Click2Mail / Twilio / GHL / RON status.
+- Per-tenant portal theme (Settings → colors/logo) applied as CSS variables.
+- Executive Overview sparkline from last 6 months of paid tradeline orders.
+
+### Changed
+- Staff nav: removed duplicate Clients + Report History (history is a Reports action).
+- PDF audit/letter headers: Smart FCRA + RJ blue; default firm RJ Business Solutions.
+- RON Legal + Compliance Hub: explicit sandbox vs live vendor disclosure.
+- `src/frontend/` marked archived (not in production build).
+
 ## [3.1.0] - 2026-08-13
 ### Added
 - **Operator catalog**: `docs/FEATURES.md` — every public, staff, client, engine, and integration surface plus finish-up list.

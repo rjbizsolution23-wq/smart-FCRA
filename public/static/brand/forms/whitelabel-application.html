@@ -140,7 +140,7 @@
         <label class="cb-row"><input type="checkbox" name="nda" required/><div class="cb-t"><b>Mutual NDA consent (required)</b> · I understand information shared during this evaluation is confidential per RJ's standard Mutual NDA. Both parties bound for 3 years.</div></label>
         <label class="cb-row"><input type="checkbox" name="tcpa"/><div class="cb-t">Contact consent · call / text / email regarding this application.</div></label>
       </div>
-      <div class="turnstile-placeholder"><b>Cloudflare Turnstile</b> · Silent check on submit.</div>
+      <div id="cf-turnstile" class="cf-turnstile"></div>
     </div>
 
     <div class="success-state" id="success">
@@ -233,5 +233,6 @@
 })();
 </script>
 
+<script src="/static/brand/turnstile.js"></script>
 </body>
 </html>
