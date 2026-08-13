@@ -122,6 +122,11 @@ import sampleMfsnReport from './data/sample-mfsn-report.json';
 import { spaAppSource, pwaSwSource, pwaManifestSource } from './generated/spa-source';
 import { persistCreditTwinFromParsed } from './lib/credit-twin';
 import { registerClientIntelligenceRoutes } from './lib/client-intelligence-routes';
+import { inspectUpload, decodeBase64Bytes, sanitizeFileName } from './lib/upload-hygiene';
+import { vaultOriginalFromBody } from './lib/report-vault';
+import { persistInvestigationClock, closeInvestigationClock, FCRA_611_OPERATIONAL_DAYS } from './lib/investigation-clocks';
+import { recordServiceCompleted, assertCoveredChargeAllowed, writeBillingLedger } from './lib/service-ledger';
+import { sendLetterViaClick2Mail } from './lib/click2mail';
 import { evaluateIdentityTheftGate } from './engine/dispute-attestation';
 
 // Secure field-level cryptographic helpers mapped to Worker bindings
@@ -191,6 +196,20 @@ async function persistBureauScores(
     });
   } catch (e) {
     console.warn('[credit-twin] snapshot skipped', e);
+  }
+
+  try {
+    await recordServiceCompleted({
+      db: c.env.DB,
+      id: generateId(),
+      orgId: opts.orgId,
+      clientId: opts.clientId,
+      serviceType: 'credit_report_analysis',
+      performedBy: 'system',
+      deliverableId: opts.reportId,
+    });
+  } catch (e) {
+    console.warn('[service-ledger] analysis completion skipped', e);
   }
 }
 
@@ -2433,7 +2452,20 @@ app.post('/api/client-portal/onboard', authMiddleware, async (c) => {
     bureau: resolvedBureau,
     parsed,
     sourceProvider: 'ClientPortal',
-    sourcePayloadType: 'text',
+    sourcePayloadType: body.fileBase64 ? 'original_file' : 'text',
+  });
+  await vaultOriginalFromBody({
+    env: c.env,
+    db: c.env.DB,
+    orgId: user.org_id,
+    clientId: client.id,
+    reportId,
+    uploadedBy: user.id,
+    fileName,
+    fileBase64: body.fileBase64,
+    declaredMime: body.mimeType,
+    extractedText: rawText,
+    ocrUsed: !!body.ocrUsed,
   });
 
   let fundability = null;
@@ -2827,6 +2859,25 @@ app.post('/api/client-portal/unlock/checkout', authMiddleware, async (c) => {
   if (isPortalAnalysisUnlocked(client)) return c.json({ ok: true, alreadyUnlocked: true });
   if (!stripeConfigured(c.env)) {
     return c.json({ error: 'Card checkout is not configured yet. Your advisor will unlock analysis after payment is received.', stripeConfigured: false }, 503);
+  }
+  const gate = await assertCoveredChargeAllowed({
+    db: c.env.DB,
+    orgId: user.org_id,
+    clientId: client.id,
+    serviceType: 'credit_report_analysis',
+    contractSigned: !!client.croa_contract_agreed,
+    croaDisclosuresAcknowledged: !!client.croa_contract_agreed,
+    tsrApplies: false,
+    generateId,
+  });
+  if (!gate.allowed) {
+    return c.json({
+      error: 'CROA blocks this charge until the promised analysis is fully performed and recorded.',
+      result: gate.eval.result,
+      requirements: gate.eval.requirements,
+      explanation: gate.eval.explanation,
+      decision_id: gate.decisionId,
+    }, 403);
   }
   const amount = Math.max(100, Number(c.env.ANALYSIS_UNLOCK_PRICE_CENTS || 29700));
   const stripe = getStripe(c.env);
@@ -3652,7 +3703,7 @@ app.get('/api/client-portal/uploads', authMiddleware, async (c) => {
   const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
   if (!client) return c.json({ error: 'Client not found' }, 404);
   const rows = await c.env.DB.prepare(
-    `SELECT id, category, file_name, mime_type, notes, analysis_json, r2_key, byte_size, sha256, created_at
+    `SELECT id, category, file_name, mime_type, notes, analysis_json, r2_key, byte_size, sha256, scan_status, ocr_status, created_at
      FROM portal_uploads WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 100`
   ).bind(client.id, user.org_id).all().catch(async () =>
     c.env.DB.prepare(
@@ -3676,6 +3727,9 @@ app.get('/api/client-portal/uploads/:id/download', authMiddleware, async (c) => 
     resourceType: 'portal_upload', resourceId: row.id, ip: c.req.header('CF-Connecting-IP'),
   });
   if (row.r2_key && c.env.DOCS) {
+    if (String(row.scan_status || '') === 'blocked') {
+      return c.json({ error: 'This file was blocked by the malware/hygiene scanner and cannot be downloaded.' }, 403);
+    }
     const obj = await c.env.DOCS.get(row.r2_key);
     if (!obj) return c.json({ error: 'Object missing from vault' }, 404);
     const headers = new Headers();
@@ -3727,6 +3781,7 @@ app.post('/api/client-portal/uploads', authMiddleware, async (c) => {
               `UPDATE violations SET status = 'resolved', updated_at = datetime('now') WHERE client_id = ? AND org_id = ? AND status != 'resolved'`
             ).bind(client.id, user.org_id).run().catch(() => {});
           }
+          await closeInvestigationClock(c.env.DB, { documentId: openDoc.id, orgId: user.org_id });
           await c.env.DB.prepare(
             'INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
           ).bind(
@@ -3790,39 +3845,61 @@ app.post('/api/client-portal/uploads', authMiddleware, async (c) => {
   let r2Key: string | null = null;
   let byteSize: number | null = null;
   let sha256: string | null = null;
+  const enc = contentText ? await encryptPII(c, contentText) : null;
 
   if (fileBase64) {
     if (!c.env.DOCS) return c.json({ error: 'Document vault (R2) is not bound on this deployment' }, 503);
     const raw = fileBase64.includes(',') ? fileBase64.split(',').pop()! : fileBase64;
-    const binary = Uint8Array.from(atob(raw), (ch) => ch.charCodeAt(0));
+    const binary = decodeBase64Bytes(raw);
     if (binary.byteLength > 15 * 1024 * 1024) return c.json({ error: 'File too large (15MB max)' }, 400);
-    byteSize = binary.byteLength;
-    const digest = await crypto.subtle.digest('SHA-256', binary);
-    sha256 = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
-    r2Key = `org/${user.org_id}/client/${client.id}/${id}/${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    await c.env.DOCS.put(r2Key, binary, {
-      httpMetadata: { contentType: mimeType },
-      customMetadata: { orgId: user.org_id, clientId: client.id, sha256, uploadedBy: user.id },
+    const hygiene = await inspectUpload({
+      bytes: binary,
+      fileName,
+      declaredMime: mimeType,
+      extractedText: contentText,
+      ocrUsed: !!body.ocrUsed,
+      category,
     });
-  }
-
-  const enc = contentText ? await encryptPII(c, contentText) : null;
-  try {
-    await c.env.DB.prepare(
-      `INSERT INTO portal_uploads (id, org_id, client_id, uploaded_by, category, file_name, mime_type, content_text, notes, analysis_json, r2_key, byte_size, sha256, encrypted, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))`
-    ).bind(
-      id, user.org_id, client.id, user.id, category, fileName, mimeType, enc, body.notes || null,
-      analysis ? JSON.stringify(analysis) : null, r2Key, byteSize, sha256,
-    ).run();
-  } catch {
-    await c.env.DB.prepare(
-      `INSERT INTO portal_uploads (id, org_id, client_id, uploaded_by, category, file_name, mime_type, content_text, notes, analysis_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-    ).bind(
-      id, user.org_id, client.id, user.id, category, fileName, mimeType, enc, body.notes || null,
-      analysis ? JSON.stringify(analysis) : null,
-    ).run();
+    if (!hygiene.ok) {
+      return c.json({ error: hygiene.scanDetail, hygiene }, 400);
+    }
+    byteSize = hygiene.byteSize;
+    sha256 = hygiene.sha256;
+    r2Key = `org/${user.org_id}/client/${client.id}/${id}/${sanitizeFileName(fileName)}`;
+    await c.env.DOCS.put(r2Key, binary, {
+      httpMetadata: { contentType: hygiene.detectedMime || mimeType },
+      customMetadata: { orgId: user.org_id, clientId: client.id, sha256, uploadedBy: user.id, scanStatus: hygiene.scanStatus },
+    });
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO portal_uploads (id, org_id, client_id, uploaded_by, category, file_name, mime_type, content_text, notes, analysis_json, r2_key, byte_size, sha256, encrypted, scan_status, scan_detail, ocr_status, ocr_chars, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, datetime('now'))`
+      ).bind(
+        id, user.org_id, client.id, user.id, category, fileName, hygiene.detectedMime || mimeType, enc, body.notes || null,
+        analysis ? JSON.stringify(analysis) : null, r2Key, byteSize, sha256,
+        hygiene.scanStatus, hygiene.scanDetail, hygiene.ocrStatus, hygiene.ocrChars,
+      ).run();
+    } catch {
+      await c.env.DB.prepare(
+        `INSERT INTO portal_uploads (id, org_id, client_id, uploaded_by, category, file_name, mime_type, content_text, notes, analysis_json, r2_key, byte_size, sha256, encrypted, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))`
+      ).bind(
+        id, user.org_id, client.id, user.id, category, fileName, mimeType, enc, body.notes || null,
+        analysis ? JSON.stringify(analysis) : null, r2Key, byteSize, sha256,
+      ).run();
+    }
+  } else {
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO portal_uploads (id, org_id, client_id, uploaded_by, category, file_name, mime_type, content_text, notes, analysis_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+      ).bind(
+        id, user.org_id, client.id, user.id, category, fileName, mimeType, enc, body.notes || null,
+        analysis ? JSON.stringify(analysis) : null,
+      ).run();
+    } catch (e: any) {
+      return c.json({ error: e.message || 'Upload insert failed' }, 500);
+    }
   }
 
   await writeSecurityAudit(c.env, {
@@ -5114,7 +5191,7 @@ app.get('/api/clients/:clientId/disputes/rounds', authMiddleware, async (c) => {
   let start: number | null = null;
   for (const d of items) {
     const ts = new Date(d.created_at).getTime();
-    if (start === null || ts - start > 35 * 86400000) { if (cur.length) rounds.push({ round: roundNum++, letters: cur }); cur = []; start = ts; }
+    if (start === null || ts - start > FCRA_611_OPERATIONAL_DAYS * 86400000) { if (cur.length) rounds.push({ round: roundNum++, letters: cur }); cur = []; start = ts; }
     cur.push(d);
   }
   if (cur.length) rounds.push({ round: roundNum, letters: cur });
@@ -5349,7 +5426,7 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
   if (!planCheck.allowed) return c.json({ error: planCheck.message }, 403);
 
   const body = await c.req.json();
-  const { clientId, bureau, rawText, fileName, replaceCurrent, autoWorkflow } = body;
+  const { clientId, bureau, rawText, fileName, replaceCurrent, autoWorkflow, fileBase64, mimeType, ocrUsed } = body;
 
   if (!clientId || !rawText) return c.json({ error: 'Client ID and report text required' }, 400);
 
@@ -5470,7 +5547,21 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
     bureau: resolvedBureau,
     parsed,
     sourceProvider: 'AnnualCreditReport',
-    sourcePayloadType: 'text',
+    sourcePayloadType: fileBase64 ? 'original_file' : 'text',
+  });
+
+  const vault = await vaultOriginalFromBody({
+    env: c.env,
+    db: c.env.DB,
+    orgId: user.org_id,
+    clientId,
+    reportId,
+    uploadedBy: user.id,
+    fileName: fileName || 'upload.txt',
+    fileBase64,
+    declaredMime: mimeType,
+    extractedText: rawText,
+    ocrUsed: !!ocrUsed,
   });
 
   const pack = await refreshBureauPackStatus(c, clientId, user.org_id);
@@ -5538,6 +5629,7 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
     bureauPack: pack,
     workflow,
     scores: parsed.scores || null,
+    originalFile: { stored: vault.stored, scanStatus: vault.scanStatus, scanDetail: vault.scanDetail, mime: vault.detectedMime },
   });
 });
 
@@ -5552,7 +5644,7 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
   if (!reportCheck.allowed) return c.json({ error: reportCheck.message }, 403);
 
   const body = await c.req.json();
-  const { rawText, fileName, bureau, clientId: bodyClientId } = body;
+  const { rawText, fileName, bureau, clientId: bodyClientId, fileBase64, mimeType, ocrUsed } = body;
 
   if (!rawText) return c.json({ error: 'Report text required for onboarding' }, 400);
 
@@ -6044,7 +6136,20 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
     bureau: onboardBureau,
     parsed,
     sourceProvider: 'AnnualCreditReport',
-    sourcePayloadType: 'text',
+    sourcePayloadType: fileBase64 ? 'original_file' : 'text',
+  });
+  await vaultOriginalFromBody({
+    env: c.env,
+    db: c.env.DB,
+    orgId: user.org_id,
+    clientId,
+    reportId,
+    uploadedBy: user.id,
+    fileName: fileName || 'onboard-credit-report.txt',
+    fileBase64,
+    declaredMime: mimeType,
+    extractedText: rawText,
+    ocrUsed: !!ocrUsed,
   });
   const onboardPack = await refreshBureauPackStatus(c, clientId, user.org_id);
 
@@ -6353,6 +6458,19 @@ app.post('/api/billing/webhook', async (c) => {
             'portal_analysis_unlocked', 'Stripe checkout unlocked portal analysis',
             JSON.stringify({ paymentIntent: sessionObj.payment_intent || sessionObj.id }),
           ).run().catch(() => {});
+          await writeBillingLedger({
+            db: c.env.DB,
+            id: generateId(),
+            orgId: sessionObj.metadata.orgId,
+            clientId: sessionObj.metadata.clientId,
+            stripeObjectId: String(sessionObj.payment_intent || sessionObj.id),
+            eventType: 'checkout.session.completed',
+            amountCents: sessionObj.amount_total || null,
+            serviceType: 'credit_report_analysis',
+            decision: 'ALLOW',
+            status: 'PAID',
+            explanation: ['Stripe checkout completed after CROA completion gate'],
+          });
         } catch (e) { console.warn('[unlock webhook]', e); }
         break;
       }
@@ -6476,13 +6594,24 @@ app.post('/api/billing/mailing-callback', async (c) => {
   }
 
   const mDate = mailingDate ? new Date(mailingDate) : new Date();
-  const due = new Date(mDate.getTime() + 35 * 24 * 60 * 60 * 1000);
-  const responseDueDateStr = due.toISOString().split('T')[0];
-  const sentDateStr = mDate.toISOString().split('T')[0];
+  const clockId = generateId();
+  const clock = await persistInvestigationClock({
+    db: c.env.DB,
+    id: clockId,
+    orgId: doc.org_id,
+    clientId: doc.client_id,
+    documentId,
+    mailingDate: mDate,
+  });
+  const sentDateStr = clock.mailingDate;
 
   await c.env.DB.prepare(
-    'UPDATE documents SET usps_tracking_number = ?, response_due_date = ?, sent_date = ?, status = \'sent\', updated_at = datetime("now") WHERE id = ?'
-  ).bind(uspsTrackingNumber || null, responseDueDateStr, sentDateStr, documentId).run();
+    'UPDATE documents SET usps_tracking_number = ?, response_due_date = ?, sent_date = ?, status = \'sent\', investigation_clock_id = ?, updated_at = datetime("now") WHERE id = ?'
+  ).bind(uspsTrackingNumber || null, clock.operationalTarget, sentDateStr, clockId, documentId).run().catch(async () => {
+    await c.env.DB.prepare(
+      'UPDATE documents SET usps_tracking_number = ?, response_due_date = ?, sent_date = ?, status = \'sent\', updated_at = datetime("now") WHERE id = ?'
+    ).bind(uspsTrackingNumber || null, clock.operationalTarget, sentDateStr, documentId).run();
+  });
 
   await c.env.DB.prepare(
     'INSERT INTO mailing_webhook_events (id, document_id, payload) VALUES (?, ?, ?)'
@@ -6497,8 +6626,8 @@ app.post('/api/billing/mailing-callback', async (c) => {
     documentId,
     'system_usps',
     'document_mailed',
-    `Certified letter sent via USPS. Tracking: ${uspsTrackingNumber || 'N/A'}. Due date set to ${responseDueDateStr} (15 U.S.C. § 1681i).`,
-    JSON.stringify({ trackingNumber: uspsTrackingNumber, responseDueDate: responseDueDateStr, sentDate: sentDateStr })
+    `Certified letter sent via USPS. Tracking: ${uspsTrackingNumber || 'N/A'}. Statutory FCRA § 611 due ${clock.statutoryTarget}; operational due ${clock.operationalTarget}.`,
+    JSON.stringify({ trackingNumber: uspsTrackingNumber, statutoryTarget: clock.statutoryTarget, operationalTarget: clock.operationalTarget, sentDate: sentDateStr })
   ).run();
 
   try {
@@ -6523,7 +6652,7 @@ app.post('/api/billing/mailing-callback', async (c) => {
     }
   } catch { /* soft */ }
 
-  return c.json({ ok: true, responseDueDate: responseDueDateStr });
+  return c.json({ ok: true, responseDueDate: clock.operationalTarget, statutoryTarget: clock.statutoryTarget, clockId: clock.clockId });
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -8340,86 +8469,53 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
   const doc = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
   if (!doc) return c.json({ error: 'Document not found' }, 404);
 
-  const username = c.env.CLICK2MAIL_USERNAME;
-  const authBasic = c.env.CLICK2MAIL_AUTH_BASIC;
-  const apiUrl = c.env.CLICK2MAIL_API_URL;
-
-  // Step 1: Get account addresses
-  const addrRes = await fetch(`${apiUrl}/account/addresses`, {
-    headers: {
-      'Authorization': `Basic ${authBasic}`,
-      'Content-Type': 'application/json',
-    },
-  });
-  if (!addrRes.ok) {
-    const errText = await addrRes.text();
-    return c.json({ error: `Click2Mail address fetch failed: ${errText}` }, 502);
-  }
-  const addrData = await addrRes.json() as any;
-  const fromAddress = addrData.addresses?.[0]?.id;
-  if (!fromAddress) return c.json({ error: 'No sender address found in Click2Mail account' }, 400);
-
-  // Step 2: Create document job (plain text letter)
-  const letterContent = doc.content || '';
-  const docName = doc.title || 'FCRA Legal Document';
-
-  const createRes = await fetch(`${apiUrl}/documents`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${authBasic}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      documentName: docName,
-      documentType: '00',
-      fileExtension: 'txt',
-      content: btoa(letterContent),
-    }),
-  });
-  if (!createRes.ok) {
-    const errText = await createRes.text();
-    return c.json({ error: `Click2Mail document creation failed: ${errText}` }, 502);
-  }
-  const createData = await createRes.json() as any;
-  const documentId = createData.id;
-
-  // Step 3: Create mailing
-  const mailingRes = await fetch(`${apiUrl}/mailings`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${authBasic}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      documentId,
-      fromAddressId: fromAddress,
-      toName: recipientName || doc.recipient_name || '',
-      toAddress1: recipientAddress || doc.recipient_address || '',
-      toCity: recipientCity || '',
-      toState: recipientState || '',
-      toZip: recipientZip || '',
-      toCountry: 'USA',
+  let mailing;
+  try {
+    mailing = await sendLetterViaClick2Mail(c.env, {
+      title: doc.title || 'FCRA Legal Document',
+      content: doc.content || '',
+      recipient: {
+        name: recipientName || doc.recipient_name || '',
+        address1: recipientAddress || doc.recipient_address || '',
+        city: recipientCity || '',
+        state: recipientState || '',
+        zip: recipientZip || '',
+      },
       mailClass: 'FIRST_CLASS',
-      format: 'LETTER',
-    }),
-  });
-  if (!mailingRes.ok) {
-    const errText = await mailingRes.text();
-    return c.json({ error: `Click2Mail mailing creation failed: ${errText}` }, 502);
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message || 'Mail send failed' }, err.status || 502);
   }
-  const mailingData = await mailingRes.json() as any;
 
-  // Update document status to "sent" using correct database schema columns
-  const mDate = new Date();
-  const due = new Date(mDate.getTime() + 35 * 24 * 60 * 60 * 1000);
-  const responseDueDateStr = due.toISOString().split('T')[0];
-  const sentDateStr = mDate.toISOString().split('T')[0];
+  const clockId = generateId();
+  const clock = await persistInvestigationClock({
+    db: c.env.DB,
+    id: clockId,
+    orgId: user.org_id,
+    clientId: doc.client_id,
+    documentId: id,
+  });
 
+  const sentDateStr = clock.mailingDate || new Date().toISOString().split('T')[0];
   await c.env.DB.prepare(
-    'UPDATE documents SET status = ?, sent_date = ?, response_due_date = ?, updated_at = datetime("now") WHERE id = ?'
-  ).bind('sent', sentDateStr, responseDueDateStr, id).run();
+    'UPDATE documents SET status = ?, sent_date = ?, response_due_date = ?, mailing_id = ?, mail_class = ?, investigation_clock_id = ?, updated_at = datetime("now") WHERE id = ?'
+  ).bind('sent', sentDateStr, clock.operationalTarget, mailing.mailingId, mailing.mailClass, clockId, id).run().catch(async () => {
+    await c.env.DB.prepare(
+      'UPDATE documents SET status = ?, sent_date = ?, response_due_date = ?, updated_at = datetime("now") WHERE id = ?'
+    ).bind('sent', sentDateStr, clock.operationalTarget, id).run();
+  });
 
-  await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, doc.client_id, id, user.id, 'document_mailed', `Mailed "${doc.title}" to ${recipientName || doc.recipient_name || 'recipient'}`).run();
+  await recordServiceCompleted({
+    db: c.env.DB,
+    id: generateId(),
+    orgId: user.org_id,
+    clientId: doc.client_id,
+    serviceType: 'dispute_mailing',
+    performedBy: user.id,
+    deliverableId: id,
+  });
+
+  await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, doc.client_id, id, user.id, 'document_mailed', `Mailed "${doc.title}" to ${recipientName || doc.recipient_name || 'recipient'} · FCRA 611 clock ${clock.statutoryTarget}`).run();
 
   try {
     const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(doc.client_id, user.org_id).first() as any;
@@ -8436,14 +8532,19 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
         notifyEmail: !!email && client.notify_email !== 0,
         vars: {
           clientName: `${client.first_name} ${client.last_name}`,
-          tracking: mailingData?.id ? String(mailingData.id) : 'pending',
+          tracking: mailing.mailingId || 'pending',
           portalUrl: `${portalBaseUrl(c.env)}/`,
         },
       });
     }
   } catch { /* soft */ }
 
-  return c.json({ success: true, mailingId: mailingData.id, message: `Document mailed successfully` });
+  return c.json({
+    success: true,
+    mailingId: mailing.mailingId,
+    investigationClock: clock,
+    message: 'Document mailed. FCRA § 611 30-day investigation clock started (35-day operational due date includes mail transit).',
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -10118,7 +10219,7 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/app.js?v=20260813-report-sandbox-2"></script>
+  <script src="/static/app.js?v=20260813-prod-ops"></script>
 </body>
 </html>`;
 }

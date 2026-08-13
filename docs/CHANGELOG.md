@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.5.0] - 2026-08-13
+### Added
+- Original report files stored in R2 (`credit_reports.r2_key`) and opened beside the paper sandbox.
+- Upload hygiene: magic-byte allowlist, executable/polyglot block, PDF JavaScript review, OCR-required for image reports. Migration `0022_production_ops.sql`.
+- Portal **Mail via Click2Mail** on approved disputes. Persists `investigation_clocks` with FCRA § 611 30-day statutory + 35-day operational (mail buffer) targets.
+- CROA Stripe completion ledger (`service_records` writers + `billing_ledger`). Analysis unlock is blocked until analysis is recorded as performed.
+- GitHub Actions: PR preview skips Pages deploy with a comment when `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` are missing; production/hotfix fail with an explicit secrets error.
+
 ## [3.4.1] - 2026-08-13
 ### Added
 - Interactive report sandbox: consumers open a scrollable paper copy of the imported Experian/Equifax/TransUnion file (accounts, payment history, inquiries, source text) in a scriptless iframe.

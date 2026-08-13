@@ -212,6 +212,17 @@
       .replace(/'/g, "&#039;");
   }
 
+  async function fileToBase64(fileOrBuffer) {
+    const buf = fileOrBuffer instanceof ArrayBuffer ? fileOrBuffer : await fileOrBuffer.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let binary = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // RJ DISPUTE COCKPIT WORKSPACE GLOBALS & HELPERS
   // ═══════════════════════════════════════════════════════════════
@@ -2474,7 +2485,10 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
               rawText: compiledText,
               fileName: file.name,
               replaceCurrent: true,
-              autoWorkflow: true
+              autoWorkflow: true,
+              fileBase64: await fileToBase64(arrayBuffer),
+              mimeType: file.type || 'application/pdf',
+              ocrUsed: compiledText.trim().length > 0 && (file.name || '').toLowerCase().endsWith('.pdf')
             })
           });
 
@@ -3547,10 +3561,16 @@ async function pgOnboardingWizard(el, data) {
 
       updateProgress('Finishing extraction...', 100);
       await sleep(300);
-      return compiledText;
+      return {
+        rawText: compiledText,
+        fileBase64: await fileToBase64(arrayBuffer),
+        mimeType: 'application/pdf',
+        fileName: file.name,
+        ocrUsed: compiledText.trim().length > 0,
+      };
     } else {
       updateProgress('Reading raw file content...', 50);
-      return new Promise((resolve, reject) => {
+      const text = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (event) => {
           updateProgress('Extraction complete...', 100);
@@ -3559,17 +3579,22 @@ async function pgOnboardingWizard(el, data) {
         reader.onerror = (e) => reject(new Error(`File read failed: ${e.target.error}`));
         reader.readAsText(file);
       });
+      return { rawText: text, fileBase64: btoa(unescape(encodeURIComponent(text))), mimeType: file.type || 'text/plain', fileName: file.name, ocrUsed: false };
     }
   }
 
-  async function handleOnboardText(rawText) {
+  async function handleOnboardText(rawOrObj) {
+    const payload = typeof rawOrObj === 'string' ? { rawText: rawOrObj } : (rawOrObj || {});
     const res = await api('/reports/onboard', {
       method: 'POST',
       body: JSON.stringify({
         bureau: onboardingData.bureau || 'Equifax',
-        rawText,
-        fileName: 'onboard-credit-report.txt',
-        clientId: onboardingData.clientId || undefined
+        rawText: payload.rawText,
+        fileName: payload.fileName || 'onboard-credit-report.txt',
+        clientId: onboardingData.clientId || undefined,
+        fileBase64: payload.fileBase64,
+        mimeType: payload.mimeType,
+        ocrUsed: !!payload.ocrUsed,
       })
     });
 
@@ -9101,6 +9126,8 @@ async function pgAdminConsole(el) {
           const f = fi.files[0];
           if (!f) return;
           form.fileName = f.name;
+          form.mimeType = f.type || 'application/octet-stream';
+          try { form.fileBase64 = await fileToBase64(f); } catch { form.fileBase64 = ''; }
           if (f.type === 'application/pdf' && window.pdfjsLib) {
             const buf = await f.arrayBuffer();
             const pdf = await pdfjsLib.getDocument(buf).promise;
@@ -9153,6 +9180,9 @@ async function pgAdminConsole(el) {
                 rawText: form.rawText,
                 bureau: form.bureau,
                 fileName: form.fileName,
+                fileBase64: form.fileBase64,
+                mimeType: form.mimeType,
+                ocrUsed: false,
                 permissiblePurposeConsent: true,
                 croaContractAgreed: true,
                 tsrAdvanceFeeWaived: true,
@@ -9712,6 +9742,7 @@ async function pgAdminConsole(el) {
         <div class="flex flex-wrap items-center gap-2 text-[10px] uppercase font-bold">
           <button type="button" data-rs-tab="paper" class="rs-tab px-3 py-1.5 rounded-lg bg-sky-600 text-white">Scrollable report</button>
           <button type="button" data-rs-tab="source" class="rs-tab px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300">Source text</button>
+          ${view.originalFile && view.originalFile.available ? `<button type="button" data-rs-tab="original" class="rs-tab px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300">Original file</button>` : ''}
           <button type="button" id="rs-print" class="px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300">Print paper copy</button>
         </div>
         <div class="flex flex-wrap gap-1.5" id="rs-sections">
@@ -9733,6 +9764,8 @@ async function pgAdminConsole(el) {
             <iframe id="rs-frame" title="Sandboxed credit report" sandbox="allow-same-origin" referrerpolicy="no-referrer"
               class="w-full h-[70vh] rounded-xl border border-slate-700 bg-white"></iframe>
             <pre id="rs-source" class="hidden h-[70vh] overflow-auto rounded-xl border border-gray-800 bg-black/50 p-4 text-[11px] text-gray-300 whitespace-pre-wrap font-mono">${escapeHtml(view.sourceText || '')}</pre>
+            <iframe id="rs-original" title="Original uploaded report" sandbox="" referrerpolicy="no-referrer"
+              class="hidden w-full h-[70vh] rounded-xl border border-slate-700 bg-white"></iframe>
           </div>
           <aside class="lg:col-span-3 glass rounded-xl p-4 border border-gray-800 min-h-[12rem]" id="rs-detail">
             ${renderDetail(null)}
@@ -9770,6 +9803,22 @@ async function pgAdminConsole(el) {
         });
         document.getElementById('rs-frame').classList.toggle('hidden', mode !== 'paper');
         document.getElementById('rs-source').classList.toggle('hidden', mode !== 'source');
+        const orig = document.getElementById('rs-original');
+        if (orig) {
+          orig.classList.toggle('hidden', mode !== 'original');
+          if (mode === 'original' && !orig.dataset.loaded) {
+            (async () => {
+              try {
+                const headers = {};
+                if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
+                const res = await fetch('/api/client-portal/reports/' + encodeURIComponent(reportId) + '/original?inline=1' + (qs ? '&' + qs.slice(1) : ''), { headers });
+                if (!res.ok) throw new Error('Original file unavailable');
+                orig.src = URL.createObjectURL(await res.blob());
+                orig.dataset.loaded = '1';
+              } catch (err) { toast(err.message, 'error'); }
+            })();
+          }
+        }
       };
     });
     document.querySelectorAll('.rs-sec').forEach((btn) => {
@@ -9893,6 +9942,10 @@ async function pgAdminConsole(el) {
                 <button type="button" class="bg-blue-600 text-white text-xs font-bold px-3 py-2 rounded-lg" onclick="window._approveDispute('${escapeHtml(d.id)}')">I confirm these statements are accurate</button>
                 <button type="button" class="bg-gray-800 text-gray-200 text-xs font-bold px-3 py-2 rounded-lg" onclick="window._nav('client-attest')">Request changes</button>
               </div>` : ''}
+            ${d.status === 'READY_TO_SEND' ? `
+              <button type="button" class="bg-sky-700 hover:bg-sky-600 text-white text-xs font-bold px-3 py-2 rounded-lg" onclick="window._mailDispute('${escapeHtml(d.id)}')">Mail via Click2Mail · start 30-day clock</button>
+              <p class="text-[10px] text-gray-500">Mailing starts the FCRA § 611 investigation clock. It does not guarantee deletion.</p>` : ''}
+            ${d.status === 'SENT' ? `<p class="text-[11px] text-emerald-300">Mailed ${escapeHtml((d.sent_at || '').slice(0,16))}. Investigation clock is running.</p>` : ''}
           </div>`).join('') || '<p class="text-sm text-gray-500">No dispute drafts. Confirm facts first.</p>'}
         <button type="button" id="btn-create-disp" class="bg-slate-700 text-white text-xs font-bold px-3 py-2 rounded-lg">Prepare dispute from my attestations</button>
       </div>`;
@@ -9901,6 +9954,14 @@ async function pgAdminConsole(el) {
       try {
         const r = await api('/client-portal/disputes/' + id + '/approve', { method: 'POST', body: JSON.stringify({ confirmAccurate: true }) });
         toast('Approved · ' + r.confirmation, 'success');
+        pgClientDisputes(el);
+      } catch (err) { toast(err.message, 'error'); }
+    };
+    window._mailDispute = async (id) => {
+      if (portalStaffBlocked()) return;
+      try {
+        const r = await api('/client-portal/disputes/' + id + '/send', { method: 'POST', body: '{}' });
+        toast('Mailed · clock ' + (r.investigationClock && r.investigationClock.statutoryTarget), 'success');
         pgClientDisputes(el);
       } catch (err) { toast(err.message, 'error'); }
     };
@@ -9960,8 +10021,20 @@ async function pgAdminConsole(el) {
     el.innerHTML = `
       <div class="fade-in space-y-5 max-w-3xl">
         <h1 class="text-xl font-bold text-white font-display">Billing</h1>
-        <p class="text-sm text-gray-400">${escapeHtml(data.notice)}</p>
+        <p class="text-sm text-gray-400">${escapeHtml(data.croaNotice || data.notice || '')}</p>
         ${(data.currentServices||[]).map((s) => `<div class="glass rounded-xl p-4 text-sm text-white">${escapeHtml(s.type)} · ${escapeHtml(s.status)}</div>`).join('')}
+        <div class="glass rounded-xl p-4">
+          <h2 class="text-sm font-bold text-white mb-2">Completed services (required before covered charges)</h2>
+          ${(data.completedServices||[]).map((s) => `<div class="text-xs text-gray-300 py-1">${escapeHtml(s.service_type)} · ${escapeHtml((s.performed_at||'').slice(0,16))} · ${escapeHtml(s.status)}</div>`).join('') || '<p class="text-xs text-gray-500">None recorded yet. Analysis unlock cannot be charged until a report is analyzed.</p>'}
+        </div>
+        <div class="glass rounded-xl p-4">
+          <h2 class="text-sm font-bold text-white mb-2">Charge ledger</h2>
+          ${(data.ledger||[]).map((s) => `<div class="text-xs text-gray-300 py-1">${escapeHtml(s.decision)} · ${escapeHtml(s.event_type)} · ${escapeHtml(s.service_type||'')} · ${s.amount_cents != null ? ('$'+(s.amount_cents/100).toFixed(2)) : ''}</div>`).join('') || '<p class="text-xs text-gray-500">No charge attempts.</p>'}
+        </div>
+        <div class="glass rounded-xl p-4">
+          <h2 class="text-sm font-bold text-white mb-2">Investigation clocks (FCRA § 611)</h2>
+          ${(data.investigationClocks||[]).map((s) => `<div class="text-xs text-gray-300 py-1">${escapeHtml(s.deadline_type||'FCRA_611')} · statutory ${escapeHtml(s.calculated_target_date||'')} · operational ${escapeHtml(s.operational_target_date||'')} · ${escapeHtml(s.status||'')}</div>`).join('') || '<p class="text-xs text-gray-500">No mailed disputes yet.</p>'}
+        </div>
         <button type="button" onclick="window._nav('client-cancel')" class="bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold px-3 py-2 rounded-lg">Cancel services</button>
       </div>`;
   }

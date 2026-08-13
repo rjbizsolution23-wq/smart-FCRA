@@ -26,6 +26,9 @@ import {
   scoreModelFromParsed,
   type SandboxAccount,
 } from '../engine/report-sandbox';
+import { persistInvestigationClock, craAddressForRecipient } from './investigation-clocks';
+import { recordServiceCompleted } from './service-ledger';
+import { sendLetterViaClick2Mail, click2mailConfigured } from './click2mail';
 
 const CONSENT_CATALOG = [
   { type: 'ELECTRONIC_COMMUNICATIONS', version: '1.0', label: 'Electronic communications' },
@@ -152,7 +155,7 @@ export function registerClientIntelligenceRoutes(
 
     const reports = await softAll(
       c.env.DB,
-      `SELECT id, bureau, report_date, created_at, fico_score, vantage_score, source_provider, total_accounts, total_collections, total_inquiries, is_current
+      `SELECT id, bureau, report_date, created_at, fico_score, vantage_score, source_provider, total_accounts, total_collections, total_inquiries, is_current, file_name
        FROM credit_reports WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 20`,
       client.id, user.org_id,
     );
@@ -402,8 +405,44 @@ export function registerClientIntelligenceRoutes(
       publicRecords,
       sandboxHtml,
       sourceText: rawText.slice(0, 200000),
+      originalFile: {
+        available: !!(report.r2_key && report.scan_status !== 'blocked'),
+        mime: report.original_mime || null,
+        scanStatus: report.scan_status || null,
+        byteSize: report.original_byte_size || report.file_size || null,
+        ocrStatus: report.ocr_status || null,
+      },
       notice: 'This is a copy of the report imported into Smart FCRA. It is not the bureau’s live website. This score is not necessarily a lender score. Opening this view does not file a dispute. Field differences are shown for your review and are not automatically labeled as legal violations.',
     });
+  });
+
+  app.get('/api/client-portal/reports/:id/original', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+    if (!client) return c.json({ error: 'Client profile not found' }, 404);
+    const report = await softFirst(
+      c.env.DB,
+      `SELECT * FROM credit_reports WHERE id = ? AND client_id = ? AND org_id = ?`,
+      c.req.param('id'), client.id, user.org_id,
+    );
+    if (!report) return c.json({ error: 'Report not found' }, 404);
+    if (String(report.scan_status || '') === 'blocked') {
+      return c.json({ error: 'Original file was blocked by the hygiene scanner.' }, 403);
+    }
+    if (!report.r2_key || !c.env.DOCS) {
+      return c.json({ error: 'Original file was not stored for this import. Re-upload the PDF to pair the source document with the sandbox.' }, 404);
+    }
+    const obj = await c.env.DOCS.get(report.r2_key);
+    if (!obj) return c.json({ error: 'Original file missing from vault' }, 404);
+    const inline = c.req.query('inline') === '1';
+    const headers = new Headers();
+    headers.set('Content-Type', report.original_mime || obj.httpMetadata?.contentType || 'application/pdf');
+    const safeName = String(report.file_name || 'credit-report.pdf').replace(/"/g, '');
+    headers.set('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${safeName}"`);
+    headers.set('Cache-Control', 'private, no-store');
+    headers.set('X-Content-Type-Options', 'nosniff');
+    headers.set('X-Frame-Options', 'SAMEORIGIN');
+    return new Response(obj.body, { headers });
   });
 
   app.get('/api/client-portal/credit-events', authMiddleware, async (c) => {
@@ -630,6 +669,121 @@ export function registerClientIntelligenceRoutes(
     return c.json({ ok: true, approvalId, confirmation, immutable: true });
   });
 
+  app.post('/api/client-portal/disputes/:id/send', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const blocked = forbidStaffConsumerAction(user);
+    if (blocked) return c.json({ error: blocked }, 403);
+    const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+    if (!client) return c.json({ error: 'Client profile not found' }, 404);
+    const id = c.req.param('id');
+    const dispute = await softFirst(
+      c.env.DB,
+      `SELECT * FROM portal_disputes WHERE id = ? AND client_id = ? AND org_id = ?`,
+      id, client.id, user.org_id,
+    );
+    if (!dispute) return c.json({ error: 'Dispute not found' }, 404);
+    if (!dispute.approved_at || dispute.status !== 'READY_TO_SEND') {
+      return c.json({ error: 'Dispute must be approved before mailing. Opening a report or drafting a letter is not a mailing.' }, 400);
+    }
+    if (!click2mailConfigured(c.env)) {
+      return c.json({ error: 'Mail vendor is not configured. Set Click2Mail secrets on the Pages project before sending.' }, 503);
+    }
+    const cra = craAddressForRecipient(dispute.recipient || dispute.recipient_type);
+    const reasons = qJson(dispute.dispute_basis_json, []);
+    const letterBody = [
+      `${client.first_name || ''} ${client.last_name || ''}`.trim(),
+      client.address_line1 || '',
+      `${client.city || ''}, ${client.state || ''} ${client.zip || ''}`.trim(),
+      '',
+      new Date().toLocaleDateString('en-US'),
+      '',
+      cra.block,
+      '',
+      'Re: Formal dispute under the Fair Credit Reporting Act, 15 U.S.C. § 1681i',
+      `Account: ${dispute.account_name || dispute.account_key || 'as identified on my file'}`,
+      '',
+      'I dispute the following information as inaccurate or incomplete based on facts I confirmed in my Smart FCRA portal. This is not a request to delete accurate information.',
+      '',
+      `Dispute bases (consumer-confirmed): ${Array.isArray(reasons) ? reasons.join(', ') : String(reasons)}`,
+      '',
+      'Please complete a reasonable reinvestigation within 30 days of receipt and delete or correct any information you cannot verify. I do not allege identity theft unless I separately affirmed that fact.',
+    ].join('\n');
+
+    const docId = generateId();
+    const title = `FCRA § 611 dispute — ${dispute.account_name || dispute.account_key || 'account'}`;
+    await c.env.DB.prepare(
+      `INSERT INTO documents (id, org_id, client_id, doc_type, doc_subtype, title, recipient_name, recipient_address, content, status, created_by)
+       VALUES (?, ?, ?, 'bureau-dispute', 'portal', ?, ?, ?, ?, 'draft', ?)`
+    ).bind(docId, user.org_id, client.id, title, cra.name, cra.block, letterBody, user.id).run();
+
+    let mailing;
+    try {
+      mailing = await sendLetterViaClick2Mail(c.env, {
+        title,
+        content: letterBody,
+        recipient: { name: cra.name, address1: cra.address1, city: cra.city, state: cra.state, zip: cra.zip },
+        mailClass: 'FIRST_CLASS',
+      });
+    } catch (err: any) {
+      return c.json({ error: err.message || 'Mail send failed' }, err.status || 502);
+    }
+
+    const clock = await persistInvestigationClock({
+      db: c.env.DB,
+      id: generateId(),
+      orgId: user.org_id,
+      clientId: client.id,
+      disputeId: id,
+      documentId: docId,
+    });
+    await c.env.DB.prepare(
+      `UPDATE documents SET status = 'sent', sent_date = ?, response_due_date = ?, mailing_id = ?, mail_class = ?, investigation_clock_id = ?, updated_at = datetime('now') WHERE id = ?`
+    ).bind(clock.mailingDate, clock.operationalTarget, mailing.mailingId, mailing.mailClass, clock.clockId, docId).run().catch(() => null);
+    await c.env.DB.prepare(
+      `UPDATE portal_disputes SET status = 'SENT', sent_at = datetime('now'), letter_id = ? WHERE id = ? AND org_id = ?`
+    ).bind(docId, id, user.org_id).run();
+    await recordServiceCompleted({
+      db: c.env.DB,
+      id: generateId(),
+      orgId: user.org_id,
+      clientId: client.id,
+      serviceType: 'dispute_mailing',
+      performedBy: user.id,
+      deliverableId: docId,
+    });
+    const confirmation = `MAIL-${docId.slice(0, 8).toUpperCase()}`;
+    await c.env.DB.prepare(
+      `INSERT INTO action_receipts (id, org_id, client_id, action, confirmation_number, payload_json)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).bind(generateId(), user.org_id, client.id, 'DISPUTE_MAILED', confirmation, JSON.stringify({
+      disputeId: id, documentId: docId, mailingId: mailing.mailingId, statutoryTarget: clock.statutoryTarget,
+    })).run().catch(() => null);
+
+    return c.json({
+      ok: true,
+      confirmation,
+      documentId: docId,
+      mailingId: mailing.mailingId,
+      investigationClock: clock,
+      notice: 'FCRA § 611 30-day investigation clock started. The operational due date includes a 5-day mail-transit buffer. This mailing does not guarantee deletion.',
+    });
+  });
+
+  app.get('/api/client-portal/investigation-clocks', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+    if (!client) return c.json({ error: 'Client profile not found' }, 404);
+    const rows = await softAll(
+      c.env.DB,
+      `SELECT * FROM investigation_clocks WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 50`,
+      client.id, user.org_id,
+    );
+    return c.json({
+      clocks: rows,
+      legend: 'Statutory target is 30 days (15 U.S.C. § 1681i). Operational target is 35 days (5-day mail buffer). A 15-day extension is possible in limited cases.',
+    });
+  });
+
   app.get('/api/client-portal/consents', authMiddleware, async (c) => {
     const user = c.get('user');
     const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
@@ -756,13 +910,26 @@ export function registerClientIntelligenceRoutes(
     if (!client) return c.json({ error: 'Client profile not found' }, 404);
     const services = await softAll(
       c.env.DB,
-      `SELECT id, service_type, performed_at, status FROM service_records WHERE client_id = ? AND org_id = ? ORDER BY performed_at DESC LIMIT 50`,
+      `SELECT id, service_type, performed_at, status, deliverable_id FROM service_records WHERE client_id = ? AND org_id = ? ORDER BY performed_at DESC LIMIT 50`,
+      client.id, user.org_id,
+    );
+    const ledger = await softAll(
+      c.env.DB,
+      `SELECT id, event_type, amount_cents, service_type, decision, status, created_at FROM billing_ledger WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 40`,
+      client.id, user.org_id,
+    );
+    const clocks = await softAll(
+      c.env.DB,
+      `SELECT id, deadline_type, calculated_target_date, operational_target_date, status, mailing_date, actual_response_date FROM investigation_clocks WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 20`,
       client.id, user.org_id,
     );
     return c.json({
       currentServices: [{ type: 'credit_intelligence', status: client.payment_status || 'active' }],
       completedServices: services,
-      notice: 'Internal CROA/TSR billing rules are not exposed here. Invoices and receipts appear when generated.',
+      ledger,
+      investigationClocks: clocks,
+      croaNotice: 'Covered credit-repair charges are blocked until a completion record exists. Platform software subscriptions are billed separately.',
+      notice: 'You are billed only after covered credit-repair work is recorded as performed. Invoices from Stripe appear when a charge is allowed and collected.',
       cancelPage: 'client-cancel',
     });
   });
@@ -776,14 +943,20 @@ export function registerClientIntelligenceRoutes(
       : await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
 
     if (action === 'CHARGE_PAYMENT' || action === 'BILL_SERVICE') {
+      const serviceType = body.serviceType || 'credit_report_analysis';
+      const completed = client ? await softFirst(
+        c.env.DB,
+        `SELECT id FROM service_records WHERE client_id = ? AND org_id = ? AND service_type = ? AND status = 'COMPLETED' LIMIT 1`,
+        client.id, user.org_id, serviceType,
+      ) : null;
       const evalResult = evaluateBillableEvent({
         clientState: client?.state,
-        serviceType: body.serviceType || 'credit_report_analysis',
+        serviceType,
         salesChannel: body.salesChannel || 'ONLINE',
-        contractSigned: !!body.contractSigned,
-        croaDisclosuresAcknowledged: !!body.croaDisclosuresAcknowledged,
-        serviceFullyPerformed: !!body.serviceFullyPerformed,
-        coveredCreditRepair: isCoveredCreditRepairService(body.serviceType || 'credit_report_analysis'),
+        contractSigned: !!(body.contractSigned || client?.croa_contract_agreed),
+        croaDisclosuresAcknowledged: !!(body.croaDisclosuresAcknowledged || client?.croa_contract_agreed),
+        serviceFullyPerformed: !!completed,
+        coveredCreditRepair: isCoveredCreditRepairService(serviceType),
         tsrApplies: body.tsrApplies,
       });
       const decisionId = generateId();

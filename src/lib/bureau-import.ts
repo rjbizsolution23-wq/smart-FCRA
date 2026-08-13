@@ -125,6 +125,24 @@ export async function importBureauReportsBatch(
       sourcePayloadType,
     });
 
+    try {
+      const { vaultOriginalFromBody } = await import('./report-vault');
+      await vaultOriginalFromBody({
+        env: c.env,
+        db: c.env.DB,
+        orgId: user.org_id,
+        clientId,
+        reportId,
+        uploadedBy: user.id,
+        fileName: `${fileNamePrefix}-${bureau}.json`,
+        jsonPayload: rawPayload,
+        declaredMime: sourcePayloadType === 'json' ? 'application/json' : 'text/plain',
+        extractedText: typeof rawPayload === 'string' ? rawPayload : JSON.stringify(rawPayload).slice(0, 200000),
+      });
+    } catch (e) {
+      console.warn('[bureau-import] original payload vault skipped', e);
+    }
+
     results.push({
       reportId,
       bureau,

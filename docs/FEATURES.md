@@ -92,10 +92,10 @@ Shown when `isClient` is true. Analysis / letters stay **locked** until staff ru
 |---|---|---|
 | `client-cockpit` | Dashboard | Named-model scores, next-best action, result taxonomy, credit health, recent events. **No deletion/score-lift simulator.** |
 | `client-credit` | My Credit | Tri-bureau compare, utilization (educational), credit event ledger, open report sandbox |
-| `client-report` | Report sandbox | Scrollable paper copy in a scriptless iframe; jump to accounts; payment-history legend; hard/soft inquiries; print; Confirm facts. Owner-only. |
+| `client-report` | Report sandbox | Scrollable paper copy in a scriptless iframe; original PDF tab when vaulted; jump to accounts; payment-history legend; hard/soft inquiries; print; Confirm facts. Owner-only. |
 | `client-case` | My Credit Case | Disputes, findings (not auto-labeled as FCRA violations), action receipts |
 | `client-attest` | Confirm Facts | Structured interview; immutable attestations; identity-theft gate |
-| `client-disputes` | Disputes | Evidence-first drafts; client approval required; staff impersonation cannot approve |
+| `client-disputes` | Disputes | Evidence-first drafts; client approval; **mail via Click2Mail** starts the 30-day FCRA § 611 clock |
 | `client-actions` | Action Plan | One primary consumer action |
 | `client-progress` | Progress | Measured report-to-report changes |
 | `client-rights` | Consumer Rights | FCRA / CROA / TSR / FDCPA / identity-theft education |
@@ -227,7 +227,10 @@ Migrations live in `migrations/` (`0001`–`0021`+). Newest: `0021_client_intell
 - **Playwright CI gate** login → upload → detect → letter (`tests/login-upload-letter.spec.ts`)
 - **Live RON** Proof (`ApiKey` → `https://api.proof.com/transactions`) and BlueNotary (`Bearer` → `https://app.bluenotary.us/api/integrationsv2/sessions`) with ceremony join URLs + HMAC webhooks
 - **Client intelligence portal** — evidence-first disputes, immutable attestations, hallucination firewall, credit event ledger, CROA in-portal cancellation, named score models, mobile Home/Credit/Case/Actions/More nav. Removed FICO deletion simulator / guaranteed-lift copy.
-- **Report sandbox** — scrollable paper copy of the imported report in a scriptless iframe; owner-only API; SSN redacted; payment-history grid + legend; hard vs soft inquiries; FCRA § 605 DOFD education; print paper copy; Confirm facts from a tradeline. Viewing is not a dispute.
+- **Report sandbox** — scrollable paper copy of the imported report in a scriptless iframe; original file tab when stored in R2; owner-only API; SSN redacted; payment-history grid + legend; hard vs soft inquiries; FCRA § 605 DOFD education; print paper copy; Confirm facts from a tradeline. Viewing is not a dispute.
+- **Upload hygiene + original vault** — magic-byte malware gates; original PDF/JSON stored on R2 `DOCS`; blocked files are not downloadable.
+- **FCRA § 611 clocks** — every Click2Mail send writes `investigation_clocks` (30-day statutory / 35-day operational).
+- **CROA ledger** — `service_records` on analysis and mailing; Stripe analysis-unlock blocked until completion.
 
 ### Operator secrets still required in Pages (not code)
 

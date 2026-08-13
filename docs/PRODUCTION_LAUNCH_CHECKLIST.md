@@ -68,6 +68,22 @@ npx wrangler d1 migrations apply fcra-detector-v2 --remote
 - `/api/health/ready` reports `ready: true`, `environment: production`
 - Original `smart-fcra` Pages + `fcra-detector-production` D1 are untouched
 
+- [x] Original credit-report files vaulted to R2 and opened in the sandbox
+- [x] Upload hygiene (magic bytes / executable block / OCR gate)
+- [x] FCRA § 611 investigation clocks on every mailing
+- [x] CROA completion ledger gating Stripe analysis-unlock
+
+## GitHub Actions secrets (required to publish)
+
+Add these in the GitHub repo: **Settings → Secrets and variables → Actions**:
+
+| Secret | Used by |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | PR preview, production deploy, hotfix, D1 backup |
+| `CLOUDFLARE_ACCOUNT_ID` | same |
+
+Token needs **Account / Cloudflare Pages / Edit** on project `smart-fcra-v2`.
+
 ## Local QA
 
 ```bash

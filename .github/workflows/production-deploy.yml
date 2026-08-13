@@ -82,6 +82,16 @@ jobs:
           node --check dist/static/app.js
           echo "static app.js OK ($(wc -c < dist/static/app.js) bytes)"
 
+      - name: Require Cloudflare Pages secrets
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$ACCOUNT" ]; then
+            echo "::error::Production deploy requires GitHub Actions secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID. Add them in repo Settings → Secrets and variables → Actions. Token must allow Cloudflare Pages Edit on project smart-fcra-v2."
+            exit 1
+          fi
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
