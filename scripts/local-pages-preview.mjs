@@ -14,11 +14,20 @@ const backupPath = path.join(root, 'wrangler.toml.__preview_bak');
 
 const original = readFileSync(wranglerPath, 'utf8');
 const withoutAi = original
-  .replace(/\n\[ai\][\s\S]*?(?=\n\[|\s*$)/, '\n')
+  .replace(/\n\[ai\][\s\S]*?(?=\n\[|\n# |\s*$)/, '\n')
+  .replace(/\[ai\]\s*\nbinding\s*=\s*"AI"\s*/g, '')
   .trimEnd() + '\n';
 
 copyFileSync(wranglerPath, backupPath);
 writeFileSync(wranglerPath, withoutAi);
+
+const jsoncPath = path.join(root, 'wrangler.jsonc');
+const jsoncBackupPath = path.join(root, 'wrangler.jsonc.__preview_bak');
+if (existsSync(jsoncPath)) {
+  const jsonc = readFileSync(jsoncPath, 'utf8');
+  copyFileSync(jsoncPath, jsoncBackupPath);
+  writeFileSync(jsoncPath, jsonc.replace(/,?\s*"ai"\s*:\s*\{[^}]*\}/, ''));
+}
 console.log('[preview] AI binding stripped for local sandbox (no Cloudflare OAuth)');
 
 function restore() {
@@ -27,6 +36,11 @@ function restore() {
       copyFileSync(backupPath, wranglerPath);
       unlinkSync(backupPath);
       console.log('[preview] wrangler.toml restored');
+    }
+    if (existsSync(jsoncBackupPath)) {
+      copyFileSync(jsoncBackupPath, jsoncPath);
+      unlinkSync(jsoncBackupPath);
+      console.log('[preview] wrangler.jsonc restored');
     }
   } catch (e) {
     console.error('[preview] restore failed', e);
@@ -53,11 +67,12 @@ const child = spawn(
     'dev',
     'dist',
     '--d1=fcra-detector-v2',
-    '--local',
     '--ip',
     '127.0.0.1',
     '--port',
     '3000',
+    '--show-interactive-dev-session',
+    'false',
   ],
   {
     cwd: root,
