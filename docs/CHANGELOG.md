@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.3.0] - 2026-08-13
+### Added
+- Installable PWA: `/manifest.webmanifest`, `/sw.js` (app-shell cache, never caches `/api`), overlay mobile nav, table scroll, Add to Home Screen.
+- Playwright CI gate `tests/login-upload-letter.spec.ts` (login → upload → detect → bureau-dispute letter) plus isolation specs.
+- Space Grotesk (OFL Latin subset) embedded in audit and letter PDFs via jsPDF.
+- Live Proof and BlueNotary RON adapters with vendor ceremony URLs, HMAC webhook verification, and vendor-driven completion.
+
+### Changed
+- CI runs the full Playwright spec set (`testMatch: *.spec.ts`).
+- Legal & Notary UI: **Open live ceremony** for Proof/BlueNotary; sandbox seal remains test-only.
+
 ## [3.2.0] - 2026-08-13
 ### Added
 - Twilio Video JS join on the client Video page (live room or camera preview).

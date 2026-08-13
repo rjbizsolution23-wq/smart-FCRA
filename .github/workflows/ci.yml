@@ -38,7 +38,7 @@ jobs:
       - name: Write local secrets for preview
         run: cp .dev.vars.example .dev.vars
 
-      - name: E2E security tests
+      - name: E2E Playwright (isolation + login → upload → letter)
         run: |
           npm run build
           npm run preview &
@@ -51,5 +51,5 @@ jobs:
             sleep 2
           done
           curl -sf http://127.0.0.1:3000/api/health || (kill $PREVIEW_PID 2>/dev/null; exit 1)
-          npx playwright test tests/multi-tenant-isolation.spec.ts
+          npx playwright test
           kill $PREVIEW_PID 2>/dev/null || true

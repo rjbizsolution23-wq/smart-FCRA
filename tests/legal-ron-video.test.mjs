@@ -86,6 +86,12 @@ assert(nm && nm.ron_allowed === 1, 'NM allowed via default');
 assert(resolveVendor({}) === 'sandbox', 'default sandbox');
 assert(resolveVendor({ RON_VENDOR: 'proof', RON_VENDOR_API_KEY: 'x' }) === 'proof', 'vendor when keyed');
 
+const {
+  defaultRonApiUrl,
+  PROOF_API_BASE,
+} = await import(pathToFileURL(path.join(root, 'src/lib/ron-vendors.ts')).href);
+assert(defaultRonApiUrl('proof') === PROOF_API_BASE, 'proof default API');
+
 assert(videoConfigured({}) === false, 'video not configured without keys');
 const tok = await createTwilioVideoAccessToken({}, { identity: 'client:1', roomName: 'test-room' });
 assert(tok.simulated === true && tok.token.startsWith('sim_'), 'simulated token');

@@ -1,0 +1,26 @@
+{
+  "name": "Smart FCRA · RJ Business Solutions",
+  "short_name": "Smart FCRA",
+  "description": "FCRA dispute operations — Empowering Generational Wealth",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#2563eb",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/static/brand/pwa-icon.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/brand/pwa-icon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}

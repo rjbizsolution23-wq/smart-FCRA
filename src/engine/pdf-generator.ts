@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { registerBrandFonts, setPdfFont } from './pdf-fonts';
 
 export interface PDFReportData {
   clientName: string;
@@ -53,17 +54,19 @@ export function generatePDFReport(data: PDFReportData): Uint8Array {
     doc.setFillColor(color[0], color[1], color[2]);
   };
 
+  const font = registerBrandFonts(doc);
+
   // Header Block
   setFillColor(deepBlue);
   doc.rect(0, 0, pageWidth, 40, 'F');
 
   // Title
-  doc.setFont('Helvetica', 'bold');
+  setPdfFont(doc, font, 'bold');
   doc.setFontSize(20);
   doc.setTextColor(255, 255, 255);
   doc.text('SMART FCRA AUDIT REPORT', margin, 15);
 
-  doc.setFont('Helvetica', 'normal');
+  setPdfFont(doc, font, 'normal');
   doc.setFontSize(10);
   doc.text('RJ Business Solutions • High-Precision Violation Engine', margin, 22);
   doc.text(`Report ID: ${data.reportId}`, pageWidth - margin - 50, 15, { align: 'left' });
@@ -78,12 +81,12 @@ export function generatePDFReport(data: PDFReportData): Uint8Array {
   doc.rect(margin, y, contentWidth, 38, 'D');
 
   // Client Details
-  doc.setFont('Helvetica', 'bold');
+  setPdfFont(doc, font, 'bold');
   doc.setFontSize(11);
   setTextColor(deepBlue);
   doc.text('CLIENT INFORMATION', margin + 5, y + 6);
 
-  doc.setFont('Helvetica', 'normal');
+  setPdfFont(doc, font, 'normal');
   doc.setFontSize(9);
   setTextColor(darkGray);
   doc.text(`Name: ${data.clientName}`, margin + 5, y + 14);
@@ -92,12 +95,12 @@ export function generatePDFReport(data: PDFReportData): Uint8Array {
   doc.text(`Email: ${data.clientEmail || 'N/A'}`, margin + 5, y + 32);
 
   // Report Details
-  doc.setFont('Helvetica', 'bold');
+  setPdfFont(doc, font, 'bold');
   doc.setFontSize(11);
   setTextColor(deepBlue);
   doc.text('AUDIT METADATA', margin + 100, y + 6);
 
-  doc.setFont('Helvetica', 'normal');
+  setPdfFont(doc, font, 'normal');
   doc.setFontSize(9);
   setTextColor(darkGray);
   doc.text(`Credit Bureau: ${data.bureau.toUpperCase()}`, margin + 100, y + 14);
@@ -110,7 +113,7 @@ export function generatePDFReport(data: PDFReportData): Uint8Array {
   // Score Banner
   setFillColor(primaryBlue);
   doc.rect(margin, y, contentWidth, 14, 'F');
-  doc.setFont('Helvetica', 'bold');
+  setPdfFont(doc, font, 'bold');
   doc.setFontSize(12);
   doc.setTextColor(255, 255, 255);
   doc.text(`LITIGATION VIABILITY SCORE: ${data.litigationScore} / 100`, margin + 5, y + 9);
@@ -122,7 +125,7 @@ export function generatePDFReport(data: PDFReportData): Uint8Array {
   y += 24;
 
   // Violations Header
-  doc.setFont('Helvetica', 'bold');
+  setPdfFont(doc, font, 'bold');
   doc.setFontSize(14);
   setTextColor(deepBlue);
   doc.text('IDENTIFIED STATUTORY VIOLATIONS', margin, y);
@@ -135,7 +138,7 @@ export function generatePDFReport(data: PDFReportData): Uint8Array {
   y += 8;
 
   if (!data.violations || data.violations.length === 0) {
-    doc.setFont('Helvetica', 'normal');
+    setPdfFont(doc, font, 'normal');
     doc.setFontSize(10);
     setTextColor(darkGray);
     doc.text('No statutory or regulatory violations were detected in this credit report segment.', margin, y + 5);
@@ -155,7 +158,7 @@ export function generatePDFReport(data: PDFReportData): Uint8Array {
       if (y + cardHeight + 10 > pageHeight - margin) {
         doc.addPage();
         y = margin + 10;
-        doc.setFont('Helvetica', 'bold');
+        setPdfFont(doc, font, 'bold');
         doc.setFontSize(12);
         setTextColor(deepBlue);
         doc.text('IDENTIFIED STATUTORY VIOLATIONS (CONTINUED)', margin, y);
@@ -175,19 +178,19 @@ export function generatePDFReport(data: PDFReportData): Uint8Array {
       doc.rect(margin, y, 2, cardHeight, 'F');
 
       // Index and Category
-      doc.setFont('Helvetica', 'bold');
+      setPdfFont(doc, font, 'bold');
       doc.setFontSize(10);
       setTextColor(alertRed);
       doc.text(`Violation #${index + 1}: ${cleanCategory}`, margin + 5, y + 6);
 
       // Account / Creditor Name
-      doc.setFont('Helvetica', 'bold');
+      setPdfFont(doc, font, 'bold');
       doc.setFontSize(9);
       setTextColor(darkGray);
       doc.text(`Account / Item: ${cleanAccount}`, margin + 5, y + 12);
 
       // Description text (Split long text to fit)
-      doc.setFont('Helvetica', 'normal');
+      setPdfFont(doc, font, 'normal');
       doc.setFontSize(8.5);
       setTextColor(darkGray);
       doc.text(descLines, margin + 5, y + 18);
@@ -204,7 +207,7 @@ export function generatePDFReport(data: PDFReportData): Uint8Array {
     doc.setLineWidth(0.2);
     doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
 
-    doc.setFont('Helvetica', 'normal');
+    setPdfFont(doc, font, 'normal');
     doc.setFontSize(8);
     setTextColor(darkGray);
     doc.text('Built by Rick Jefferson | Powered by RJ Business Solutions', margin, pageHeight - 10);
@@ -323,6 +326,8 @@ export function generatePDFFromText(title: string, text: string, customLetterhea
     doc.setFillColor(color[0], color[1], color[2]);
   };
 
+  const font = registerBrandFonts(doc);
+
   // Helper to draw the header on a page
   const drawHeader = (isFirstPage = false) => {
     if (isFirstPage && customLetterhead?.logoBase64) {
@@ -350,12 +355,12 @@ export function generatePDFFromText(title: string, text: string, customLetterhea
     doc.rect(0, 0, pageWidth, 40, 'F');
 
     // Title
-    doc.setFont('Helvetica', 'bold');
+    setPdfFont(doc, font, 'bold');
     doc.setFontSize(14);
     doc.setTextColor(255, 255, 255);
     doc.text(headerTitle.toUpperCase(), margin, 18);
 
-    doc.setFont('Helvetica', 'normal');
+    setPdfFont(doc, font, 'normal');
     doc.setFontSize(9);
     const subText = customLetterhead?.customSubtext || 'RJ Business Solutions • Smart FCRA dispute document';
     doc.text(subText, margin, 26);
@@ -379,7 +384,7 @@ export function generatePDFFromText(title: string, text: string, customLetterhea
   const cleanedText = cleanTextForPDF(rawTextContent);
   const paragraphs = cleanedText.split(/\r?\n/);
   
-  doc.setFont('Helvetica', 'normal');
+  setPdfFont(doc, font, 'normal');
   doc.setFontSize(9.5);
   setTextColor(darkGray);
 
@@ -392,7 +397,7 @@ export function generatePDFFromText(title: string, text: string, customLetterhea
         doc.addPage();
         drawHeader(false);
         y = 55;
-        doc.setFont('Helvetica', 'normal');
+        setPdfFont(doc, font, 'normal');
         doc.setFontSize(9.5);
         setTextColor(darkGray);
       }
@@ -405,7 +410,7 @@ export function generatePDFFromText(title: string, text: string, customLetterhea
         doc.addPage();
         drawHeader(false);
         y = 55;
-        doc.setFont('Helvetica', 'normal');
+        setPdfFont(doc, font, 'normal');
         doc.setFontSize(9.5);
         setTextColor(darkGray);
       }
@@ -423,7 +428,7 @@ export function generatePDFFromText(title: string, text: string, customLetterhea
     doc.setLineWidth(0.2);
     doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
 
-    doc.setFont('Helvetica', 'normal');
+    setPdfFont(doc, font, 'normal');
     doc.setFontSize(8);
     setTextColor(darkGray);
     const footerText = customLetterhead?.orgName 

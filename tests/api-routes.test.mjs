@@ -111,4 +111,17 @@ const mockEnv = {
   assert(body.enabled === false, 'turnstile disabled without keys');
 }
 
+// PWA shell
+{
+  const man = await app.request('/manifest.webmanifest', {}, mockEnv);
+  assert(man.status === 200, 'GET /manifest.webmanifest returns 200');
+  const manifest = await man.json();
+  assert(manifest.short_name === 'Smart FCRA', 'manifest short_name');
+  assert(manifest.display === 'standalone', 'manifest standalone');
+  const sw = await app.request('/sw.js', {}, mockEnv);
+  assert(sw.status === 200, 'GET /sw.js returns 200');
+  const swText = await sw.text();
+  assert(swText.includes('smart-fcra-shell'), 'service worker cache name');
+}
+
 console.log('PASS: API route integration tests');

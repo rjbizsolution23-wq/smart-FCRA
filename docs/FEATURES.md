@@ -55,7 +55,7 @@ Defined in `window._nav` in `public/static/app.js`.
 | Nav id | Page | What it does |
 |---|---|---|
 | `search` | Global search | Clients, reports, documents |
-| `exec-overview` | Executive Overview | KPIs, pipeline, revenue sparkline (sparkline is **hardcoded SVG**, not live series) |
+| `exec-overview` | Executive Overview | KPIs, pipeline, last-6-month revenue sparkline from paid tradeline orders |
 | `admin-clients` | Client Management | Staff client list + create |
 | `violation-review` | Violation Review QA | Approve / reject engine findings |
 | `dashboard` | Dashboard | Staff home, alerts, quick stats |
@@ -203,16 +203,16 @@ Migrations live in `migrations/` (`0001`–`0020`+). Newest: `0020_brand_leads.s
 - **Nav** — duplicate Clients + Report History removed from sidebar (history lives on Reports)
 - **Client Stripe checkout** `POST /api/client-portal/unlock/checkout` + webhook `analysis_unlock`
 - **RON sandbox vs live** banners on Legal + Compliance Hub
-- **PDF letterhead** Smart FCRA + RJ blue `#2563eb`; default firm RJ Business Solutions (PDF body uses Helvetica — Workers-safe)
+- **PDF letterhead** Smart FCRA + RJ blue `#2563eb` + **Space Grotesk** headings (OFL subset bundled for Workers)
 - **Per-tenant theme** Settings → Portal theme (CSS variables on login)
 - **`src/frontend/`** archived as non-production prototypes
+- **PWA** `/manifest.webmanifest` + `/sw.js`, Add to Home Screen, overlay mobile nav, horizontal table scroll
+- **Playwright CI gate** login → upload → detect → letter (`tests/login-upload-letter.spec.ts`)
+- **Live RON** Proof (`ApiKey` → `https://api.proof.com/transactions`) and BlueNotary (`Bearer` → `https://app.bluenotary.us/api/integrationsv2/sessions`) with ceremony join URLs + HMAC webhooks
 
-### Still unfinished (later polish)
+### Operator secrets still required in Pages (not code)
 
-1. **Mobile / PWA polish** — sidebar + tables are desktop-first.
-2. **E2E** — Playwright against login → upload → detect → letter is not a required CI gate today.
-3. **Embed a webfont in PDFs** — jsPDF on Workers uses Helvetica; Space Grotesk would need a bundled TTF.
-4. **Live RON vendor ceremony** — banners and sandbox lock are in place; production still needs `RON_VENDOR` + `RON_VENDOR_API_KEY` in Pages secrets.
+Production notarization, Turnstile, and Stripe unlock need Cloudflare Pages secrets (`RON_VENDOR` + `RON_VENDOR_API_KEY`, `TURNSTILE_*`, `STRIPE_API_KEY`). The app is wired; keys are not in git.
 
 ---
 

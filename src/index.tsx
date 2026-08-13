@@ -36,6 +36,7 @@ import { issueClientContractPack, createLegalContract, signLegalContract, record
 import { ESIGN_DISCLOSURE_TEXT, ESIGN_DISCLOSURE_VERSION, type ContractType, documentRequiresNotarization, sha256Hex } from './data/legal-contracts';
 import { createVideoRoom, issueRoomToken, completeVideoSession, videoConfigured } from './lib/twilio-video';
 import { seedRonStateRules, createRonSession, submitRonIdentityChecklist, completeRonSession, handleRonWebhook, getRonStateRule, DEFAULT_RON_STATE_RULES, resolveVendor } from './lib/ron-service';
+import { ceremonyUrlFromMeta } from './lib/ron-vendors';
 import { mapMfsnToInternal } from './engine/mfsn-mapper';
 import {
   MFSNClient,
@@ -118,7 +119,7 @@ import { CITIZENSHIP_STATUSES, GENDER_OPTIONS, MARITAL_STATUS_OPTIONS } from './
 import { listTradelineEducation } from './data/tradeline-education';
 import { sendSms } from './lib/alerts';
 import sampleMfsnReport from './data/sample-mfsn-report.json';
-import { spaAppSource } from './generated/spa-source';
+import { spaAppSource, pwaSwSource, pwaManifestSource } from './generated/spa-source';
 
 // Secure field-level cryptographic helpers mapped to Worker bindings
 async function encryptPII(c: any, text: string): Promise<string> {
@@ -502,6 +503,7 @@ type Bindings = {
   RON_VENDOR_API_KEY?: string;
   RON_VENDOR_API_URL?: string;
   RON_WEBHOOK_SECRET?: string;
+  RON_DOCUMENT_URL?: string;
   SENTRY_DSN?: string;
   PII_ENCRYPTION_KEY?: string;
   RESEND_API_KEY?: string;
@@ -667,6 +669,22 @@ app.get('/static/app.js', (c) => {
     'Content-Type': 'application/javascript; charset=utf-8',
     'Cache-Control': 'no-cache, must-revalidate',
     'X-Content-Type-Options': 'nosniff',
+  });
+});
+
+app.get('/sw.js', (c) => {
+  return c.body(pwaSwSource, 200, {
+    'Content-Type': 'application/javascript; charset=utf-8',
+    'Cache-Control': 'no-cache, must-revalidate',
+    'Service-Worker-Allowed': '/',
+    'X-Content-Type-Options': 'nosniff',
+  });
+});
+
+app.get('/manifest.webmanifest', (c) => {
+  return c.body(pwaManifestSource, 200, {
+    'Content-Type': 'application/manifest+json; charset=utf-8',
+    'Cache-Control': 'no-cache, must-revalidate',
   });
 });
 
@@ -6568,6 +6586,8 @@ app.get('/api/settings/integrations', authMiddleware, async (c) => {
       vendor: resolveVendor(c.env),
       sandbox: resolveVendor(c.env) === 'sandbox',
       live: resolveVendor(c.env) !== 'sandbox',
+      proof: resolveVendor(c.env) === 'proof',
+      bluenotary: resolveVendor(c.env) === 'bluenotary',
     },
   });
 });
@@ -8765,7 +8785,7 @@ app.post('/api/ron/sessions', authMiddleware, async (c) => {
 
 app.get('/api/ron/sessions', authMiddleware, async (c) => {
   const user = c.get('user');
-  let sql = `SELECT id, client_id, contract_id, document_id, vendor, status, principal_state, retention_until, sealed_vault_upload_id, created_at, completed_at FROM ron_sessions WHERE org_id = ?`;
+  let sql = `SELECT id, client_id, contract_id, document_id, vendor, status, principal_state, retention_until, sealed_vault_upload_id, created_at, completed_at, metadata_json FROM ron_sessions WHERE org_id = ?`;
   const binds: any[] = [user.org_id];
   if (user.role === 'client') {
     const me = await c.env.DB.prepare('SELECT id FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
@@ -8778,7 +8798,11 @@ app.get('/api/ron/sessions', authMiddleware, async (c) => {
   }
   sql += ` ORDER BY created_at DESC LIMIT 50`;
   const rows = await c.env.DB.prepare(sql).bind(...binds).all();
-  return c.json({ sessions: rows?.results || [], vendor: resolveVendor(c.env) });
+  const sessions = (rows?.results || []).map((s: any) => ({
+    ...s,
+    ceremonyUrl: ceremonyUrlFromMeta(s.metadata_json),
+  }));
+  return c.json({ sessions, vendor: resolveVendor(c.env), sandbox: resolveVendor(c.env) === 'sandbox' });
 });
 
 app.get('/api/ron/sessions/:id', authMiddleware, async (c) => {
@@ -8789,7 +8813,7 @@ app.get('/api/ron/sessions/:id', authMiddleware, async (c) => {
     const me = await c.env.DB.prepare('SELECT id FROM clients WHERE email = ? AND org_id = ?').bind(user.email, user.org_id).first() as any;
     if (!me || me.id !== row.client_id) return c.json({ error: 'Forbidden' }, 403);
   }
-  return c.json({ session: row });
+  return c.json({ session: row, ceremonyUrl: ceremonyUrlFromMeta(row.metadata_json), vendor: row.vendor });
 });
 
 app.post('/api/ron/sessions/:id/identity', authMiddleware, async (c) => {
@@ -8847,10 +8871,16 @@ app.post('/api/ron/sessions/:id/complete', authMiddleware, async (c) => {
 });
 
 app.post('/api/webhooks/ron', async (c) => {
-  const signature = c.req.header('X-Ron-Signature') || c.req.header('X-Webhook-Secret');
-  const payload = await c.req.json();
+  const signature = c.req.header('X-Ron-Signature')
+    || c.req.header('X-Webhook-Secret')
+    || c.req.header('X-Proof-Signature')
+    || c.req.header('X-Hub-Signature-256')
+    || c.req.header('X-BlueNotary-Signature');
+  const rawBody = await c.req.text();
+  let payload: any = {};
+  try { payload = rawBody ? JSON.parse(rawBody) : {}; } catch { return c.json({ error: 'Invalid JSON' }, 400); }
   try {
-    const result = await handleRonWebhook(c.env, { signature, payload });
+    const result = await handleRonWebhook(c.env, { signature, payload, rawBody });
     return c.json({ ok: true, ...result });
   } catch (e: any) {
     return c.json({ error: e.message }, 401);
@@ -9898,7 +9928,15 @@ function getAppHtml(): string {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Smart FCRA">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/brand/pwa-icon.jpg">
+  <link rel="icon" href="/static/brand/pwa-icon.jpg">
   <title>Smart FCRA · RJ Business Solutions</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -10020,6 +10058,21 @@ function getAppHtml(): string {
     .brand-glow {
       text-shadow: 0 0 20px rgba(10, 102, 255, 0.4);
     }
+
+    #page-content { overflow-x: hidden; }
+    #page-content table { min-width: 36rem; }
+    .table-scroll, #page-content .glass { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    #nav-backdrop { background: rgba(2, 6, 23, 0.62); }
+    body.nav-open { overflow: hidden; }
+    @media (max-width: 767px) {
+      #page-content { padding: 16px 12px 28px !important; padding-top: 4.5rem !important; }
+      button, a, select, input, textarea { max-width: 100%; }
+      .md\\:hidden.fixed { min-width: 44px; min-height: 44px; }
+    }
+    @media (display-mode: standalone) {
+      [data-pwa-install] { display: none !important; }
+      body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+    }
   </style>
 </head>
 <body class="gradient-bg min-h-screen text-gray-100">
@@ -10030,7 +10083,7 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/app.js?v=20260813-finish-list"></script>
+  <script src="/static/app.js?v=20260813-finish-polish"></script>
 </body>
 </html>`;
 }

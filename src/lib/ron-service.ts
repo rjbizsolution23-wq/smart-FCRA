@@ -6,6 +6,14 @@
 import { sha256Hex } from '../data/legal-contracts';
 import { writeSecurityAudit } from './security-compliance';
 import { storeContractInVault } from './legal-contracts';
+import {
+  createRonVendorSession,
+  ceremonyUrlFromMeta,
+  extractRonWebhookIds,
+  fetchRonVendorStatus,
+  verifyRonWebhookSignature,
+  webhookMarksComplete,
+} from './ron-vendors';
 
 export type RonEnv = {
   DB: any;
@@ -14,7 +22,10 @@ export type RonEnv = {
   RON_VENDOR_API_KEY?: string;
   RON_VENDOR_API_URL?: string;
   RON_WEBHOOK_SECRET?: string;
+  RON_DOCUMENT_URL?: string;
   COMPANY_NAME?: string;
+  APP_BASE_URL?: string;
+  FRONTEND_URL?: string;
 };
 
 export type RonStateRule = {
@@ -156,6 +167,7 @@ export async function createRonSession(
   retentionUntil.setFullYear(retentionUntil.getFullYear() + retentionYears);
 
   let vendorSessionId: string | null = null;
+  let ceremonyUrl: string | null = null;
   let status = 'identity_pending';
   const meta: any = {
     requiresKba: !!rule.requires_kba,
@@ -163,31 +175,33 @@ export async function createRonSession(
     platformApprovalRequired: !!rule.platform_approval_required,
   };
 
-  if (vendor !== 'sandbox' && env.RON_VENDOR_API_KEY && env.RON_VENDOR_API_URL) {
+  if (vendor !== 'sandbox' && env.RON_VENDOR_API_KEY) {
+    const client = await env.DB.prepare(`SELECT first_name, last_name, email FROM clients WHERE id = ? AND org_id = ?`)
+      .bind(opts.clientId, opts.orgId).first() as any;
+    const base = env.APP_BASE_URL || env.FRONTEND_URL || 'https://smart-fcra-v2.pages.dev';
     try {
-      const res = await fetch(`${env.RON_VENDOR_API_URL.replace(/\/$/, '')}/sessions`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${env.RON_VENDOR_API_KEY}`,
-          'Content-Type': 'application/json',
+      const created = await createRonVendorSession({
+        vendor,
+        apiKey: env.RON_VENDOR_API_KEY,
+        apiUrl: env.RON_VENDOR_API_URL,
+        sessionId,
+        principalState: state,
+        contractId: opts.contractId,
+        documentUrl: env.RON_DOCUMENT_URL,
+        callbackUrl: `${String(base).replace(/\/$/, '')}/api/webhooks/ron`,
+        signer: {
+          email: client?.email || `ron-${sessionId}@smartfcra.local`,
+          firstName: client?.first_name || 'Client',
+          lastName: client?.last_name || 'Signer',
         },
-        body: JSON.stringify({
-          externalId: sessionId,
-          principalState: state,
-          contractId: opts.contractId,
-          documentId: opts.documentId,
-          callbackUrl: '/api/webhooks/ron',
-        }),
+        transactionName: `Smart FCRA RON · ${client?.first_name || ''} ${client?.last_name || ''}`.trim(),
       });
-      const data = await res.json() as any;
-      if (res.ok) {
-        vendorSessionId = data.id || data.sessionId || null;
-        meta.vendorCreate = data;
-        status = 'identity_pending';
-      } else {
-        meta.vendorError = data;
-        // Keep session but mark for manual/sandbox path
-      }
+      vendorSessionId = created.vendorSessionId;
+      ceremonyUrl = created.ceremonyUrl;
+      meta.vendorCreate = created.raw;
+      meta.ceremonyUrl = ceremonyUrl;
+      if (created.error) meta.vendorError = created.error;
+      if (ceremonyUrl) status = 'in_session';
     } catch (e: any) {
       meta.vendorError = e.message;
     }
@@ -243,9 +257,12 @@ export async function createRonSession(
     requiresKba: !!rule.requires_kba,
     requiresCredentialAnalysis: !!rule.requires_credential_analysis,
     sandbox: vendor === 'sandbox',
+    ceremonyUrl,
     legalNotice: vendor === 'sandbox'
       ? 'Sandbox mode: complete identity checklist for UX testing. Connect a certified RON vendor for legally effective notarization.'
-      : 'Session created with configured RON vendor. Complete identity proofing in the vendor flow.',
+      : ceremonyUrl
+        ? 'Live vendor ceremony created. Open the vendor room to complete identity proofing and notarization.'
+        : 'Session created with configured RON vendor. Complete identity proofing in the vendor flow.',
   };
 }
 
@@ -309,15 +326,45 @@ export async function completeRonSession(
     notaryState?: string;
     aVRecordingRef?: string;
     forceSandbox?: boolean;
+    fromWebhook?: boolean;
   },
 ) {
   const row = await env.DB.prepare(
     `SELECT * FROM ron_sessions WHERE id = ? AND org_id = ?`
   ).bind(opts.sessionId, opts.orgId).first() as any;
   if (!row) throw new Error('RON session not found');
-  if (row.status !== 'identity_verified' && row.status !== 'in_session' && row.vendor === 'sandbox') {
-    // allow sandbox completion after identity_verified only
-    if (row.status !== 'identity_verified') throw new Error(`Cannot complete from status ${row.status}`);
+  if (row.status === 'completed') {
+    return {
+      sessionId: row.id,
+      status: 'completed',
+      sealedHash: row.sealed_document_hash,
+      vaultUploadId: row.sealed_vault_upload_id,
+      certificate: row.journal_entry_json ? JSON.parse(row.journal_entry_json) : null,
+      sandbox: row.vendor === 'sandbox',
+      alreadyComplete: true,
+    };
+  }
+  if (row.vendor === 'sandbox') {
+    if (row.status !== 'identity_verified' && row.status !== 'in_session') {
+      throw new Error(`Cannot complete from status ${row.status}`);
+    }
+  } else if (!opts.fromWebhook && !opts.forceSandbox) {
+    const vendorStatus = await fetchRonVendorStatus({
+      vendor: row.vendor,
+      apiKey: env.RON_VENDOR_API_KEY || '',
+      apiUrl: env.RON_VENDOR_API_URL,
+      vendorSessionId: row.vendor_session_id,
+    });
+    if (!vendorStatus.completed) {
+      const join = vendorStatus.ceremonyUrl || ceremonyUrlFromMeta(row.metadata_json);
+      throw new Error(
+        `Live ${row.vendor} ceremony is not complete.${join ? ` Open the vendor room: ${join}` : ' Finish identity + notarization in the vendor app, then retry or wait for the webhook.'}`,
+      );
+    }
+    opts.notaryName = opts.notaryName || vendorStatus.notaryName;
+    opts.notaryCommission = opts.notaryCommission || vendorStatus.notaryCommission;
+    opts.notaryState = opts.notaryState || vendorStatus.notaryState;
+    opts.aVRecordingRef = opts.aVRecordingRef || vendorStatus.recordingRef;
   }
 
   let contract: any = null;
@@ -448,31 +495,32 @@ export async function completeRonSession(
 
 export async function handleRonWebhook(
   env: RonEnv,
-  opts: { signature?: string | null; payload: any },
+  opts: { signature?: string | null; payload: any; rawBody?: string },
 ) {
-  if (env.RON_WEBHOOK_SECRET) {
-    // Simple shared-secret header check (vendors often use HMAC — extend per vendor)
-    if (opts.signature !== env.RON_WEBHOOK_SECRET) {
-      throw new Error('Invalid RON webhook signature');
-    }
-  }
-  const externalId = opts.payload?.externalId || opts.payload?.sessionId;
-  if (!externalId) throw new Error('Missing session id in webhook');
+  const ok = await verifyRonWebhookSignature({
+    secret: env.RON_WEBHOOK_SECRET,
+    signature: opts.signature,
+    rawBody: opts.rawBody || JSON.stringify(opts.payload || {}),
+  });
+  if (!ok) throw new Error('Invalid RON webhook signature');
+
+  const { sessionHint, event } = extractRonWebhookIds(opts.payload);
+  if (!sessionHint) throw new Error('Missing session id in webhook');
 
   const row = await env.DB.prepare(
     `SELECT * FROM ron_sessions WHERE id = ? OR vendor_session_id = ?`
-  ).bind(externalId, externalId).first() as any;
+  ).bind(sessionHint, sessionHint).first() as any;
   if (!row) throw new Error('RON session not found for webhook');
 
-  const event = String(opts.payload?.event || opts.payload?.status || '').toLowerCase();
-  if (event.includes('complete') || event === 'notarized') {
+  if (webhookMarksComplete(event, opts.payload)) {
     return completeRonSession(env, {
       orgId: row.org_id,
       sessionId: row.id,
-      notaryName: opts.payload?.notary?.name,
-      notaryCommission: opts.payload?.notary?.commission,
-      notaryState: opts.payload?.notary?.state,
-      aVRecordingRef: opts.payload?.recordingUrl || opts.payload?.recordingRef,
+      notaryName: opts.payload?.notary?.name || opts.payload?.data?.notary?.name,
+      notaryCommission: opts.payload?.notary?.commission || opts.payload?.data?.notary?.commission,
+      notaryState: opts.payload?.notary?.state || opts.payload?.data?.notary?.state,
+      aVRecordingRef: opts.payload?.recordingUrl || opts.payload?.recordingRef || opts.payload?.data?.recording_url,
+      fromWebhook: true,
     });
   }
   if (event.includes('identity')) {

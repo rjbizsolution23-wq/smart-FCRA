@@ -815,6 +815,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
               <p class="text-[10px] text-amber-300 leading-relaxed"><strong>FCRA NOTICE:</strong> We prepare dispute documents only. NOT legal advice. See <a href="/compliance/disclaimers" class="underline hover:text-amber-200">disclaimers</a>.</p>
             </div>
             <button type="submit" class="w-full btn-rj font-semibold py-2.5 rounded-lg transition text-sm">Sign In</button>
+            <button type="button" data-pwa-install class="hidden w-full rounded-lg border border-sky-500/40 bg-sky-950/30 text-sky-100 text-sm font-semibold py-2.5" onclick="window._installPwa()"><i class="fas fa-download mr-2"></i>Install Smart FCRA</button>
           </form>
             <a href="/?signup=mfsn" class="mt-3 flex items-center justify-center gap-2 w-full rounded-lg border border-sky-500/40 bg-sky-950/30 hover:bg-sky-900/40 text-sky-100 text-sm font-semibold py-2.5 transition">
               <i class="fas fa-bolt text-sky-300"></i> New client? Sign up with MyFreeScoreNow
@@ -1122,13 +1123,28 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     // Mobile nav toggle
     window._toggleMobileNav = () => {
       const nav = document.getElementById('mobile-nav');
+      const backdrop = document.getElementById('nav-backdrop');
       const btn = document.querySelector('[aria-controls="mobile-nav"]');
       if (nav) {
-        const hidden = nav.classList.contains('-translate-x-full');
-        nav.classList.toggle('-translate-x-full', !hidden);
-        nav.classList.toggle('translate-x-0', hidden);
-        if (btn) btn.setAttribute('aria-expanded', hidden ? 'true' : 'false');
+        const opening = nav.classList.contains('-translate-x-full');
+        nav.classList.toggle('-translate-x-full', !opening);
+        nav.classList.toggle('translate-x-0', opening);
+        if (backdrop) backdrop.classList.toggle('hidden', !opening);
+        document.body.classList.toggle('nav-open', opening);
+        if (btn) btn.setAttribute('aria-expanded', opening ? 'true' : 'false');
       }
+    };
+    window._closeMobileNav = () => {
+      const nav = document.getElementById('mobile-nav');
+      const backdrop = document.getElementById('nav-backdrop');
+      const btn = document.querySelector('[aria-controls="mobile-nav"]');
+      if (nav) {
+        nav.classList.add('-translate-x-full');
+        nav.classList.remove('translate-x-0');
+      }
+      if (backdrop) backdrop.classList.add('hidden');
+      document.body.classList.remove('nav-open');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
     };
     // Branding URLs
     const RJ_LOGO = 'https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg';
@@ -1157,8 +1173,9 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       <!-- Top Branding Header -->
       ${MFSN_BANNER ? `<div class="h-16 bg-gray-900 border-b border-gray-800 flex items-center px-4 shrink-0"><img src="${MFSN_BANNER}" alt="MyFreeScoreNow" class="h-14 object-contain"></div>` : ''}
             <div class="flex flex-1 overflow-hidden">
-      <button type="button" class="md:hidden fixed top-20 left-3 z-50 bg-gray-800 text-white p-2 rounded-lg border border-gray-700" onclick="window._toggleMobileNav()" aria-label="Toggle navigation" aria-controls="mobile-nav" aria-expanded="false"><i class="fas fa-bars"></i></button>
-      <aside id="mobile-nav" class="w-56 bg-gray-900/80 border-r border-gray-800 flex flex-col shrink-0 fixed md:relative inset-y-0 left-0 z-40 md:translate-x-0 -translate-x-full transition-transform md:flex" aria-label="${t('a11y.mainNavigation')}">
+      <button type="button" class="md:hidden fixed top-20 left-3 z-50 bg-gray-800 text-white p-2.5 rounded-lg border border-gray-700 min-h-[44px] min-w-[44px]" onclick="window._toggleMobileNav()" aria-label="Toggle navigation" aria-controls="mobile-nav" aria-expanded="false"><i class="fas fa-bars"></i></button>
+      <div id="nav-backdrop" class="hidden md:hidden fixed inset-0 z-30" onclick="window._closeMobileNav()" aria-hidden="true"></div>
+      <aside id="mobile-nav" class="w-64 max-w-[85vw] bg-gray-900/95 border-r border-gray-800 flex flex-col shrink-0 fixed md:relative inset-y-0 left-0 z-40 md:translate-x-0 -translate-x-full transition-transform md:flex pt-[env(safe-area-inset-top)]" aria-label="${t('a11y.mainNavigation')}">
         <div class="p-4 border-b border-gray-800"><div class="flex items-center gap-2.5">
           ${FCRA_LOGO ? `<img src="${FCRA_LOGO}" alt="RJ Business Solutions" class="w-12 h-12 rounded-xl object-cover border border-blue-500/20 shadow-[0_0_15px_rgba(10,102,255,0.15)]">` : `<div class="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center"><i class="fas fa-shield-alt text-blue-400 text-xs"></i></div>`}
           <div class="min-w-0"><div class="text-xs font-bold text-white truncate font-display">Smart FCRA</div><div class="text-[10px] text-sky-300/80 truncate">RJ Business Solutions</div><div class="text-[10px] text-gray-500 truncate">${state.org?.name||'Org'}</div></div>
@@ -1170,8 +1187,9 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
             <option value="es" ${state.locale === 'es' ? 'selected' : ''}>Español</option>
           </select>
         </div></div>
-        <nav class="flex-1 p-3 space-y-1 overflow-y-auto" role="navigation">${navItems.map(n=>`<button type="button" onclick="window._nav('${n.id}')" aria-current="${state.currentPage===n.id?'page':'false'}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${state.currentPage===n.id?'bg-blue-600/20 text-blue-400':'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}"><i class="fas ${n.icon} w-5 text-center text-xs" aria-hidden="true"></i><span class="flex-1 text-left">${n.label}</span>${n.badgeId ? `<span id="${n.badgeId}" class="hidden min-w-[1.25rem] h-5 px-1.5 rounded-full bg-cyan-500 text-gray-950 text-[10px] font-bold flex items-center justify-center">${''}</span>` : ''}</button>`).join('')}</nav>
+        <nav class="flex-1 p-3 space-y-1 overflow-y-auto" role="navigation">${navItems.map(n=>`<button type="button" onclick="window._closeMobileNav(); window._nav('${n.id}')" aria-current="${state.currentPage===n.id?'page':'false'}" class="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition min-h-[44px] ${state.currentPage===n.id?'bg-blue-600/20 text-blue-400':'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}"><i class="fas ${n.icon} w-5 text-center text-xs" aria-hidden="true"></i><span class="flex-1 text-left">${n.label}</span>${n.badgeId ? `<span id="${n.badgeId}" class="hidden min-w-[1.25rem] h-5 px-1.5 rounded-full bg-cyan-500 text-gray-950 text-[10px] font-bold flex items-center justify-center">${''}</span>` : ''}</button>`).join('')}</nav>
         <div class="p-3 border-t border-gray-800">
+          <button type="button" data-pwa-install class="hidden w-full mb-2 flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-sky-200 bg-sky-950/40 border border-sky-500/30 hover:bg-sky-900/40" onclick="window._installPwa()"><i class="fas fa-download"></i>Install app</button>
           <div class="flex items-center gap-2.5 px-2 mb-3"><div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold" aria-hidden="true">${(state.user?.name||'U')[0].toUpperCase()}</div><div class="min-w-0"><div class="text-xs font-medium text-gray-300 truncate">${state.user?.name||'User'}</div><div class="text-[10px] text-gray-500 truncate">${state.user?.role||'member'}</div></div></div>
           <button type="button" onclick="window._logout()" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-gray-500 hover:bg-red-900/20 hover:text-red-400 transition"><i class="fas fa-sign-out-alt" aria-hidden="true"></i>${t('nav.signOut')}</button>
         </div>
@@ -8459,7 +8477,7 @@ async function pgAdminConsole(el) {
       ]},
       { title: 'Staff console', items: [
         ['Search', 'Clients, reports, documents'],
-        ['Executive Overview', 'KPIs and pipeline (sparkline is still a static SVG)'],
+        ['Executive Overview', 'KPIs and last-6-month revenue sparkline from paid tradeline orders'],
         ['Client Management', 'Create/list clients; Salisha demo workspace'],
         ['Violation Review QA', 'Approve / reject engine findings'],
         ['Dashboard / Clients / Reports', 'Ops home, client list, report upload + history'],
@@ -8476,8 +8494,8 @@ async function pgAdminConsole(el) {
         ['Cockpit / Journey / Get Started', 'Scores, 6-stage pipeline, intake wizard'],
         ['Messages / Vault', 'Client ↔ staff chat; ID, SSN, proof, reports in R2'],
         ['Fundability / Boost / AU Tradelines', 'Deterministic fundability + educational AU catalog'],
-        ['Tutor / Documents / Legal & Notary', 'Alex Rivera tutor, letters, RON (sandbox unless live keys)'],
-        ['Video', 'Twilio Video tokens only — in-browser SDK not embedded yet'],
+        ['Tutor / Documents / Legal & Notary', 'Alex Rivera tutor, letters, RON (Proof/BlueNotary ceremony when live keys set)'],
+        ['Video', 'Twilio Video JS — live room when keys set, local camera preview otherwise'],
         ['Education / Security / Mentors', 'Lessons, MFA, Rick / Alex / Maya / Jordan chat'],
       ]},
       { title: 'Engines & integrations', items: [
@@ -8497,10 +8515,12 @@ async function pgAdminConsole(el) {
       'Shipped: Click2Mail status from /api/settings/integrations.',
       'Shipped: Duplicate Clients / Report History removed from sidebar.',
       'Shipped: Client Stripe checkout POST /api/client-portal/unlock/checkout.',
-      'Shipped: RON sandbox vs live vendor banner.',
-      'Shipped: PDF headers use Smart FCRA + RJ blue; default firm name RJ Business Solutions.',
+      'Shipped: RON sandbox vs live vendor banner + Proof/BlueNotary ceremony URLs.',
+      'Shipped: PDF headers use Smart FCRA + RJ blue + Space Grotesk.',
       'Shipped: Per-tenant CSS tokens from Settings → branding.',
       'Shipped: src/frontend archived as non-production prototypes.',
+      'Shipped: Mobile PWA (manifest, service worker, install, overlay nav).',
+      'Shipped: Playwright login → upload → detect → letter as a required CI gate.',
     ];
     el.innerHTML = `<div class="fade-in space-y-6">
       <div class="rounded-2xl border border-blue-500/25 bg-gradient-to-r from-slate-950 via-blue-950/30 to-slate-950 p-6">
@@ -10394,6 +10414,9 @@ async function pgAdminConsole(el) {
         const res = await api('/ron/sessions', { method: 'POST', body: JSON.stringify(body) });
         if (res.error) return toast(res.error, 'error');
         toast(res.sandbox ? 'Sandbox RON session started (not a legal notarial act)' : 'RON session started', res.sandbox ? 'warning' : 'success');
+        if (res.ceremonyUrl) {
+          window.open(res.ceremonyUrl, '_blank', 'noopener');
+        }
         pgClientLegal(el);
       };
 
@@ -10484,9 +10507,11 @@ async function pgAdminConsole(el) {
                   <div class="text-sm text-white">${escapeHtml(s.status)} · ${escapeHtml(s.vendor)} · ${escapeHtml(s.principal_state || '')}</div>
                   <div class="text-[10px] text-gray-500">Retain until ${escapeHtml(s.retention_until || '—')}</div>
                 </div>
-                <div class="flex gap-2">
-                  ${s.status === 'identity_pending' ? `<button onclick="window._ronIdentity('${s.id}')" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg">Complete ID checklist</button>` : ''}
-                  ${s.status === 'identity_verified' ? `<button onclick="window._ronComplete('${s.id}')" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg">Seal / complete</button>` : ''}
+                <div class="flex flex-wrap gap-2">
+                  ${s.ceremonyUrl && s.vendor !== 'sandbox' ? `<a href="${escapeHtml(s.ceremonyUrl)}" target="_blank" rel="noopener" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg">Open live ceremony</a>` : ''}
+                  ${s.status === 'identity_pending' && (s.vendor === 'sandbox' || !s.ceremonyUrl) ? `<button onclick="window._ronIdentity('${s.id}')" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg">Complete ID checklist</button>` : ''}
+                  ${s.status === 'identity_verified' && s.vendor === 'sandbox' ? `<button onclick="window._ronComplete('${s.id}')" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg">Seal / complete</button>` : ''}
+                  ${s.vendor !== 'sandbox' && s.status !== 'completed' ? `<span class="text-[10px] text-emerald-300 self-center">Vendor-driven — finish in Proof/BlueNotary</span>` : ''}
                 </div>
               </div>`).join('') : '<p class="text-sm text-gray-500">No RON sessions yet.</p>'}
           </div>
@@ -12740,6 +12765,22 @@ async function pgAdminConsole(el) {
 
   (async () => {
     await loadLocale(localStorage.getItem('fcra_locale') || 'en');
+    if ('serviceWorker' in navigator) {
+      try { await navigator.serviceWorker.register('/sw.js', { scope: '/' }); } catch {}
+    }
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      window._deferredPwa = e;
+      document.querySelectorAll('[data-pwa-install]').forEach((el) => el.classList.remove('hidden'));
+    });
+    window._installPwa = async () => {
+      const ev = window._deferredPwa;
+      if (!ev) return;
+      ev.prompt();
+      try { await ev.userChoice; } catch {}
+      window._deferredPwa = null;
+      document.querySelectorAll('[data-pwa-install]').forEach((el) => el.classList.add('hidden'));
+    };
     render();
   })();
 })();
