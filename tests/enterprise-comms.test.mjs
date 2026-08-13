@@ -30,7 +30,7 @@ const { portalBaseUrl, isSyntheticPortalEmail } = await import(
 
 // Branding defaults
 const brand = await loadOrgBrand({}, null);
-assert(brand.name === 'Smart FCRA', 'default brand name');
+assert(brand.name === 'RJ Business Solutions', 'default brand name');
 assert(brand.owner.includes('Rick Jefferson'), 'default owner');
 const bv = brandVars(brand);
 assert(bv.brandName === brand.name && bv.brandFromName === brand.fromName, 'brandVars');
