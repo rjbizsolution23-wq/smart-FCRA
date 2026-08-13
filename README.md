@@ -2,8 +2,8 @@
   <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="RJ Business Solutions Logo" width="220" style="border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);" />
 </p>
 
-# 🧠 Smart FCRA Supreme v2 — Enterprise Ingestion & Violation Engine
-### Engineered by **Rick Jefferson** | **RJ Business Solutions**
+# Smart FCRA — Credit advocacy CRM
+### Engineered by **Rick Jefferson** | **RJ Business Solutions** · Empowering Generational Wealth
 
 > **Separate project (v2)** — workbench branch cloned from production. Deploy target is `smart-fcra-v2` / DB `fcra-detector-v2`. **Do not merge into original `main`.** When finished, push to a new repo (`smart-FCRA-v2`). See [docs/NEW_VERSION.md](docs/NEW_VERSION.md).
 
@@ -17,7 +17,9 @@
 ## 💼 The Venture Capital & Enterprise Opportunity
 Consumer credit inaccuracies represent a multi-billion dollar friction point in the financial sector. Over **79% of consumer credit files contain errors**, yet credit repair companies and consumer law firms spend countless manual hours parsing dense, image-heavy PDF reports trying to find statutory leverage.
 
-**Smart FCRA Supreme** is an institutional-grade, highly automated SaaS platform that bridges the gap between raw credit data and statutory damages recovery. It ingests complex multi-bureau credit reports, executes client-side OCR for scanned files, merges disparate spelling records via fuzzy string-distance algorithms, and automatically uncovers violations of the **Fair Credit Reporting Act (FCRA - 15 U.S.C. § 1681)** and **Fair Debt Collection Practices Act (FDCPA)**.
+**Smart FCRA** is an institutional-grade, highly automated SaaS platform that bridges the gap between raw credit data and statutory damages recovery. It ingests complex multi-bureau credit reports, executes client-side OCR for scanned files, merges disparate spelling records via fuzzy string-distance algorithms, and automatically uncovers violations of the **Fair Credit Reporting Act (FCRA - 15 U.S.C. § 1681)** and **Fair Debt Collection Practices Act (FDCPA)**.
+
+**Operator catalog (every feature, every gap):** [docs/FEATURES.md](docs/FEATURES.md) · **Brand tokens:** [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) · **Live brand hub:** https://smart-fcra-v2.pages.dev/brand
 
 ### 📈 Economic Value Proposition (ROI)
 * **Zero-Compute Client-Side OCR**: Reduces backend API and server bills to zero for high-overhead image parsing by leveraging web workers and client-side Tesseract.js.
@@ -29,7 +31,7 @@ Consumer credit inaccuracies represent a multi-billion dollar friction point in 
 ## 🚀 Key Technological Innovations
 
 ### 1. High-Fidelity Client-Side OCR Pipeline
-Standard parsers choke on scanned, image-only files or low-resolution faxes. **Smart FCRA Supreme** deploys a state-of-the-art browser-side OCR engine using a multi-threaded web worker model:
+Standard parsers choke on scanned, image-only files or low-resolution faxes. **Smart FCRA** deploys a state-of-the-art browser-side OCR engine using a multi-threaded web worker model:
 * **Automatic Scanned Document Detection**: Analyzes PDF.js text layer output; if character density is `< 1000`, the file is automatically rerouted to the OCR pipeline.
 * **Scale-Clarity Rendering**: Renders PDF pages to offscreen canvas instances at a pixel-dense `1.5x` scale to optimize OCR letter recognition.
 * **Asynchronous Progress Synchronization**: Updates progress indicators in real-time, giving clients a premium, state-of-the-art interactive experience.
@@ -80,6 +82,8 @@ Our repository layout is engineered for immediate technical onboarding and insti
 │   ├── SECURITY_AUDIT.md   # Threat Vector Modeling & Data Safety Analysis
 │   ├── INFRASTRUCTURE.md   # Cloudflare Pages, Worker, and D1 Database Mapping
 │   ├── DB_SCHEMA.md        # Relational SQLite D1 Entity Layout
+│   ├── FEATURES.md         # Complete operator catalog + finish-up list
+│   ├── DESIGN_SYSTEM.md    # RJ blue / Space Grotesk / Inter tokens
 │   ├── ADR_LOG.md          # Architectural Decision Records
 │   └── IP_PROTECTION_AND_LICENSING.md # Absolute Ownership & Sovereign IP Protection Deed
 ├── src/                # Edge Workers API & Parsing Engine Source Code

@@ -1,4 +1,4 @@
-// SmartFCRA Supreme — AES-256-GCM PII encryption (Web Crypto).
+// Smart FCRA — AES-256-GCM PII encryption (Web Crypto).
 // Production policy: encryption key REQUIRED for new writes (fail closed).
 
 async function getCryptoKey(secret: string): Promise<CryptoKey> {

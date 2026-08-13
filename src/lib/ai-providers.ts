@@ -202,7 +202,7 @@ export async function generateAiText(env: AiEnv, messages: ChatMessage[]): Promi
           env.OPENROUTER_API_KEY,
           model,
           messages,
-          { 'HTTP-Referer': 'https://rjbusinesssolutions.org', 'X-Title': 'Smart FCRA Supreme' }
+          { 'HTTP-Referer': 'https://rjbusinesssolutions.org', 'X-Title': 'Smart FCRA · RJ Business Solutions' }
         );
         return { text, provider: 'openrouter-free', model };
       } catch (e: any) {

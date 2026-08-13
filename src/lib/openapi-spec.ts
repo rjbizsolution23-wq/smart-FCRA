@@ -173,7 +173,7 @@ export function buildOpenApiSpec(baseUrl: string) {
     info: {
       title: 'Smart FCRA v2 API',
       version: '2.0.0',
-      description: 'Partner and integration API for Smart FCRA Supreme Violation Detector v2. Authenticate via `POST /api/auth/login` and pass the session token as `Authorization: Bearer <token>`.',
+      description: 'Partner and integration API for Smart FCRA by RJ Business Solutions. Authenticate via `POST /api/auth/login` and pass the session token as `Authorization: Bearer <token>`.',
       contact: { name: 'RJ Business Solutions', url: 'https://smartfcra.com' },
       license: { name: 'Proprietary' },
     },

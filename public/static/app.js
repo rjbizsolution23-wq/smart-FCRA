@@ -723,7 +723,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
                 <label class="flex gap-2 items-start cursor-pointer"><input type="checkbox" name="tsr" required class="mt-0.5"> I acknowledge TSR advance-fee waiver terms for credit services.</label>
               </div>
               <p class="text-[10px] text-gray-500 leading-relaxed">Your full FCRA analysis runs on our side after signup, but stays hidden in your portal until our team confirms payment and unlocks your case.</p>
-              <button type="submit" id="mfsn-signup-btn" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-3 rounded-lg text-sm"><i class="fas fa-bolt mr-2"></i>Pull Report & Create My Portal</button>
+              <button type="submit" id="mfsn-signup-btn" class="w-full btn-rj font-semibold py-3 rounded-lg text-sm"><i class="fas fa-bolt mr-2"></i>Pull Report & Create My Portal</button>
             </form>
             <div id="mfsn-signup-result" class="hidden mt-4 rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-4 text-sm text-emerald-100 space-y-2"></div>
             <p class="text-center text-xs text-gray-500 mt-4">Already have access? <a href="/" class="text-cyan-400 hover:text-cyan-300">Sign in</a></p>
@@ -839,7 +839,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
             <p class="text-[10px] text-amber-300 leading-relaxed"><strong>NOTICE:</strong> This service prepares dispute documents. We are NOT a law firm and do NOT provide legal advice. <a href="/compliance/disclaimers" class="underline hover:text-amber-200">View Full Disclaimers →</a></p>
           </div>
         </div>
-        <p class="text-center text-gray-600 text-xs mt-4">Smart FCRA Supreme v2.0 | RJ Business Solutions</p>
+        <p class="text-center text-gray-500 text-xs mt-4">Smart FCRA · RJ Business Solutions · Empowering Generational Wealth</p>
       </div></div>`;
   }
 
@@ -1095,6 +1095,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'sales-tools', icon: 'fa-chart-pie', label: 'Sales Tools' },
         { id: 'tradelines', icon: 'fa-layer-group', label: 'Tradelines' },
         { id: 'brand-library', icon: 'fa-palette', label: 'Brand Library' },
+        { id: 'product-map', icon: 'fa-sitemap', label: 'Product Map' },
         { id: 'roi-calculator', icon: 'fa-calculator', label: 'ROI Calculator' },
         { id: 'team', icon: 'fa-user-friends', label: 'Team' },
         { id: 'settings', icon: 'fa-cog', label: 'Settings' },
@@ -1204,6 +1205,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'sales-tools': await pgSalesTools(el); break;
         case 'tradelines': await pgTradelines(el); break;
         case 'brand-library': await pgBrandLibrary(el); break;
+        case 'product-map': await pgProductMap(el); break;
         case 'roi-calculator': await pgROICalculator(el); break;
         case 'team': await pgTeam(el); break;
         case 'settings': await pgSettings(el); break;
@@ -6054,7 +6056,7 @@ Status: Discharged`;
             <a href="/legal/terms" target="_blank" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"><i class="fas fa-external-link-alt"></i>View full document</a>
           </div>
           <div class="p-6 text-sm text-gray-300 space-y-4">
-            <p>By using the FCRA Supreme Violation Detector service, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use our service.</p>
+            <p>By using Smart FCRA, operated by RJ Business Solutions, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use our service.</p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="bg-gray-800/40 rounded-lg p-4">
                 <div class="text-xs font-semibold text-blue-400 mb-2">Service Usage</div>
@@ -6124,7 +6126,7 @@ Status: Discharged`;
           <div class="p-6 text-sm text-gray-300 space-y-4">
             <div class="p-4 bg-amber-900/20 border border-amber-600/30 rounded-lg">
               <div class="text-xs font-bold text-amber-300 mb-2">⚠️ NOT LEGAL ADVICE</div>
-              <p class="text-xs text-gray-400 leading-relaxed">FCRA Supreme Detector prepares dispute documents only. We are NOT a law firm and do not provide legal advice. Nothing on this platform constitutes legal advice. For legal advice about your specific situation, consult a qualified attorney. FCRA rights are governed by 15 U.S.C. § 1681 et seq.</p>
+              <p class="text-xs text-gray-400 leading-relaxed">Smart FCRA, operated by RJ Business Solutions, prepares dispute documents only. We are NOT a law firm and do not provide legal advice. Nothing on this platform constitutes legal advice. For legal advice about your specific situation, consult a qualified attorney. FCRA rights are governed by 15 U.S.C. § 1681 et seq.</p>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="bg-gray-800/40 rounded-lg p-4">
@@ -8332,6 +8334,146 @@ async function pgAdminConsole(el) {
     } catch (err) {
       el.innerHTML = `<div class="text-red-400 p-6">${escapeHtml(err.message)}</div>`;
     }
+  }
+
+  async function pgBrandLibrary(el) {
+    const RJ_LOGO = 'https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg';
+    let catalog = { forms: [], brand: { name: 'RJ Business Solutions', tagline: 'Empowering Generational Wealth', colors: { blue: '#2563eb', sky: '#0ea5e9', navy: '#0f172a' }, fonts: { head: 'Space Grotesk', body: 'Inter' }, logo: RJ_LOGO, web: 'https://rjbusinesssolutions.org', email: 'support@rjbusinesssolutions.org' }, hubUrl: '/static/brand/' };
+    let leads = [];
+    try { catalog = { ...catalog, ...(await api('/brand/catalog')) }; } catch {}
+    try { const r = await api('/brand/leads'); leads = r.leads || []; } catch {}
+    const colors = catalog.brand?.colors || {};
+    const forms = catalog.forms || [];
+    el.innerHTML = `<div class="fade-in space-y-6">
+      <div class="rounded-2xl border border-blue-500/25 bg-gradient-to-r from-slate-950 via-blue-950/40 to-slate-950 p-6 flex flex-wrap items-center gap-5">
+        <img src="${escapeHtml(catalog.brand?.logo || RJ_LOGO)}" alt="RJ Business Solutions" class="w-16 h-16 rounded-2xl object-cover border border-blue-500/40 shadow-[0_0_24px_rgba(37,99,235,0.35)]">
+        <div class="flex-1 min-w-[220px]">
+          <div class="text-[10px] uppercase tracking-[0.18em] font-bold text-sky-300">RJ Business Solutions</div>
+          <h1 class="text-2xl font-bold text-white font-display mt-0.5">Brand Library</h1>
+          <p class="text-sm text-slate-400 mt-1">${escapeHtml(catalog.brand?.tagline || 'Empowering Generational Wealth')} · Smart FCRA identity, forms, and inbound leads</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <a href="${escapeHtml(catalog.hubUrl || '/brand')}" target="_blank" rel="noopener" class="btn-rj px-4 py-2.5 rounded-lg text-sm font-semibold">Open full hub</a>
+          <button type="button" onclick="window._nav('product-map')" class="px-4 py-2.5 rounded-lg text-sm font-semibold border border-blue-500/30 text-blue-100 hover:bg-blue-500/10">Product map</button>
+        </div>
+      </div>
+      <div class="grid md:grid-cols-4 gap-3">
+        ${[['Blue', colors.blue || '#2563eb'], ['Sky', colors.sky || '#0ea5e9'], ['Navy', colors.navy || '#0f172a'], ['Gold', '#f59e0b']].map(([n, hex]) => `
+          <div class="glass rounded-xl p-4 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg border border-white/10" style="background:${hex}"></div>
+            <div><div class="text-xs text-gray-400">${n}</div><div class="text-sm font-mono text-white">${hex}</div></div>
+          </div>`).join('')}
+      </div>
+      <div class="glass rounded-xl p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-sm font-bold text-white font-display">Live lead forms</h2>
+          <span class="text-[10px] text-slate-500">Space Grotesk · Inter · POST /api/public/lead/:formId</span>
+        </div>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          ${forms.map(f => `<a href="${escapeHtml(f.url)}" target="_blank" rel="noopener" class="rounded-xl border border-blue-500/20 bg-slate-950/50 hover:border-blue-400/50 p-4 transition">
+            <div class="text-[10px] uppercase tracking-wider text-sky-300 font-bold">${escapeHtml(f.id)}</div>
+            <div class="text-sm font-semibold text-white mt-1">${escapeHtml(f.title)}</div>
+            <div class="text-[11px] text-slate-500 mt-2">${escapeHtml(f.url)}</div>
+          </a>`).join('')}
+        </div>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-bold text-white font-display">Recent brand leads</h2>
+          <span class="text-[10px] text-slate-500">${leads.length} latest</span>
+        </div>
+        ${leads.length ? `<div class="overflow-x-auto"><table class="w-full text-xs">
+          <thead><tr class="text-left text-slate-500 border-b border-slate-800">
+            <th class="py-2 pr-3">When</th><th class="py-2 pr-3">Form</th><th class="py-2 pr-3">Name</th><th class="py-2 pr-3">Email</th><th class="py-2 pr-3">Status</th>
+          </tr></thead>
+          <tbody>${leads.slice(0, 25).map(l => `<tr class="border-b border-slate-800/80">
+            <td class="py-2 pr-3 text-slate-400 whitespace-nowrap">${escapeHtml(String(l.created_at || '').slice(0, 16))}</td>
+            <td class="py-2 pr-3 text-sky-300">${escapeHtml(l.form_id || '')}</td>
+            <td class="py-2 pr-3 text-white">${escapeHtml([l.first_name, l.last_name].filter(Boolean).join(' ') || '—')}</td>
+            <td class="py-2 pr-3 text-slate-300">${escapeHtml(l.email || '')}</td>
+            <td class="py-2 pr-3">${escapeHtml(l.status || 'new')}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>` : `<p class="text-sm text-slate-500">No inbound brand leads yet. Share <a class="text-blue-400 underline" href="/forms/credit-qualify" target="_blank">/forms/credit-qualify</a>.</p>`}
+      </div>
+    </div>`;
+  }
+
+  async function pgProductMap(el) {
+    const sections = [
+      { title: 'Public (no login)', items: [
+        ['Login / Register / MFA', 'Email, password, forgot/reset, MFA, email verify'],
+        ['MFSN signup', '/?signup=mfsn — affiliate A8289, MAPIK# token, analysis locked until staff unlock'],
+        ['Brand hub', '/brand — 69 RJ assets (forms, marketing, legal, ops, founder)'],
+        ['Lead forms', '8 interactive forms POST to /api/public/lead/:formId → D1 + ops email + GHL'],
+        ['Legal', '/legal/terms, /legal/privacy, /compliance/disclaimers'],
+        ['API / health', '/api/docs, /api/health, /api/health/ready, /api/security/trust-center'],
+      ]},
+      { title: 'Staff console', items: [
+        ['Search', 'Clients, reports, documents'],
+        ['Executive Overview', 'KPIs and pipeline (sparkline is still a static SVG)'],
+        ['Client Management', 'Create/list clients; Salisha demo workspace'],
+        ['Violation Review QA', 'Approve / reject engine findings'],
+        ['Dashboard / Clients / Reports', 'Ops home, client list, report upload + history'],
+        ['Violations / Documents', 'Org queue + generated letters/PDFs'],
+        ['Compliance Hub', 'Consent, disclaimers, legal status'],
+        ['Mailing Campaigns', 'Click2Mail certified / first-class'],
+        ['Founder OS / Sales / ROI', 'Owner OS, pitch tools, deal math'],
+        ['Tradelines', 'TradelineMaster inventory, 12.5% markup, filters, cart, smart match, order email'],
+        ['Brand Library', 'Forms, color tokens, inbound leads'],
+        ['Team / Settings / Billing', 'Users, GHL/MFSN/Twilio/Stripe/Click2Mail, org Stripe'],
+        ['AI Studio / Legal / Admin', 'Mentors, in-app legal, super-admin console'],
+      ]},
+      { title: 'Client portal', items: [
+        ['Cockpit / Journey / Get Started', 'Scores, 6-stage pipeline, intake wizard'],
+        ['Messages / Vault', 'Client ↔ staff chat; ID, SSN, proof, reports in R2'],
+        ['Fundability / Boost / AU Tradelines', 'Deterministic fundability + educational AU catalog'],
+        ['Tutor / Documents / Legal & Notary', 'Alex Rivera tutor, letters, RON (sandbox unless live keys)'],
+        ['Video', 'Twilio Video tokens only — in-browser SDK not embedded yet'],
+        ['Education / Security / Mentors', 'Lessons, MFA, Rick / Alex / Maya / Jordan chat'],
+      ]},
+      { title: 'Engines & integrations', items: [
+        ['Violation engine', 'FCRA / FDCPA / ECOA / Metro2 / state / BK + fact-check, LVS, damages'],
+        ['Letters', '~45 types, letter-strategy, branded PDF letterhead'],
+        ['GoHighLevel', 'Full custom fields + tags; bulk CRM + MFSN sync'],
+        ['MyFreeScoreNow', 'Partner signup, affiliate A8289, token gate, analysis lock'],
+        ['TradelineMaster', 'Live inventory, markup, daily refresh cron job'],
+        ['Twilio / Email / Stripe / Click2Mail', 'SMS, Verify, Video tokens, transactional mail, org billing, certified mail'],
+        ['AI cascade', 'Groq → Gemini → Workers AI → OpenAI free-only'],
+      ]},
+    ];
+    const leftover = [
+      'Embed Twilio Video JS on the client Video page (tokens exist today).',
+      'Wire Cloudflare Turnstile on brand forms (placeholder only).',
+      'Bind Executive Overview sparkline to live revenue/pipeline.',
+      'Read Click2Mail status from /api/settings/integrations instead of hardcoding CONNECTED.',
+      'Merge duplicate Clients / Reports nav items.',
+      'Client self-serve Stripe checkout for analysis unlock.',
+      'Proof RON live keys + sandbox disclosure.',
+      'Confirm every letter PDF uses RJ logo + Space Grotesk / Inter.',
+    ];
+    el.innerHTML = `<div class="fade-in space-y-6">
+      <div class="rounded-2xl border border-blue-500/25 bg-gradient-to-r from-slate-950 via-blue-950/30 to-slate-950 p-6">
+        <div class="text-[10px] uppercase tracking-[0.18em] font-bold text-sky-300">Smart FCRA · RJ Business Solutions</div>
+        <h1 class="text-2xl font-bold text-white font-display mt-1">Product map</h1>
+        <p class="text-sm text-slate-400 mt-1">Everything this app does today, plus the finish-up list. Full write-up: <a class="text-blue-400 underline" href="https://github.com/rjbizsolution23-wq/smart-FCRA/blob/cursor/production-ready-cro-d5d1/docs/FEATURES.md" target="_blank" rel="noopener">docs/FEATURES.md</a></p>
+      </div>
+      ${sections.map(s => `
+        <div class="glass rounded-xl p-5">
+          <h2 class="text-sm font-bold text-white font-display mb-3">${s.title}</h2>
+          <div class="grid md:grid-cols-2 gap-3">
+            ${s.items.map(([n, d]) => `<div class="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+              <div class="text-xs font-semibold text-white">${n}</div>
+              <div class="text-[11px] text-slate-400 mt-1 leading-relaxed">${d}</div>
+            </div>`).join('')}
+          </div>
+        </div>`).join('')}
+      <div class="glass rounded-xl p-5 border border-amber-500/25">
+        <h2 class="text-sm font-bold text-amber-200 font-display mb-3">Still to finish</h2>
+        <ol class="space-y-2 text-sm text-slate-300 list-decimal list-inside">
+          ${leftover.map(x => `<li>${x}</li>`).join('')}
+        </ol>
+      </div>
+    </div>`;
   }
 
   async function pgTradelines(el) {

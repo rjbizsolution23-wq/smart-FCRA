@@ -1,6 +1,15 @@
-# Changelog — FCRA Supreme Violation Detector
+# Changelog — Smart FCRA · RJ Business Solutions
 
 All notable changes to this project will be documented in this file.
+
+## [3.1.0] - 2026-08-13
+### Added
+- **Operator catalog**: `docs/FEATURES.md` — every public, staff, client, engine, and integration surface plus finish-up list.
+- **Product Map** staff page: in-app feature inventory matching the catalog.
+- **Brand Library** staff page restored: RJ tokens, live forms, inbound `brand_leads`.
+
+### Changed
+- **Brand consistency**: login, MFSN CTA, legal pages, OpenAPI, mentors, and letterhead copy use **Smart FCRA · RJ Business Solutions** (Space Grotesk + Inter, `#2563eb` / `#0ea5e9`). Removed leftover “FCRA Supreme” chrome from user-facing surfaces.
 
 ## [3.0.0] - 2026-04-18
 ### Added

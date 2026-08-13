@@ -9638,32 +9638,33 @@ async function getStaticFile(path: string): Promise<string | null> {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Terms of Service | FCRA Supreme Detector</title>
+  <title>Terms of Service | Smart FCRA</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
-    body { background: #030014; color: #e5e7eb; font-family: system-ui, -apple-system, sans-serif; }
-    .glass { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); backdrop-filter: blur(40px); }
+    :root { --rj-blue:#2563eb; --rj-sky:#0ea5e9; --rj-navy:#0f172a; }
+    body { background: #0f172a; color: #e5e7eb; font-family: Inter, system-ui, sans-serif; }
+    h1, h2, h3 { font-family: 'Space Grotesk', Inter, sans-serif; }
+    .glass { background: rgba(15,23,42,0.72); border: 1px solid rgba(191,219,254,0.12); backdrop-filter: blur(24px); }
   </style>
 </head>
 <body class="min-h-screen">
   <div class="max-w-4xl mx-auto px-4 py-12">
     <div class="flex items-center gap-4 mb-10">
-      <div class="w-12 h-12 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center">
-        <i class="fas fa-shield-alt text-xl text-blue-400"></i>
-      </div>
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="RJ Business Solutions" class="w-12 h-12 rounded-xl object-cover border border-blue-500/40 shadow-[0_0_18px_rgba(37,99,235,0.35)]">
       <div>
-        <h1 class="text-xl font-bold text-white">FCRA Supreme Detector</h1>
-        <p class="text-xs text-gray-500">RJ Business Solutions</p>
+        <h1 class="text-xl font-bold text-white">Smart FCRA</h1>
+        <p class="text-xs text-sky-300">RJ Business Solutions · Empowering Generational Wealth</p>
       </div>
     </div>
     <div class="glass rounded-2xl p-8 mb-8">
       <h2 class="text-2xl font-bold text-white mb-2">Terms of Service</h2>
       <p class="text-sm text-gray-500 mb-6">Last updated: April 22, 2026</p>
       <div class="prose prose-invert prose-sm max-w-none text-gray-300">
-        <p>By using the FCRA Supreme Violation Detector service, you agree to be bound by these Terms of Service.</p>
+        <p>By using the Smart FCRA service, you agree to be bound by these Terms of Service.</p>
         <h3 class="text-lg font-semibold text-white mt-6 mb-3">1. Acceptance of Terms</h3>
-        <p>These Terms of Service govern your use of the FCRA Supreme Violation Detector operated by RJ Business Solutions.</p>
+        <p>These Terms of Service govern your use of the Smart FCRA operated by RJ Business Solutions.</p>
         <h3 class="text-lg font-semibold text-white mt-6 mb-3">2. Use of Service</h3>
         <p>You may use this service solely for lawful purposes. You agree not to use the service in any way that violates applicable laws.</p>
         <h3 class="text-lg font-semibold text-white mt-6 mb-3">3. Disclaimer</h3>
@@ -9683,23 +9684,24 @@ async function getStaticFile(path: string): Promise<string | null> {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Privacy Policy | FCRA Supreme Detector</title>
+  <title>Privacy Policy | Smart FCRA</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
-    body { background: #030014; color: #e5e7eb; font-family: system-ui, -apple-system, sans-serif; }
-    .glass { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); backdrop-filter: blur(40px); }
+    :root { --rj-blue:#2563eb; --rj-sky:#0ea5e9; --rj-navy:#0f172a; }
+    body { background: #0f172a; color: #e5e7eb; font-family: Inter, system-ui, sans-serif; }
+    h1, h2, h3 { font-family: 'Space Grotesk', Inter, sans-serif; }
+    .glass { background: rgba(15,23,42,0.72); border: 1px solid rgba(191,219,254,0.12); backdrop-filter: blur(24px); }
   </style>
 </head>
 <body class="min-h-screen">
   <div class="max-w-4xl mx-auto px-4 py-12">
     <div class="flex items-center gap-4 mb-10">
-      <div class="w-12 h-12 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center">
-        <i class="fas fa-shield-alt text-xl text-purple-400"></i>
-      </div>
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="RJ Business Solutions" class="w-12 h-12 rounded-xl object-cover border border-blue-500/40 shadow-[0_0_18px_rgba(37,99,235,0.35)]">
       <div>
-        <h1 class="text-xl font-bold text-white">FCRA Supreme Detector</h1>
-        <p class="text-xs text-gray-500">RJ Business Solutions</p>
+        <h1 class="text-xl font-bold text-white">Smart FCRA</h1>
+        <p class="text-xs text-sky-300">RJ Business Solutions · Empowering Generational Wealth</p>
       </div>
     </div>
     <div class="glass rounded-2xl p-8 mb-8">
@@ -9726,23 +9728,24 @@ async function getStaticFile(path: string): Promise<string | null> {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Disclaimers | FCRA Supreme Detector</title>
+  <title>Disclaimers | Smart FCRA</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
-    body { background: #030014; color: #e5e7eb; font-family: system-ui, -apple-system, sans-serif; }
-    .glass { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); backdrop-filter: blur(40px); }
+    :root { --rj-blue:#2563eb; --rj-sky:#0ea5e9; --rj-navy:#0f172a; }
+    body { background: #0f172a; color: #e5e7eb; font-family: Inter, system-ui, sans-serif; }
+    h1, h2, h3 { font-family: 'Space Grotesk', Inter, sans-serif; }
+    .glass { background: rgba(15,23,42,0.72); border: 1px solid rgba(191,219,254,0.12); backdrop-filter: blur(24px); }
   </style>
 </head>
 <body class="min-h-screen">
   <div class="max-w-4xl mx-auto px-4 py-12">
     <div class="flex items-center gap-4 mb-10">
-      <div class="w-12 h-12 rounded-xl bg-amber-600/20 border border-amber-500/30 flex items-center justify-center">
-        <i class="fas fa-exclamation-triangle text-xl text-amber-400"></i>
-      </div>
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="RJ Business Solutions" class="w-12 h-12 rounded-xl object-cover border border-blue-500/40 shadow-[0_0_18px_rgba(37,99,235,0.35)]">
       <div>
-        <h1 class="text-xl font-bold text-white">FCRA Supreme Detector</h1>
-        <p class="text-xs text-gray-500">RJ Business Solutions</p>
+        <h1 class="text-xl font-bold text-white">Smart FCRA</h1>
+        <p class="text-xs text-sky-300">RJ Business Solutions · Empowering Generational Wealth</p>
       </div>
     </div>
     <div class="glass rounded-2xl p-8 mb-8">
@@ -9909,7 +9912,7 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/app.js?v=20260809-rj-brand-library"></script>
+  <script src="/static/app.js?v=20260813-rj-brand-full"></script>
 </body>
 </html>`;
 }

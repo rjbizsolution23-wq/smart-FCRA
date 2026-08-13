@@ -3,7 +3,7 @@
  * 50+ Leading Federal Court Decisions on FCRA, FDCPA, ECOA
  * 
  * Owner: Rick Jefferson | RJ Business Solutions
- * Source: FCRA Supreme Violation Detector Knowledge Base
+ * Source: Smart FCRA Knowledge Base (RJ Business Solutions)
  */
 
 export interface CaseLawCitation {

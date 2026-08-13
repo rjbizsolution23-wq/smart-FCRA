@@ -3,7 +3,7 @@
  * For Credit Card Debt, Written Contracts, and Judgments
  * 
  * Owner: Rick Jefferson | RJ Business Solutions
- * Source: FCRA Supreme Violation Detector Knowledge Base
+ * Source: Smart FCRA Knowledge Base (RJ Business Solutions)
  * Last Updated: July 16, 2026
  */
 
