@@ -10231,7 +10231,7 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/app.js?v=20260813-saas-funnel"></script>
+  <script src="/static/app.js?v=20260813-saas-funnel-v2"></script>
 </body>
 </html>`;
 }

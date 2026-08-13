@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.6.1] - 2026-08-13
+### Changed
+- Sales funnel copy: violations / LVS / damages, **generated** letters (no “templates” language), client portal + learning resources, and package cards that state what each tier does for litigation ops.
+- In-app Billing plan bullets aligned: generated letters from file facts; removed template wording.
+
 ## [3.6.0] - 2026-08-13
 ### Added
 - Public **Smart FCRA by RJ Business Solutions** sales funnel at `/` (`public/static/marketing/index.html`): full-bleed hero, product, compliance posture, SaaS pricing ($497 / $2,500 / $9,997), demo lead form → `POST /api/public/lead/saas-demo`.

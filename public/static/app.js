@@ -6283,9 +6283,9 @@ Status: Discharged`;
   // ═══════════════════════════════════════════════════════════════
   async function pgBilling(el) {
     const plans = [
-      { id: 'professional', name: 'Professional', price: 497, color: 'blue', badge: 'MOST POPULAR', features: ['100 Clients/mo', 'Unlimited report analyses', 'Litigation scoring', '15 FCRA letters (all templates)', '15-category violation engine', 'Case law database', 'SOL calculator', 'Priority email support'], priceId: 'price_PRO_497' },
-      { id: 'unlimited', name: 'Unlimited', price: 2500, color: 'amber', badge: 'UNLIMITED', features: ['Everything in Enterprise', 'Unlimited MFSN credit reports', 'Full FCRA knowledge base', 'Custom integrations', 'SLA guarantee', 'On-site training available', 'Quarterly business review', 'Multi-org management'], priceId: 'price_UNL_2500' },
-      { id: 'enterprise', name: 'Enterprise', price: 9997, color: 'purple', badge: 'TEAM/AGENCY', features: ['Unlimited Clients', 'Unlimited everything', '38 legal document templates', 'Full case law database (300+ cases)', 'Expert consultation add-on', 'White-label reports', 'API access', 'Dedicated account manager'], priceId: 'price_ENT_9997' }
+      { id: 'professional', name: 'Professional', price: 497, color: 'blue', badge: 'MOST POPULAR', features: ['100 active clients', 'Unlimited report analyses', '15-category violation engine (FCRA/FDCPA/ECOA/Metro 2)', 'Litigation Vulnerability Score + damages', 'Generated dispute/demand letters from file facts', 'Case-law hooks + SOL calculator', 'Client portal: sandbox, tutors, CROA cancel', 'Priority email support'], priceId: 'price_PRO_497' },
+      { id: 'unlimited', name: 'Unlimited', price: 2500, color: 'amber', badge: 'UNLIMITED', features: ['Everything in Professional', 'Unlimited clients & scans', 'MFSN / monitoring imports', 'Click2Mail + FCRA § 611 investigation clocks', 'Full FCRA knowledge base & staff mentors', 'Team operator seats', 'Faster SLA + QBR available', 'Multi-org management'], priceId: 'price_UNL_2500' },
+      { id: 'enterprise', name: 'Enterprise', price: 9997, color: 'purple', badge: 'TEAM/AGENCY', features: ['Unlimited seats, clients, analyses', 'Full generated litigation document pack (~45 letter types)', 'Full case-law database (300+)', 'White-label client portals', 'API access', 'Dedicated account manager', 'Expert legal-ops consultation add-on'], priceId: 'price_ENT_9997' }
     ];
 
     let mode = 'unconfigured';
