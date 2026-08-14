@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.8.0] - 2026-08-14
+### Added
+- Migration `0024_tenant_session_compliance.sql`: session last-seen / last-path / demo isolation / revoke-without-delete, `session_events`, demo + lead IP/UA, org indexes.
+- Full data + compliance catalog: `docs/DATA_AND_COMPLIANCE.md`, `src/lib/data-compliance.ts`, `GET /api/compliance/data-inventory`.
+- Session rows kept after logout/expiry (`revoked_at`). Login, logout, MFA, and demo enter write `session_events` + `security_audit_log`.
+- Privacy export pack covers consents, clocks, contracts, disputes, billing, and related 0021–0023 records (org-scoped). Purge deletes R2 originals and remaining PII tables; legal hold has an admin setter.
+- `GET /api/security/audit-log` (tenant-scoped). Brand leads visible to `super_admin` globally and to other staff **only in their org**.
+
+### Changed
+- Housekeeping no longer deletes session history; expired demo sessions are marked `expired` and kept.
+- Public privacy policy: opaque sessions (not JWT RS256); garbled CCPA phone removed.
+
 ## [3.7.0] - 2026-08-14
 ### Added
 - Login and `/demo`: CRO **interactive demo** signup on the Sign In screen (`/login?mode=demo`) — business name, address, email, phone — then popup tour + text/voice agent.

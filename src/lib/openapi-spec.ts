@@ -33,7 +33,10 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
   { method: 'post', path: '/api/auth/reset-password', summary: 'Complete password reset', tags: ['Auth'] },
   // Security
   { method: 'get', path: '/api/security/trust-center', summary: 'Public trust center metadata', tags: ['Security'] },
-  { method: 'get', path: '/api/security/posture', summary: 'Authenticated security posture score', tags: ['Security'], security: true },
+  { method: 'get', path: '/api/security/audit-log', summary: 'Tenant-scoped security audit events', tags: ['Security'], security: true },
+  { method: 'get', path: '/api/auth/session-events', summary: 'Current user session lifecycle events', tags: ['Auth'], security: true },
+  { method: 'get', path: '/api/compliance/data-inventory', summary: 'Full data catalog + compliance controls', tags: ['Compliance'], security: true },
+  { method: 'post', path: '/api/admin/clients/{id}/legal-hold', summary: 'Set or release a litigation/retention hold', tags: ['Admin'], security: true },
   // Clients
   { method: 'get', path: '/api/clients', summary: 'List clients for org', tags: ['Clients'], security: true },
   { method: 'post', path: '/api/clients', summary: 'Create client', tags: ['Clients'], security: true },

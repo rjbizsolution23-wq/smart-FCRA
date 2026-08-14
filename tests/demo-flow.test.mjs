@@ -81,6 +81,7 @@ function createDemoDb() {
               id: binds[0], email: binds[1], phone: binds[2], business_name: binds[3],
               business_address: binds[4], first_name: binds[5], last_name: binds[6],
               token_hash: binds[7], status: 'pending', expires_at: binds[8],
+              org_id: binds[9] || null, source_ip: binds[10] || null, user_agent: binds[11] || null,
               mfsn_pulls: 0, tour_step: 0,
             });
           }
@@ -88,6 +89,7 @@ function createDemoDb() {
             sessions.push({
               id: binds[0], user_id: binds[1], org_id: binds[2], expires_at: binds[3],
               ip_address: binds[4], user_agent: binds[5],
+              demo_session_id: binds[6] || null, revoked_at: null,
             });
           }
           if (s.includes("UPDATE demo_sessions SET status = 'active'")) {
@@ -100,12 +102,17 @@ function createDemoDb() {
             }
           }
           if (s.includes('UPDATE demo_sessions SET token_hash')) {
-            const row = demoSessions.find((r) => r.id === binds[6]);
+            const row = demoSessions.find((r) => r.id === binds[binds.length - 1]);
             if (row) {
               row.token_hash = binds[0];
               row.phone = binds[1];
               row.business_name = binds[2];
               row.business_address = binds[3];
+              if (binds.length > 8) {
+                row.org_id = binds[6];
+                row.source_ip = binds[7];
+                row.user_agent = binds[8];
+              }
             }
           }
           if (s.includes('INSERT INTO brand_leads')) store.leads.push({ id: binds[0] });
@@ -213,6 +220,9 @@ let demoToken;
   assert(res.status === 200, `demo start 200 got ${res.status} ${JSON.stringify(body)}`);
   assert(body.token && body.token.length >= 32, 'demo token issued');
   demoToken = body.token;
+  assert(db.store.demoSessions.length === 1, 'demo session row stored');
+  assert(db.store.demoSessions[0].org_id === 'org_platform_master', 'demo start stores tenant org');
+  assert(db.store.leads.length >= 1, 'demo lead stored');
 }
 
 let sessionToken;
@@ -229,6 +239,7 @@ let sessionToken;
   assert(body.demo?.businessName === 'Acme Credit Repair LLC', 'firm name on session');
   assert(body.demo?.sampleClientId === 'cli_demo_001', 'salisha sample attached');
   sessionToken = body.token;
+  assert(db.store.sessions[0]?.demo_session_id, 'auth session tagged with demo_session_id');
 }
 
 const auth = { Authorization: `Bearer ${sessionToken}` };

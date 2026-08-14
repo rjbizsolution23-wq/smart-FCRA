@@ -72,7 +72,9 @@ const fakeDb = {
 };
 
 const hk = await jobHousekeeping({ DB: fakeDb });
-assert(hk.sessions >= 0 && calls.some((s) => /DELETE FROM sessions/i.test(s)), 'housekeeping deletes sessions');
+assert(hk.demoExpired >= 0 && calls.some((s) => /UPDATE demo_sessions SET status = 'expired'/i.test(s)), 'housekeeping expires demo sessions');
+assert(!calls.some((s) => /DELETE FROM sessions/i.test(s)), 'housekeeping retains session rows');
+assert(calls.some((s) => /data_retention_holds/i.test(s)), 'alert purge respects legal hold');
 
 const rv = await jobRonVideoCleanup({ DB: fakeDb });
 assert(typeof rv.ronExpired === 'number', 'ron cleanup stats');

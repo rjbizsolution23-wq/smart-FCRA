@@ -11,6 +11,7 @@ import { buildSecurityPosture } from './security-compliance';
 import { seedKnowledgeBase, retrieveKnowledge } from './knowledge-base';
 import { syncTradelineInventory } from './tradeline-sync';
 import { tradelineMasterConfigured } from './tradelinemaster-client';
+import { OPS_BACKUP_TABLES } from './data-compliance';
 
 export type OpsEnv = {
   DB: any;
@@ -165,10 +166,13 @@ export async function touchClientEngagement(env: OpsEnv, clientId: string) {
 // ── Individual jobs ──────────────────────────────────────────────
 
 export async function jobHousekeeping(env: OpsEnv, opts?: { orgId?: string }) {
-  const stats = { sessions: 0, mfa: 0, verifyTokens: 0, resetTokens: 0, oldAlerts: 0, oldJobRuns: 0, errors: 0 };
+  const stats = { sessions: 0, mfa: 0, verifyTokens: 0, resetTokens: 0, oldAlerts: 0, oldJobRuns: 0, demoExpired: 0, errors: 0 };
+  // Session rows are retained after expiry/revoke for tenant audit (revoked_at / expires_at). Do not DELETE.
   try {
-    const r = await env.DB.prepare(`DELETE FROM sessions WHERE expires_at IS NOT NULL AND expires_at < datetime('now')`).run();
-    stats.sessions = r?.meta?.changes || 0;
+    const r = await env.DB.prepare(
+      `UPDATE demo_sessions SET status = 'expired', updated_at = datetime('now') WHERE expires_at < datetime('now') AND status IN ('active','pending')`
+    ).run();
+    stats.demoExpired = r?.meta?.changes || 0;
   } catch { stats.errors++; }
   try {
     const r = await env.DB.prepare(
@@ -188,10 +192,11 @@ export async function jobHousekeeping(env: OpsEnv, opts?: { orgId?: string }) {
     ).run();
     stats.mfa = r?.meta?.changes || 0;
   } catch { stats.errors++; }
-  // Retain portal alerts 180 days unless legal hold (best-effort)
+  // Retain portal alerts 180 days unless the client is on legal hold
   try {
     const r = await env.DB.prepare(
-      `DELETE FROM portal_alerts WHERE created_at < datetime('now', '-180 days') AND status IN ('sent','simulated','failed','skipped')`
+      `DELETE FROM portal_alerts WHERE created_at < datetime('now', '-180 days') AND status IN ('sent','simulated','failed','skipped')
+       AND client_id NOT IN (SELECT id FROM clients WHERE COALESCE(data_retention_holds, 0) = 1)`
     ).run();
     stats.oldAlerts = r?.meta?.changes || 0;
   } catch { /* soft */ }
@@ -929,12 +934,7 @@ export async function jobBackupSnapshot(env: OpsEnv, opts?: { orgId?: string }) 
     return stats;
   }
 
-  const tables = [
-    'organizations', 'users', 'clients', 'credit_reports', 'violations', 'documents',
-    'legal_contracts', 'esign_consent_events', 'ron_sessions', 'video_conference_sessions',
-    'email_delivery_log', 'onboarding_drip_log', 'scheduled_job_runs', 'compliance_snapshots',
-    'privacy_requests', 'security_audit_log', 'knowledge_chunks',
-  ];
+  const tables = OPS_BACKUP_TABLES;
   const payload: Record<string, any> = {
     createdAt: new Date().toISOString(),
     type: 'ops_scheduled_snapshot',

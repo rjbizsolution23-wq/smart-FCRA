@@ -183,23 +183,25 @@ Mentors: Rick Jefferson (strategy), Alex Rivera (credit tutor), Maya Chen (compl
 
 ## 8. Data, security, ops
 
+Canonical inventory: [`docs/DATA_AND_COMPLIANCE.md`](./DATA_AND_COMPLIANCE.md) and `GET /api/compliance/data-inventory`.
+
 | Layer | Behavior |
 |---|---|
-| Auth | JWT (Web Crypto), refresh rotation, MFA TOTP, lockout, password reset |
-| Tenancy | `org_id` on almost every table; `org_platform_master` for public brand leads |
+| Auth | Opaque D1 session tokens (not JWT), MFA TOTP, password reset, `session_events` + `security_audit_log` |
+| Tenancy | `org_id` on tenant tables; brand leads org-scoped (super_admin sees all); demo visitors isolated by `demo_session_id` |
 | Roles | `super_admin`, `admin`, `staff`, `client` |
-| PII | Encryption helpers, audit log, retention jobs |
-| Files | R2 vault + report PDFs |
-| Cron | GitHub Action `platform-ops.yml` → `POST /api/cron/ops` with packs: `daily`, `weekly`, `monthly`, plus `tradeline_inventory_refresh` inside daily |
-| Health | `/api/health/ready` checks D1 |
+| PII | AES-256-GCM on reports/vault; DOB/SSN enc columns written when key set; legal hold; CCPA/GDPR export+purge |
+| Files | R2 vault for original reports and uploads; deleted on privacy purge |
+| Cron | GitHub Action `platform-ops.yml` → `POST /api/cron/ops`; housekeeping **keeps** session rows |
+| Health | `/api/health/ready` checks D1 + integrations |
 
 ---
 
 ## 9. Database (high-signal tables)
 
-`users`, `clients`, `credit_reports`, `credit_accounts`, `violations`, `generated_documents`, `consent_records`, `mfsn_members`, `brand_leads`, `tradeline_orders`, `ghl_sync_log`, `audit_logs`, `refresh_tokens`, `orgs` / branding, mailing campaigns, journey stages, vault files.
+`organizations`, `users`, `sessions`, `session_events`, `clients`, `credit_reports`, `violations`, `documents`, `activity_log`, `security_audit_log`, `privacy_requests`, `brand_leads`, `client_consents`, `portal_disputes`, `investigation_clocks`, `service_records`, `billing_ledger`, `legal_contracts`, `esign_consent_events`, `demo_sessions`, plus the full catalog in DATA_AND_COMPLIANCE.md.
 
-Migrations live in `migrations/` (`0001`–`0021`+). Newest: `0021_client_intelligence.sql` (attestations, snapshots, credit events, portal disputes, CROA cancellations, consents, compliance decisions).
+Migrations live in `migrations/` (`0001`–`0024`). Newest: `0024_tenant_session_compliance.sql`.
 
 ---
 
@@ -233,6 +235,7 @@ Migrations live in `migrations/` (`0001`–`0021`+). Newest: `0021_client_intell
 - **Upload hygiene + original vault** — magic-byte malware gates; original PDF/JSON stored on R2 `DOCS`; blocked files are not downloadable.
 - **FCRA § 611 clocks** — every Click2Mail send writes `investigation_clocks` (30-day statutory / 35-day operational).
 - **CROA ledger** — `service_records` on analysis and mailing; Stripe analysis-unlock blocked until completion.
+- **Tenant + session persistence (0024)** — every session kept after logout (`revoked_at`, last-seen, IP/UA); demo visitors isolated; brand leads org-scoped; full privacy export/purge + R2 delete; legal hold setter; catalog at `docs/DATA_AND_COMPLIANCE.md` / `GET /api/compliance/data-inventory`.
 
 ### Operator secrets still required in Pages (not code)
 

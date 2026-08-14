@@ -78,11 +78,11 @@
         <h3 class="text-lg font-semibold text-white">5. Data Security</h3>
         <p class="text-sm leading-relaxed">We implement appropriate technical and organizational measures to protect your personal information, including:</p>
         <ul class="text-sm list-disc list-inside space-y-1 text-gray-400">
-          <li>Encryption of data in transit (TLS 1.3) and at rest (AES-256)</li>
+          <li>Encryption of data in transit (TLS 1.3) and at rest (AES-256-GCM)</li>
           <li>Access controls limiting data access to authorized personnel only</li>
-          <li>Regular security assessments and penetration testing</li>
+          <li>Per-tenant isolation of consumer files, sessions, and audit records</li>
           <li>Secure Cloudflare infrastructure with DDoS protection</li>
-          <li>JWT-based authentication with RS256 signing</li>
+          <li>Opaque server-side session tokens (not JWT) with IP/UA and last-seen tracking</li>
         </ul>
 
         <h3 class="text-lg font-semibold text-white">6. Your Rights Under GDPR</h3>
@@ -106,7 +106,7 @@
           <li><strong>Right to Opt-Out:</strong> Opt-out of the sale of personal information (we do NOT sell your data)</li>
           <li><strong>Right to Non-Discrimination:</strong> Equal service regardless of exercising privacy rights</li>
         </ul>
-        <p class="text-sm leading-relaxed">To exercise these rights, contact us at privacy@rickjeffersonsolutions.com or call (505) 牢.</p>
+        <p class="text-sm leading-relaxed">To exercise these rights, contact us at privacy@rickjeffersonsolutions.com.</p>
 
         <h3 class="text-lg font-semibold text-white">8. Cookies and Tracking</h3>
         <p class="text-sm leading-relaxed">We use cookies and similar tracking technologies to:</p>

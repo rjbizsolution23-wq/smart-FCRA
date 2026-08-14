@@ -143,6 +143,19 @@ import { vaultOriginalFromBody } from './lib/report-vault';
 import { persistInvestigationClock, closeInvestigationClock, FCRA_611_OPERATIONAL_DAYS } from './lib/investigation-clocks';
 import { recordServiceCompleted, assertCoveredChargeAllowed, writeBillingLedger } from './lib/service-ledger';
 import { sendLetterViaClick2Mail } from './lib/click2mail';
+import {
+  D1_BACKUP_TABLES,
+  brandLeadsVisibleTo,
+  collectPrivacyExport,
+  dataInventoryPayload,
+  insertSessionRow,
+  lookupActiveSession,
+  purgeClientRecords,
+  revokeSessions,
+  sessionsListScope,
+  touchSessionActivity,
+  writeSessionEvent,
+} from './lib/data-compliance';
 import { evaluateIdentityTheftGate } from './engine/dispute-attestation';
 
 // Secure field-level cryptographic helpers mapped to Worker bindings
@@ -446,8 +459,15 @@ async function backpopulateClientInfo(c: any, clientId: string, personalInfo: an
 
     // 2. Backpopulate Date of Birth if currently empty
     if (!client.dob && personalInfo.dobs?.[0]) {
+      const dobVal = personalInfo.dobs[0].trim();
       updates.push('dob = ?');
-      binds.push(personalInfo.dobs[0].trim());
+      binds.push(dobVal);
+      if (!client.dob_enc) {
+        try {
+          updates.push('dob_enc = ?');
+          binds.push(await encryptPII(c, dobVal));
+        } catch { /* key missing */ }
+      }
     }
 
     // 3. Backpopulate Clean SSN Last 4 if currently empty
@@ -464,6 +484,12 @@ async function backpopulateClientInfo(c: any, clientId: string, personalInfo: an
       if (ssnVal) {
         updates.push('ssn_last4 = ?');
         binds.push(ssnVal);
+        if (!client.ssn_last4_enc) {
+          try {
+            updates.push('ssn_last4_enc = ?');
+            binds.push(await encryptPII(c, ssnVal));
+          } catch { /* key missing */ }
+        }
       }
     }
 
@@ -496,8 +522,8 @@ async function backpopulateClientInfo(c: any, clientId: string, personalInfo: an
 
     if (updates.length > 0) {
       updates.push('updated_at = datetime("now")');
-      binds.push(clientId);
-      const sql = `UPDATE clients SET ${updates.join(', ')} WHERE id = ?`;
+      binds.push(clientId, orgId);
+      const sql = `UPDATE clients SET ${updates.join(', ')} WHERE id = ? AND org_id = ?`;
       await c.env.DB.prepare(sql).bind(...binds).run();
     }
   } catch (err) {
@@ -786,9 +812,7 @@ async function authMiddleware(c: any, next: any) {
     c.req.query('token');
   if (!sessionId) return c.json({ error: 'Unauthorized' }, 401);
 
-  const session = await c.env.DB.prepare(
-    'SELECT s.*, u.id as user_id, u.name as user_name, u.email as user_email, u.role as user_role, u.is_active, u.org_id, COALESCE(u.must_change_password, 0) as must_change_password, COALESCE(u.mfa_enabled, 0) as mfa_enabled FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND s.expires_at > datetime("now")'
-  ).bind(sessionId).first();
+  const session = await lookupActiveSession(c.env.DB, sessionId);
 
   if (!session) return c.json({ error: 'Session expired' }, 401);
 
@@ -842,10 +866,25 @@ async function authMiddleware(c: any, next: any) {
 
   if (session.ip_address && session.ip_address !== 'unknown' && session.ip_address !== currentIp) {
     console.warn(`[SECURITY] Session IP change. Session: ${session.id}. Saved: ${session.ip_address}, Request: ${currentIp}`);
+    await writeSessionEvent(c.env, {
+      sessionId: session.id, orgId: session.org_id, userId: session.user_id, demoSessionId: session.demo_session_id,
+      eventType: 'fingerprint_ip_mismatch', ip: currentIp, ua: currentUa, path: c.req.path,
+      detail: { saved: session.ip_address },
+    });
   }
   if (session.user_agent && session.user_agent !== 'unknown' && session.user_agent !== currentUa) {
     console.warn(`[SECURITY] Session UA change. Session: ${session.id}. Saved: ${session.user_agent?.slice(0, 80)}, Request: ${currentUa?.slice(0, 80)}`);
+    await writeSessionEvent(c.env, {
+      sessionId: session.id, orgId: session.org_id, userId: session.user_id, demoSessionId: session.demo_session_id,
+      eventType: 'fingerprint_ua_mismatch', ip: currentIp, ua: currentUa, path: c.req.path,
+    });
   }
+
+  const touch = touchSessionActivity(c.env, session.id, c.req.path);
+  try {
+    if (c.executionCtx?.waitUntil) c.executionCtx.waitUntil(touch);
+    else await touch;
+  } catch { /* ignore */ }
 
   c.set('user', { id: session.user_id, name: session.user_name, email: session.user_email, role: session.user_role, org_id: session.org_id });
   c.set('session', session);
@@ -997,19 +1036,30 @@ app.post('/api/public/lead/:formId', async (c) => {
   const orgId = resolvePublicSignupOrgId(c.env);
   const leadId = generateId();
   const payload = { ...body, form: body.form || formId };
+  const sourceIp = c.req.header('CF-Connecting-IP') || null;
+  const sourceUa = (c.req.header('User-Agent') || '').slice(0, 240) || null;
   try {
     await c.env.DB.prepare(
-      `INSERT INTO brand_leads (id, org_id, form_id, email, phone, first_name, last_name, payload_json, source_url, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', datetime('now'), datetime('now'))`,
+      `INSERT INTO brand_leads (id, org_id, form_id, email, phone, first_name, last_name, payload_json, source_url, source_ip, user_agent, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', datetime('now'), datetime('now'))`,
     ).bind(
       leadId, orgId, formId, email || null, phone || null, firstName || null, lastName || null,
-      JSON.stringify(payload), c.req.header('Referer') || null,
+      JSON.stringify(payload), c.req.header('Referer') || null, sourceIp, sourceUa,
     ).run();
   } catch (e: any) {
-    if (String(e?.message || '').includes('no such table')) {
+    if (String(e?.message || '').includes('no such column')) {
+      await c.env.DB.prepare(
+        `INSERT INTO brand_leads (id, org_id, form_id, email, phone, first_name, last_name, payload_json, source_url, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', datetime('now'), datetime('now'))`,
+      ).bind(
+        leadId, orgId, formId, email || null, phone || null, firstName || null, lastName || null,
+        JSON.stringify(payload), c.req.header('Referer') || null,
+      ).run();
+    } else if (String(e?.message || '').includes('no such table')) {
       return c.json({ error: 'Migration 0020 required', code: 'MIGRATION_REQUIRED' }, 503);
+    } else {
+      throw e;
     }
-    throw e;
   }
 
   // Soft: email ops + sync GHL contact
@@ -1126,6 +1176,8 @@ app.post('/api/public/demo/start', async (c) => {
   const id = generateId();
   const orgId = resolvePublicSignupOrgId(c.env);
   const expiresAt = demoSessionExpiryIso(DEMO_SESSION_HOURS);
+  const sourceIp = c.req.header('CF-Connecting-IP') || null;
+  const sourceUa = (c.req.header('User-Agent') || '').slice(0, 240) || null;
 
   try {
     const existing = await c.env.DB.prepare(
@@ -1134,14 +1186,27 @@ app.post('/api/public/demo/start', async (c) => {
        ORDER BY created_at DESC LIMIT 1`,
     ).bind(email).first() as any;
     if (existing) {
-      await c.env.DB.prepare(
-        `UPDATE demo_sessions SET token_hash = ?, phone = ?, business_name = ?, business_address = ?, first_name = ?, last_name = ?, updated_at = datetime('now') WHERE id = ?`,
-      ).bind(tokenHash, phone, businessName, businessAddress, firstName || null, lastName || null, existing.id).run();
+      try {
+        await c.env.DB.prepare(
+          `UPDATE demo_sessions SET token_hash = ?, phone = ?, business_name = ?, business_address = ?, first_name = ?, last_name = ?, org_id = ?, source_ip = ?, user_agent = ?, updated_at = datetime('now') WHERE id = ?`,
+        ).bind(tokenHash, phone, businessName, businessAddress, firstName || null, lastName || null, orgId, sourceIp, sourceUa, existing.id).run();
+      } catch {
+        await c.env.DB.prepare(
+          `UPDATE demo_sessions SET token_hash = ?, phone = ?, business_name = ?, business_address = ?, first_name = ?, last_name = ?, updated_at = datetime('now') WHERE id = ?`,
+        ).bind(tokenHash, phone, businessName, businessAddress, firstName || null, lastName || null, existing.id).run();
+      }
     } else {
-      await c.env.DB.prepare(
-        `INSERT INTO demo_sessions (id, email, phone, business_name, business_address, first_name, last_name, token_hash, status, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
-      ).bind(id, email, phone, businessName, businessAddress, firstName || null, lastName || null, tokenHash, expiresAt).run();
+      try {
+        await c.env.DB.prepare(
+          `INSERT INTO demo_sessions (id, email, phone, business_name, business_address, first_name, last_name, token_hash, status, expires_at, org_id, source_ip, user_agent)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
+        ).bind(id, email, phone, businessName, businessAddress, firstName || null, lastName || null, tokenHash, expiresAt, orgId, sourceIp, sourceUa).run();
+      } catch {
+        await c.env.DB.prepare(
+          `INSERT INTO demo_sessions (id, email, phone, business_name, business_address, first_name, last_name, token_hash, status, expires_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+        ).bind(id, email, phone, businessName, businessAddress, firstName || null, lastName || null, tokenHash, expiresAt).run();
+      }
     }
   } catch (e: any) {
     if (String(e?.message || '').includes('no such table')) {
@@ -1153,12 +1218,13 @@ app.post('/api/public/demo/start', async (c) => {
   const leadId = generateId();
   try {
     await c.env.DB.prepare(
-      `INSERT INTO brand_leads (id, org_id, form_id, email, phone, first_name, last_name, payload_json, source_url, status, created_at, updated_at)
-       VALUES (?, ?, 'interactive-demo', ?, ?, ?, ?, ?, ?, 'new', datetime('now'), datetime('now'))`,
+      `INSERT INTO brand_leads (id, org_id, form_id, email, phone, first_name, last_name, payload_json, source_url, source_ip, user_agent, status, created_at, updated_at)
+       VALUES (?, ?, 'interactive-demo', ?, ?, ?, ?, ?, ?, ?, ?, 'new', datetime('now'), datetime('now'))`,
     ).bind(
       leadId, orgId, email, phone, firstName || null, lastName || null,
       JSON.stringify({ ...body, form: 'interactive-demo', businessName, businessAddress }),
       c.req.header('Referer') || '/demo',
+      sourceIp, sourceUa,
     ).run();
     await c.env.DB.prepare(`UPDATE demo_sessions SET lead_id = ? WHERE token_hash = ?`).bind(leadId, tokenHash).run();
   } catch { /* brand_leads optional if 0020 missing */ }
@@ -1225,13 +1291,23 @@ app.post('/api/public/demo/enter', async (c) => {
   const expires = new Date(Date.now() + DEMO_SESSION_HOURS * 60 * 60 * 1000).toISOString();
   const ip = c.req.header('CF-Connecting-IP') || 'unknown';
   const ua = c.req.header('User-Agent') || 'unknown';
-  await c.env.DB.prepare(
-    'INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)',
-  ).bind(sessionToken, host.user.id, host.orgId, expires, ip, ua).run();
+  await insertSessionRow(c.env.DB, {
+    id: sessionToken, userId: host.user.id, orgId: host.orgId, expires, ip, ua, demoSessionId: row.id,
+  });
 
   await c.env.DB.prepare(
     `UPDATE demo_sessions SET status = 'active', auth_session_id = ?, org_id = ?, user_id = ?, last_seen_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
   ).bind(sessionToken, host.orgId, host.user.id, row.id).run();
+
+  await writeSessionEvent(c.env, {
+    sessionId: sessionToken, orgId: host.orgId, userId: host.user.id, demoSessionId: row.id,
+    eventType: 'demo_enter', ip, ua, path: '/api/public/demo/enter',
+    detail: { email: row.email, businessName: row.business_name },
+  });
+  await writeSecurityAudit(c.env, {
+    orgId: host.orgId, actorUserId: host.user.id, actorRole: host.user.role || 'admin', action: 'demo_enter',
+    resourceType: 'demo_session', resourceId: row.id, ip, ua,
+  });
 
   return c.json({
     token: sessionToken,
@@ -1325,12 +1401,21 @@ Keep reply under 180 words. No legal advice. No internals.`,
 
   try {
     await c.env.DB.prepare(
-      `INSERT INTO demo_agent_turns (id, demo_session_id, role, content, actions_json) VALUES (?, ?, 'user', ?, null)`,
-    ).bind(generateId(), demo.id, message).run();
+      `INSERT INTO demo_agent_turns (id, demo_session_id, org_id, role, content, actions_json) VALUES (?, ?, ?, 'user', ?, null)`,
+    ).bind(generateId(), demo.id, user.org_id, message).run();
     await c.env.DB.prepare(
-      `INSERT INTO demo_agent_turns (id, demo_session_id, role, content, actions_json) VALUES (?, ?, 'agent', ?, ?)`,
-    ).bind(generateId(), demo.id, reply, JSON.stringify(actions)).run();
-  } catch { /* ignore log failure */ }
+      `INSERT INTO demo_agent_turns (id, demo_session_id, org_id, role, content, actions_json) VALUES (?, ?, ?, 'agent', ?, ?)`,
+    ).bind(generateId(), demo.id, user.org_id, reply, JSON.stringify(actions)).run();
+  } catch {
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO demo_agent_turns (id, demo_session_id, role, content, actions_json) VALUES (?, ?, 'user', ?, null)`,
+      ).bind(generateId(), demo.id, message).run();
+      await c.env.DB.prepare(
+        `INSERT INTO demo_agent_turns (id, demo_session_id, role, content, actions_json) VALUES (?, ?, 'agent', ?, ?)`,
+      ).bind(generateId(), demo.id, reply, JSON.stringify(actions)).run();
+    } catch { /* ignore log failure */ }
+  }
 
   await c.env.DB.prepare(`UPDATE demo_sessions SET last_seen_at = datetime('now') WHERE id = ?`).bind(demo.id).run().catch(() => {});
   await c.env.DB.prepare(
@@ -1430,18 +1515,18 @@ app.get('/api/brand/leads', authMiddleware, async (c) => {
   if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
   try {
     const publicOrg = resolvePublicSignupOrgId(c.env);
-    const rows = (user.role === 'admin' || user.role === 'super_admin')
+    const rows = brandLeadsVisibleTo(user.role) === 'all'
       ? await c.env.DB.prepare(
-          `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, created_at
+          `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, source_ip, created_at
            FROM brand_leads ORDER BY created_at DESC LIMIT 200`,
         ).all()
       : await c.env.DB.prepare(
-          `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, created_at
+          `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, source_ip, created_at
            FROM brand_leads
-           WHERE org_id = ? OR org_id = ? OR org_id IS NULL
+           WHERE org_id = ?
            ORDER BY created_at DESC LIMIT 200`,
-        ).bind(user.org_id, publicOrg).all();
-    return c.json({ ok: true, leads: rows.results || [], publicOrgId: publicOrg });
+        ).bind(user.org_id).all();
+    return c.json({ ok: true, leads: rows.results || [], publicOrgId: publicOrg, scope: brandLeadsVisibleTo(user.role) });
   } catch (e: any) {
     if (String(e?.message || '').includes('no such table')) {
       return c.json({ ok: true, leads: [], warning: 'Migration 0020 required' });
@@ -2058,10 +2143,22 @@ app.post('/api/auth/login', async (c) => {
     user = await c.env.DB.prepare(
       'SELECT u.*, o.name as org_name, o.plan as org_plan, o.settings as org_settings FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ?'
     ).bind(email).first() as any;
-    if (!user) return c.json({ error: 'Invalid credentials' }, 401);
+    if (!user) {
+      await writeSecurityAudit(c.env, {
+        action: 'login_failed', ip: c.req.header('CF-Connecting-IP'), ua: c.req.header('User-Agent'),
+        success: false, detail: { reason: 'unknown_user' },
+      });
+      return c.json({ error: 'Invalid credentials' }, 401);
+    }
 
     const valid = await verifyPassword(password, user.password_hash);
-    if (!valid) return c.json({ error: 'Invalid credentials' }, 401);
+    if (!valid) {
+      await writeSecurityAudit(c.env, {
+        orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'login_failed',
+        ip: c.req.header('CF-Connecting-IP'), ua: c.req.header('User-Agent'), success: false, detail: { reason: 'bad_password' },
+      });
+      return c.json({ error: 'Invalid credentials' }, 401);
+    }
 
     if (user.is_active !== 1) {
       return c.json({
@@ -2099,8 +2196,14 @@ app.post('/api/auth/login', async (c) => {
   const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   const ip = c.req.header('CF-Connecting-IP') || 'unknown';
   const ua = c.req.header('User-Agent') || 'unknown';
-  await c.env.DB.prepare('INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)').bind(token, user.id, user.org_id, expires, ip, ua).run();
+  await insertSessionRow(c.env.DB, { id: token, userId: user.id, orgId: user.org_id, expires, ip, ua });
   await c.env.DB.prepare('UPDATE users SET last_login = datetime("now") WHERE id = ?').bind(user.id).run();
+  await writeSessionEvent(c.env, {
+    sessionId: token, orgId: user.org_id, userId: user.id, eventType: 'login', ip, ua, path: '/api/auth/login',
+  });
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'login', ip, ua,
+  });
 
   return c.json({
     token,
@@ -2132,8 +2235,14 @@ app.post('/api/auth/mfa/challenge', async (c) => {
   const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   const ip = c.req.header('CF-Connecting-IP') || 'unknown';
   const ua = c.req.header('User-Agent') || 'unknown';
-  await c.env.DB.prepare('INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)').bind(token, user.id, user.org_id, expires, ip, ua).run();
+  await insertSessionRow(c.env.DB, { id: token, userId: user.id, orgId: user.org_id, expires, ip, ua });
   await c.env.DB.prepare('UPDATE users SET last_login = datetime("now") WHERE id = ?').bind(user.id).run();
+  await writeSessionEvent(c.env, {
+    sessionId: token, orgId: user.org_id, userId: user.id, eventType: 'mfa_login', ip, ua, path: '/api/auth/mfa/challenge',
+  });
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'mfa_login', ip, ua,
+  });
 
   return c.json({
     token,
@@ -2224,7 +2333,7 @@ app.post('/api/auth/change-password', authMiddleware, async (c) => {
     await c.env.DB.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`).bind(hash, user.id).run();
   }
   const session = c.get('session');
-  await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND id != ?').bind(user.id, session.id).run();
+  await revokeSessions(c.env.DB, { userId: user.id, exceptId: session.id });
   await writeSecurityAudit(c.env, {
     orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'password_changed',
     ip: c.req.header('CF-Connecting-IP'), ua: c.req.header('User-Agent'),
@@ -2247,9 +2356,83 @@ app.get('/api/security/trust-center', async (c) => {
   });
 });
 
+app.get('/api/compliance/data-inventory', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  return c.json(dataInventoryPayload());
+});
+
+app.get('/api/security/audit-log', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  const limit = Math.min(200, Math.max(1, Number(c.req.query('limit') || 100)));
+  try {
+    const rows = user.role === 'super_admin' && c.req.query('all') === '1'
+      ? await c.env.DB.prepare(
+          `SELECT id, org_id, actor_user_id, actor_role, action, resource_type, resource_id, ip_address, success, created_at FROM security_audit_log ORDER BY created_at DESC LIMIT ?`,
+        ).bind(limit).all()
+      : await c.env.DB.prepare(
+          `SELECT id, org_id, actor_user_id, actor_role, action, resource_type, resource_id, ip_address, success, created_at FROM security_audit_log WHERE org_id = ? ORDER BY created_at DESC LIMIT ?`,
+        ).bind(user.org_id, limit).all();
+    return c.json({ events: rows?.results || [] });
+  } catch (e: any) {
+    if (String(e?.message || '').includes('no such table')) return c.json({ events: [], warning: 'Migration 0008 required' });
+    throw e;
+  }
+});
+
+app.get('/api/auth/session-events', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const session = c.get('session');
+  const scope = sessionsListScope(session);
+  try {
+    const rows = scope.mode === 'demo'
+      ? await c.env.DB.prepare(
+          `SELECT id, event_type, ip_address, path, created_at FROM session_events WHERE user_id = ? AND demo_session_id = ? ORDER BY created_at DESC LIMIT 100`,
+        ).bind(user.id, scope.demoSessionId).all()
+      : await c.env.DB.prepare(
+          `SELECT id, event_type, ip_address, path, created_at FROM session_events WHERE user_id = ? AND (demo_session_id IS NULL OR demo_session_id = '') ORDER BY created_at DESC LIMIT 100`,
+        ).bind(user.id).all();
+    return c.json({ events: rows?.results || [] });
+  } catch {
+    return c.json({ events: [], warning: 'Migration 0024 required' });
+  }
+});
+
+app.post('/api/admin/clients/:id/legal-hold', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (!(user.role === 'admin' || user.role === 'super_admin')) return c.json({ error: 'Admin only' }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const hold = body.hold === true || body.hold === 1 || body.hold === '1';
+  const client = await c.env.DB.prepare(`SELECT id, org_id FROM clients WHERE id = ? AND org_id = ?`)
+    .bind(c.req.param('id'), user.org_id).first() as any;
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  await c.env.DB.prepare(
+    `UPDATE clients SET data_retention_holds = ?, notes = COALESCE(notes, '') || ?, updated_at = datetime('now') WHERE id = ? AND org_id = ?`,
+  ).bind(hold ? 1 : 0, hold ? `\n[legal-hold ${new Date().toISOString()}] ${String(body.reason || 'litigation/retention')}` : `\n[legal-hold released ${new Date().toISOString()}]`, client.id, user.org_id).run();
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role,
+    action: hold ? 'legal_hold_set' : 'legal_hold_released',
+    resourceType: 'client', resourceId: client.id, ip: c.req.header('CF-Connecting-IP'),
+    detail: { reason: body.reason || null },
+  });
+  return c.json({ ok: true, hold });
+});
+
 app.post('/api/auth/logout', authMiddleware, async (c) => {
   const session = c.get('session');
-  await c.env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(session.id).run();
+  const user = c.get('user');
+  const ip = c.req.header('CF-Connecting-IP') || 'unknown';
+  const ua = c.req.header('User-Agent') || 'unknown';
+  await revokeSessions(c.env.DB, { userId: user.id, sessionId: session.id });
+  await writeSessionEvent(c.env, {
+    sessionId: session.id, orgId: user.org_id, userId: user.id, demoSessionId: session.demo_session_id,
+    eventType: 'logout', ip, ua, path: '/api/auth/logout',
+  });
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'logout', ip, ua,
+    resourceType: 'session', resourceId: session.id,
+  });
   return c.json({ ok: true });
 });
 
@@ -2262,26 +2445,51 @@ app.get('/api/auth/me', authMiddleware, async (c) => {
 
 app.get('/api/auth/sessions', authMiddleware, async (c) => {
   const user = c.get('user');
-  const rows = await c.env.DB.prepare(
-    `SELECT id, ip_address, user_agent, created_at, expires_at FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`
-  ).bind(user.id).all();
-  const current = c.get('session').id;
-  return c.json({ sessions: (rows?.results || []).map((s: any) => ({ ...s, current: s.id === current })) });
+  const current = c.get('session');
+  const scope = sessionsListScope(current);
+  const sql = scope.mode === 'demo'
+    ? `SELECT id, ip_address, user_agent, created_at, expires_at, last_seen_at, last_path, demo_session_id FROM sessions WHERE user_id = ? AND demo_session_id = ? AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 50`
+    : `SELECT id, ip_address, user_agent, created_at, expires_at, last_seen_at, last_path, demo_session_id FROM sessions WHERE user_id = ? AND demo_session_id IS NULL AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 50`;
+  let rows;
+  try {
+    rows = scope.mode === 'demo'
+      ? await c.env.DB.prepare(sql).bind(user.id, scope.demoSessionId).all()
+      : await c.env.DB.prepare(sql).bind(user.id).all();
+  } catch {
+    rows = await c.env.DB.prepare(
+      `SELECT id, ip_address, user_agent, created_at, expires_at FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`,
+    ).bind(user.id).all();
+  }
+  return c.json({ sessions: (rows?.results || []).map((s: any) => ({ ...s, current: s.id === current.id })), scope: scope.mode });
 });
 
 app.post('/api/auth/sessions/:id/revoke', authMiddleware, async (c) => {
   const user = c.get('user');
   const sessionId = c.req.param('id');
   if (sessionId === c.get('session').id) return c.json({ error: 'Cannot revoke current session' }, 400);
-  await c.env.DB.prepare('DELETE FROM sessions WHERE id = ? AND user_id = ?').bind(sessionId, user.id).run();
+  await revokeSessions(c.env.DB, { userId: user.id, sessionId });
   await writeSecurityAudit(c.env, { orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'session_revoked', resourceId: sessionId, ip: c.req.header('CF-Connecting-IP') });
+  await writeSessionEvent(c.env, {
+    sessionId, orgId: user.org_id, userId: user.id, eventType: 'session_revoked', ip: c.req.header('CF-Connecting-IP'),
+  });
   return c.json({ ok: true });
 });
 
 app.post('/api/auth/sessions/revoke-all', authMiddleware, async (c) => {
   const user = c.get('user');
-  const current = c.get('session').id;
-  await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND id != ?').bind(user.id, current).run();
+  const current = c.get('session');
+  const scope = sessionsListScope(current);
+  if (scope.mode === 'demo') {
+    try {
+      await c.env.DB.prepare(
+        `UPDATE sessions SET revoked_at = datetime('now') WHERE user_id = ? AND demo_session_id = ? AND id != ? AND revoked_at IS NULL`,
+      ).bind(user.id, scope.demoSessionId, current.id).run();
+    } catch {
+      await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND id != ?').bind(user.id, current.id).run();
+    }
+  } else {
+    await revokeSessions(c.env.DB, { userId: user.id, exceptId: current.id });
+  }
   await writeSecurityAudit(c.env, { orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'sessions_revoked_all', ip: c.req.header('CF-Connecting-IP') });
   return c.json({ ok: true });
 });
@@ -2363,8 +2571,8 @@ app.post('/api/auth/reset-password', async (c) => {
   await c.env.DB.batch([
     c.env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(newHash, record.user_id),
     c.env.DB.prepare('DELETE FROM password_reset_tokens WHERE token = ?').bind(token),
-    c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(record.user_id),
   ]);
+  await revokeSessions(c.env.DB, { userId: record.user_id, allForUser: true });
 
   return c.json({ ok: true, message: 'Password reset successfully' });
 });
@@ -5319,35 +5527,12 @@ app.post('/api/privacy/export', authMiddleware, async (c) => {
      VALUES (?, ?, ?, ?, 'export', 'in_progress', ?, ?, datetime('now'))`
   ).bind(reqId, user.org_id, client.id, user.id, body.legalBasis || 'ccpa', body.notes || null).run();
 
-  const reports = await c.env.DB.prepare(`SELECT id, bureau, report_date, file_name, status, created_at FROM credit_reports WHERE client_id = ?`).bind(client.id).all();
-  const violations = await c.env.DB.prepare(`SELECT id, statute, severity, status, created_at FROM violations WHERE client_id = ?`).bind(client.id).all();
-  const docs = await c.env.DB.prepare(`SELECT id, doc_type, title, status, created_at FROM documents WHERE client_id = ?`).bind(client.id).all();
-  const messages = await c.env.DB.prepare(`SELECT id, sender_role, subject, created_at FROM portal_messages WHERE client_id = ?`).bind(client.id).all().catch(() => ({ results: [] }));
-  const uploads = await c.env.DB.prepare(`SELECT id, category, file_name, created_at, sha256 FROM portal_uploads WHERE client_id = ?`).bind(client.id).all().catch(() => ({ results: [] }));
-
-  const pack = {
-    exportedAt: new Date().toISOString(),
+  const pack = await collectPrivacyExport(c.env.DB, {
+    orgId: user.org_id,
+    client,
     requestId: reqId,
     legalBasis: body.legalBasis || 'ccpa',
-    client: {
-      id: client.id,
-      first_name: client.first_name,
-      last_name: client.last_name,
-      email: client.email,
-      phone: client.phone,
-      city: client.city,
-      state: client.state,
-      zip: client.zip,
-      // Never export encrypted SSN material in clear form beyond last4 if present
-      ssn_last4: client.ssn_last4 || null,
-    },
-    reports: reports?.results || [],
-    violations: violations?.results || [],
-    documents: docs?.results || [],
-    messages: messages?.results || [],
-    uploads: uploads?.results || [],
-    notice: 'Raw credit report payloads are available to authorized staff via encrypted vault access; consumer export includes metadata inventory.',
-  };
+  });
 
   await c.env.DB.prepare(
     `UPDATE privacy_requests SET status = 'fulfilled', fulfilled_at = datetime('now'), fulfillment_json = ? WHERE id = ?`
@@ -5407,43 +5592,17 @@ app.post('/api/admin/privacy-requests/:id/fulfill', authMiddleware, async (c) =>
   if (!req) return c.json({ error: 'Not found' }, 404);
   if (req.request_type !== 'delete') return c.json({ error: 'Only delete requests are fulfilled here' }, 400);
   const clientId = req.client_id;
-  const priorClient = await c.env.DB.prepare(`SELECT email FROM clients WHERE id = ? AND org_id = ?`).bind(clientId, user.org_id).first() as any;
+  const priorClient = await c.env.DB.prepare(`SELECT email, data_retention_holds FROM clients WHERE id = ? AND org_id = ?`).bind(clientId, user.org_id).first() as any;
+  if (priorClient?.data_retention_holds === 1) {
+    return c.json({ error: 'Deletion is on legal hold. Release the hold before fulfilling.' }, 409);
+  }
   const priorEmail = priorClient?.email || null;
 
-  // Purge client-scoped sensitive data (retain anonymized audit)
-  const tables = [
-    'portal_messages', 'portal_uploads', 'portal_alerts', 'education_progress', 'tutor_memory', 'roadmap_progress',
-    'fundability_snapshots', 'underwriting_snapshots', 'tradeline_orders', 'violations', 'documents',
-  ];
-  for (const table of tables) {
-    try { await c.env.DB.prepare(`DELETE FROM ${table} WHERE client_id = ? AND org_id = ?`).bind(clientId, user.org_id).run(); } catch { /* soft */ }
-  }
-  // Scrub credit reports content but keep stub for case history if needed
-  try {
-    await c.env.DB.prepare(
-      `UPDATE credit_reports SET raw_text = NULL, parsed_data = NULL, file_name = 'REDACTED', status = 'purged' WHERE client_id = ? AND org_id = ?`
-    ).bind(clientId, user.org_id).run();
-  } catch { /* soft */ }
-  // Anonymize client
-  await c.env.DB.prepare(
-    `UPDATE clients SET first_name = 'REDACTED', last_name = 'REDACTED', email = ?, phone = NULL, phone_e164 = NULL,
-       address_line1 = NULL, address_line2 = NULL, city = NULL, state = NULL, zip = NULL, dob = NULL, ssn_last4 = NULL,
-       ssn_last4_enc = NULL, dob_enc = NULL, notes = 'Purged per privacy request', status = 'purged', updated_at = datetime('now')
-     WHERE id = ? AND org_id = ?`
-  ).bind(`purged+${clientId.slice(0, 8)}@privacy.local`, clientId, user.org_id).run();
-
-  // Disable matching portal login
-  try {
-    if (priorEmail) {
-      await c.env.DB.prepare(
-        `UPDATE users SET is_active = 0, email = ? WHERE org_id = ? AND role = 'client' AND email = ?`
-      ).bind(`purged+${clientId.slice(0, 8)}@privacy.local`, user.org_id, priorEmail).run();
-    }
-  } catch { /* soft */ }
+  const purge = await purgeClientRecords(c.env, { orgId: user.org_id, clientId, priorEmail });
 
   await c.env.DB.prepare(
     `UPDATE privacy_requests SET status = 'fulfilled', fulfilled_at = datetime('now'), fulfillment_json = ? WHERE id = ?`
-  ).bind(JSON.stringify({ purgedBy: user.id, at: new Date().toISOString() }), req.id).run();
+  ).bind(JSON.stringify({ purgedBy: user.id, at: new Date().toISOString(), ...purge }), req.id).run();
 
   await writeSecurityAudit(c.env, {
     orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'privacy_delete_fulfilled',
@@ -5451,7 +5610,7 @@ app.post('/api/admin/privacy-requests/:id/fulfill', authMiddleware, async (c) =>
     detail: { clientId },
   });
 
-  return c.json({ ok: true, purged: true });
+  return c.json({ ok: true, purged: true, ...purge });
 });
 
 
@@ -9562,17 +9721,6 @@ app.get('/api/clients/:id/compliance-summary', authMiddleware, async (c) => {
 });
 
 // 0. POST /api/admin/backup/trigger — snapshot D1 tables to R2 vault
-const D1_BACKUP_TABLES = [
-  'organizations', 'users', 'clients', 'credit_reports', 'violations', 'documents',
-  'sessions', 'activity_log', 'portal_messages', 'portal_uploads', 'portal_alerts',
-  'education_progress', 'tutor_memory', 'fundability_snapshots', 'tradeline_orders',
-  'underwriting_snapshots', 'security_audit_log', 'privacy_requests', 'roadmap_progress',
-  'client_journey_state', 'daily_motivation_log', 'knowledge_chunks', 'email_template_registry',
-  'legal_contracts', 'esign_consent_events', 'video_conference_sessions', 'ron_sessions', 'ron_state_rules',
-  'email_delivery_log', 'onboarding_drip_log',
-  'scheduled_job_runs', 'email_suppressions', 'newsletter_subscriptions', 'newsletter_issues',
-  'newsletter_deliveries', 'compliance_snapshots', 'ops_alerts',
-];
 
 app.post('/api/admin/journey/dispatch-daily', authMiddleware, adminGateMiddleware, async (c) => {
   const body = await c.req.json().catch(() => ({}));
@@ -10009,7 +10157,7 @@ app.post('/api/admin/users/:id/toggle-status', authMiddleware, adminGateMiddlewa
 
     // Force expire any active sessions for the suspended user instantly
     if (newStatus === 0) {
-      await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id).run();
+      await revokeSessions(c.env.DB, { userId: id, allForUser: true });
     }
 
     // Log the action

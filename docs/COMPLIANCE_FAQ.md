@@ -1,3 +1,5 @@
+**Data stored in the product:** see [`docs/DATA_AND_COMPLIANCE.md`](./DATA_AND_COMPLIANCE.md) (every D1/R2/KV collection, session/tenant rules, FCRA/CROA/TSR/CCPA/GDPR/ESIGN coverage).
+
 # SmartFCRA Supreme — Legal & Compliance Handbook (v1.0)
 ## Federal Statutes, CROA, FCRA, & FTC TSR Ingestion Guidelines
 
