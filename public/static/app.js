@@ -771,7 +771,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       </div></div>`;
     }
     return `<div class="min-h-screen flex items-center justify-center p-4">
-      <div class="w-full max-w-md">
+      <div class="w-full max-w-lg">
         <div class="text-center mb-8">
           <div class="inline-flex items-center justify-center mb-4"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-16 w-auto rounded-2xl border border-blue-500/40 object-cover shadow-[0_0_24px_rgba(37,99,235,0.35)]" alt="RJ Business Solutions"></div>
           <div class="text-[10px] uppercase tracking-[0.18em] font-bold text-sky-300 mb-2">by RJ Business Solutions</div>
@@ -779,6 +779,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           <p class="text-gray-400 mt-1 text-sm">Empowering Generational Wealth · Credit advocacy CRM</p>
           <div class="mt-3 flex flex-wrap justify-center gap-2 text-[11px]">
             <a href="/" class="px-2.5 py-1 rounded-lg border border-white/10 text-gray-300 hover:bg-white/5">Marketing site</a>
+            <a href="/demo" class="px-2.5 py-1 rounded-lg border border-sky-500/30 text-sky-200 hover:bg-sky-500/10">CRO interactive demo</a>
             <a href="/forms/credit-qualify" class="px-2.5 py-1 rounded-lg border border-blue-500/30 text-blue-200 hover:bg-blue-500/10">Credit Qualify</a>
             <a href="/login?signup=mfsn" class="px-2.5 py-1 rounded-lg border border-cyan-500/30 text-cyan-200 hover:bg-cyan-500/10">MFSN Signup</a>
             <a href="/brand" target="_blank" class="px-2.5 py-1 rounded-lg border border-white/10 text-gray-300 hover:bg-white/5">Brand Library</a>
@@ -814,6 +815,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           <div class="flex border-b border-gray-700 mb-5">
             <button id="tab-login" class="flex-1 pb-3 text-sm font-semibold text-blue-400 border-b-2 border-blue-400" onclick="window._switchTab('login')">Sign In</button>
             <button id="tab-register" class="flex-1 pb-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent" onclick="window._switchTab('register')">Create Account</button>
+            <button id="tab-demo" class="flex-1 pb-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent" onclick="window._switchTab('demo')">CRO Demo</button>
           </div>
           <div id="auth-login"><form id="login-form" class="space-y-4">
             <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Email</label><input type="email" name="email" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none" placeholder="you@company.com"></div>
@@ -831,23 +833,22 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
             <button type="submit" class="w-full btn-rj font-semibold py-2.5 rounded-lg transition text-sm">Sign In</button>
             <button type="button" data-pwa-install class="hidden w-full rounded-lg border border-sky-500/40 bg-sky-950/30 text-sky-100 text-sm font-semibold py-2.5" onclick="window._installPwa()"><i class="fas fa-download mr-2"></i>Install Smart FCRA</button>
           </form>
-            <a href="/login?signup=mfsn" class="mt-3 flex items-center justify-center gap-2 w-full rounded-lg border border-sky-500/40 bg-sky-950/30 hover:bg-sky-900/40 text-sky-100 text-sm font-semibold py-2.5 transition">
+            <button type="button" onclick="window._switchTab('demo')" class="mt-3 w-full rounded-lg border border-sky-500/40 bg-gradient-to-r from-blue-600/20 to-cyan-600/20 hover:from-blue-600/30 hover:to-cyan-600/30 text-sky-100 text-sm font-semibold py-2.5 transition">
+              <i class="fas fa-play-circle text-sky-300 mr-1"></i> Credit company? Launch interactive demo
+            </button>
+            <a href="/login?signup=mfsn" class="mt-2 flex items-center justify-center gap-2 w-full rounded-lg border border-sky-500/40 bg-sky-950/30 hover:bg-sky-900/40 text-sky-100 text-sm font-semibold py-2.5 transition">
               <i class="fas fa-bolt text-sky-300"></i> New client? Sign up with MyFreeScoreNow
             </a>
             <div class="mt-4 rounded-xl border border-cyan-500/25 bg-gradient-to-br from-slate-950 via-cyan-950/20 to-slate-950 p-3.5 space-y-2.5">
               <div class="flex items-center justify-between gap-2">
-                <p class="text-[11px] font-bold uppercase tracking-wider text-cyan-300"><i class="fas fa-flask mr-1.5"></i>Live demo logins</p>
-                <span class="text-[9px] font-mono text-cyan-500/80">sandbox</span>
+                <p class="text-[11px] font-bold uppercase tracking-wider text-cyan-300"><i class="fas fa-building mr-1.5"></i>For credit-repair firms</p>
+                <span class="text-[9px] font-mono text-cyan-500/80">guided demo</span>
               </div>
-              <button type="button" id="demo-login-admin" class="w-full text-left rounded-lg bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 px-3 py-2.5 transition">
-                <div class="text-xs font-bold text-white">Staff / Admin walkthrough</div>
-                <div class="text-[10px] text-blue-200/80 font-mono mt-0.5">demo@example.com · demo123456</div>
+              <p class="text-[11px] text-slate-400 leading-relaxed">Tour the violation engine, generated letters, client portal, tutors, and CROA controls. One live MyFreeScoreNow report per firm account.</p>
+              <button type="button" onclick="window._switchTab('demo')" class="w-full text-left rounded-lg bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 px-3 py-2.5 transition">
+                <div class="text-xs font-bold text-white">Start CRO interactive demo</div>
+                <div class="text-[10px] text-blue-200/80 mt-0.5">Requires business name, address, email, and phone</div>
               </button>
-              <button type="button" id="demo-login-client" class="w-full text-left rounded-lg bg-teal-600/15 hover:bg-teal-600/25 border border-teal-500/30 px-3 py-2.5 transition">
-                <div class="text-xs font-bold text-white">Client portal (Salisha)</div>
-                <div class="text-[10px] text-teal-200/80 font-mono mt-0.5">salisha.mcdowell@example.com · demo123456</div>
-              </button>
-              <p class="text-[10px] text-slate-500 leading-relaxed">Admin path: Clients → Salisha → <strong class="text-slate-300">Preview Portal</strong> for the full customer cockpit without signing out.</p>
             </div>
           </div>
           <div id="auth-register" class="hidden"><form id="register-form" class="space-y-4">
@@ -862,7 +863,26 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
               </div>
             </div>
             <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition text-sm">Create Account</button>
-          </form></div>
+          </form>
+            <p class="text-[11px] text-gray-500 mt-3">Want the guided walkthrough first? <button type="button" class="text-sky-300 underline" onclick="window._switchTab('demo')">Open the CRO interactive demo</button></p>
+          </div>
+          <div id="auth-demo" class="hidden">
+            <p class="text-xs text-sky-200/90 mb-3 leading-relaxed">For credit repair organizations and litigation desks. We capture your firm details, then a popup tour + voice/text agent walks the live product.</p>
+            <form id="cro-demo-form" class="space-y-3">
+              <div class="grid grid-cols-2 gap-2">
+                <div><label class="block text-xs font-medium text-gray-400 mb-1">First name</label><input name="firstName" required autocomplete="given-name" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm outline-none"></div>
+                <div><label class="block text-xs font-medium text-gray-400 mb-1">Last name</label><input name="lastName" required autocomplete="family-name" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm outline-none"></div>
+              </div>
+              <div><label class="block text-xs font-medium text-gray-400 mb-1">Work email</label><input name="email" type="email" required autocomplete="email" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm outline-none" placeholder="you@yourfirm.com"></div>
+              <div><label class="block text-xs font-medium text-gray-400 mb-1">Phone</label><input name="phone" type="tel" required autocomplete="tel" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm outline-none" placeholder="(555) 555-5555"></div>
+              <div><label class="block text-xs font-medium text-gray-400 mb-1">Business name</label><input name="businessName" required autocomplete="organization" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm outline-none" placeholder="Your CRO or law firm"></div>
+              <div><label class="block text-xs font-medium text-gray-400 mb-1">Business address</label><textarea name="businessAddress" required rows="2" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm outline-none" placeholder="Street, city, state, ZIP"></textarea></div>
+              <div id="cf-turnstile"></div>
+              <p class="text-[10px] text-gray-500 leading-relaxed">Not consumer enrollment. One live MyFreeScoreNow report per demo account. Letters are generated from file facts — not fill-in forms.</p>
+              <button type="submit" class="w-full btn-rj font-semibold py-2.5 rounded-lg text-sm">Enter interactive demo</button>
+              <div id="cro-demo-status" class="text-xs min-h-[1rem] text-emerald-300" role="status"></div>
+            </form>
+          </div>
           </div>
           <div class="mt-4 p-3 bg-amber-900/20 border border-amber-600/30 rounded-lg">
             <p class="text-[10px] text-amber-300 leading-relaxed"><strong>NOTICE:</strong> This service prepares dispute documents. We are NOT a law firm and do NOT provide legal advice. <a href="/compliance/disclaimers" class="underline hover:text-amber-200">View Full Disclaimers →</a></p>
@@ -873,10 +893,17 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   }
 
   window._switchTab = function(tab) {
-    const ll = $('#auth-login'), rr = $('#auth-register'), tl = $('#tab-login'), tr = $('#tab-register');
+    const ll = $('#auth-login'), rr = $('#auth-register'), dd = $('#auth-demo');
+    const tl = $('#tab-login'), tr = $('#tab-register'), td = $('#tab-demo');
     if (!ll || !rr) return;
-    if (tab === 'login') { ll.classList.remove('hidden'); rr.classList.add('hidden'); tl.className = 'flex-1 pb-3 text-sm font-semibold text-blue-400 border-b-2 border-blue-400'; tr.className = 'flex-1 pb-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent'; }
-    else { ll.classList.add('hidden'); rr.classList.remove('hidden'); tr.className = 'flex-1 pb-3 text-sm font-semibold text-blue-400 border-b-2 border-blue-400'; tl.className = 'flex-1 pb-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent'; }
+    const on = 'flex-1 pb-3 text-sm font-semibold text-blue-400 border-b-2 border-blue-400';
+    const off = 'flex-1 pb-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent';
+    ll.classList.toggle('hidden', tab !== 'login');
+    rr.classList.toggle('hidden', tab !== 'register');
+    if (dd) dd.classList.toggle('hidden', tab !== 'demo');
+    if (tl) tl.className = tab === 'login' ? on : off;
+    if (tr) tr.className = tab === 'register' ? on : off;
+    if (td) td.className = tab === 'demo' ? on : off;
   };
 
   window._switchAuthPanel = function(panel) {
@@ -892,6 +919,9 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     const verifyEmail = params.get('verifyEmail');
     if (params.get('mode') === 'register' || params.get('plan')) {
       try { window._switchTab('register'); } catch (_) {}
+    }
+    if (params.get('mode') === 'demo' || params.get('signup') === 'demo') {
+      try { window._switchTab('demo'); } catch (_) {}
     }
     if (verifyEmail) {
       api('/auth/verify-email', { method:'POST', body: JSON.stringify({ token: verifyEmail }) })
@@ -1013,6 +1043,54 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     const demoClient = document.getElementById('demo-login-client');
     if (demoAdmin) demoAdmin.onclick = () => demoLogin('demo@example.com', 'demo123456');
     if (demoClient) demoClient.onclick = () => demoLogin('salisha.mcdowell@example.com', 'demo123456');
+    const croDemo = document.getElementById('cro-demo-form');
+    if (croDemo) {
+      croDemo.onsubmit = async (e) => {
+        e.preventDefault();
+        const status = document.getElementById('cro-demo-status');
+        const btn = croDemo.querySelector('button[type="submit"]');
+        if (status) { status.classList.remove('text-red-300'); status.textContent = 'Opening your demo session…'; }
+        if (btn) btn.disabled = true;
+        const body = Object.fromEntries(new FormData(croDemo).entries());
+        if (typeof window.rjGetTurnstileToken === 'function') body.cfTurnstileToken = window.rjGetTurnstileToken() || '';
+        else {
+          const tInput = document.querySelector('input[name="cf-turnstile-response"]');
+          if (tInput) body.cfTurnstileToken = tInput.value;
+        }
+        try {
+          const res = await fetch('/api/public/demo/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || data.detail || 'Could not start demo');
+          location.href = '/app?demo=' + encodeURIComponent(data.token);
+        } catch (err) {
+          if (status) { status.classList.add('text-red-300'); status.textContent = err.message || 'Failed'; }
+          if (btn) btn.disabled = false;
+        }
+      };
+      (async () => {
+        const slot = document.getElementById('cf-turnstile');
+        if (!slot || slot.dataset.booted) return;
+        slot.dataset.booted = '1';
+        try {
+          const cfg = await fetch('/api/public/turnstile').then((r) => r.json());
+          if (!cfg.enabled || !cfg.siteKey) return;
+          if (!window.turnstile) {
+            await new Promise((resolve, reject) => {
+              const s = document.createElement('script');
+              s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+              s.onload = resolve;
+              s.onerror = reject;
+              document.head.appendChild(s);
+            });
+          }
+          window.turnstile.render(slot, { sitekey: cfg.siteKey, theme: 'dark', appearance: 'always' });
+        } catch (_) {}
+      })();
+    }
     if (lf) lf.onsubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);

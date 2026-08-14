@@ -10613,8 +10613,8 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/demo-experience.js?v=20260814-demo"></script>
-  <script src="/static/app.js?v=20260814-demo"></script>
+  <script src="/static/demo-experience.js?v=20260814-demo-login"></script>
+  <script src="/static/app.js?v=20260814-demo-login"></script>
 </body>
 </html>`;
 }

@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [3.7.0] - 2026-08-14
 ### Added
-- Gated **interactive sales demo** at `/demo`: work email, phone, business name, and business address required before the app opens. Lead stored + GHL/ops notify.
+- Login and `/demo`: CRO **interactive demo** signup on the Sign In screen (`/login?mode=demo`) — business name, address, email, phone — then popup tour + text/voice agent.
 - In-app popup **product tour** of the full console (ingest, violations, LVS/damages, generated letters, mail clocks, portal, sandbox, tutors, CROA).
 - **Demo agent** (text + browser voice) answers product questions and navigates screens. Does not disclose engine internals or promise lawsuit outcomes.
 - Optional **one live MyFreeScoreNow report / one person per demo account**. Repeat pulls blocked.
