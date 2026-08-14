@@ -20,6 +20,7 @@
     i18nStrings: {},
     billingMode: null,
     mfaEnabled: null,
+    demoSession: JSON.parse(localStorage.getItem('fcra_demo_session') || 'null'),
   };
 
   // ── i18n (English + Spanish) ───────────────────────────────────
@@ -150,6 +151,7 @@
     if (u.org !== undefined) { u.org ? localStorage.setItem('fcra_org', JSON.stringify(u.org)) : localStorage.removeItem('fcra_org'); }
     if (u.impersonateClientId !== undefined) { u.impersonateClientId ? localStorage.setItem('fcra_impersonate_client_id', u.impersonateClientId) : localStorage.removeItem('fcra_impersonate_client_id'); }
     if (u.impersonateClientName !== undefined) { u.impersonateClientName ? localStorage.setItem('fcra_impersonate_client_name', u.impersonateClientName) : localStorage.removeItem('fcra_impersonate_client_name'); }
+    if (u.demoSession !== undefined) { u.demoSession ? localStorage.setItem('fcra_demo_session', JSON.stringify(u.demoSession)) : localStorage.removeItem('fcra_demo_session'); }
   }
 
   window._startImpersonating = function(clientId, clientName) {
@@ -1239,7 +1241,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   }
 
   window._nav = (p, data) => { if (p === 'exit-impersonation') { window._stopImpersonating(); } else { navigate(p, data); } };
-  window._logout = async () => { try { await api('/auth/logout',{method:'POST'}); } catch {} setState({token:null,user:null,org:null}); toast('Signed out','info'); render(); };
+  window._logout = async () => { try { await api('/auth/logout',{method:'POST'}); } catch {} setState({token:null,user:null,org:null,demoSession:null,impersonateClientId:null,impersonateClientName:null}); toast('Signed out','info'); render(); };
 
   async function loadPage(page) {
     const el = $('#page-content');
@@ -12925,6 +12927,34 @@ async function pgAdminConsole(el) {
       window._deferredPwa = null;
       document.querySelectorAll('[data-pwa-install]').forEach((el) => el.classList.add('hidden'));
     };
+    const demoTok = new URLSearchParams(location.search).get('demo');
+    if (demoTok) {
+      try {
+        const res = await fetch('/api/public/demo/enter', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: demoTok }),
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok || !d.token) throw new Error(d.error || 'Demo session could not start');
+        setState({ token: d.token, user: d.user, org: d.org, demoSession: d.demo });
+        history.replaceState({}, '', '/app');
+      } catch (err) {
+        toast(err.message || 'Restart the demo at /demo with your firm details', 'error');
+      }
+    }
     render();
+    if (state.demoSession && window.SmartFcraDemo) {
+      window.SmartFcraDemo.mount({
+        api,
+        toast,
+        getState: () => state,
+        navigate,
+        startImpersonating: window._startImpersonating,
+        stopImpersonating: window._stopImpersonating,
+        clearImpersonate: () => setState({ impersonateClientId: null, impersonateClientName: null }),
+      });
+      window.SmartFcraDemo.boot(state.demoSession);
+    }
   })();
 })();

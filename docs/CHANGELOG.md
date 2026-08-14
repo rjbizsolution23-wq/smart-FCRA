@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.7.0] - 2026-08-14
+### Added
+- Gated **interactive sales demo** at `/demo`: work email, phone, business name, and business address required before the app opens. Lead stored + GHL/ops notify.
+- In-app popup **product tour** of the full console (ingest, violations, LVS/damages, generated letters, mail clocks, portal, sandbox, tutors, CROA).
+- **Demo agent** (text + browser voice) answers product questions and navigates screens. Does not disclose engine internals or promise lawsuit outcomes.
+- Optional **one live MyFreeScoreNow report / one person per demo account**. Repeat pulls blocked.
+- Migration `0023_demo_experience.sql`.
+
 ## [3.6.1] - 2026-08-13
 ### Changed
 - Sales funnel copy: violations / LVS / damages, **generated** letters (no “templates” language), client portal + learning resources, and package cards that state what each tier does for litigation ops.

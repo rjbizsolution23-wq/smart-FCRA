@@ -26,7 +26,8 @@ This is the operator map of **everything the app does today**, plus **what is st
 |---|---|
 | `/` | Smart FCRA by RJ Business Solutions sales funnel (product, pricing, demo lead). |
 | `/login` `/app` | SPA shell. `/login?signup=mfsn` opens MFSN partner signup; `/login?mode=register` opens Create Account. Hash routes after login (`#dashboard`, `#client-cockpit`, …). |
-| `/pricing` `/demo` | Redirect to `/#pricing` and `/#demo`. |
+| `/demo` | Gated interactive demo (firm details required). Popup tour + text/voice agent. Optional one live MFSN pull. |
+| `/pricing` | Redirect to `/#pricing`. |
 | `/brand` | RJ Business Solutions brand library hub (forms, marketing, legal, ops, founder) |
 | `/forms/credit-qualify` | Interactive credit / dispute qualification |
 | `/forms/funding-qualify` | Business funding qualification |

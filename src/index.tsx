@@ -53,6 +53,22 @@ import { buildInstitutionalProfile, slimInstitutionalReport } from './data/fundi
 import { DOCUMENT_TYPES, type DocumentData } from './engine/documents';
 import { generatePDFReport, type PDFReportData, generatePDFFromText } from './engine/pdf-generator';
 import { turnstilePublicConfig, verifyTurnstileToken } from './lib/turnstile';
+import {
+  DEMO_ORG_ID,
+  DEMO_STAFF_EMAIL,
+  DEMO_CLIENT_ID,
+  DEMO_TOUR,
+  DEMO_PRODUCT_KNOWLEDGE,
+  DEMO_SESSION_HOURS,
+  routeDemoIntent,
+  fallbackDemoReply,
+  parseAgentActions,
+  hashDemoToken,
+  normalizeDemoEmail,
+  normalizeDemoPhone,
+  demoSessionExpiryIso,
+  livePullBlocked,
+} from './engine/demo-experience';
 import { fillSixMonthSeries, sparklinePath } from './lib/overview-metrics';
 import { resolveTenantTheme } from './lib/tenant-theme';
 import { FOUNDER_TEMPLATES } from './engine/founder-templates';
@@ -119,7 +135,7 @@ import { CITIZENSHIP_STATUSES, GENDER_OPTIONS, MARITAL_STATUS_OPTIONS } from './
 import { listTradelineEducation } from './data/tradeline-education';
 import { sendSms } from './lib/alerts';
 import sampleMfsnReport from './data/sample-mfsn-report.json';
-import { spaAppSource, pwaSwSource, pwaManifestSource, marketingLandingHtml } from './generated/spa-source';
+import { spaAppSource, pwaSwSource, pwaManifestSource, marketingLandingHtml, marketingDemoHtml, demoExperienceSource } from './generated/spa-source';
 import { persistCreditTwinFromParsed } from './lib/credit-twin';
 import { registerClientIntelligenceRoutes } from './lib/client-intelligence-routes';
 import { inspectUpload, decodeBase64Bytes, sanitizeFileName } from './lib/upload-hygiene';
@@ -652,6 +668,9 @@ app.use('/api/auth/login', rateLimiter);
 app.use('/api/auth/register', rateLimiter);
 app.use('/api/public/mfsn-signup', rateLimiter);
 app.use('/api/public/lead/*', rateLimiter);
+app.use('/api/public/demo/*', rateLimiter);
+app.use('/api/demo/agent/chat', rateLimiter);
+app.use('/api/demo/mfsn-live', rateLimiter);
 app.use('/api/auth/forgot-password', rateLimiter);
 app.use('/api/auth/change-password', rateLimiter);
 app.use('/api/auth/mfa/setup', rateLimiter);
@@ -700,6 +719,13 @@ app.onError(async (err, c) => {
 // Serve SPA from the Worker bundle first (prevents blank screen if Pages asset is stale/corrupt)
 app.get('/static/app.js', (c) => {
   return c.body(spaAppSource, 200, {
+    'Content-Type': 'application/javascript; charset=utf-8',
+    'Cache-Control': 'no-cache, must-revalidate',
+    'X-Content-Type-Options': 'nosniff',
+  });
+});
+app.get('/static/demo-experience.js', (c) => {
+  return c.body(demoExperienceSource, 200, {
     'Content-Type': 'application/javascript; charset=utf-8',
     'Cache-Control': 'no-cache, must-revalidate',
     'X-Content-Type-Options': 'nosniff',
@@ -945,6 +971,7 @@ const BRAND_FORM_IDS = new Set([
   'podcast-guest',
   'saas-demo',
   'smart-fcra-demo',
+  'interactive-demo',
 ]);
 
 /** Public RJ brand lead capture (interactive forms). */
@@ -1042,6 +1069,362 @@ app.post('/api/public/lead/:formId', async (c) => {
   }, 201);
 });
 
+async function lookupDemoSession(c: any) {
+  const session = c.get('session');
+  if (!session?.id) return null;
+  try {
+    return await c.env.DB.prepare(
+      `SELECT * FROM demo_sessions WHERE auth_session_id = ? AND expires_at > datetime('now') AND status IN ('active','pending')`,
+    ).bind(session.id).first() as any;
+  } catch (e: any) {
+    if (String(e?.message || '').includes('no such table')) return { _missing: true };
+    throw e;
+  }
+}
+
+async function ensureDemoHost(c: any) {
+  const orgId = DEMO_ORG_ID;
+  await c.env.DB.prepare(
+    `INSERT OR IGNORE INTO organizations (id, name, slug, plan, max_users, max_clients, max_reports_per_month, settings)
+     VALUES (?, ?, ?, 'professional', 25, 500, 200, '{}')`,
+  ).bind(orgId, 'Smart FCRA Demo', 'smart-fcra-demo').run();
+  let user = await c.env.DB.prepare(
+    `SELECT * FROM users WHERE lower(email) = ? AND org_id = ?`,
+  ).bind(DEMO_STAFF_EMAIL, orgId).first() as any;
+  if (!user) {
+    const passwordHash = await hashPassword(createSessionToken() + 'Aa1!');
+    await c.env.DB.prepare(
+      `INSERT INTO users (id, org_id, email, name, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, 'admin', 1)`,
+    ).bind('usr_demo_001', orgId, DEMO_STAFF_EMAIL, 'Demo Host', passwordHash).run();
+    user = await c.env.DB.prepare(`SELECT * FROM users WHERE id = ?`).bind('usr_demo_001').first() as any;
+  }
+  return { orgId, user };
+}
+
+/** Gate: business identity required, then issue a hashed demo token. */
+app.post('/api/public/demo/start', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const email = normalizeDemoEmail(body.email || body.Email);
+  const phone = String(body.phone || body.Phone || '').trim();
+  const phoneDigits = normalizeDemoPhone(phone);
+  const businessName = String(body.businessName || body.business_name || '').trim();
+  const businessAddress = String(body.businessAddress || body.business_address || '').trim();
+  const firstName = String(body.firstName || body.first_name || '').trim();
+  const lastName = String(body.lastName || body.last_name || '').trim();
+  if (!email || !phoneDigits || phoneDigits.length < 10 || !businessName || !businessAddress) {
+    return c.json({ error: 'Work email, phone, business name, and business address are required before the demo opens.' }, 400);
+  }
+  const turnstile = await verifyTurnstileToken(
+    c.env,
+    body.cfTurnstileToken || body['cf-turnstile-response'] || c.req.header('cf-turnstile-response'),
+    c.req.header('CF-Connecting-IP'),
+  );
+  if (!turnstile.ok) return c.json({ error: 'Bot check failed', detail: turnstile.error }, 403);
+
+  const token = createSessionToken();
+  const tokenHash = await hashDemoToken(token);
+  const id = generateId();
+  const orgId = resolvePublicSignupOrgId(c.env);
+  const expiresAt = demoSessionExpiryIso(DEMO_SESSION_HOURS);
+
+  try {
+    const existing = await c.env.DB.prepare(
+      `SELECT id, status, expires_at, mfsn_pulls FROM demo_sessions
+       WHERE email = ? AND expires_at > datetime('now') AND status IN ('active','pending')
+       ORDER BY created_at DESC LIMIT 1`,
+    ).bind(email).first() as any;
+    if (existing) {
+      await c.env.DB.prepare(
+        `UPDATE demo_sessions SET token_hash = ?, phone = ?, business_name = ?, business_address = ?, first_name = ?, last_name = ?, updated_at = datetime('now') WHERE id = ?`,
+      ).bind(tokenHash, phone, businessName, businessAddress, firstName || null, lastName || null, existing.id).run();
+    } else {
+      await c.env.DB.prepare(
+        `INSERT INTO demo_sessions (id, email, phone, business_name, business_address, first_name, last_name, token_hash, status, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+      ).bind(id, email, phone, businessName, businessAddress, firstName || null, lastName || null, tokenHash, expiresAt).run();
+    }
+  } catch (e: any) {
+    if (String(e?.message || '').includes('no such table')) {
+      return c.json({ error: 'Migration 0023 required', code: 'MIGRATION_REQUIRED' }, 503);
+    }
+    throw e;
+  }
+
+  const leadId = generateId();
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO brand_leads (id, org_id, form_id, email, phone, first_name, last_name, payload_json, source_url, status, created_at, updated_at)
+       VALUES (?, ?, 'interactive-demo', ?, ?, ?, ?, ?, ?, 'new', datetime('now'), datetime('now'))`,
+    ).bind(
+      leadId, orgId, email, phone, firstName || null, lastName || null,
+      JSON.stringify({ ...body, form: 'interactive-demo', businessName, businessAddress }),
+      c.req.header('Referer') || '/demo',
+    ).run();
+    await c.env.DB.prepare(`UPDATE demo_sessions SET lead_id = ? WHERE token_hash = ?`).bind(leadId, tokenHash).run();
+  } catch { /* brand_leads optional if 0020 missing */ }
+
+  try {
+    const opsEmail = c.env.TRADELINE_OPS_EMAIL || c.env.COMPANY_EMAIL || 'support@rjbusinesssolutions.org';
+    await sendAppEmail(c.env, {
+      to: opsEmail,
+      from: c.env.CLOUDFLARE_EMAIL_FROM_ONBOARDING || c.env.CLOUDFLARE_EMAIL_FROM_NOREPLY || 'welcome@onboarding.smartfcra.com',
+      fromName: 'RJ Business Solutions',
+      subject: `[Smart FCRA Demo] ${businessName} — ${firstName} ${lastName}`.trim(),
+      html: `<p>Interactive demo started for <b>${businessName}</b><br/>${firstName} ${lastName}<br/>${email}<br/>${phone}<br/>${businessAddress}</p>`,
+      text: `Demo ${businessName} ${email} ${phone} ${businessAddress}`,
+      purpose: 'onboarding',
+    });
+  } catch { /* soft */ }
+
+  try {
+    if (ghlConfigured(c.env)) {
+      await syncClientToGhl(c.env, {
+        id: leadId,
+        email,
+        phone,
+        first_name: firstName,
+        last_name: lastName,
+        case_status: 'LEAD',
+        payment_status: 'lead',
+        signup_source: 'interactive-demo',
+      }, {
+        orgName: businessName,
+        analysisUnlocked: false,
+        tags: ['RJ Lead', 'Interactive Demo', 'Smart FCRA'],
+      });
+    }
+  } catch { /* soft */ }
+
+  return c.json({ ok: true, token, expiresHours: DEMO_SESSION_HOURS, enter: '/app?demo=' + token });
+});
+
+app.post('/api/public/demo/enter', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const token = String(body.token || c.req.query('token') || '').trim();
+  if (!token) return c.json({ error: 'Demo token required' }, 400);
+  const tokenHash = await hashDemoToken(token);
+  let row: any;
+  try {
+    row = await c.env.DB.prepare(
+      `SELECT * FROM demo_sessions WHERE token_hash = ? AND expires_at > datetime('now')`,
+    ).bind(tokenHash).first();
+  } catch (e: any) {
+    if (String(e?.message || '').includes('no such table')) {
+      return c.json({ error: 'Migration 0023 required', code: 'MIGRATION_REQUIRED' }, 503);
+    }
+    throw e;
+  }
+  if (!row) return c.json({ error: 'Demo session expired or invalid. Restart at /demo with your firm details.' }, 401);
+
+  const host = await ensureDemoHost(c);
+  try {
+    await ensureDemoClientAndPortal(c, host.orgId);
+  } catch { /* sample client optional */ }
+
+  const sessionToken = createSessionToken();
+  const expires = new Date(Date.now() + DEMO_SESSION_HOURS * 60 * 60 * 1000).toISOString();
+  const ip = c.req.header('CF-Connecting-IP') || 'unknown';
+  const ua = c.req.header('User-Agent') || 'unknown';
+  await c.env.DB.prepare(
+    'INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)',
+  ).bind(sessionToken, host.user.id, host.orgId, expires, ip, ua).run();
+
+  await c.env.DB.prepare(
+    `UPDATE demo_sessions SET status = 'active', auth_session_id = ?, org_id = ?, user_id = ?, last_seen_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
+  ).bind(sessionToken, host.orgId, host.user.id, row.id).run();
+
+  return c.json({
+    token: sessionToken,
+    user: { id: host.user.id, name: host.user.name || 'Demo Host', email: host.user.email, role: host.user.role || 'admin', org_id: host.orgId, isDemo: true },
+    org: { id: host.orgId, name: 'Smart FCRA Demo', plan: 'professional' },
+    demo: {
+      id: row.id,
+      businessName: row.business_name,
+      email: row.email,
+      mfsnPulls: row.mfsn_pulls || 0,
+      liveClientId: row.live_client_id || null,
+      tourStep: row.tour_step || 0,
+      sampleClientId: DEMO_CLIENT_ID,
+    },
+  });
+});
+
+app.get('/api/demo/tour', authMiddleware, async (c) => {
+  const demo = await lookupDemoSession(c);
+  if (demo?._missing) return c.json({ error: 'Migration 0023 required', code: 'MIGRATION_REQUIRED' }, 503);
+  if (!demo) return c.json({ error: 'Interactive demo session required' }, 403);
+  return c.json({ steps: DEMO_TOUR, product: 'Smart FCRA', brand: 'RJ Business Solutions' });
+});
+
+app.get('/api/demo/session', authMiddleware, async (c) => {
+  const demo = await lookupDemoSession(c);
+  if (demo?._missing) return c.json({ error: 'Migration 0023 required', code: 'MIGRATION_REQUIRED' }, 503);
+  if (!demo) return c.json({ error: 'Interactive demo session required' }, 403);
+  return c.json({
+    id: demo.id,
+    businessName: demo.business_name,
+    email: demo.email,
+    mfsnPulls: demo.mfsn_pulls || 0,
+    liveClientId: demo.live_client_id,
+    tourStep: demo.tour_step || 0,
+    sampleClientId: DEMO_CLIENT_ID,
+    livePullRemaining: livePullBlocked(demo) ? 0 : 1,
+  });
+});
+
+app.patch('/api/demo/session', authMiddleware, async (c) => {
+  const demo = await lookupDemoSession(c);
+  if (!demo || demo._missing) return c.json({ error: 'Interactive demo session required' }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const tourStep = Number(body.tourStep);
+  if (Number.isFinite(tourStep)) {
+    await c.env.DB.prepare(`UPDATE demo_sessions SET tour_step = ?, last_seen_at = datetime('now') WHERE id = ?`)
+      .bind(Math.max(0, Math.min(DEMO_TOUR.length - 1, tourStep)), demo.id).run();
+  }
+  return c.json({ ok: true });
+});
+
+app.post('/api/demo/agent/chat', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const demo = await lookupDemoSession(c);
+  if (demo?._missing) return c.json({ error: 'Migration 0023 required', code: 'MIGRATION_REQUIRED' }, 503);
+  if (!demo) return c.json({ error: 'Interactive demo session required' }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const message = String(body.message || '').trim().slice(0, 2000);
+  if (!message) return c.json({ error: 'message required' }, 400);
+
+  const routed = routeDemoIntent(message);
+  let reply = '';
+  let actions = routed.actions;
+  try {
+    const result = await generateAiText(c.env, [
+      {
+        role: 'system',
+        content: `${DEMO_PRODUCT_KNOWLEDGE}
+
+Respond as the in-app demo guide. Current screen: ${String(body.page || '')}.
+If you want the UI to move, append a JSON block:
+\`\`\`json
+{"reply":"spoken explanation","actions":[{"type":"navigate","page":"violations"}]}
+\`\`\`
+Valid action types: navigate (page + optional data), impersonate, exitImpersonate, tour (step number), prepare, openLiveMfsn.
+Keep reply under 180 words. No legal advice. No internals.`,
+      },
+      { role: 'user', content: message },
+    ]);
+    const parsed = parseAgentActions(result.text);
+    reply = parsed.reply || routed.speak;
+    if (parsed.actions.length) actions = parsed.actions;
+    else if (routed.matched && !parsed.actions.length) actions = routed.actions;
+  } catch {
+    const fb = fallbackDemoReply(message);
+    reply = fb.reply;
+    actions = fb.actions.length ? fb.actions : actions;
+  }
+  if (!reply) reply = fallbackDemoReply(message).reply;
+
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO demo_agent_turns (id, demo_session_id, role, content, actions_json) VALUES (?, ?, 'user', ?, null)`,
+    ).bind(generateId(), demo.id, message).run();
+    await c.env.DB.prepare(
+      `INSERT INTO demo_agent_turns (id, demo_session_id, role, content, actions_json) VALUES (?, ?, 'agent', ?, ?)`,
+    ).bind(generateId(), demo.id, reply, JSON.stringify(actions)).run();
+  } catch { /* ignore log failure */ }
+
+  await c.env.DB.prepare(`UPDATE demo_sessions SET last_seen_at = datetime('now') WHERE id = ?`).bind(demo.id).run().catch(() => {});
+  await c.env.DB.prepare(
+    'INSERT INTO activity_log (id, org_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?)',
+  ).bind(
+    generateId(), user.org_id, user.id, 'demo_agent_chat',
+    'Interactive demo agent turn',
+    JSON.stringify({ demoSessionId: demo.id }),
+  ).run().catch(() => {});
+
+  return c.json({ reply, actions, routed: routed.matched });
+});
+
+app.post('/api/demo/mfsn-live', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const demo = await lookupDemoSession(c);
+  if (!demo || demo._missing) return c.json({ error: 'Interactive demo session required' }, 403);
+  if (livePullBlocked(demo)) {
+    return c.json({ error: 'This demo account already used its one live MyFreeScoreNow report. Open a paid organization to run production imports.' }, 409);
+  }
+  const prior = await c.env.DB.prepare(
+    `SELECT id FROM demo_sessions WHERE (email = ? OR phone = ?) AND mfsn_pulls >= 1 AND id != ? LIMIT 1`,
+  ).bind(demo.email, demo.phone, demo.id).first();
+  if (prior) {
+    return c.json({ error: 'This email or phone already ran a live demo pull. One person, one report, per account.' }, 409);
+  }
+
+  const body = await c.req.json().catch(() => ({}));
+  const memberEmail = normalizeDemoEmail(body.memberEmail || body.mfsnUsername);
+  const memberToken = String(body.memberToken || body.mfsnToken || '').trim();
+  if (!memberEmail || !memberToken) {
+    return c.json({ error: 'MyFreeScoreNow member email and MAPIK# token are required for the live pull.' }, 400);
+  }
+
+  const creds = resolvePublicSignupMfsnCredentials(c.env, memberToken);
+  if (!creds) {
+    return c.json({ error: 'Live MFSN is not configured on this deployment (partner credentials missing). Use the Salisha sandbox case instead.' }, 503);
+  }
+
+  const clientId = 'cli_demo_live_' + demo.id.slice(0, 16);
+  const existingClient = await c.env.DB.prepare(`SELECT id FROM clients WHERE id = ?`).bind(clientId).first();
+  if (!existingClient) {
+    await c.env.DB.prepare(
+      `INSERT INTO clients (id, org_id, created_by, first_name, last_name, email, phone, address_line1, status, notes, tags, portal_analysis_unlocked)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, '["demo-live"]', 1)`,
+    ).bind(
+      clientId, user.org_id, user.id,
+      demo.first_name || 'Demo', demo.last_name || 'Visitor',
+      memberEmail, demo.phone, demo.business_address,
+      `Live demo pull for ${demo.business_name}`,
+    ).run();
+  }
+
+  try {
+    const mfsn = new MFSNClient(creds);
+    const pulled = await mfsn.fetchAndNormalize(memberEmail);
+    const bureauReports = mapMfsnToInternal(pulled.raw || pulled);
+    if (!bureauReports.length) return c.json({ error: 'No bureau data returned for that member.' }, 404);
+    const demoViolationCount = bureauReports.reduce((s, r) => s + liveAnalyzeParsedReport(r).violations.length, 0);
+    await importBureauReportsBatch(c, {
+      generateId,
+      encryptPII,
+      backpopulateClientInfo,
+      saveViolationsForReport,
+      persistBureauScores,
+      markPriorBureauReportsStale,
+      refreshBureauPackStatus,
+      computeAndStoreFundability,
+    }, {
+      clientId,
+      bureauReports,
+      rawPayload: pulled.raw || pulled,
+      sourceProvider: 'DemoLiveMFSN',
+      sourcePayloadType: 'mfsn-live',
+      fileNamePrefix: 'demo-live-mfsn',
+      activityAction: 'demo_live_mfsn',
+      activityDescription: `Demo live MFSN pull (${bureauReports.length} bureaus, ${demoViolationCount} findings)`,
+    });
+    await c.env.DB.prepare(
+      `UPDATE demo_sessions SET mfsn_pulls = 1, mfsn_member_email = ?, live_client_id = ?, updated_at = datetime('now') WHERE id = ?`,
+    ).bind(memberEmail, clientId, demo.id).run();
+    return c.json({
+      ok: true,
+      clientId,
+      bureaus: bureauReports.length,
+      findings: demoViolationCount,
+      message: 'Live file imported. This account cannot pull another demo report. Open Violations to see findings generated from this file.',
+    });
+  } catch (e: any) {
+    const msg = e instanceof MFSNError ? e.message : (e?.message || 'Live pull failed');
+    return c.json({ error: msg }, 502);
+  }
+});
+
 app.get('/api/brand/leads', authMiddleware, async (c) => {
   const user = c.get('user');
   if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
@@ -1099,7 +1482,7 @@ app.get('/api/brand/catalog', authMiddleware, async (c) => {
 /** Public Smart FCRA sales funnel (software landing). */
 app.get('/', (c) => c.html(marketingLandingHtml));
 app.get('/pricing', (c) => c.redirect('/#pricing', 302));
-app.get('/demo', (c) => c.redirect('/#demo', 302));
+app.get('/demo', (c) => c.html(marketingDemoHtml));
 app.get('/login', (c) => c.html(getAppHtml()));
 app.get('/app', (c) => c.html(getAppHtml()));
 
@@ -9249,7 +9632,6 @@ app.post('/api/admin/backup/trigger', authMiddleware, adminGateMiddleware, async
   });
 });
 
-const DEMO_CLIENT_ID = 'cli_demo_001';
 const DEMO_CLIENT_EMAIL = 'salisha.mcdowell@example.com';
 const DEMO_PORTAL_PASSWORD = 'demo123456';
 
@@ -10231,7 +10613,8 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/app.js?v=20260813-saas-funnel-v2"></script>
+  <script src="/static/demo-experience.js?v=20260814-demo"></script>
+  <script src="/static/app.js?v=20260814-demo"></script>
 </body>
 </html>`;
 }

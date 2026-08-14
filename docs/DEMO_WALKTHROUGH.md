@@ -1,6 +1,11 @@
-# Demo Walkthrough — show Smart FCRA in ~5 minutes
+# Demo Walkthrough — Smart FCRA by RJ Business Solutions
 
-**Live URL:** https://smart-fcra-v2.pages.dev
+**Interactive demo (preferred):** https://smart-fcra-v2.pages.dev/demo  
+Requires work email, phone, **business name**, and **business address**. Then a popup tour walks the product and a text/voice agent answers questions and drives screens.
+
+**Live MyFreeScoreNow:** one report, one person, per demo account (member email + MAPIK#). Repeat pulls are blocked.
+
+Staff sandbox logins still exist for internal use:
 
 ## Logins (sandbox)
 
