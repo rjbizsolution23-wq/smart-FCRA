@@ -1,40 +1,49 @@
-name: Hotfix Deploy (blank-screen / SPA)
+name: Cloudflare release (D1 + Pages)
+
+# Applies every pending D1 migration on fcra-detector-v2, then deploys Pages.
+# Does not wait on Playwright so a token-equipped run can ship the demo.
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths:
-      - 'public/static/app.js'
-      - 'src/index.tsx'
-      - 'scripts/embed-spa.mjs'
-      - 'package.json'
+
+concurrency:
+  group: cloudflare-release-main
+  cancel-in-progress: true
 
 jobs:
-  deploy:
+  migrate-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
+
       - run: npm ci
+
       - run: npm run build
-      - name: Verify SPA
+
+      - name: Verify SPA bundle
         run: |
-          node --check dist/static/app.js
+          test -f dist/static/app.js
           test -f dist/_worker.js
-      - name: Require Cloudflare Pages secrets
+          node --check dist/static/app.js
+
+      - name: Require Cloudflare secrets
         env:
           TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           if [ -z "$TOKEN" ] || [ -z "$ACCOUNT" ]; then
-            echo "::error::Hotfix deploy requires GitHub Actions secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID."
+            echo "::error::Set GitHub Actions secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (Pages Edit + D1 Edit)."
             exit 1
           fi
-      - name: Apply D1 migrations (remote production)
+
+      - name: Apply D1 migrations (remote)
         uses: cloudflare/wrangler-action@v3
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -44,7 +53,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 migrations apply fcra-detector-v2 --remote
 
-      - name: Deploy to Cloudflare Pages
+      - name: Deploy Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
