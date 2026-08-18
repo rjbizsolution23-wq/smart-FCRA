@@ -58,7 +58,7 @@ const mockEnv = {
   assert(spec.paths['/api/security/audit-log'], 'security audit log documented');
   assert(spec.paths['/api/public/plans'], 'public plans documented');
   assert(spec.paths['/api/admin/stripe/ensure-catalog'], 'ensure-catalog documented');
-  assert(spec.paths['/api/admin/demo/signups'], 'demo signups documented');
+  assert(spec.paths['/api/admin/organizations/{id}/summary'], 'tenant summary documented');
 }
 
 // Daily motivation cron rejects missing secret
@@ -136,6 +136,11 @@ const mockEnv = {
 {
   const res = await app.request('/api/admin/demo/signups', {}, mockEnv);
   assert(res.status === 401, 'GET /api/admin/demo/signups without token returns 401');
+}
+
+{
+  const res = await app.request('/api/admin/organizations/org_x/summary', {}, mockEnv);
+  assert(res.status === 401, 'GET /api/admin/organizations/:id/summary without token returns 401');
 }
 
 // PWA shell

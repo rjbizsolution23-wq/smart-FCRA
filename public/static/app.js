@@ -16,6 +16,9 @@
     disputeStatus: JSON.parse(localStorage.getItem('fcra_dispute_status') || '{}'),
     impersonateClientId: localStorage.getItem('fcra_impersonate_client_id') || null,
     impersonateClientName: localStorage.getItem('fcra_impersonate_client_name') || null,
+    actingOrgId: localStorage.getItem('fcra_acting_org_id') || null,
+    actingOrgName: localStorage.getItem('fcra_acting_org_name') || null,
+    homeOrg: JSON.parse(localStorage.getItem('fcra_home_org') || 'null'),
     locale: localStorage.getItem('fcra_locale') || 'en',
     i18nStrings: {},
     billingMode: null,
@@ -151,8 +154,45 @@
     if (u.org !== undefined) { u.org ? localStorage.setItem('fcra_org', JSON.stringify(u.org)) : localStorage.removeItem('fcra_org'); }
     if (u.impersonateClientId !== undefined) { u.impersonateClientId ? localStorage.setItem('fcra_impersonate_client_id', u.impersonateClientId) : localStorage.removeItem('fcra_impersonate_client_id'); }
     if (u.impersonateClientName !== undefined) { u.impersonateClientName ? localStorage.setItem('fcra_impersonate_client_name', u.impersonateClientName) : localStorage.removeItem('fcra_impersonate_client_name'); }
+    if (u.actingOrgId !== undefined) { u.actingOrgId ? localStorage.setItem('fcra_acting_org_id', u.actingOrgId) : localStorage.removeItem('fcra_acting_org_id'); }
+    if (u.actingOrgName !== undefined) { u.actingOrgName ? localStorage.setItem('fcra_acting_org_name', u.actingOrgName) : localStorage.removeItem('fcra_acting_org_name'); }
+    if (u.homeOrg !== undefined) { u.homeOrg ? localStorage.setItem('fcra_home_org', JSON.stringify(u.homeOrg)) : localStorage.removeItem('fcra_home_org'); }
     if (u.demoSession !== undefined) { u.demoSession ? localStorage.setItem('fcra_demo_session', JSON.stringify(u.demoSession)) : localStorage.removeItem('fcra_demo_session'); }
   }
+
+  window._copyText = async function(text, label) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast((label || 'Link') + ' copied', 'success');
+    } catch {
+      toast('Copy failed', 'error');
+    }
+  };
+
+  window._workInTenant = async function(orgId, orgName) {
+    if (state.user?.role !== 'super_admin') return;
+    try {
+      if (!state.homeOrg && state.org) setState({ homeOrg: state.org });
+      const summary = await api('/admin/organizations/' + encodeURIComponent(orgId) + '/summary');
+      const org = summary.organization || {};
+      setState({
+        actingOrgId: org.id || orgId,
+        actingOrgName: org.name || orgName || orgId,
+        org: { id: org.id, name: org.name, plan: org.plan, slug: org.slug },
+      });
+      toast('Now managing ' + (org.name || orgId) + ' — Client Management and Billing use this company', 'warning');
+      navigate('admin-clients');
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+
+  window._exitTenant = function() {
+    const home = state.homeOrg;
+    setState({ actingOrgId: null, actingOrgName: null, org: home || state.org });
+    toast('Back to platform owner view', 'info');
+    navigate('admin-console');
+  };
 
   window._startImpersonating = function(clientId, clientName) {
     setState({ impersonateClientId: clientId, impersonateClientName: clientName });
@@ -168,9 +208,13 @@
   };
 
   async function api(path, opts = {}) {
-    const headers = { 'Content-Type': 'application/json' };
+    const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
     if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
-    const res = await fetch(`/api${path}`, { ...opts, headers });
+    if (state.user?.role === 'super_admin' && state.actingOrgId) {
+      headers['X-Acting-Org-Id'] = state.actingOrgId;
+    }
+    const { headers: _ignored, ...rest } = opts;
+    const res = await fetch(`/api${path}`, { ...rest, headers });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const err = new Error(data.error || `Error ${res.status}`);
@@ -1304,7 +1348,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'legal', icon: 'fa-gavel', label: 'Legal' },
       ];
       if (state.user?.role === 'super_admin') {
-        navItems.push({ id: 'admin-console', icon: 'fa-user-shield', label: 'Admin Console' });
+        navItems.unshift({ id: 'admin-console', icon: 'fa-building', label: 'Tenants & Software' });
       }
     }
     // Mobile nav toggle
@@ -1337,6 +1381,15 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     const RJ_LOGO = 'https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg';
     const MFSN_BANNER = '/static/logos/mfsn-banner.png';
     const FCRA_LOGO = RJ_LOGO;
+    const tenantBanner = state.actingOrgId
+      ? `<div class="bg-sky-700/95 text-white text-xs font-semibold px-4 py-2.5 flex items-center justify-between z-[1000] border-b border-sky-400/30">
+          <div class="flex items-center gap-2">
+            <i class="fas fa-building text-sm"></i>
+            <span><strong>Managing tenant:</strong> ${escapeHtml(state.actingOrgName || state.actingOrgId)} — Client Management, Billing, and reports are this company.</span>
+          </div>
+          <button onclick="window._exitTenant()" class="bg-black/30 hover:bg-black/50 px-3 py-1 rounded-lg transition text-[10px] uppercase tracking-wider font-extrabold flex items-center gap-1 border border-white/20"><i class="fas fa-times-circle"></i>Exit tenant</button>
+         </div>`
+      : '';
     const impersonationBanner = state.impersonateClientId 
       ? `<div class="bg-amber-600/90 text-white text-xs font-semibold px-4 py-2.5 flex items-center justify-between z-[1000] border-b border-amber-500/30">
           <div class="flex items-center gap-2">
@@ -1348,6 +1401,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       : '';
     return `<a href="#page-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[9999] focus:bg-blue-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg">${t('a11y.skipToContent')}</a>
     <div class="flex h-screen overflow-hidden flex-col">
+      ${tenantBanner}
       ${impersonationBanner}
       <div id="stripe-mode-banner" class="hidden bg-amber-500/90 text-gray-950 text-xs font-semibold px-4 py-2 flex items-center justify-between z-[999] border-b border-amber-400/50">
         <span><i class="fas fa-flask mr-1.5"></i><strong>Stripe Test Mode</strong> — charges are simulated. Switch to live keys in Cloudflare before production billing.</span>
@@ -1397,7 +1451,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   }
 
   window._nav = (p, data) => { if (p === 'exit-impersonation') { window._stopImpersonating(); } else { navigate(p, data); } };
-  window._logout = async () => { try { await api('/auth/logout',{method:'POST'}); } catch {} setState({token:null,user:null,org:null,demoSession:null,impersonateClientId:null,impersonateClientName:null}); toast('Signed out','info'); render(); };
+  window._logout = async () => { try { await api('/auth/logout',{method:'POST'}); } catch {} setState({token:null,user:null,org:null,demoSession:null,impersonateClientId:null,impersonateClientName:null,actingOrgId:null,actingOrgName:null,homeOrg:null}); toast('Signed out','info'); render(); };
 
   async function loadPage(page) {
     const el = $('#page-content');
@@ -6472,21 +6526,39 @@ Status: Discharged`;
   // BILLING
   // ═══════════════════════════════════════════════════════════════
   async function pgBilling(el) {
-    const plans = [
-      { id: 'professional', name: 'Professional', price: 497, color: 'blue', badge: 'MOST POPULAR', features: ['100 active clients', 'Unlimited report analyses', '15-category violation engine (FCRA/FDCPA/ECOA/Metro 2)', 'Litigation Vulnerability Score + damages', 'Generated dispute/demand letters from file facts', 'Case-law hooks + SOL calculator', 'Client portal: sandbox, tutors, CROA cancel', 'Priority email support'], priceId: 'price_PRO_497' },
-      { id: 'unlimited', name: 'Unlimited', price: 2500, color: 'amber', badge: 'UNLIMITED', features: ['Everything in Professional', 'Unlimited clients & scans', 'MFSN / monitoring imports', 'Click2Mail + FCRA § 611 investigation clocks', 'Full FCRA knowledge base & staff mentors', 'Team operator seats', 'Faster SLA + QBR available', 'Multi-org management'], priceId: 'price_UNL_2500' },
-      { id: 'enterprise', name: 'Enterprise', price: 9997, color: 'purple', badge: 'TEAM/AGENCY', features: ['Unlimited seats, clients, analyses', 'Full generated litigation document pack (~45 letter types)', 'Full case-law database (300+)', 'White-label client portals', 'API access', 'Dedicated account manager', 'Expert legal-ops consultation add-on'], priceId: 'price_ENT_9997' }
+    const fallbackPlans = [
+      { id: 'professional', name: 'Professional', amountDisplay: '$497', color: 'blue', badge: 'MOST POPULAR', features: ['100 active clients', 'Unlimited report analyses', '15-category violation engine (FCRA/FDCPA/ECOA/Metro 2)', 'Litigation Vulnerability Score + damages', 'Generated dispute/demand letters from file facts', 'Case-law hooks + SOL calculator', 'Client portal: sandbox, tutors, CROA cancel', 'Priority email support'], paymentLink: null },
+      { id: 'unlimited', name: 'Unlimited', amountDisplay: '$2,500', color: 'amber', badge: 'UNLIMITED', features: ['Everything in Professional', 'Unlimited clients & scans', 'MFSN / monitoring imports', 'Click2Mail + FCRA § 611 investigation clocks', 'Full FCRA knowledge base & staff mentors', 'Team operator seats', 'Faster SLA + QBR available', 'Multi-org management'], paymentLink: null },
+      { id: 'enterprise', name: 'Enterprise', amountDisplay: '$9,997', color: 'purple', badge: 'TEAM/AGENCY', features: ['Unlimited seats, clients, analyses', 'Full generated litigation document pack (~45 letter types)', 'Full case-law database (300+)', 'White-label client portals', 'API access', 'Dedicated account manager', 'Expert legal-ops consultation add-on'], paymentLink: null }
     ];
+    const featureMap = Object.fromEntries(fallbackPlans.map((p) => [p.id, p]));
 
     let mode = 'unconfigured';
     let invoices = [];
+    let catalogPlans = fallbackPlans;
     try {
-      const [modeRes, invRes] = await Promise.all([
+      const [modeRes, invRes, planRes] = await Promise.all([
         api('/billing/mode').catch(() => ({ mode: 'unconfigured' })),
         api('/billing/invoices').catch(() => ({ invoices: [] })),
+        fetch('/api/public/plans').then((r) => r.json()).catch(() => null),
       ]);
       mode = modeRes.mode || 'unconfigured';
       invoices = invRes.invoices || [];
+      if (planRes && Array.isArray(planRes.plans) && planRes.plans.length) {
+        catalogPlans = planRes.plans.map((p) => {
+          const meta = featureMap[p.id] || {};
+          return {
+            id: p.id,
+            name: p.name || meta.name,
+            amountDisplay: p.amountDisplay || meta.amountDisplay,
+            color: meta.color || 'blue',
+            badge: meta.badge || '',
+            features: meta.features || [p.description || p.seats],
+            paymentLink: p.paymentLink || null,
+            live: !!p.live,
+          };
+        });
+      }
     } catch (_) {}
 
     const modeBanner = mode === 'test'
@@ -6525,17 +6597,21 @@ Status: Discharged`;
       </div>` : ''}
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        ${plans.map(p => `
+        ${catalogPlans.map(p => `
           <div class="glass rounded-2xl p-5 flex flex-col border-2 ${state.org?.plan === p.id ? 'border-' + p.color + '-500 ring-4 ring-' + p.color + '-500/10' : 'border-gray-800'} relative overflow-hidden">
             ${p.badge ? `<div class="absolute top-3 right-3 ${p.color === 'blue' ? 'bg-blue-600' : p.color === 'purple' ? 'bg-purple-600' : p.color === 'amber' ? 'bg-amber-600' : 'bg-gray-600'} px-2 py-0.5 rounded text-[9px] font-bold text-white uppercase tracking-wider">${p.badge}</div>` : ''}
             <div class="mb-4 mt-2">
               <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">${p.name}</div>
-              <div class="flex items-baseline"><span class="text-3xl font-bold text-white">$${p.price}</span><span class="text-gray-500 text-xs ml-1">/month</span></div>
+              <div class="flex items-baseline"><span class="text-3xl font-bold text-white">${p.amountDisplay}</span><span class="text-gray-500 text-xs ml-1">/month</span></div>
             </div>
             <ul class="flex-1 space-y-2 mb-5">
               ${p.features.map(f => `<li class="flex items-start gap-2 text-[11px] text-gray-300"><i class="fas fa-check text-${p.color}-500 mt-0.5"></i> <span>${f}</span></li>`).join('')}
             </ul>
-            <button onclick="window._checkout('${p.id}')" class="w-full py-2 rounded-lg text-sm font-semibold ${state.org?.plan === p.id ? 'bg-gray-700 text-white' : 'bg-' + p.color + '-600 hover:bg-' + p.color + '-700 text-white'} transition">${state.org?.plan === p.id ? 'Current Plan' : 'Upgrade'}</button>
+            <div class="space-y-2">
+              <button onclick="window._checkout('${p.id}')" class="w-full py-2 rounded-lg text-sm font-semibold ${state.org?.plan === p.id ? 'bg-gray-700 text-white' : 'bg-' + p.color + '-600 hover:bg-' + p.color + '-700 text-white'} transition">${state.org?.plan === p.id ? 'Current Plan' : 'Pay now (Checkout)'}</button>
+              ${p.paymentLink ? `<a href="${escapeHtml(p.paymentLink)}" target="_blank" rel="noopener" class="block w-full py-2 rounded-lg text-center text-xs font-semibold border border-gray-600 text-gray-200 hover:bg-gray-800">Pay with Stripe</a>
+              <button type="button" onclick="window._copyText('${escapeHtml(p.paymentLink)}','${p.name} payment link')" class="w-full py-1.5 rounded-lg text-[11px] text-gray-400 hover:text-white">Copy payment link</button>` : `<p class="text-[10px] text-gray-500 text-center">Payment link not ready — use Checkout.</p>`}
+            </div>
           </div>
         `).join('')}
       </div>
@@ -6573,7 +6649,7 @@ Status: Discharged`;
     } catch(err) {
       rememberPendingPlan(planId);
       toast(err.message, 'error');
-      if (btn) { btn.disabled = false; btn.innerHTML = 'Upgrade'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = 'Pay now (Checkout)'; }
       return false;
     }
   };
@@ -7310,15 +7386,18 @@ async function pgAdminConsole(el) {
   el.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-center"><i class="fas fa-spinner fa-spin text-3xl text-blue-400 mb-3"></i><div class="text-sm text-gray-400">Initializing Platform Control Center...</div></div></div>`;
 
   try {
-    const [statsData, orgsData, usersData, logsData, privacyData] = await Promise.all([
+    const [statsData, orgsData, usersData, logsData, privacyData, plansPayload] = await Promise.all([
       api('/admin/db-stats'),
       api('/admin/organizations'),
       api('/admin/users'),
       api('/admin/logs'),
       api('/admin/privacy-requests').catch(() => ({ requests: [] })),
+      fetch('/api/public/plans').then((r) => r.json()).catch(() => ({ plans: [] })),
     ]);
+    const catalogPayLinks = {};
+    (plansPayload.plans || []).forEach((p) => { if (p.id && p.paymentLink) catalogPayLinks[p.id] = p.paymentLink; });
 
-    let activeTab = 'overview';
+    let activeTab = state.pageData?.tab || 'organizations';
 
     function renderConsole() {
       el.innerHTML = `
@@ -7326,9 +7405,9 @@ async function pgAdminConsole(el) {
           <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
             <div>
               <h1 class="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-                <i class="fas fa-user-shield text-blue-500"></i> Platform Control Center
+                <i class="fas fa-building text-blue-500"></i> Tenants & Software
               </h1>
-              <p class="text-xs text-gray-400 mt-0.5">RJ Business Solutions • Global Multi-Tenant Systems Admin Panel</p>
+              <p class="text-xs text-gray-400 mt-0.5">Every company, their users and clients, packages, and Stripe pay links — platform owner command center</p>
             </div>
             <div class="flex items-center gap-2">
               <span class="px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-green-500/10 text-green-400 border border-green-500/20 flex items-center gap-1.5 animate-pulse">
@@ -7381,7 +7460,7 @@ async function pgAdminConsole(el) {
       if (activeTab === 'overview') {
         const stats = statsData.stats;
         target.innerHTML = `
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div class="glass p-5 rounded-xl border border-gray-800">
               <div class="text-xs text-gray-400 uppercase tracking-wider font-semibold">B2B Tenants</div>
               <div class="text-2xl font-extrabold text-white mt-2">${stats.organizations}</div>
@@ -7391,6 +7470,11 @@ async function pgAdminConsole(el) {
               <div class="text-xs text-gray-400 uppercase tracking-wider font-semibold">User Accounts</div>
               <div class="text-2xl font-extrabold text-white mt-2">${stats.users}</div>
               <div class="text-[10px] text-purple-400 font-medium mt-1"><i class="fas fa-user-check text-[10px] mr-1"></i>Registered Users</div>
+            </div>
+            <div class="glass p-5 rounded-xl border border-gray-800">
+              <div class="text-xs text-gray-400 uppercase tracking-wider font-semibold">Consumer Clients</div>
+              <div class="text-2xl font-extrabold text-white mt-2">${stats.clients}</div>
+              <div class="text-[10px] text-cyan-400 font-medium mt-1"><i class="fas fa-address-card text-[10px] mr-1"></i>All tenants</div>
             </div>
             <div class="glass p-5 rounded-xl border border-gray-800">
               <div class="text-xs text-gray-400 uppercase tracking-wider font-semibold">Reports Ingested</div>
@@ -7458,59 +7542,56 @@ async function pgAdminConsole(el) {
       else if (activeTab === 'organizations') {
         target.innerHTML = `
           <div class="glass rounded-xl border border-gray-800 overflow-hidden">
-            <div class="p-4 border-b border-gray-800 bg-gray-900/40 flex justify-between items-center">
-              <h3 class="text-sm font-bold text-white">Active Tenants Directory</h3>
-              <span class="text-xs text-gray-400">${orgsData.organizations.length} organizations provisioned</span>
+            <div class="p-4 border-b border-gray-800 bg-gray-900/40 flex flex-wrap justify-between items-center gap-3">
+              <div>
+                <h3 class="text-sm font-bold text-white">Companies in your system</h3>
+                <p class="text-[11px] text-gray-500 mt-0.5">Open a tenant to see its users and clients. Work in tenant to run the software as that company.</p>
+              </div>
+              <input type="search" id="tenant-search" placeholder="Search company..." class="bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white w-56">
             </div>
             <div class="overflow-x-auto">
               <table class="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr class="border-b border-gray-800 text-gray-400 font-medium">
-                    <th class="p-3">Organization ID</th>
-                    <th class="p-3">Name / Slug</th>
-                    <th class="p-3">Active Subscription Plan</th>
-                    <th class="p-3 text-center">Max Users</th>
-                    <th class="p-3 text-center">Max Clients</th>
-                    <th class="p-3 text-center">Max Reports / Mo</th>
+                    <th class="p-3">Company</th>
+                    <th class="p-3">Plan</th>
+                    <th class="p-3 text-center">Users</th>
+                    <th class="p-3 text-center">Clients</th>
                     <th class="p-3 text-center">Status</th>
                     <th class="p-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-800/60 text-gray-300">
+                <tbody class="divide-y divide-gray-800/60 text-gray-300" id="tenant-org-tbody">
                   ${orgsData.organizations.map(o => {
                     const settings = JSON.parse(o.settings || '{}');
                     const isSuspended = !!settings.suspended;
                     return `
-                      <tr class="hover:bg-gray-800/20">
-                        <td class="p-3 font-mono text-[10px] text-gray-400">${o.id}</td>
+                      <tr class="hover:bg-gray-800/20 tenant-row" data-name="${escapeHtml((o.name || '') + ' ' + (o.slug || ''))}">
                         <td class="p-3">
-                          <div class="font-bold text-white">${o.name}</div>
-                          <div class="text-[10px] text-gray-500">${o.slug}</div>
+                          <div class="font-bold text-white">${escapeHtml(o.name)}</div>
+                          <div class="text-[10px] text-gray-500 font-mono">${escapeHtml(o.id)}</div>
                         </td>
                         <td class="p-3">
                           <span class="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase ${
                             o.plan === 'enterprise' ? 'bg-purple-900/30 text-purple-400 border border-purple-800/30' :
-                            o.plan === 'pro' || o.plan === 'unlimited' ? 'bg-blue-900/30 text-blue-400 border border-blue-800/30' :
+                            o.plan === 'pro' || o.plan === 'unlimited' || o.plan === 'professional' ? 'bg-blue-900/30 text-blue-400 border border-blue-800/30' :
                             'bg-gray-700/50 text-gray-400'
-                          }">${o.plan}</span>
+                          }">${escapeHtml(o.plan || 'free')}</span>
                         </td>
-                        <td class="p-3 text-center font-semibold">${o.max_users}</td>
-                        <td class="p-3 text-center font-semibold">${o.max_clients}</td>
-                        <td class="p-3 text-center font-semibold">${o.max_reports_per_month}</td>
+                        <td class="p-3 text-center font-semibold">${o.user_count ?? '—'}</td>
+                        <td class="p-3 text-center font-semibold">${o.client_count ?? '—'}</td>
                         <td class="p-3 text-center">
                           <span class="px-2.5 py-0.5 rounded text-[10px] font-semibold ${
                             isSuspended ? 'bg-red-900/30 text-red-400 border border-red-800/30' : 'bg-green-900/30 text-green-400 border border-green-800/30'
                           }">${isSuspended ? 'Suspended' : 'Active'}</span>
                         </td>
-                        <td class="p-3 text-right space-x-1.5 whitespace-nowrap">
-                          <button onclick="window._adminEditOrg('${o.id}')" class="bg-gray-800 hover:bg-gray-700 text-white px-2.5 py-1.5 rounded text-[10px] font-bold transition">
-                            <i class="fas fa-edit mr-1"></i>Edit
-                          </button>
+                        <td class="p-3 text-right space-x-1 whitespace-nowrap">
+                          <button onclick="window._adminViewOrg('${o.id}')" class="bg-sky-600 hover:bg-sky-500 text-white px-2.5 py-1.5 rounded text-[10px] font-bold transition">Open</button>
+                          <button onclick="window._workInTenant('${o.id}', '${escapeHtml(o.name).replace(/'/g, '')}')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1.5 rounded text-[10px] font-bold transition">Work in tenant</button>
+                          <button onclick="window._adminEditOrg('${o.id}')" class="bg-gray-800 hover:bg-gray-700 text-white px-2.5 py-1.5 rounded text-[10px] font-bold transition">Edit</button>
                           <button onclick="window._adminToggleOrgSuspension('${o.id}')" class="${
                             isSuspended ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white'
-                          } px-2.5 py-1.5 rounded text-[10px] font-bold transition">
-                            <i class="fas ${isSuspended ? 'fa-play' : 'fa-stop'} mr-1"></i>${isSuspended ? 'Unsuspend' : 'Suspend'}
-                          </button>
+                          } px-2.5 py-1.5 rounded text-[10px] font-bold transition">${isSuspended ? 'Unsuspend' : 'Suspend'}</button>
                         </td>
                       </tr>
                     `;
@@ -7519,6 +7600,7 @@ async function pgAdminConsole(el) {
               </table>
             </div>
           </div>
+          <div id="tenant-detail-panel" class="hidden"></div>
 
           <div id="org-edit-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div class="glass w-full max-w-md rounded-xl border border-gray-800 overflow-hidden shadow-2xl">
@@ -7535,6 +7617,7 @@ async function pgAdminConsole(el) {
                 <div>
                   <label class="block text-xs text-gray-400 mb-1">Commercial Billing Plan</label>
                   <select name="plan" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-xs focus:border-blue-500 outline-none">
+                    <option value="free">Free (gated)</option>
                     <option value="professional">Professional Plan ($497/mo)</option>
                     <option value="unlimited">Unlimited Plan ($2500/mo)</option>
                     <option value="enterprise">Enterprise Plan ($9997/mo)</option>
@@ -7589,6 +7672,16 @@ async function pgAdminConsole(el) {
             } catch(err) {
               toast(err.message, 'error');
             }
+          };
+        }
+        const tenantSearch = document.getElementById('tenant-search');
+        if (tenantSearch) {
+          tenantSearch.oninput = (e) => {
+            const q = String(e.target.value || '').toLowerCase();
+            document.querySelectorAll('.tenant-row').forEach((row) => {
+              const name = (row.getAttribute('data-name') || '').toLowerCase();
+              row.classList.toggle('hidden', q && !name.includes(q));
+            });
           };
         }
       } 
@@ -8035,6 +8128,12 @@ async function pgAdminConsole(el) {
         target.innerHTML = `
           <div class="grid md:grid-cols-2 gap-6">
             <div class="glass rounded-xl border border-gray-800 p-5">
+              <h3 class="text-sm font-bold text-white mb-2"><i class="fas fa-credit-card text-emerald-400 mr-1.5"></i>Stripe SaaS Catalog</h3>
+              <p class="text-xs text-gray-400 mb-4">Create or refresh Professional / Unlimited / Enterprise products, prices, and payment links. Return URLs use smartfcra.com.</p>
+              <button id="btn-admin-stripe-catalog" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg"><i class="fas fa-sync mr-1"></i>Ensure Payment Links</button>
+              <pre id="admin-stripe-catalog-result" class="mt-3 text-[10px] text-gray-500 font-mono whitespace-pre-wrap hidden"></pre>
+            </div>
+            <div class="glass rounded-xl border border-gray-800 p-5">
               <h3 class="text-sm font-bold text-white mb-2"><i class="fas fa-database text-blue-400 mr-1.5"></i>D1 Backup Snapshot</h3>
               <p class="text-xs text-gray-400 mb-4">Export all core tables to the R2 vault. Weekly GitHub Actions also run automatically.</p>
               <button id="btn-admin-backup" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-lg"><i class="fas fa-cloud-upload-alt mr-1"></i>Trigger Backup Now</button>
@@ -8062,6 +8161,21 @@ async function pgAdminConsole(el) {
               <button id="btn-admin-journey-dispatch" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg"><i class="fas fa-paper-plane mr-1"></i>Send This Morning's Ritual Now</button>
               <pre id="admin-journey-result" class="mt-3 text-[10px] text-gray-500 font-mono whitespace-pre-wrap hidden"></pre>
             </div>`;
+        const stripeCatBtn = document.getElementById('btn-admin-stripe-catalog');
+        if (stripeCatBtn) stripeCatBtn.onclick = async () => {
+          stripeCatBtn.disabled = true;
+          try {
+            const r = await api('/admin/stripe/ensure-catalog', { method: 'POST', body: '{}' });
+            const pre = document.getElementById('admin-stripe-catalog-result');
+            if (pre) {
+              pre.classList.remove('hidden');
+              pre.textContent = (r.plans || []).map((p) => `${p.id}: ${p.paymentLinkUrl || p.priceId}`).join('\n');
+            }
+            (r.plans || []).forEach((p) => { if (p.id && p.paymentLinkUrl) catalogPayLinks[p.id] = p.paymentLinkUrl; });
+            toast('Stripe catalog ready', 'success');
+          } catch (err) { toast(err.message, 'error'); }
+          stripeCatBtn.disabled = false;
+        };
         const backupBtn = document.getElementById('btn-admin-backup');
         if (backupBtn) backupBtn.onclick = async () => {
           backupBtn.disabled = true;
@@ -8274,6 +8388,64 @@ async function pgAdminConsole(el) {
         renderConsole();
       } catch(err) {
         toast(err.message, 'error');
+      }
+    };
+
+    window._adminViewOrg = async (orgId) => {
+      const panel = document.getElementById('tenant-detail-panel');
+      if (!panel) return;
+      panel.classList.remove('hidden');
+      panel.innerHTML = '<div class="glass rounded-xl border border-gray-800 p-6 text-sm text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Loading company...</div>';
+      try {
+        const d = await api('/admin/organizations/' + encodeURIComponent(orgId) + '/summary');
+        const o = d.organization || {};
+        const payBtns = ['professional', 'unlimited', 'enterprise'].map((id) => {
+          const url = catalogPayLinks[id];
+          if (!url) return '';
+          return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-lg bg-emerald-600/20 border border-emerald-500/30 text-emerald-200 text-[10px] font-bold uppercase">${id} pay link</a>
+            <button type="button" onclick="window._copyText('${escapeHtml(url)}','${id} payment link')" class="px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 text-[10px] font-bold">Copy ${id}</button>`;
+        }).join('');
+        panel.innerHTML = `
+          <div class="glass rounded-xl border border-sky-800/40 p-5 space-y-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 class="text-lg font-bold text-white">${escapeHtml(o.name || '')}</h3>
+                <p class="text-[11px] text-gray-500 font-mono">${escapeHtml(o.id)} · plan ${escapeHtml(o.plan || 'free')} · ${d.counts?.users || 0} users · ${d.counts?.clients || 0} clients · ${d.counts?.reports || 0} reports</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button type="button" onclick="window._workInTenant('${escapeHtml(o.id)}', '${escapeHtml(o.name || '').replace(/'/g, '')}')" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 py-2 rounded-lg">Work in this software</button>
+                <button type="button" onclick="window._nav('billing')" class="bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded-lg">Open Billing</button>
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-2">${payBtns || '<span class="text-[11px] text-gray-500">Payment links load from Stripe catalog (Ops tab → Ensure Payment Links).</span>'}</div>
+            <div class="grid md:grid-cols-2 gap-4">
+              <div>
+                <h4 class="text-xs font-bold text-white mb-2">Users</h4>
+                <div class="overflow-x-auto max-h-64">
+                  <table class="w-full text-left text-[11px]"><tbody>
+                    ${(d.users || []).map((u) => `<tr class="border-t border-gray-800"><td class="py-1.5 text-white">${escapeHtml(u.name || '')}</td><td class="py-1.5 text-gray-400">${escapeHtml(u.email || '')}</td><td class="py-1.5 text-purple-300">${escapeHtml(u.role || '')}</td></tr>`).join('') || '<tr><td class="text-gray-500 py-2">No users</td></tr>'}
+                  </tbody></table>
+                </div>
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-white mb-2">Clients</h4>
+                <div class="overflow-x-auto max-h-64">
+                  <table class="w-full text-left text-[11px]"><tbody>
+                    ${(d.clients || []).map((c) => `<tr class="border-t border-gray-800"><td class="py-1.5 text-white">${escapeHtml((c.first_name || '') + ' ' + (c.last_name || ''))}</td><td class="py-1.5 text-gray-400">${escapeHtml(c.email || '')}</td></tr>`).join('') || '<tr><td class="text-gray-500 py-2">No clients yet</td></tr>'}
+                  </tbody></table>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 class="text-xs font-bold text-white mb-2">Stripe payments</h4>
+              ${(d.payments || []).length ? `<table class="w-full text-left text-[11px]"><thead><tr class="text-gray-500"><th class="pb-1">Email</th><th>Plan</th><th>Status</th><th>When</th></tr></thead><tbody>
+                ${(d.payments || []).map((p) => `<tr class="border-t border-gray-800"><td class="py-1.5">${escapeHtml(p.email || '')}</td><td>${escapeHtml(p.plan || '')}</td><td>${escapeHtml(p.status || '')}</td><td>${escapeHtml((p.created_at || '').slice(0, 16))}</td></tr>`).join('')}
+              </tbody></table>` : '<p class="text-[11px] text-gray-500">No SaaS payments attached to this company yet.</p>'}
+            </div>
+          </div>`;
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (err) {
+        panel.innerHTML = `<div class="glass rounded-xl border border-red-500/30 p-4 text-sm text-red-300">${escapeHtml(err.message)}</div>`;
       }
     };
 
@@ -12884,12 +13056,17 @@ async function pgAdminConsole(el) {
   async function pgSalesTools(el) {
     // 1. Fetch available clients to enable campaign-trigger simulation
     let clients = [];
+    let payLinks = { professional: '', unlimited: '', enterprise: '' };
     try {
       const d = await api('/clients');
       clients = d.clients || [];
     } catch(err) {
       console.warn('Failed to load clients for campaign triggers:', err.message);
     }
+    try {
+      const catalog = await fetch('/api/public/plans').then((r) => r.json());
+      (catalog.plans || []).forEach((p) => { if (p.id && p.paymentLink) payLinks[p.id] = p.paymentLink; });
+    } catch (_) {}
 
     el.innerHTML = `
       <div class="fade-in max-w-6xl mx-auto space-y-6">
@@ -13066,6 +13243,11 @@ async function pgAdminConsole(el) {
                 <li><i class="fas fa-check text-blue-500 mr-1 text-[8px]"></i> Core 75+ Rules Engine</li>
                 <li><i class="fas fa-check text-blue-500 mr-1 text-[8px]"></i> Letter Draft Compiler</li>
               </ul>
+              <div class="mt-3 space-y-1.5">
+                <button type="button" onclick="window._checkout('professional')" class="w-full py-2 rounded-lg text-[10px] font-bold bg-blue-600 hover:bg-blue-500 text-white">Pay now (Checkout)</button>
+                ${payLinks.professional ? `<a href="${escapeHtml(payLinks.professional)}" target="_blank" rel="noopener" class="block w-full py-2 rounded-lg text-center text-[10px] font-bold border border-gray-700 text-gray-200">Pay with Stripe</a>
+                <button type="button" onclick="window._copyText('${escapeHtml(payLinks.professional)}','Professional payment link')" class="w-full text-[10px] text-gray-500">Copy payment link</button>` : ''}
+              </div>
             </div>
             <!-- Tier 2 -->
             <div class="border border-blue-500/20 bg-blue-950/5 rounded-2xl p-4 flex flex-col justify-between relative">
@@ -13080,6 +13262,11 @@ async function pgAdminConsole(el) {
                 <li><i class="fas fa-check text-blue-500 mr-1 text-[8px]"></i> Advanced 50-State SOL</li>
                 <li><i class="fas fa-check text-blue-500 mr-1 text-[8px]"></i> Full Case Law Databases</li>
               </ul>
+              <div class="mt-3 space-y-1.5">
+                <button type="button" onclick="window._checkout('unlimited')" class="w-full py-2 rounded-lg text-[10px] font-bold bg-blue-600 hover:bg-blue-500 text-white">Pay now (Checkout)</button>
+                ${payLinks.unlimited ? `<a href="${escapeHtml(payLinks.unlimited)}" target="_blank" rel="noopener" class="block w-full py-2 rounded-lg text-center text-[10px] font-bold border border-gray-700 text-gray-200">Pay with Stripe</a>
+                <button type="button" onclick="window._copyText('${escapeHtml(payLinks.unlimited)}','Unlimited payment link')" class="w-full text-[10px] text-gray-500">Copy payment link</button>` : ''}
+              </div>
             </div>
             <!-- Tier 3 -->
             <div class="border border-gray-800 bg-gray-900/5 rounded-2xl p-4 flex flex-col justify-between">
@@ -13093,6 +13280,11 @@ async function pgAdminConsole(el) {
                 <li><i class="fas fa-check text-blue-500 mr-1 text-[8px]"></i> 24/7 Dedicated Support</li>
                 <li><i class="fas fa-check text-blue-500 mr-1 text-[8px]"></i> Custom API Webhooks</li>
               </ul>
+              <div class="mt-3 space-y-1.5">
+                <button type="button" onclick="window._checkout('enterprise')" class="w-full py-2 rounded-lg text-[10px] font-bold bg-purple-600 hover:bg-purple-500 text-white">Pay now (Checkout)</button>
+                ${payLinks.enterprise ? `<a href="${escapeHtml(payLinks.enterprise)}" target="_blank" rel="noopener" class="block w-full py-2 rounded-lg text-center text-[10px] font-bold border border-gray-700 text-gray-200">Pay with Stripe</a>
+                <button type="button" onclick="window._copyText('${escapeHtml(payLinks.enterprise)}','Enterprise payment link')" class="w-full text-[10px] text-gray-500">Copy payment link</button>` : ''}
+              </div>
             </div>
           </div>
         </div>

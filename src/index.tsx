@@ -156,6 +156,7 @@ import {
   staticPublicPlans,
 } from './lib/stripe-catalog';
 import { CANONICAL_ORIGIN, canonicalRedirectUrl } from './lib/public-origin';
+import { shouldApplyActingOrg } from './lib/acting-org';
 import {
   claimPendingSaasEntitlement,
   fulfillSaasCheckout,
@@ -880,8 +881,21 @@ async function authMiddleware(c: any, next: any) {
     }
   }
 
-  const org = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(session.org_id).first();
-  if (org) {
+  const homeOrgId = session.org_id;
+  const actingHeader = String(c.req.header('X-Acting-Org-Id') || c.req.header('x-acting-org-id') || '').trim();
+  let effectiveOrgId = homeOrgId;
+  if (
+    session.user_role === 'super_admin' &&
+    actingHeader &&
+    actingHeader !== homeOrgId &&
+    shouldApplyActingOrg(c.req.path)
+  ) {
+    const target = await c.env.DB.prepare('SELECT id FROM organizations WHERE id = ?').bind(actingHeader).first();
+    if (target?.id) effectiveOrgId = String(target.id);
+  }
+
+  const org = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(effectiveOrgId).first();
+  if (org && !(session.user_role === 'super_admin' && effectiveOrgId !== homeOrgId)) {
     try {
       const settings = JSON.parse(org.settings || '{}');
       if (settings.suspended) {
@@ -916,7 +930,15 @@ async function authMiddleware(c: any, next: any) {
     else await touch;
   } catch { /* ignore */ }
 
-  c.set('user', { id: session.user_id, name: session.user_name, email: session.user_email, role: session.user_role, org_id: session.org_id });
+  c.set('user', {
+    id: session.user_id,
+    name: session.user_name,
+    email: session.user_email,
+    role: session.user_role,
+    org_id: effectiveOrgId,
+    home_org_id: homeOrgId,
+    acting_org_id: effectiveOrgId !== homeOrgId ? effectiveOrgId : null,
+  });
   c.set('session', session);
   return next();
 }
@@ -10384,8 +10406,56 @@ app.get('/api/admin/db-stats', authMiddleware, adminGateMiddleware, async (c) =>
 // 2. GET /api/admin/organizations
 app.get('/api/admin/organizations', authMiddleware, adminGateMiddleware, async (c) => {
   try {
-    const orgs = await c.env.DB.prepare('SELECT * FROM organizations ORDER BY created_at DESC').all();
+    let orgs;
+    try {
+      orgs = await c.env.DB.prepare(`
+        SELECT o.*,
+          (SELECT COUNT(*) FROM users u WHERE u.org_id = o.id) AS user_count,
+          (SELECT COUNT(*) FROM clients c WHERE c.org_id = o.id) AS client_count
+        FROM organizations o
+        ORDER BY o.created_at DESC
+      `).all();
+    } catch {
+      orgs = await c.env.DB.prepare('SELECT * FROM organizations ORDER BY created_at DESC').all();
+    }
     return c.json({ organizations: orgs?.results || [] });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+app.get('/api/admin/organizations/:id/summary', authMiddleware, adminGateMiddleware, async (c) => {
+  try {
+    const id = c.req.param('id');
+    const org = await c.env.DB.prepare('SELECT * FROM organizations WHERE id = ?').bind(id).first() as any;
+    if (!org) return c.json({ error: 'Organization not found' }, 404);
+    const users = await c.env.DB.prepare(
+      'SELECT id, name, email, role, is_active, last_login, created_at FROM users WHERE org_id = ? ORDER BY created_at DESC',
+    ).bind(id).all();
+    const clients = await c.env.DB.prepare(
+      'SELECT id, first_name, last_name, email, phone, status, created_at FROM clients WHERE org_id = ? ORDER BY created_at DESC LIMIT 200',
+    ).bind(id).all();
+    let payments: any[] = [];
+    try {
+      const pay = await c.env.DB.prepare(
+        'SELECT id, email, plan, status, stripe_customer_id, stripe_subscription_id, stripe_session_id, created_at, applied_at FROM saas_entitlements WHERE org_id = ? ORDER BY created_at DESC LIMIT 50',
+      ).bind(id).all();
+      payments = pay?.results || [];
+    } catch {
+      payments = [];
+    }
+    const reports = await c.env.DB.prepare('SELECT COUNT(*) as count FROM credit_reports WHERE org_id = ?').bind(id).first('count');
+    return c.json({
+      organization: org,
+      users: users?.results || [],
+      clients: clients?.results || [],
+      payments,
+      counts: {
+        users: (users?.results || []).length,
+        clients: (clients?.results || []).length,
+        reports: reports || 0,
+      },
+    });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
@@ -11144,8 +11214,8 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/demo-experience.js?v=20260818-pay-access"></script>
-  <script src="/static/app.js?v=20260818-pay-access"></script>
+  <script src="/static/demo-experience.js?v=20260818-tenants-pay"></script>
+  <script src="/static/app.js?v=20260818-tenants-pay"></script>
 </body>
 </html>`;
 }

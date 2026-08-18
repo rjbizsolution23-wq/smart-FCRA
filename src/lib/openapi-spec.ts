@@ -149,6 +149,7 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
   { method: 'get', path: '/api/admin/privacy-requests', summary: 'Privacy request queue', tags: ['Admin'], security: true },
   { method: 'post', path: '/api/admin/privacy-requests/{id}/fulfill', summary: 'Fulfill privacy delete/export request', tags: ['Admin'], security: true },
   { method: 'get', path: '/api/admin/organizations', summary: 'List all organizations', tags: ['Admin'], security: true },
+  { method: 'get', path: '/api/admin/organizations/{id}/summary', summary: 'One tenant: users, clients, Stripe payments', tags: ['Admin'], security: true },
   { method: 'get', path: '/api/compliance/esign-disclosure', summary: 'E-SIGN/UETA disclosure text + hash', tags: ['Compliance'], security: true },
   { method: 'get', path: '/api/compliance/ron-states', summary: 'RON state eligibility matrix', tags: ['Compliance'], security: true },
   { method: 'get', path: '/api/compliance/overview', summary: 'Contracts / RON / video compliance overview', tags: ['Compliance'], security: true },
