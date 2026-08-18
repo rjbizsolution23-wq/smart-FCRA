@@ -1286,6 +1286,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'sales-tools', icon: 'fa-chart-pie', label: 'Sales Tools' },
         { id: 'tradelines', icon: 'fa-layer-group', label: 'Tradelines' },
         { id: 'brand-library', icon: 'fa-palette', label: 'Brand Library' },
+        { id: 'demo-signups', icon: 'fa-clipboard-list', label: 'Demo Signups' },
         { id: 'product-map', icon: 'fa-sitemap', label: 'Product Map' },
         { id: 'roi-calculator', icon: 'fa-calculator', label: 'ROI Calculator' },
         { id: 'team', icon: 'fa-user-friends', label: 'Team' },
@@ -1423,6 +1424,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'sales-tools': await pgSalesTools(el); break;
         case 'tradelines': await pgTradelines(el); break;
         case 'brand-library': await pgBrandLibrary(el); break;
+        case 'demo-signups': await pgDemoSignups(el); break;
         case 'product-map': await pgProductMap(el); break;
         case 'roi-calculator': await pgROICalculator(el); break;
         case 'team': await pgTeam(el); break;
@@ -8698,20 +8700,115 @@ async function pgAdminConsole(el) {
       <div class="glass rounded-xl p-5">
         <div class="flex items-center justify-between mb-3">
           <h2 class="text-sm font-bold text-white font-display">Recent brand leads</h2>
-          <span class="text-[10px] text-slate-500">${leads.length} latest</span>
+          <div class="flex items-center gap-3">
+            <button type="button" onclick="window._nav('demo-signups')" class="text-[11px] text-sky-300 hover:text-sky-200 font-semibold">Open Demo Signups inbox →</button>
+            <span class="text-[10px] text-slate-500">${leads.length} latest</span>
+          </div>
         </div>
         ${leads.length ? `<div class="overflow-x-auto"><table class="w-full text-xs">
           <thead><tr class="text-left text-slate-500 border-b border-slate-800">
-            <th class="py-2 pr-3">When</th><th class="py-2 pr-3">Form</th><th class="py-2 pr-3">Name</th><th class="py-2 pr-3">Email</th><th class="py-2 pr-3">Status</th>
+            <th class="py-2 pr-3">When</th><th class="py-2 pr-3">Form</th><th class="py-2 pr-3">Name</th><th class="py-2 pr-3">Email</th><th class="py-2 pr-3">Phone</th><th class="py-2 pr-3">Status</th>
           </tr></thead>
-          <tbody>${leads.slice(0, 25).map(l => `<tr class="border-b border-slate-800/80">
+          <tbody>${leads.map(l => `<tr class="border-b border-slate-800/80">
             <td class="py-2 pr-3 text-slate-400 whitespace-nowrap">${escapeHtml(String(l.created_at || '').slice(0, 16))}</td>
             <td class="py-2 pr-3 text-sky-300">${escapeHtml(l.form_id || '')}</td>
             <td class="py-2 pr-3 text-white">${escapeHtml([l.first_name, l.last_name].filter(Boolean).join(' ') || '—')}</td>
             <td class="py-2 pr-3 text-slate-300">${escapeHtml(l.email || '')}</td>
+            <td class="py-2 pr-3 text-slate-400">${escapeHtml(l.phone || '')}</td>
             <td class="py-2 pr-3">${escapeHtml(l.status || 'new')}</td>
           </tr>`).join('')}</tbody>
         </table></div>` : `<p class="text-sm text-slate-500">No inbound brand leads yet. Share <a class="text-blue-400 underline" href="/forms/credit-qualify" target="_blank">/forms/credit-qualify</a>.</p>`}
+      </div>
+    </div>`;
+  }
+
+  function demoSignupWhen(v) {
+    return escapeHtml(String(v || '').replace('T', ' ').slice(0, 16) || '—');
+  }
+
+  async function pgDemoSignups(el) {
+    el.innerHTML = `<div class="flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-3xl text-blue-400"></i></div>`;
+    let data = { demos: [], requestDemos: [], saasSignups: [], counts: {}, scope: 'org' };
+    try {
+      data = await api('/admin/demo/signups');
+    } catch (err) {
+      el.innerHTML = `<div class="text-red-400 p-6">${escapeHtml(err.message || 'Could not load demo signups')}</div>`;
+      return;
+    }
+    const demos = data.demos || [];
+    const requests = data.requestDemos || [];
+    const saas = data.saasSignups || [];
+    const row = (cells) => `<tr class="border-b border-slate-800/80">${cells}</tr>`;
+    el.innerHTML = `<div class="fade-in space-y-6">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 class="text-xl font-bold text-white">Demo Signups</h1>
+          <p class="text-sm text-gray-400 mt-1">Every interactive CRO demo, landing-page request-a-demo, and new SaaS organization. Super admin sees the full platform list.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <a href="/demo" target="_blank" class="px-3 py-2 rounded-lg text-xs font-semibold border border-sky-500/30 text-sky-200 hover:bg-sky-500/10">Open /demo</a>
+          <a href="/#demo" target="_blank" class="px-3 py-2 rounded-lg text-xs font-semibold border border-blue-500/30 text-blue-200 hover:bg-blue-500/10">Landing demo form</a>
+        </div>
+      </div>
+      <div class="grid sm:grid-cols-3 gap-3">
+        <div class="glass rounded-xl p-4"><div class="text-[10px] uppercase tracking-wider text-slate-500">Interactive CRO demos</div><div class="text-2xl font-bold text-white mt-1">${demos.length}</div></div>
+        <div class="glass rounded-xl p-4"><div class="text-[10px] uppercase tracking-wider text-slate-500">Request-a-demo forms</div><div class="text-2xl font-bold text-white mt-1">${requests.length}</div></div>
+        <div class="glass rounded-xl p-4"><div class="text-[10px] uppercase tracking-wider text-slate-500">SaaS org signups</div><div class="text-2xl font-bold text-white mt-1">${saas.length}</div></div>
+      </div>
+
+      <div class="glass rounded-xl p-5">
+        <h2 class="text-sm font-bold text-white mb-1">Interactive CRO demos</h2>
+        <p class="text-[11px] text-slate-500 mb-3">From /demo and the login CRO Demo tab (business name, address, email, phone). Stored in demo sessions.</p>
+        ${demos.length ? `<div class="overflow-x-auto"><table class="w-full text-xs">
+          <thead><tr class="text-left text-slate-500 border-b border-slate-800">
+            <th class="py-2 pr-3">When</th><th class="py-2 pr-3">Firm</th><th class="py-2 pr-3">Contact</th><th class="py-2 pr-3">Email</th><th class="py-2 pr-3">Phone</th><th class="py-2 pr-3">Status</th><th class="py-2 pr-3">Last seen</th>
+          </tr></thead>
+          <tbody>${demos.map((d) => row(`
+            <td class="py-2 pr-3 text-slate-400 whitespace-nowrap">${demoSignupWhen(d.created_at)}</td>
+            <td class="py-2 pr-3 text-white">${escapeHtml(d.business_name || '—')}<div class="text-[10px] text-slate-500 max-w-xs truncate">${escapeHtml(d.business_address || '')}</div></td>
+            <td class="py-2 pr-3 text-slate-200">${escapeHtml([d.first_name, d.last_name].filter(Boolean).join(' ') || '—')}</td>
+            <td class="py-2 pr-3 text-sky-300">${escapeHtml(d.email || '')}</td>
+            <td class="py-2 pr-3 text-slate-300">${escapeHtml(d.phone || '')}</td>
+            <td class="py-2 pr-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${d.status === 'active' ? 'bg-emerald-900/40 text-emerald-300' : d.status === 'expired' ? 'bg-gray-800 text-gray-400' : 'bg-amber-900/30 text-amber-300'}">${escapeHtml(d.status || '')}</span></td>
+            <td class="py-2 pr-3 text-slate-500 whitespace-nowrap">${demoSignupWhen(d.last_seen_at)}</td>
+          `)).join('')}</tbody>
+        </table></div>` : `<p class="text-sm text-slate-500">No interactive demo sessions yet.</p>`}
+      </div>
+
+      <div class="glass rounded-xl p-5">
+        <h2 class="text-sm font-bold text-white mb-1">Landing “Request demo” forms</h2>
+        <p class="text-[11px] text-slate-500 mb-3">From the sales site #demo form (form ids saas-demo / interactive-demo).</p>
+        ${requests.length ? `<div class="overflow-x-auto"><table class="w-full text-xs">
+          <thead><tr class="text-left text-slate-500 border-b border-slate-800">
+            <th class="py-2 pr-3">When</th><th class="py-2 pr-3">Form</th><th class="py-2 pr-3">Name</th><th class="py-2 pr-3">Email</th><th class="py-2 pr-3">Phone</th><th class="py-2 pr-3">Status</th>
+          </tr></thead>
+          <tbody>${requests.map((l) => row(`
+            <td class="py-2 pr-3 text-slate-400 whitespace-nowrap">${demoSignupWhen(l.created_at)}</td>
+            <td class="py-2 pr-3 text-sky-300">${escapeHtml(l.form_id || '')}</td>
+            <td class="py-2 pr-3 text-white">${escapeHtml([l.first_name, l.last_name].filter(Boolean).join(' ') || '—')}</td>
+            <td class="py-2 pr-3 text-slate-300">${escapeHtml(l.email || '')}</td>
+            <td class="py-2 pr-3 text-slate-400">${escapeHtml(l.phone || '')}</td>
+            <td class="py-2 pr-3">${escapeHtml(l.status || 'new')}</td>
+          `)).join('')}</tbody>
+        </table></div>` : `<p class="text-sm text-slate-500">No request-a-demo submissions yet.</p>`}
+      </div>
+
+      <div class="glass rounded-xl p-5">
+        <h2 class="text-sm font-bold text-white mb-1">SaaS organization signups</h2>
+        <p class="text-[11px] text-slate-500 mb-3">Create Account from Start Professional / Unlimited / Enterprise. After email verify they are sent to Stripe checkout. Super admin only.</p>
+        ${saas.length ? `<div class="overflow-x-auto"><table class="w-full text-xs">
+          <thead><tr class="text-left text-slate-500 border-b border-slate-800">
+            <th class="py-2 pr-3">When</th><th class="py-2 pr-3">Organization</th><th class="py-2 pr-3">Contact</th><th class="py-2 pr-3">Email</th><th class="py-2 pr-3">Plan</th><th class="py-2 pr-3">Verified</th>
+          </tr></thead>
+          <tbody>${saas.map((o) => row(`
+            <td class="py-2 pr-3 text-slate-400 whitespace-nowrap">${demoSignupWhen(o.created_at)}</td>
+            <td class="py-2 pr-3 text-white">${escapeHtml(o.name || '—')}</td>
+            <td class="py-2 pr-3 text-slate-200">${escapeHtml(o.contact_name || '—')}</td>
+            <td class="py-2 pr-3 text-sky-300">${escapeHtml(o.email || '')}</td>
+            <td class="py-2 pr-3">${escapeHtml(o.plan || 'free')}</td>
+            <td class="py-2 pr-3">${Number(o.is_active) === 1 ? '<span class="text-emerald-300">Yes</span>' : '<span class="text-amber-300">Pending email</span>'}</td>
+          `)).join('')}</tbody>
+        </table></div>` : `<p class="text-sm text-slate-500">${data.scope === 'all' ? 'No SaaS organizations yet.' : 'Sign in as platform super admin to see every tenant signup.'}</p>`}
       </div>
     </div>`;
   }

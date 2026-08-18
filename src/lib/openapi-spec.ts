@@ -144,6 +144,8 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
   { method: 'post', path: '/api/demo/prepare', summary: 'Load Salisha sample case + consents for the interactive demo session (not super_admin)', tags: ['Demo'], security: true },
   { method: 'post', path: '/api/demo/convert', summary: 'Handoff interactive demo firm identity into organization signup', tags: ['Demo'], security: true },
   { method: 'post', path: '/api/admin/demo/prepare', summary: 'One-click sales demo: Salisha client, portal password reset, sample case', tags: ['Admin'], security: true },
+  { method: 'get', path: '/api/brand/leads', summary: 'Inbound brand / demo form leads', tags: ['Admin'], security: true },
+  { method: 'get', path: '/api/admin/demo/signups', summary: 'Interactive demo sessions, request-a-demo leads, and SaaS org signups', tags: ['Admin'], security: true },
   { method: 'get', path: '/api/admin/privacy-requests', summary: 'Privacy request queue', tags: ['Admin'], security: true },
   { method: 'post', path: '/api/admin/privacy-requests/{id}/fulfill', summary: 'Fulfill privacy delete/export request', tags: ['Admin'], security: true },
   { method: 'get', path: '/api/admin/organizations', summary: 'List all organizations', tags: ['Admin'], security: true },

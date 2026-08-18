@@ -1709,6 +1709,78 @@ app.get('/api/brand/leads', authMiddleware, async (c) => {
   }
 });
 
+const DEMO_LEAD_FORMS = ['saas-demo', 'interactive-demo', 'smart-fcra-demo'];
+
+/** Inbox: interactive CRO demos, landing request-a-demo leads, and new SaaS orgs. */
+app.get('/api/admin/demo/signups', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role !== 'admin' && user.role !== 'super_admin') {
+    return c.json({ error: 'Admin only' }, 403);
+  }
+  const all = user.role === 'super_admin';
+  const leadPlaceholders = DEMO_LEAD_FORMS.map(() => '?').join(',');
+
+  let demos: any[] = [];
+  try {
+    const demoSql = all
+      ? `SELECT id, email, phone, business_name, business_address, first_name, last_name, status, mfsn_pulls, mfsn_member_email, live_client_id, org_id, lead_id, tour_step, created_at, expires_at, last_seen_at, source_ip
+         FROM demo_sessions ORDER BY created_at DESC LIMIT 300`
+      : `SELECT id, email, phone, business_name, business_address, first_name, last_name, status, mfsn_pulls, mfsn_member_email, live_client_id, org_id, lead_id, tour_step, created_at, expires_at, last_seen_at, source_ip
+         FROM demo_sessions WHERE org_id = ? ORDER BY created_at DESC LIMIT 300`;
+    const demoRows = all
+      ? await c.env.DB.prepare(demoSql).all()
+      : await c.env.DB.prepare(demoSql).bind(user.org_id).all();
+    demos = demoRows?.results || [];
+  } catch (e: any) {
+    if (!String(e?.message || '').includes('no such table')) throw e;
+  }
+
+  let requestDemos: any[] = [];
+  try {
+    const leadSql = all
+      ? `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, source_ip, created_at
+         FROM brand_leads WHERE form_id IN (${leadPlaceholders}) ORDER BY created_at DESC LIMIT 300`
+      : `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, source_ip, created_at
+         FROM brand_leads WHERE form_id IN (${leadPlaceholders}) AND org_id = ? ORDER BY created_at DESC LIMIT 300`;
+    const leadRows = all
+      ? await c.env.DB.prepare(leadSql).bind(...DEMO_LEAD_FORMS).all()
+      : await c.env.DB.prepare(leadSql).bind(...DEMO_LEAD_FORMS, user.org_id).all();
+    requestDemos = leadRows?.results || [];
+  } catch (e: any) {
+    if (!String(e?.message || '').includes('no such table')) throw e;
+  }
+
+  let saasSignups: any[] = [];
+  if (all) {
+    try {
+      const orgRows = await c.env.DB.prepare(
+        `SELECT o.id, o.name, o.slug, o.plan, o.created_at,
+                (SELECT email FROM users WHERE org_id = o.id ORDER BY created_at ASC LIMIT 1) AS email,
+                (SELECT name FROM users WHERE org_id = o.id ORDER BY created_at ASC LIMIT 1) AS contact_name,
+                (SELECT is_active FROM users WHERE org_id = o.id ORDER BY created_at ASC LIMIT 1) AS is_active
+         FROM organizations o
+         WHERE o.id != 'org_platform_master'
+         ORDER BY o.created_at DESC
+         LIMIT 150`,
+      ).all();
+      saasSignups = orgRows?.results || [];
+    } catch { /* optional */ }
+  }
+
+  return c.json({
+    ok: true,
+    scope: all ? 'all' : 'org',
+    demos,
+    requestDemos,
+    saasSignups,
+    counts: {
+      demos: demos.length,
+      requestDemos: requestDemos.length,
+      saasSignups: saasSignups.length,
+    },
+  });
+});
+
 app.get('/api/brand/catalog', authMiddleware, async (c) => {
   return c.json({
     ok: true,
@@ -1723,6 +1795,7 @@ app.get('/api/brand/catalog', authMiddleware, async (c) => {
       { id: 'partnership', title: 'Partnership Application', url: '/forms/partnership' },
       { id: 'podcast-guest', title: 'Podcast Guest', url: '/forms/podcast-guest' },
       { id: 'saas-demo', title: 'Smart FCRA SaaS Demo', url: '/#demo' },
+      { id: 'interactive-demo', title: 'CRO Interactive Demo', url: '/demo' },
     ],
     brand: {
       name: 'RJ Business Solutions',
@@ -10992,8 +11065,8 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/demo-experience.js?v=20260818-stripe-catalog"></script>
-  <script src="/static/app.js?v=20260818-stripe-catalog"></script>
+  <script src="/static/demo-experience.js?v=20260818-demo-inbox"></script>
+  <script src="/static/app.js?v=20260818-demo-inbox"></script>
 </body>
 </html>`;
 }

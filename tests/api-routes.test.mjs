@@ -58,6 +58,7 @@ const mockEnv = {
   assert(spec.paths['/api/security/audit-log'], 'security audit log documented');
   assert(spec.paths['/api/public/plans'], 'public plans documented');
   assert(spec.paths['/api/admin/stripe/ensure-catalog'], 'ensure-catalog documented');
+  assert(spec.paths['/api/admin/demo/signups'], 'demo signups documented');
 }
 
 // Daily motivation cron rejects missing secret
@@ -129,6 +130,12 @@ const mockEnv = {
   assert(body.plans[0].id === 'professional' && body.plans[0].amountCents === 49700, 'professional amount');
   assert(body.plans.every((p) => p.subscribeUrl.includes('/login?mode=register')), 'register subscribe urls');
   assert(body.plans.every((p) => !p.priceId && !String(JSON.stringify(body)).includes('sk_')), 'no stripe secrets');
+}
+
+// Demo signups inbox requires auth
+{
+  const res = await app.request('/api/admin/demo/signups', {}, mockEnv);
+  assert(res.status === 401, 'GET /api/admin/demo/signups without token returns 401');
 }
 
 // PWA shell
