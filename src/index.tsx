@@ -58,6 +58,11 @@ import {
   DEMO_STAFF_EMAIL,
   DEMO_CLIENT_ID,
   DEMO_CLIENT_NAME,
+  DEMO_CLIENT_EMAIL,
+  DEMO_CLIENT_FIRST_NAME,
+  DEMO_CLIENT_LAST_NAME,
+  isSandboxDemoOrg,
+  sandboxClientHideSql,
   DEMO_TOUR,
   DEMO_PRODUCT_KNOWLEDGE,
   DEMO_SESSION_HOURS,
@@ -125,10 +130,10 @@ import {
   filterTradelines,
   summarizeInventory,
   submitTradelineOrder,
-  TRADELINE_MARKUP_RATE,
   TRADELINE_BRAND,
   TRADELINE_OPS_EMAIL_DEFAULT,
   TRADELINE_FROM_EMAIL_DEFAULT,
+  toPublicTradeline,
   type EnrichedTradeline,
 } from './lib/tradelinemaster-client';
 import { syncTradelineInventory, loadCachedTradelines, sendTradelineOrderEmails } from './lib/tradeline-sync';
@@ -970,7 +975,10 @@ async function verifyOrgPlanLimits(c: any, resourceType: 'client' | 'report' | '
 
   if (resourceType === 'client') {
     if (plan === 'professional' || plan === 'pro') {
-      const clientCountRes = await c.env.DB.prepare('SELECT COUNT(*) as total FROM clients WHERE org_id = ?').bind(user.org_id).first();
+      const hideDemo = sandboxClientHideSql(user.org_id, 'id', 'email');
+      const clientCountRes = await c.env.DB.prepare(
+        `SELECT COUNT(*) as total FROM clients WHERE org_id = ?${hideDemo.sql}`
+      ).bind(user.org_id, ...hideDemo.binds).first();
       const clientCount = clientCountRes?.total || 0;
       if (clientCount >= 100) {
         return {
@@ -1522,7 +1530,7 @@ app.post('/api/demo/prepare', authMiddleware, async (c) => {
       lastName: demo.last_name,
       phone: demo.phone,
     }),
-    message: 'Interactive demo sandbox ready — Salisha sample case, upload, and generated letters are on this org.',
+    message: 'Interactive demo sandbox ready — sample Demo Client case, upload, and generated letters are on this org. Add your own client to see the live process.',
   });
 });
 
@@ -1663,7 +1671,7 @@ app.post('/api/demo/mfsn-live', authMiddleware, async (c) => {
 
   const creds = resolvePublicSignupMfsnCredentials(c.env, memberToken);
   if (!creds) {
-    return c.json({ error: 'Live MFSN is not configured on this deployment (partner credentials missing). Use the Salisha sandbox case instead.' }, 503);
+    return c.json({ error: 'Live MFSN is not configured on this deployment (partner credentials missing). Use the sample Demo Client case instead, or add your own client after signup.' }, 503);
   }
 
   const clientId = 'cli_demo_live_' + demo.id.slice(0, 16);
@@ -2922,18 +2930,21 @@ app.post('/api/auth/reset-password', async (c) => {
 app.get('/api/dashboard', authMiddleware, async (c) => {
   const user = c.get('user');
   const oid = user.org_id;
+  const hideClients = sandboxClientHideSql(oid, 'id', 'email');
+  const hideJoin = sandboxClientHideSql(oid, 'c.id', 'c.email');
+  const hideV = sandboxClientHideSql(oid, 'client_id');
 
   const [clients, reports, violations, docs] = await Promise.all([
-    c.env.DB.prepare('SELECT COUNT(*) as count FROM clients WHERE org_id = ?').bind(oid).first(),
-    c.env.DB.prepare('SELECT COUNT(*) as count FROM credit_reports WHERE org_id = ?').bind(oid).first(),
-    c.env.DB.prepare('SELECT COUNT(*) as count, severity FROM violations WHERE org_id = ? GROUP BY severity').bind(oid).all(),
-    c.env.DB.prepare('SELECT COUNT(*) as count FROM documents WHERE org_id = ?').bind(oid).first(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM clients WHERE org_id = ?${hideClients.sql}`).bind(oid, ...hideClients.binds).first(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM credit_reports WHERE org_id = ?${hideV.sql}`).bind(oid, ...hideV.binds).first(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count, severity FROM violations WHERE org_id = ?${hideV.sql} GROUP BY severity`).bind(oid, ...hideV.binds).all(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM documents WHERE org_id = ?${hideV.sql}`).bind(oid, ...hideV.binds).first(),
   ]);
 
-  const totalDamages = await c.env.DB.prepare('SELECT SUM(total_damages_min) as min_total, SUM(total_damages_max) as max_total FROM violations WHERE org_id = ?').bind(oid).first() as any;
+  const totalDamages = await c.env.DB.prepare(`SELECT SUM(total_damages_min) as min_total, SUM(total_damages_max) as max_total FROM violations WHERE org_id = ?${hideV.sql}`).bind(oid, ...hideV.binds).first() as any;
   const recentActivity = await c.env.DB.prepare('SELECT * FROM activity_log WHERE org_id = ? ORDER BY created_at DESC LIMIT 10').bind(oid).all();
-  const recentViolations = await c.env.DB.prepare('SELECT v.*, c.first_name, c.last_name FROM violations v JOIN clients c ON v.client_id = c.id WHERE v.org_id = ? ORDER BY v.created_at DESC LIMIT 5').bind(oid).all();
-  const byCategory = await c.env.DB.prepare('SELECT category, COUNT(*) as count FROM violations WHERE org_id = ? GROUP BY category').bind(oid).all();
+  const recentViolations = await c.env.DB.prepare(`SELECT v.*, c.first_name, c.last_name FROM violations v JOIN clients c ON v.client_id = c.id WHERE v.org_id = ?${hideJoin.sql} ORDER BY v.created_at DESC LIMIT 5`).bind(oid, ...hideJoin.binds).all();
+  const byCategory = await c.env.DB.prepare(`SELECT category, COUNT(*) as count FROM violations WHERE org_id = ?${hideV.sql} GROUP BY category`).bind(oid, ...hideV.binds).all();
 
   const stats = {
     totalClients: (clients as any)?.count || 0,
@@ -2964,6 +2975,9 @@ app.get('/api/clients', authMiddleware, async (c) => {
   
   let query = 'SELECT c.*, (SELECT COUNT(*) FROM credit_reports WHERE client_id = c.id) as report_count, (SELECT COUNT(*) FROM violations WHERE client_id = c.id) as violation_count, (SELECT SUM(total_damages_min) FROM violations WHERE client_id = c.id) as damages_min, (SELECT SUM(total_damages_max) FROM violations WHERE client_id = c.id) as damages_max FROM clients c WHERE c.org_id = ?';
   const params: any[] = [user.org_id];
+  const hideDemo = sandboxClientHideSql(user.org_id, 'c.id', 'c.email');
+  query += hideDemo.sql;
+  params.push(...hideDemo.binds);
 
   if (search) { query += ' AND (c.first_name LIKE ? OR c.last_name LIKE ? OR c.email LIKE ?)'; params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
   if (status) { query += ' AND c.status = ?'; params.push(status); }
@@ -3015,6 +3029,9 @@ app.post('/api/clients', authMiddleware, async (c) => {
 app.get('/api/clients/:id', authMiddleware, async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
+  if (!isSandboxDemoOrg(user.org_id) && user.role !== 'client' && id === DEMO_CLIENT_ID) {
+    return c.json({ error: 'Not found' }, 404);
+  }
   const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(id, user.org_id).first();
   if (!client) return c.json({ error: 'Not found' }, 404);
 
@@ -4135,7 +4152,7 @@ app.get('/api/integrations/mfsn/status', authMiddleware, async (c) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// TRADELINEMASTER — RJ Business Solutions marketplace (12.5% markup)
+// TRADELINEMASTER — RJ Business Solutions marketplace (retail prices)
 // ═══════════════════════════════════════════════════════════════
 
 function parseTradelineFilters(q: Record<string, string | undefined>) {
@@ -4194,7 +4211,6 @@ app.get('/api/tradelines/status', authMiddleware, async (c) => {
     ok: configured && (apiOk || !!cached.tradelines.length),
     configured,
     brand: TRADELINE_BRAND,
-    markupRate: Number(c.env.TRADELINE_MARKUP_RATE || TRADELINE_MARKUP_RATE),
     opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT,
     fromEmail: c.env.TRADELINE_FROM_EMAIL || TRADELINE_FROM_EMAIL_DEFAULT,
     balance: user.role === 'client' ? undefined : balance,
@@ -4209,7 +4225,6 @@ app.get('/api/tradelines/meta', authMiddleware, async (c) => {
   return c.json({
     ok: true,
     brand: TRADELINE_BRAND,
-    markupRate: Number(c.env.TRADELINE_MARKUP_RATE || TRADELINE_MARKUP_RATE),
     opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT,
     citizenship: CITIZENSHIP_STATUSES,
     genders: GENDER_OPTIONS,
@@ -4234,7 +4249,6 @@ app.get('/api/tradelines/inventory', authMiddleware, async (c) => {
     minSpots: c.req.query('minSpots') || undefined,
     q: c.req.query('q') || c.req.query('search') || undefined,
   });
-  const staff = c.get('user').role !== 'client';
   let rows = filterTradelines(inv.tradelines, filters);
   const sort = c.req.query('sort') || 'statement';
   if (sort === 'price') rows = rows.slice().sort((a, b) => a.retailPrice - b.retailPrice);
@@ -4245,16 +4259,11 @@ app.get('/api/tradelines/inventory', authMiddleware, async (c) => {
   const page = Math.max(1, Number(c.req.query('page') || 1));
   const pageSize = Math.min(100, Math.max(10, Number(c.req.query('pageSize') || c.req.query('entries') || 25)));
   const start = (page - 1) * pageSize;
-  const pageRows = rows.slice(start, start + pageSize).map((t) => ({
-    ...t,
-    wholesalePrice: staff ? t.wholesalePrice : undefined,
-    markupAmount: staff ? t.markupAmount : undefined,
-  }));
+  const pageRows = rows.slice(start, start + pageSize).map((t) => toPublicTradeline(t));
 
   return c.json({
     ok: true,
     brand: TRADELINE_BRAND,
-    markupRate: Number(c.env.TRADELINE_MARKUP_RATE || TRADELINE_MARKUP_RATE),
     opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT,
     summary: summarizeInventory(inv.tradelines),
     filteredCount: rows.length,
@@ -4278,7 +4287,6 @@ app.post('/api/tradelines/refresh', authMiddleware, async (c) => {
 app.get('/api/tradelines/item/:id', authMiddleware, async (c) => {
   const id = Number(c.req.param('id'));
   if (!Number.isFinite(id)) return c.json({ error: 'Invalid id' }, 400);
-  const staff = c.get('user').role !== 'client';
   let tradeline: EnrichedTradeline | undefined;
   if (tradelineMasterConfigured(c.env)) {
     const live = await fetchTradelineById(c.env, id);
@@ -4291,11 +4299,7 @@ app.get('/api/tradelines/item/:id', authMiddleware, async (c) => {
   if (!tradeline) return c.json({ error: 'Tradeline not found' }, 404);
   return c.json({
     ok: true,
-    tradeline: {
-      ...tradeline,
-      wholesalePrice: staff ? tradeline.wholesalePrice : undefined,
-      markupAmount: staff ? tradeline.markupAmount : undefined,
-    },
+    tradeline: toPublicTradeline(tradeline),
     education: listTradelineEducation().slice(0, 3),
   });
 });
@@ -4341,7 +4345,6 @@ app.get('/api/tradelines/match/:clientId', authMiddleware, async (c) => {
   } catch { /* soft */ }
 
   const matched = matchTradelinesForClient(profile, inv.tradelines, Number(c.req.query('limit') || 12));
-  const staff = user.role !== 'client';
   return c.json({
     ok: true,
     clientId: client.id,
@@ -4349,11 +4352,7 @@ app.get('/api/tradelines/match/:clientId', authMiddleware, async (c) => {
     ...matched,
     matches: matched.matches.map((m) => ({
       ...m,
-      tradeline: {
-        ...m.tradeline,
-        wholesalePrice: staff ? m.tradeline.wholesalePrice : undefined,
-        markupAmount: staff ? m.tradeline.markupAmount : undefined,
-      },
+      tradeline: toPublicTradeline(m.tradeline),
     })),
     opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT,
   });
@@ -4381,7 +4380,15 @@ app.post('/api/tradelines/match', authMiddleware, async (c) => {
     hasThinFile: !!body.hasThinFile,
   };
   const matched = matchTradelinesForClient(profile, inv.tradelines, Number(body.limit || 12));
-  return c.json({ ok: true, ...matched, opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT });
+  return c.json({
+    ok: true,
+    ...matched,
+    matches: matched.matches.map((m) => ({
+      ...m,
+      tradeline: toPublicTradeline(m.tradeline),
+    })),
+    opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT,
+  });
 });
 
 app.get('/api/tradelines/orders', authMiddleware, async (c) => {
@@ -4397,7 +4404,7 @@ app.get('/api/tradelines/orders', authMiddleware, async (c) => {
       ).bind(user.org_id, client.id).all();
     } else {
       rows = await c.env.DB.prepare(
-        `SELECT id, client_id, tradeline_id, lender, credit_limit, wholesale_price, retail_price, status, tlm_order_id, tlm_message, created_at, updated_at
+        `SELECT id, client_id, tradeline_id, lender, credit_limit, retail_price, status, tlm_order_id, tlm_message, created_at, updated_at
          FROM tradeline_master_orders WHERE org_id = ? ORDER BY created_at DESC LIMIT 200`,
       ).bind(user.org_id).all();
     }
@@ -4566,7 +4573,6 @@ app.post('/api/tradelines/order', authMiddleware, async (c) => {
     tlmStatus,
     tlmMessage,
     retailPrice: tradeline.retailPrice,
-    wholesalePrice: user.role === 'client' ? undefined : tradeline.wholesalePrice,
     tradeline: {
       id: tradeline.id,
       lender: tradeline.lender,
@@ -6146,9 +6152,10 @@ app.get('/api/search', authMiddleware, async (c) => {
   const q = String(c.req.query('q') || '').trim();
   if (q.length < 2) return c.json({ clients: [], violations: [], documents: [] });
   const like = `%${q}%`;
+  const hideDemo = sandboxClientHideSql(user.org_id, 'id', 'email');
   const clients = await c.env.DB.prepare(
-    `SELECT id, first_name, last_name, email, phone, case_status FROM clients WHERE org_id = ? AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR phone LIKE ?) ORDER BY created_at DESC LIMIT 20`
-  ).bind(user.org_id, like, like, like, like).all();
+    `SELECT id, first_name, last_name, email, phone, case_status FROM clients WHERE org_id = ? AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR phone LIKE ?)${hideDemo.sql} ORDER BY created_at DESC LIMIT 20`
+  ).bind(user.org_id, like, like, like, like, ...hideDemo.binds).all();
   const violations = await c.env.DB.prepare(
     `SELECT v.id, v.account_name, v.statute, v.severity, v.client_id, v.category, cr.bureau
      FROM violations v
@@ -6167,8 +6174,9 @@ app.get('/api/admin/overview-stats', authMiddleware, async (c) => {
   if (user.role === 'client') return c.json({ error: 'Unauthorized administrative action' }, 403);
 
   // Core metrics
-  const totalClients = await c.env.DB.prepare('SELECT COUNT(*) as val FROM clients WHERE org_id = ?').bind(user.org_id).first() as any;
-  const activeLit = await c.env.DB.prepare('SELECT COUNT(*) as val FROM clients WHERE org_id = ? AND case_status IN ("LITIGATION", "FILED", "DISCOVERY", "NEGOTIATIONS")').bind(user.org_id).first() as any;
+  const hideDemo = sandboxClientHideSql(user.org_id, 'id', 'email');
+  const totalClients = await c.env.DB.prepare(`SELECT COUNT(*) as val FROM clients WHERE org_id = ?${hideDemo.sql}`).bind(user.org_id, ...hideDemo.binds).first() as any;
+  const activeLit = await c.env.DB.prepare(`SELECT COUNT(*) as val FROM clients WHERE org_id = ? AND case_status IN ("LITIGATION", "FILED", "DISCOVERY", "NEGOTIATIONS")${hideDemo.sql}`).bind(user.org_id, ...hideDemo.binds).first() as any;
   const pendingQA = await c.env.DB.prepare('SELECT COUNT(*) as val FROM violations WHERE org_id = ? AND status = "pending_qa"').bind(user.org_id).first() as any;
   const totalRecovery = await c.env.DB.prepare('SELECT SUM(estimated_recovery) as val FROM clients WHERE org_id = ?').bind(user.org_id).first() as any;
 
@@ -6216,7 +6224,7 @@ app.get('/api/admin/overview-stats', authMiddleware, async (c) => {
   const urgentItems: any[] = [];
   
   // 1. Missing compliance disclosures
-  const missingConsents = await c.env.DB.prepare('SELECT id, first_name, last_name, created_at FROM clients WHERE org_id = ? AND (permissible_purpose_consent = 0 OR croa_contract_agreed = 0 OR tsr_advance_fee_waived = 0) LIMIT 5').bind(user.org_id).all();
+  const missingConsents = await c.env.DB.prepare(`SELECT id, first_name, last_name, created_at FROM clients WHERE org_id = ? AND (permissible_purpose_consent = 0 OR croa_contract_agreed = 0 OR tsr_advance_fee_waived = 0)${hideDemo.sql} LIMIT 5`).bind(user.org_id, ...hideDemo.binds).all();
   if (missingConsents?.results) {
     for (const mc of missingConsents.results as any[]) {
       urgentItems.push({
@@ -10140,7 +10148,6 @@ app.post('/api/admin/backup/trigger', authMiddleware, adminGateMiddleware, async
   });
 });
 
-const DEMO_CLIENT_EMAIL = 'salisha.mcdowell@example.com';
 const DEMO_PORTAL_PASSWORD = 'demo123456';
 
 async function loadDemoSampleCase(
@@ -10197,7 +10204,7 @@ async function loadDemoSampleCase(
   return { ...batch, violationsFound: demoViolationCount, alreadyLoaded: false, reports: bureauReports.length };
 }
 
-/** Ensure Salisha demo client + portal login + sample tri-bureau case exist. */
+/** Ensure the sandbox Demo Client + portal login + sample tri-bureau case exist (interactive demo org only). */
 async function ensureDemoClientAndPortal(
   c: any,
   orgId: string,
@@ -10220,14 +10227,18 @@ async function ensureDemoClientAndPortal(
          status, notes, tags, permissible_purpose_consent, croa_contract_agreed, tsr_advance_fee_waived,
          consent_timestamp, eq_score, ex_score, tu_score, estimated_monthly_income, estimated_monthly_debt,
          created_at, updated_at
-       ) VALUES (?, ?, 'Salisha', 'McDowell', ?, '(414) 430-4277', '1342 NM 333', 'Tijeras', 'NM', '87059',
-         'active', 'Demo client for sales walkthroughs', '["Premium","Lead","Demo"]', 1, 1, 1,
+       ) VALUES (?, ?, ?, ?, ?, '(555) 010-0100', '1342 NM 333', 'Tijeras', 'NM', '87059',
+         'active', 'Sandbox sample case for the interactive demo — add your own clients on a paid org', '["Demo"]', 1, 1, 1,
          datetime('now'), 642, 635, 648, 6200, 1650, datetime('now'), datetime('now'))`
-    ).bind(DEMO_CLIENT_ID, orgId, DEMO_CLIENT_EMAIL).run();
+    ).bind(DEMO_CLIENT_ID, orgId, DEMO_CLIENT_FIRST_NAME, DEMO_CLIENT_LAST_NAME, DEMO_CLIENT_EMAIL).run();
     client = await c.env.DB.prepare(`SELECT * FROM clients WHERE id = ?`).bind(DEMO_CLIENT_ID).first() as any;
   } else {
     await c.env.DB.prepare(
       `UPDATE clients SET
+         first_name = ?,
+         last_name = ?,
+         notes = 'Sandbox sample case for the interactive demo — add your own clients on a paid org',
+         tags = '["Demo"]',
          eq_score = COALESCE(eq_score, 642),
          ex_score = COALESCE(ex_score, 635),
          tu_score = COALESCE(tu_score, 648),
@@ -10235,13 +10246,14 @@ async function ensureDemoClientAndPortal(
          estimated_monthly_debt = COALESCE(estimated_monthly_debt, 1650),
          updated_at = datetime('now')
        WHERE id = ?`
-    ).bind(client.id).run();
+    ).bind(DEMO_CLIENT_FIRST_NAME, DEMO_CLIENT_LAST_NAME, client.id).run();
     await c.env.DB.prepare(
       `UPDATE clients SET permissible_purpose_consent = 1, croa_contract_agreed = 1, tsr_advance_fee_waived = 1, updated_at = datetime('now') WHERE id = ?`
     ).bind(client.id).run().catch(() => {});
   }
 
   const email = (client.email || DEMO_CLIENT_EMAIL).trim();
+  const displayName = `${DEMO_CLIENT_FIRST_NAME} ${DEMO_CLIENT_LAST_NAME}`;
   const passwordHash = await hashPassword(DEMO_PORTAL_PASSWORD);
   const existingUser = await c.env.DB.prepare(
     `SELECT id FROM users WHERE lower(email) = lower(?) AND org_id = ?`
@@ -10250,11 +10262,11 @@ async function ensureDemoClientAndPortal(
     await c.env.DB.prepare(
       `INSERT INTO users (id, org_id, email, name, password_hash, role, is_active, must_change_password)
        VALUES (?, ?, ?, ?, ?, 'client', 1, 0)`
-    ).bind(generateId(), orgId, email, `${client.first_name} ${client.last_name}`, passwordHash).run();
+    ).bind(generateId(), orgId, email, displayName, passwordHash).run();
   } else {
     await c.env.DB.prepare(
       `UPDATE users SET password_hash = ?, name = ?, role = 'client', is_active = 1, must_change_password = 0 WHERE id = ?`
-    ).bind(passwordHash, `${client.first_name} ${client.last_name}`, existingUser.id).run();
+    ).bind(passwordHash, displayName, existingUser.id).run();
   }
 
   let sampleCase: any = null;
@@ -10272,16 +10284,17 @@ async function ensureDemoClientAndPortal(
   return { clientId: client.id as string, email, portalPassword: DEMO_PORTAL_PASSWORD, sampleCase };
 }
 
-// One-click sales demo prep: Salisha client + portal login + optional sample case
+// One-click sandbox prep: Demo Client + portal login + sample case on the interactive demo org only
 app.post('/api/admin/demo/prepare', authMiddleware, adminGateMiddleware, async (c) => {
   const user = c.get('user');
   const body = await c.req.json().catch(() => ({}));
   const loadCase = body.loadCase !== false;
+  const host = await ensureDemoHost(c);
 
-  const ensured = await ensureDemoClientAndPortal(c, user.org_id, {
+  const ensured = await ensureDemoClientAndPortal(c, host.orgId, {
     loadCase,
     forceReload: !!body.forceReload,
-    actingUser: { id: user.id, org_id: user.org_id },
+    actingUser: { id: user.id, org_id: host.orgId },
   });
   const caseResult = ensured.sampleCase || null;
 
@@ -10305,7 +10318,7 @@ app.post('/api/admin/demo/prepare', authMiddleware, adminGateMiddleware, async (
     ok: true,
     sandbox: true,
     clientId: ensured.clientId,
-    clientName: 'Salisha McDowell',
+    clientName: DEMO_CLIENT_NAME,
     portalEmail: ensured.email,
     portalPassword: ensured.portalPassword,
     staffEmail: 'demo@example.com',
@@ -10314,12 +10327,11 @@ app.post('/api/admin/demo/prepare', authMiddleware, adminGateMiddleware, async (
     caseResult,
     fundingPreview,
     walkthrough: [
-      'Sign in as staff (demo@example.com) or use one-click Admin Demo',
-      'Open Clients → Salisha McDowell → Preview Portal',
-      'Show Cockpit, Fundability (Funding Cockpit), Violations, Documents',
-      'Optional: sign out and login as client portal with the portal credentials below',
+      'Launch the interactive demo at /demo — sample data lives only on the sandbox org',
+      'Add your own client in Client Management to run the full process on this company',
+      'Optional: Preview Portal on the sample Demo Client inside the interactive demo',
     ],
-    message: 'Demo walkthrough ready — staff + client portal credentials reset for this sandbox.',
+    message: 'Sandbox Demo Client is ready on the interactive demo org. Paid CRMs should add their own clients.',
   });
 });
 
@@ -10329,9 +10341,12 @@ app.post('/api/admin/demo/load-case', authMiddleware, adminGateMiddleware, async
   const body = await c.req.json().catch(() => ({}));
   let clientId = body.clientId as string | undefined;
   let isNewClient = false;
+  let actingOrgId = user.org_id;
 
   if (!clientId) {
-    const ensured = await ensureDemoClientAndPortal(c, user.org_id);
+    const host = await ensureDemoHost(c);
+    actingOrgId = host.orgId;
+    const ensured = await ensureDemoClientAndPortal(c, host.orgId);
     clientId = ensured.clientId;
   } else {
     const existing = await c.env.DB.prepare('SELECT id FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first();
@@ -10363,6 +10378,7 @@ app.post('/api/admin/demo/load-case', authMiddleware, adminGateMiddleware, async
     fileNamePrefix: 'demo-mfsn',
     activityAction: 'demo_case_loaded',
     activityDescription: `Loaded tri-bureau demo case (${bureauReports.length} bureaus, ${demoViolationCount} violations)`,
+    actingUser: { id: user.id, org_id: actingOrgId },
   });
 
   return c.json({
@@ -11214,8 +11230,8 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/demo-experience.js?v=20260818-tenants-pay"></script>
-  <script src="/static/app.js?v=20260818-tenants-pay"></script>
+  <script src="/static/demo-experience.js?v=20260818-demo-mfsn"></script>
+  <script src="/static/app.js?v=20260818-demo-mfsn"></script>
 </body>
 </html>`;
 }

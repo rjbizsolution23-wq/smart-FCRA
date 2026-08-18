@@ -1,7 +1,7 @@
 /* Smart FCRA interactive demo overlay — tour + text/voice agent. */
 (function () {
   'use strict';
-  const DEMO_CLIENT = { id: 'cli_demo_001', name: 'Salisha McDowell' };
+  const DEMO_CLIENT = { id: 'cli_demo_001', name: 'Demo Client' };
 
   let api = null;
   let toast = () => {};

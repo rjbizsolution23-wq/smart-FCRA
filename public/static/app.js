@@ -782,6 +782,9 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         <div class="w-full max-w-lg">
           <div class="text-center mb-6">
             <div class="inline-flex items-center justify-center mb-4"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-16 w-auto rounded-2xl border border-blue-500/40 object-cover shadow-[0_0_24px_rgba(37,99,235,0.35)]" alt="RJ Business Solutions"></div>
+            <div class="rounded-2xl bg-white px-4 py-3 mb-3 inline-block">
+              <img src="/static/logos/mfsn-logo.png" alt="My Free Score Now" class="h-14 w-auto max-w-full object-contain mx-auto">
+            </div>
             <div class="text-[10px] uppercase tracking-[0.18em] font-bold text-sky-300 mb-2">RJ Business Solutions</div>
             <h1 class="text-2xl font-bold text-white font-display">Start with MyFreeScoreNow</h1>
             <p class="text-gray-400 mt-1 text-sm">Empowering Generational Wealth — enroll under our affiliate, then open your Smart FCRA portal.</p>
@@ -1379,7 +1382,6 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     };
     // Branding URLs
     const RJ_LOGO = 'https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg';
-    const MFSN_BANNER = '/static/logos/mfsn-banner.png';
     const FCRA_LOGO = RJ_LOGO;
     const tenantBanner = state.actingOrgId
       ? `<div class="bg-sky-700/95 text-white text-xs font-semibold px-4 py-2.5 flex items-center justify-between z-[1000] border-b border-sky-400/30">
@@ -1412,7 +1414,6 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         <button type="button" onclick="window._nav('settings')" class="bg-rose-600 hover:bg-rose-500 text-white px-3 py-1 rounded-lg text-[10px] uppercase tracking-wider font-bold">Enable MFA</button>
       </div>
       <!-- Top Branding Header -->
-      ${MFSN_BANNER ? `<div class="h-16 bg-gray-900 border-b border-gray-800 flex items-center px-4 shrink-0"><img src="${MFSN_BANNER}" alt="MyFreeScoreNow" class="h-14 object-contain"></div>` : ''}
             <div class="flex flex-1 overflow-hidden">
       <button type="button" class="md:hidden fixed top-20 left-3 z-50 bg-gray-800 text-white p-2.5 rounded-lg border border-gray-700 min-h-[44px] min-w-[44px]" onclick="window._toggleMobileNav()" aria-label="Toggle navigation" aria-controls="mobile-nav" aria-expanded="false"><i class="fas fa-bars"></i></button>
       <div id="nav-backdrop" class="hidden md:hidden fixed inset-0 z-30" onclick="window._closeMobileNav()" aria-hidden="true"></div>
@@ -1542,27 +1543,26 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   }
 
   // ═══════════════════════════════════════════════════════════════
+  function mfsnDashboardHero() {
+    return `<div class="rounded-2xl border border-sky-200/70 bg-white p-5 mb-6 shadow-[0_8px_30px_rgba(14,116,144,0.08)]">
+      <img src="/static/logos/mfsn-logo.png" alt="My Free Score Now" class="h-14 md:h-[4.5rem] w-auto max-w-full object-contain object-left">
+      <h2 class="mt-3 text-xl font-bold text-slate-900 font-display">My Free Score Now</h2>
+      <p class="text-xs italic text-slate-600">Know the Score and More</p>
+      <p class="text-sm text-slate-600 mt-2 max-w-2xl">Add <strong>your own client</strong> to see the full process — import a MyFreeScoreNow report, review findings, and generate letters from the file. The interactive demo keeps a generic sample case; this CRM does not ship a named walkthrough person.</p>
+      <div class="flex flex-wrap gap-2 mt-3">
+        <button type="button" onclick="window._nav('clients')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-user-plus mr-1.5"></i>Add your client</button>
+        <button type="button" onclick="window._nav('upload-report')" class="bg-sky-700 hover:bg-sky-600 text-white text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-cloud-download-alt mr-1.5"></i>Import MyFreeScoreNow</button>
+        <a href="/login?signup=mfsn" class="inline-flex items-center bg-white border border-sky-300 hover:bg-sky-50 text-sky-800 text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-bolt mr-1.5"></i>MFSN enrollment</a>
+      </div>
+    </div>`;
+  }
+
   // DASHBOARD
   // ═══════════════════════════════════════════════════════════════
   async function pgDashboard(el) {
     const d = await api('/dashboard');
     el.innerHTML = `<div class="fade-in">
-      <div class="rounded-2xl border border-amber-500/25 bg-gradient-to-r from-slate-950 via-amber-950/30 to-slate-950 p-5 mb-6 space-y-3">
-        <div class="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 class="text-lg font-bold text-white"><i class="fas fa-presentation text-amber-400 mr-2"></i>Demo Walkthrough</h2>
-            <p class="text-sm text-slate-400 mt-1">One click prepares Salisha’s case, portal login, and Funding Cockpit for a live show.</p>
-          </div>
-          <button type="button" id="btn-demo-prepare" class="bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold px-4 py-2.5 rounded-lg shadow-lg shadow-amber-900/30"><i class="fas fa-magic mr-1.5"></i>Prepare Demo Now</button>
-        </div>
-        <div id="demo-prepare-result" class="hidden text-xs text-slate-300 space-y-2"></div>
-        <div class="flex flex-wrap gap-2 text-[11px]">
-          <button type="button" onclick="window._nav('clients')" class="px-3 py-1.5 rounded-lg bg-slate-900/70 border border-slate-700 text-slate-200 hover:text-white">1. Open Clients</button>
-          <button type="button" onclick="window._nav('client-detail',{clientId:'cli_demo_001'})" class="px-3 py-1.5 rounded-lg bg-slate-900/70 border border-slate-700 text-slate-200 hover:text-white">2. Salisha workspace</button>
-          <button type="button" onclick="window._startImpersonating('cli_demo_001','Salisha McDowell')" class="px-3 py-1.5 rounded-lg bg-teal-600/20 border border-teal-500/40 text-teal-200 hover:text-white">3. Preview Client Portal</button>
-          <button type="button" onclick="window._startImpersonating('cli_demo_001','Salisha McDowell'); setTimeout(()=>window._nav('client-fundability'), 50)" class="px-3 py-1.5 rounded-lg bg-cyan-600/20 border border-cyan-500/40 text-cyan-200 hover:text-white">4. Funding Cockpit</button>
-        </div>
-      </div>
+      ${mfsnDashboardHero()}
       <div class="bg-blue-900/20 border border-blue-600/30 rounded-xl p-4 mb-6">
         <h3 class="text-sm font-semibold text-blue-300 mb-2"><i class="fas fa-scale mr-2"></i>Your Rights Under the FCRA</h3>
         <p class="text-xs text-blue-200/80 leading-relaxed">
@@ -1585,36 +1585,8 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       <div class="glass rounded-xl p-5 mb-6"><h3 class="text-sm font-semibold text-white mb-3"><i class="fas fa-dollar-sign mr-2 text-green-400"></i>Total Recovery Potential</h3>
         <div class="grid grid-cols-2 gap-4"><div class="bg-gray-800/60 rounded-lg p-4"><div class="text-xs text-gray-400 mb-1">Minimum</div><div class="text-2xl font-bold text-green-400">${money(d.totalDamagesMin)}</div></div><div class="bg-gray-800/60 rounded-lg p-4"><div class="text-xs text-gray-400 mb-1">Maximum</div><div class="text-2xl font-bold text-green-300">${money(d.totalDamagesMax)}</div></div></div></div>
       ${d.violationsBySeverity.length?`<div class="glass rounded-xl p-5 mb-6"><h3 class="text-sm font-semibold text-white mb-3"><i class="fas fa-chart-bar mr-2 text-orange-400"></i>By Severity</h3><div class="grid grid-cols-2 lg:grid-cols-4 gap-3">${d.violationsBySeverity.map(v=>`<div class="bg-gray-800/60 rounded-lg p-3 border-l-4 border-${sevColor(v.severity)}"><div class="text-xs text-gray-400 uppercase">${v.severity}</div><div class="text-lg font-bold text-${sevColor(v.severity)}">${v.count}</div></div>`).join('')}</div></div>`:''}
-      ${d.recentViolations.length?`<div class="glass rounded-xl p-5"><h3 class="text-sm font-semibold text-white mb-3"><i class="fas fa-history mr-2 text-blue-400"></i>Recent Violations</h3><div class="space-y-2">${d.recentViolations.map(v=>`<div class="bg-gray-800/40 rounded-lg p-3 flex items-center gap-3 border-l-4 border-${sevColor(v.severity)}"><div class="flex-1 min-w-0"><div class="text-sm font-medium text-white truncate">${v.subcategory}</div><div class="text-xs text-gray-400">${v.first_name} ${v.last_name} &bull; ${v.statute}</div></div><span class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-${sevColor(v.severity)}/20 text-${sevColor(v.severity)}">${v.severity}</span></div>`).join('')}</div></div>`:`<div class="glass rounded-xl p-8 text-center"><i class="fas fa-rocket text-4xl text-blue-500/40 mb-4"></i><h3 class="text-lg font-semibold text-white mb-2">Ready to Start</h3><p class="text-sm text-gray-400 mb-4">Add a client and upload a credit report to begin</p><button onclick="window._nav('clients')" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition">Add Your First Client</button></div>`}
+      ${d.recentViolations.length?`<div class="glass rounded-xl p-5"><h3 class="text-sm font-semibold text-white mb-3"><i class="fas fa-history mr-2 text-blue-400"></i>Recent Violations</h3><div class="space-y-2">${d.recentViolations.map(v=>`<div class="bg-gray-800/40 rounded-lg p-3 flex items-center gap-3 border-l-4 border-${sevColor(v.severity)}"><div class="flex-1 min-w-0"><div class="text-sm font-medium text-white truncate">${v.subcategory}</div><div class="text-xs text-gray-400">${v.first_name} ${v.last_name} &bull; ${v.statute}</div></div><span class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-${sevColor(v.severity)}/20 text-${sevColor(v.severity)}">${v.severity}</span></div>`).join('')}</div></div>`:`<div class="glass rounded-xl p-8 text-center"><i class="fas fa-rocket text-4xl text-blue-500/40 mb-4"></i><h3 class="text-lg font-semibold text-white mb-2">Add your own client</h3><p class="text-sm text-gray-400 mb-4">Create a client and import a MyFreeScoreNow report to see the full process.</p><button onclick="window._nav('clients')" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition">Add Your First Client</button></div>`}
     </div>`;
-    const prepBtn = document.getElementById('btn-demo-prepare');
-    if (prepBtn) prepBtn.onclick = async () => {
-      prepBtn.disabled = true;
-      prepBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i>Preparing…';
-      try {
-        const r = await api('/admin/demo/prepare', { method: 'POST', body: JSON.stringify({ loadCase: true }) });
-        const box = document.getElementById('demo-prepare-result');
-        if (box) {
-          box.classList.remove('hidden');
-          box.innerHTML = `
-            <div class="rounded-lg bg-emerald-950/40 border border-emerald-500/30 p-3 space-y-1">
-              <div><strong class="text-emerald-300">Ready.</strong> ${escapeHtml(r.message || '')}</div>
-              <div class="font-mono text-[11px] text-slate-300">Staff: ${escapeHtml(r.staffEmail)} / ${escapeHtml(r.staffPassword)}</div>
-              <div class="font-mono text-[11px] text-slate-300">Client portal: ${escapeHtml(r.portalEmail)} / ${escapeHtml(r.portalPassword)}</div>
-              <div class="pt-1 flex flex-wrap gap-2">
-                <button type="button" class="text-amber-300 font-bold underline" onclick="window._nav('client-detail',{clientId:'${escapeHtml(r.clientId)}'})">Open Salisha</button>
-                <button type="button" class="text-teal-300 font-bold underline" onclick="window._startImpersonating('${escapeHtml(r.clientId)}','Salisha McDowell')">Preview Portal</button>
-                <button type="button" class="text-cyan-300 font-bold underline" onclick="window._startImpersonating('${escapeHtml(r.clientId)}','Salisha McDowell'); setTimeout(()=>window._nav('client-fundability'),50)">Funding Cockpit</button>
-              </div>
-            </div>`;
-        }
-        toast('Demo prepared', 'success');
-      } catch (err) {
-        toast(err.message || 'Demo prepare failed', 'error');
-      }
-      prepBtn.disabled = false;
-      prepBtn.innerHTML = '<i class="fas fa-magic mr-1.5"></i>Prepare Demo Now';
-    };
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -1647,7 +1619,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   async function pgClients(el) {
     const d = await api('/clients');
     el.innerHTML = `<div class="fade-in">
-      <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">Clients</h1><p class="text-sm text-gray-400">${d.clients.length} total</p></div>
+      <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">Clients</h1><p class="text-sm text-gray-400">${d.clients.length} total · Add your own client to run the full process</p></div>
         <div class="flex gap-2">
           <button onclick="window._nav('onboarding-wizard', { step: 1 })" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition shadow-lg flex items-center gap-1.5"><i class="fas fa-magic"></i>Smart Autopilot Ingest</button>
           <button onclick="$('#add-client-form').classList.toggle('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-plus"></i>Add Client</button>
@@ -1665,7 +1637,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           <div><label class="block text-xs text-gray-400 mb-1">SSN Last 4</label><input type="text" name="ssnLast4" maxlength="4" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none" placeholder="1234"></div>
           <div class="md:col-span-2 flex gap-2"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition">Save Client</button><button type="button" onclick="$('#add-client-form').classList.add('hidden')" class="bg-gray-700 hover:bg-gray-600 text-white px-5 py-2 rounded-lg text-sm transition">Cancel</button></div>
         </form></div>
-      ${d.clients.length?`<div class="space-y-2">${d.clients.map(c=>`<div onclick="window._nav('client-detail',{clientId:'${c.id}'})" class="glass rounded-xl p-4 card-hover cursor-pointer"><div class="flex items-center gap-4"><div class="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 font-bold text-sm">${(c.first_name||'?')[0]}${(c.last_name||'?')[0]}</div><div class="flex-1 min-w-0"><div class="text-sm font-semibold text-white">${c.first_name} ${c.last_name}</div><div class="text-xs text-gray-400">${c.email||'No email'} ${c.phone?'&bull; '+c.phone:''}</div></div><div class="text-right shrink-0"><div class="text-xs text-gray-400">${c.report_count||0} reports &bull; ${c.violation_count||0} violations</div>${c.damages_max?`<div class="text-xs text-green-400">${money(c.damages_min)} - ${money(c.damages_max)}</div>`:''}<span class="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-medium ${c.status==='active'?'bg-green-900/30 text-green-400':'bg-gray-700 text-gray-400'}">${c.status||'active'}</span></div><i class="fas fa-chevron-right text-gray-600 text-xs"></i></div></div>`).join('')}</div>`:`<div class="glass rounded-xl p-8 text-center"><i class="fas fa-users text-4xl text-gray-600 mb-4"></i><p class="text-gray-400 mb-3">No clients yet</p><button onclick="$('#add-client-form').classList.toggle('hidden')" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">Add First Client</button></div>`}
+      ${d.clients.length?`<div class="space-y-2">${d.clients.map(c=>`<div onclick="window._nav('client-detail',{clientId:'${c.id}'})" class="glass rounded-xl p-4 card-hover cursor-pointer"><div class="flex items-center gap-4"><div class="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 font-bold text-sm">${(c.first_name||'?')[0]}${(c.last_name||'?')[0]}</div><div class="flex-1 min-w-0"><div class="text-sm font-semibold text-white">${c.first_name} ${c.last_name}</div><div class="text-xs text-gray-400">${c.email||'No email'} ${c.phone?'&bull; '+c.phone:''}</div></div><div class="text-right shrink-0"><div class="text-xs text-gray-400">${c.report_count||0} reports &bull; ${c.violation_count||0} violations</div>${c.damages_max?`<div class="text-xs text-green-400">${money(c.damages_min)} - ${money(c.damages_max)}</div>`:''}<span class="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-medium ${c.status==='active'?'bg-green-900/30 text-green-400':'bg-gray-700 text-gray-400'}">${c.status||'active'}</span></div><i class="fas fa-chevron-right text-gray-600 text-xs"></i></div></div>`).join('')}</div>`:`<div class="glass rounded-xl p-8 text-center"><i class="fas fa-users text-4xl text-gray-600 mb-4"></i><p class="text-gray-300 font-semibold mb-1">No clients yet</p><p class="text-sm text-gray-400 mb-3">Add your own client to import a report and see the process end to end.</p><button onclick="$('#add-client-form').classList.toggle('hidden')" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">Add First Client</button></div>`}
     </div>`;
     const f = $('#client-form');
     if (f) f.onsubmit = async (e) => { e.preventDefault(); const fd = new FormData(e.target); const b = {}; for (const [k,v] of fd.entries()) b[k]=v; try { await api('/clients',{method:'POST',body:JSON.stringify(b)}); toast('Client created!','success'); await pgClients(el); } catch(err) { toast(err.message,'error'); } };
@@ -2239,7 +2211,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     if (state.demoSession && (!data || !data.clientId || data.clientId === 'autopilot')) {
       data = {
         clientId: state.demoSession.sampleClientId || 'cli_demo_001',
-        clientName: state.demoSession.sampleClientName || 'Salisha McDowell',
+        clientName: state.demoSession.sampleClientName || 'Demo Client',
       };
     }
     if (!data) {
@@ -5685,7 +5657,7 @@ Status: Discharged`;
       data = {
         ...data,
         clientId: state.demoSession.sampleClientId || 'cli_demo_001',
-        clientName: data.clientName || state.demoSession.sampleClientName || 'Salisha McDowell',
+        clientName: data.clientName || state.demoSession.sampleClientName || 'Demo Client',
       };
     }
     if (!data.clientId) {
@@ -8140,8 +8112,8 @@ async function pgAdminConsole(el) {
               <pre id="admin-backup-result" class="mt-3 text-[10px] text-gray-500 font-mono whitespace-pre-wrap hidden"></pre>
             </div>
             <div class="glass rounded-xl border border-gray-800 p-5">
-              <h3 class="text-sm font-bold text-white mb-2"><i class="fas fa-flask text-amber-400 mr-1.5"></i>Demo Tri-Bureau Case</h3>
-              <p class="text-xs text-gray-400 mb-4">Prepare Salisha walkthrough (portal password + sample case) or reload the bundled MFSN sample.</p>
+              <h3 class="text-sm font-bold text-white mb-2"><i class="fas fa-flask text-amber-400 mr-1.5"></i>Interactive demo sample</h3>
+              <p class="text-xs text-gray-400 mb-4">Refreshes the generic Demo Client on the sandbox org only. Paid companies should add their own clients.</p>
               <div class="flex flex-wrap gap-2">
                 <button id="btn-admin-demo-prepare" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-4 py-2 rounded-lg"><i class="fas fa-magic mr-1"></i>Prepare Demo Walkthrough</button>
                 <button id="btn-admin-demo-load" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold px-4 py-2 rounded-lg"><i class="fas fa-sync mr-1"></i>Reload Sample Case</button>
@@ -8197,7 +8169,7 @@ async function pgAdminConsole(el) {
               box.classList.remove('hidden');
               box.innerHTML = `Ready · portal <code class="text-amber-200">${escapeHtml(r.portalEmail)}</code> / <code class="text-amber-200">${escapeHtml(r.portalPassword)}</code> ·
                 <button class="text-blue-400 font-bold ml-1" onclick="window._nav('client-detail',{clientId:'${r.clientId}'})">Open Workspace</button>
-                <button class="text-teal-400 font-bold ml-2" onclick="window._startImpersonating('${r.clientId}','Salisha McDowell')">Preview Portal</button>`;
+                <button class="text-teal-400 font-bold ml-2" onclick="window._startImpersonating('${r.clientId}','${escapeHtml(r.clientName || 'Demo Client')}')">Preview Portal</button>`;
             }
             toast(r.message || 'Demo prepared', 'success');
           } catch (err) { toast(err.message, 'error'); }
@@ -9025,14 +8997,14 @@ async function pgAdminConsole(el) {
       { title: 'Staff console', items: [
         ['Search', 'Clients, reports, documents'],
         ['Executive Overview', 'KPIs and last-6-month revenue sparkline from paid tradeline orders'],
-        ['Client Management', 'Create/list clients; Salisha demo workspace'],
+        ['Client Management', 'Create/list your own clients; sample Demo Client is sandbox-only'],
         ['Violation Review QA', 'Approve / reject engine findings'],
         ['Dashboard / Clients / Reports', 'Ops home, client list, report upload + history'],
         ['Violations / Documents', 'Org queue + generated letters/PDFs'],
         ['Compliance Hub', 'Consent, disclaimers, legal status'],
         ['Mailing Campaigns', 'Click2Mail certified / first-class'],
         ['Founder OS / Sales / ROI', 'Owner OS, pitch tools, deal math'],
-        ['Tradelines', 'TradelineMaster inventory, 12.5% markup, filters, cart, smart match, order email'],
+        ['Tradelines', 'TradelineMaster inventory, listed prices, filters, cart, smart match, order email'],
         ['Brand Library', 'Forms, color tokens, inbound leads'],
         ['Team / Settings / Billing', 'Users, GHL/MFSN/Twilio/Stripe/Click2Mail, org Stripe'],
         ['AI Studio / Legal / Admin', 'Mentors, in-app legal, super-admin console'],
@@ -9053,7 +9025,7 @@ async function pgAdminConsole(el) {
         ['Letters', '~45 types, letter-strategy, branded PDF letterhead'],
         ['GoHighLevel', 'Full custom fields + tags; bulk CRM + MFSN sync'],
         ['MyFreeScoreNow', 'Partner signup, affiliate A8289, token gate, analysis lock'],
-        ['TradelineMaster', 'Live inventory, markup, daily refresh cron job'],
+        ['TradelineMaster', 'Live inventory, listed prices, daily refresh cron job'],
         ['Twilio / Email / Stripe / Click2Mail', 'SMS, Verify, Video tokens, transactional mail, org billing, certified mail'],
         ['AI cascade', 'Groq → Gemini → Workers AI → OpenAI free-only'],
       ]},
@@ -9101,7 +9073,7 @@ async function pgAdminConsole(el) {
     const isClient = state.user?.role === 'client' || !!state.impersonateClientId;
     const money = (n) => '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const moneyInt = (n) => '$' + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
-    let meta = { citizenship: [], genders: [], maritalStatuses: [], education: [], opsEmail: 'tradelines@smartfcra.com', markupRate: 0.125 };
+    let meta = { citizenship: [], genders: [], maritalStatuses: [], education: [], opsEmail: 'tradelines@smartfcra.com' };
     let clients = [];
     let filters = { lender: '', statementDay: '', minAgeYears: '', maxPrice: '', minLimit: '', cycles: '', q: '', pageSize: 25, page: 1, sort: 'statement' };
     let selected = null;
@@ -9143,7 +9115,6 @@ async function pgAdminConsole(el) {
       const rows = inventory.tradelines || [];
       const edu = meta.education || [];
       const ops = meta.opsEmail || 'tradelines@smartfcra.com';
-      const markupPct = Math.round(Number(meta.markupRate || 0.125) * 1000) / 10;
 
       el.innerHTML = `<div class="fade-in space-y-5">
         <div class="relative overflow-hidden rounded-2xl border border-sky-500/25 bg-gradient-to-br from-slate-950 via-[#0b1f33] to-slate-950 p-6">
@@ -9152,7 +9123,7 @@ async function pgAdminConsole(el) {
             <div>
               <div class="text-[10px] uppercase tracking-[0.2em] text-sky-300/80 font-bold mb-1">RJ Business Solutions · Smart FCRA</div>
               <h1 class="text-2xl font-bold text-white tracking-tight">Authorized User Tradelines</h1>
-              <p class="text-sm text-slate-300/90 mt-1 max-w-2xl">Live TradelineMaster inventory with <strong class="text-sky-300">${markupPct}%</strong> RJ markup. Filter, smart-match to credit profiles, and request placement — payment via <a class="text-sky-300 underline" href="mailto:${escapeHtml(ops)}">${escapeHtml(ops)}</a>.</p>
+              <p class="text-sm text-slate-300/90 mt-1 max-w-2xl">Live TradelineMaster inventory at listed prices. Filter, smart-match to credit profiles, and request placement — payment via <a class="text-sky-300 underline" href="mailto:${escapeHtml(ops)}">${escapeHtml(ops)}</a>.</p>
             </div>
             <div class="flex flex-wrap gap-2 text-xs">
               <div class="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200"><span class="text-slate-500">Lines</span> <strong class="text-white ml-1">${inventory.summary?.count ?? '—'}</strong></div>
@@ -9208,7 +9179,7 @@ async function pgAdminConsole(el) {
                     <td class="py-3 pr-3 text-gray-300">${escapeHtml(t.statementLabel||'—')}</td>
                     <td class="py-3 pr-3 text-gray-400 text-xs">${escapeHtml(t.postingWindowLabel||'—')}</td>
                     <td class="py-3 pr-3 text-gray-300">${escapeHtml(t.accountAgeLabel||'—')}</td>
-                    <td class="py-3 pr-3"><div class="text-emerald-300 font-bold">${money(t.retailPrice)}</div>${!isClient && t.wholesalePrice!=null?`<div class="text-[10px] text-gray-500">Cost ${money(t.wholesalePrice)}</div>`:''}</td>
+                    <td class="py-3 pr-3"><div class="text-emerald-300 font-bold">${money(t.retailPrice)}</div></td>
                     <td class="py-3 pr-3 text-gray-300">${t.cycles}</td>
                     <td class="py-3"><button type="button" data-id="${t.id}" class="tl-select bg-orange-700 hover:bg-orange-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg">Select</button></td>
                   </tr>`).join('') || `<tr><td colspan="9" class="py-8 text-center text-gray-500">No tradelines match these filters.</td></tr>`}
@@ -11752,6 +11723,7 @@ async function pgAdminConsole(el) {
 
       el.innerHTML = `
         <div class="fade-in space-y-6">
+          ${mfsnDashboardHero()}
           <div class="relative overflow-hidden bg-gradient-to-r from-gray-900 via-blue-950 to-gray-900 border border-blue-500/20 rounded-2xl p-6 shadow-2xl">
             <div class="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-blue-600/10 rounded-full blur-2xl"></div>
             <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">

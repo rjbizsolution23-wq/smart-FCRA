@@ -7,9 +7,33 @@
 export const DEMO_ORG_ID = 'org_demo_001';
 export const DEMO_STAFF_EMAIL = 'demo@example.com';
 export const DEMO_CLIENT_ID = 'cli_demo_001';
-export const DEMO_CLIENT_NAME = 'Salisha McDowell';
+export const DEMO_CLIENT_FIRST_NAME = 'Demo';
+export const DEMO_CLIENT_LAST_NAME = 'Client';
+export const DEMO_CLIENT_NAME = 'Demo Client';
+/** Internal sandbox login / entitlement skip — never shown as a named person in paid CRMs. */
+export const DEMO_CLIENT_EMAIL = 'salisha.mcdowell@example.com';
 export const DEMO_SESSION_HOURS = 8;
 export const DEMO_MAX_LIVE_PULLS = 1;
+
+export function isSandboxDemoOrg(orgId?: string | null): boolean {
+  return orgId === DEMO_ORG_ID;
+}
+
+/** Hide the bundled sample client from paid-firm CRMs. The interactive demo org still lists it. */
+export function sandboxClientHideSql(
+  orgId: string,
+  idColumn: string,
+  emailColumn?: string,
+): { sql: string; binds: string[] } {
+  if (isSandboxDemoOrg(orgId)) return { sql: '', binds: [] };
+  if (emailColumn) {
+    return {
+      sql: ` AND ${idColumn} != ? AND lower(coalesce(${emailColumn},'')) != ?`,
+      binds: [DEMO_CLIENT_ID, DEMO_CLIENT_EMAIL],
+    };
+  }
+  return { sql: ` AND ${idColumn} != ?`, binds: [DEMO_CLIENT_ID] };
+}
 
 export type DemoAction =
   | { type: 'navigate'; page: string; data?: Record<string, string> }
@@ -42,7 +66,7 @@ export const DEMO_TOUR: DemoTourStep[] = [
   {
     id: 'upload',
     title: 'Ingest the bureau file',
-    body: 'Upload Experian, Equifax, TransUnion, or a tri-merge PDF/JSON onto Salisha’s file. Original bytes go in the vault. The parser pulls accounts, payment history, inquiries, and named score models (VantageScore / FICO when the file says so).',
+    body: 'Upload Experian, Equifax, TransUnion, or a tri-merge PDF/JSON onto the sample Demo Client file — or add your own client and run the same process. Original bytes go in the vault. The parser pulls accounts, payment history, inquiries, and named score models (VantageScore / FICO when the file says so).',
     page: 'upload-report',
     data: { clientId: DEMO_CLIENT_ID, clientName: DEMO_CLIENT_NAME },
     whyBuy: 'Staff stop re-typing reports. The file becomes the system of record.',
@@ -85,8 +109,8 @@ export const DEMO_TOUR: DemoTourStep[] = [
   },
   {
     id: 'client',
-    title: 'Client file (Salisha)',
-    body: 'This sandbox consumer is Salisha McDowell — a full tri-bureau case already loaded so you can see scores, accounts, and findings without uploading first. Preview Portal to see what she sees.',
+    title: 'Sample client file',
+    body: 'This sandbox has a generic Demo Client with a tri-bureau sample already loaded so you can see scores, accounts, and findings without uploading first. On a paid org, add your own client to run the real process — Preview Portal to see what they see.',
     page: 'client-detail',
     data: { clientId: DEMO_CLIENT_ID },
     whyBuy: 'Operators live in the client record. Everything else hangs off this file.',
@@ -134,7 +158,7 @@ export const DEMO_TOUR: DemoTourStep[] = [
   {
     id: 'live',
     title: 'Optional: one live MyFreeScoreNow report',
-    body: 'If you already have a MyFreeScoreNow member token (MAPIK#), you may pull exactly one live tri-bureau file for one person on this demo account. After that pull, this email/phone cannot run another live demo import. The guided Salisha case stays available during this session.',
+    body: 'If you already have a MyFreeScoreNow member token (MAPIK#), you may pull exactly one live tri-bureau file for one person on this demo account. After that pull, this email/phone cannot run another live demo import. The sample Demo Client case stays available during this session — add your own client when you open a paid organization.',
     page: 'upload-report',
     whyBuy: 'See YOUR pipeline on the real engine — once — then talk to sales about a paid org.',
   },
@@ -175,7 +199,7 @@ const NAV: Array<{ keys: string[]; action: DemoAction; speak: string }> = [
   { keys: ['letter', 'generate', '611', '623', 'dispute letter', 'demand'], action: { type: 'navigate', page: 'generate-doc', data: { clientId: DEMO_CLIENT_ID, clientName: DEMO_CLIENT_NAME } }, speak: 'Letter generation composes the document from selected violations and file facts — not a blank form.' },
   { keys: ['document', 'pdf', 'vault'], action: { type: 'navigate', page: 'documents' }, speak: 'Document vault — generated PDFs for download, portal, or mail.' },
   { keys: ['mail', 'click2mail', 'clock', '611 clock', 'certified'], action: { type: 'navigate', page: 'mailing-campaigns' }, speak: 'Mailing campaigns. Approved letters can go through Click2Mail and start the FCRA investigation clock.' },
-  { keys: ['salisha', 'client file', 'client detail'], action: { type: 'navigate', page: 'client-detail', data: { clientId: DEMO_CLIENT_ID } }, speak: 'Opening Salisha McDowell — the sandbox tri-bureau case.' },
+  { keys: ['salisha', 'demo client', 'sample client', 'client file', 'client detail'], action: { type: 'navigate', page: 'client-detail', data: { clientId: DEMO_CLIENT_ID } }, speak: 'Opening the sample Demo Client — the sandbox tri-bureau case. Add your own client when you run this for real.' },
   { keys: ['portal', 'consumer', 'what the client sees', 'preview'], action: { type: 'impersonate', clientId: DEMO_CLIENT_ID, name: DEMO_CLIENT_NAME }, speak: 'Previewing the consumer portal. Attestations and cancel are blocked in preview.' },
   { keys: ['sandbox', 'paper report', 'credit report view'], action: { type: 'navigate', page: 'client-report' }, speak: 'Report sandbox — scriptless paper copy of the imported file.' },
   { keys: ['rights', 'learn', 'education', 'croa cancel', 'tutor', 'alex'], action: { type: 'navigate', page: 'client-rights' }, speak: 'Learning and rights — FCRA/CROA/TSR education lives in the portal, not a side PDF.' },
@@ -184,7 +208,7 @@ const NAV: Array<{ keys: string[]; action: DemoAction; speak: string }> = [
   { keys: ['billing', 'price', '497', 'plan', 'subscribe'], action: { type: 'navigate', page: 'billing' }, speak: 'Paid org billing. Demo is not a production tenant — Professional starts at $497/mo.' },
   { keys: ['live report', 'myfreescorenow', 'mfsn', 'mapik', 'my score'], action: { type: 'openLiveMfsn' }, speak: 'Live MyFreeScoreNow pull is limited to one report and one person on this demo account.' },
   { keys: ['tour', 'guide', 'walk me', 'show me around', 'tutorial'], action: { type: 'tour', step: 0 }, speak: 'Starting the guided tour of the whole product.' },
-  { keys: ['prepare', 'load case', 'sample'], action: { type: 'prepare' }, speak: 'Loading the Salisha sandbox case if it is not already on this org.' },
+  { keys: ['prepare', 'load case', 'sample'], action: { type: 'prepare' }, speak: 'Loading the sample Demo Client case if it is not already on this sandbox.' },
   { keys: ['start your organization', 'create an organization', 'convert this demo', 'sign up my firm'], action: { type: 'convertToSignup' }, speak: 'Opening organization signup with your firm details filled in. The demo sandbox is not a production tenant.' },
   { keys: ['staff', 'exit preview', 'back to staff'], action: { type: 'exitImpersonate' }, speak: 'Returning to the staff console.' },
 ];

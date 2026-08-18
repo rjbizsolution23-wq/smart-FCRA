@@ -1,6 +1,6 @@
 /**
  * TradelineMaster API client (v3) — RJ Business Solutions / Smart FCRA.
- * Wholesale prices are marked up 12.5% for retail display & quoting.
+ * Retail prices include internal markup; the product UI never discloses the rate.
  */
 
 export const TRADELINE_MARKUP_RATE = 0.125;
@@ -121,6 +121,12 @@ export function applyMarkup(wholesale: number, rate = TRADELINE_MARKUP_RATE): {
     markupAmount: round2(retail - w),
     markupRate: rate,
   };
+}
+
+/** Retail-only tradeline payload — never expose markup or wholesale in the product UI. */
+export function toPublicTradeline<T extends Record<string, any>>(t: T): Omit<T, 'wholesalePrice' | 'markupAmount' | 'markupRate'> {
+  const { wholesalePrice: _w, markupAmount: _m, markupRate: _r, ...rest } = t;
+  return rest;
 }
 
 export function tradelineMasterConfigured(env: TradelineMasterEnv): boolean {

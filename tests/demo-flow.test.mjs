@@ -22,7 +22,7 @@ function createDemoDb() {
   }];
   const clients = [{
     id: 'cli_demo_001', org_id: 'org_demo_001', email: 'salisha.mcdowell@example.com',
-    first_name: 'Salisha', last_name: 'McDowell',
+    first_name: 'Demo', last_name: 'Client',
   }];
   const demoSessions = [];
   const sessions = [];

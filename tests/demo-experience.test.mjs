@@ -16,6 +16,9 @@ function assert(cond, msg) {
 const {
   DEMO_TOUR,
   DEMO_PRODUCT_KNOWLEDGE,
+  DEMO_CLIENT_NAME,
+  isSandboxDemoOrg,
+  sandboxClientHideSql,
   routeDemoIntent,
   fallbackDemoReply,
   parseAgentActions,
@@ -85,7 +88,19 @@ assert(livePullBlocked({ mfsn_pulls: DEMO_MAX_LIVE_PULLS }) === true, 'second pu
   assert(c.matched && c.actions[0].type === 'convertToSignup', 'convert intent');
 }
 
-assert(DEMO_TOUR.find((s) => s.id === 'upload')?.data?.clientId === 'cli_demo_001', 'upload tour pins Salisha');
-assert(DEMO_TOUR.find((s) => s.id === 'letters')?.data?.clientId === 'cli_demo_001', 'letter tour pins Salisha');
+assert(DEMO_TOUR.find((s) => s.id === 'upload')?.data?.clientId === 'cli_demo_001', 'upload tour pins Demo Client');
+assert(DEMO_TOUR.find((s) => s.id === 'letters')?.data?.clientId === 'cli_demo_001', 'letter tour pins Demo Client');
+assert(DEMO_TOUR.find((s) => s.id === 'client')?.title === 'Sample client file', 'tour uses generic sample client');
+assert(!/Salisha/i.test(DEMO_TOUR.map((s) => s.body + s.title).join(' ')), 'tour copy has no named person');
+
+assert(DEMO_CLIENT_NAME === 'Demo Client', 'sandbox display name is generic');
+assert(isSandboxDemoOrg('org_demo_001') === true, 'demo org');
+assert(isSandboxDemoOrg('org_paid') === false, 'paid org');
+{
+  const hidden = sandboxClientHideSql('org_paid', 'c.id', 'c.email');
+  assert(hidden.sql.includes('c.id') && hidden.binds.length === 2, 'paid CRM hides sample client');
+  const shown = sandboxClientHideSql('org_demo_001', 'c.id', 'c.email');
+  assert(shown.sql === '' && shown.binds.length === 0, 'demo org keeps sample client');
+}
 
 console.log('demo-experience tests passed');
