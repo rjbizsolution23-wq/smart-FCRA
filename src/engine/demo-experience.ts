@@ -18,6 +18,7 @@ export type DemoAction =
   | { type: 'tour'; step: number }
   | { type: 'prepare' }
   | { type: 'openLiveMfsn' }
+  | { type: 'convertToSignup' }
   | { type: 'highlight'; selector: string };
 
 export type DemoTourStep = {
@@ -41,8 +42,9 @@ export const DEMO_TOUR: DemoTourStep[] = [
   {
     id: 'upload',
     title: 'Ingest the bureau file',
-    body: 'Upload Experian, Equifax, TransUnion, or a tri-merge PDF/JSON. Original bytes go in the vault. The parser pulls accounts, payment history, inquiries, and named score models (VantageScore / FICO when the file says so).',
+    body: 'Upload Experian, Equifax, TransUnion, or a tri-merge PDF/JSON onto Salisha’s file. Original bytes go in the vault. The parser pulls accounts, payment history, inquiries, and named score models (VantageScore / FICO when the file says so).',
     page: 'upload-report',
+    data: { clientId: DEMO_CLIENT_ID, clientName: DEMO_CLIENT_NAME },
     whyBuy: 'Staff stop re-typing reports. The file becomes the system of record.',
   },
   {
@@ -64,6 +66,7 @@ export const DEMO_TOUR: DemoTourStep[] = [
     title: 'Letters generated from the file',
     body: 'Smart FCRA does not hand you blank forms. Bureau § 611 disputes, furnisher § 623 challenges, method-of-verification, cease-and-desist, intent-to-sue, CFPB and AG paths are composed from the selected violations, account facts, and round strategy — then branded PDF under your letterhead.',
     page: 'generate-doc',
+    data: { clientId: DEMO_CLIENT_ID, clientName: DEMO_CLIENT_NAME },
     whyBuy: 'Every letter is unique to that consumer’s file. No copy-paste library.',
   },
   {
@@ -153,7 +156,7 @@ WHAT IT DOES:
 - MFSN / monitoring imports with analysis lock until staff unlock (paid orgs). Demo live pull is capped at one report / one person per demo account.
 - Plans: Professional $497/mo (up to 100 clients + engine + generated letters + portal), Unlimited $2,500/mo (uncapped + MFSN + mail clocks + team seats), Enterprise $9,997/mo (full generated litigation pack ~45 letter types, case-law library, white-label, API).
 
-HOW TO BUY: Create an organization at /login?mode=register or talk to RJ Business Solutions sales. This demo is not a free production tenant.
+HOW TO BUY: Use “Start your organization” in the demo banner (pre-fills the firm from this session) or /login?mode=register. Plans: Professional $497/mo, Unlimited $2,500/mo, Enterprise $9,997/mo. This demo is not a free production tenant.
 
 HARD RULES FOR THE DEMO AGENT:
 - You MAY navigate the app, start the tour, explain screens, and help them pull ONE live MFSN report if they have a member token.
@@ -166,10 +169,10 @@ HARD RULES FOR THE DEMO AGENT:
 
 const NAV: Array<{ keys: string[]; action: DemoAction; speak: string }> = [
   { keys: ['overview', 'dashboard', 'home', 'start over'], action: { type: 'navigate', page: 'admin-overview' }, speak: 'Opening the operator overview.' },
-  { keys: ['upload', 'ingest', 'import report', 'pdf'], action: { type: 'navigate', page: 'upload-report' }, speak: 'This is where staff drop bureau files. Originals vault; the parser reads accounts and scores.' },
+  { keys: ['upload', 'ingest', 'import report', 'pdf'], action: { type: 'navigate', page: 'upload-report', data: { clientId: DEMO_CLIENT_ID, clientName: DEMO_CLIENT_NAME } }, speak: 'This is where staff drop bureau files. Originals vault; the parser reads accounts and scores.' },
   { keys: ['violation', 'detect', 'fcra issue', 'fdcpa', 'metro'], action: { type: 'navigate', page: 'violations' }, speak: 'Violation queue — each row is a finding with statute, evidence, and damages band. Staff QA before it becomes a demand.' },
   { keys: ['lvs', 'litigation score', 'damages', 'lawsuit', 'sue'], action: { type: 'navigate', page: 'full-analysis' }, speak: 'Litigation scoring ranks how trial-ready findings are. Estimates are educational for operators — counsel reviews before filing.' },
-  { keys: ['letter', 'generate', '611', '623', 'dispute letter', 'demand'], action: { type: 'navigate', page: 'generate-doc' }, speak: 'Letter generation composes the document from selected violations and file facts — not a blank form.' },
+  { keys: ['letter', 'generate', '611', '623', 'dispute letter', 'demand'], action: { type: 'navigate', page: 'generate-doc', data: { clientId: DEMO_CLIENT_ID, clientName: DEMO_CLIENT_NAME } }, speak: 'Letter generation composes the document from selected violations and file facts — not a blank form.' },
   { keys: ['document', 'pdf', 'vault'], action: { type: 'navigate', page: 'documents' }, speak: 'Document vault — generated PDFs for download, portal, or mail.' },
   { keys: ['mail', 'click2mail', 'clock', '611 clock', 'certified'], action: { type: 'navigate', page: 'mailing-campaigns' }, speak: 'Mailing campaigns. Approved letters can go through Click2Mail and start the FCRA investigation clock.' },
   { keys: ['salisha', 'client file', 'client detail'], action: { type: 'navigate', page: 'client-detail', data: { clientId: DEMO_CLIENT_ID } }, speak: 'Opening Salisha McDowell — the sandbox tri-bureau case.' },
@@ -182,6 +185,7 @@ const NAV: Array<{ keys: string[]; action: DemoAction; speak: string }> = [
   { keys: ['live report', 'myfreescorenow', 'mfsn', 'mapik', 'my score'], action: { type: 'openLiveMfsn' }, speak: 'Live MyFreeScoreNow pull is limited to one report and one person on this demo account.' },
   { keys: ['tour', 'guide', 'walk me', 'show me around', 'tutorial'], action: { type: 'tour', step: 0 }, speak: 'Starting the guided tour of the whole product.' },
   { keys: ['prepare', 'load case', 'sample'], action: { type: 'prepare' }, speak: 'Loading the Salisha sandbox case if it is not already on this org.' },
+  { keys: ['start your organization', 'create an organization', 'convert this demo', 'sign up my firm'], action: { type: 'convertToSignup' }, speak: 'Opening organization signup with your firm details filled in. The demo sandbox is not a production tenant.' },
   { keys: ['staff', 'exit preview', 'back to staff'], action: { type: 'exitImpersonate' }, speak: 'Returning to the staff console.' },
 ];
 
@@ -241,7 +245,7 @@ export function parseAgentActions(text: string): { reply: string; actions: DemoA
 function isDemoAction(x: any): x is DemoAction {
   if (!x || typeof x !== 'object') return false;
   const t = String(x.type || '');
-  return ['navigate', 'impersonate', 'exitImpersonate', 'tour', 'prepare', 'openLiveMfsn', 'highlight'].includes(t);
+  return ['navigate', 'impersonate', 'exitImpersonate', 'tour', 'prepare', 'openLiveMfsn', 'convertToSignup', 'highlight'].includes(t);
 }
 
 export async function hashDemoToken(token: string): Promise<string> {
@@ -263,4 +267,24 @@ export function demoSessionExpiryIso(hours = DEMO_SESSION_HOURS): string {
 
 export function livePullBlocked(row: { mfsn_pulls?: number } | null): boolean {
   return Number(row?.mfsn_pulls || 0) >= DEMO_MAX_LIVE_PULLS;
+}
+
+/** Prefill org signup from the gated demo firm identity. */
+export function buildDemoConvertUrl(demo: {
+  businessName?: string | null;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+}): string {
+  const qs = new URLSearchParams({ mode: 'register', from: 'demo' });
+  const org = String(demo.businessName || '').trim();
+  const email = String(demo.email || '').trim();
+  const name = [demo.firstName, demo.lastName].filter(Boolean).join(' ').trim();
+  const phone = String(demo.phone || '').trim();
+  if (org) qs.set('org', org);
+  if (email) qs.set('email', email);
+  if (name) qs.set('name', name);
+  if (phone) qs.set('phone', phone);
+  return `/login?${qs.toString()}`;
 }

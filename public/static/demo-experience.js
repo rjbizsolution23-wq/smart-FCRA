@@ -58,12 +58,14 @@
         goTour(Number(a.step) || 0);
       } else if (a.type === 'prepare') {
         try {
-          await api('/admin/demo/prepare', { method: 'POST', body: JSON.stringify({ loadCase: true }) });
+          await api('/demo/prepare', { method: 'POST', body: JSON.stringify({ loadCase: true }) });
           toast('Sandbox case ready', 'success');
           navigate('client-detail', { clientId: DEMO_CLIENT.id });
         } catch (e) {
           toast(e.message || 'Could not prepare demo case', 'error');
         }
+      } else if (a.type === 'convertToSignup') {
+        await convertToSignup();
       } else if (a.type === 'openLiveMfsn') {
         openLiveMfsn();
       }
@@ -134,6 +136,15 @@
       speak(reply);
     } catch (e) {
       if (pending) pending.textContent = e.message || 'Agent unavailable — use the tour buttons.';
+    }
+  }
+
+  async function convertToSignup() {
+    try {
+      const d = await api('/demo/convert', { method: 'POST', body: '{}' });
+      window.location.href = d.registerUrl || '/login?mode=register&from=demo';
+    } catch (_) {
+      window.location.href = '/login?mode=register&from=demo';
     }
   }
 
@@ -214,6 +225,7 @@
         <span>
           <button type="button" class="sf-ghost" id="sf-show-tour">Tour</button>
           <button type="button" class="sf-ghost" id="sf-live">Live report</button>
+          <button type="button" id="sf-convert">Start your organization</button>
         </span>
       </div>
       <aside id="sf-demo-tour"></aside>
@@ -238,6 +250,7 @@
       renderTourCard();
     };
     document.getElementById('sf-live').onclick = () => openLiveMfsn();
+    document.getElementById('sf-convert').onclick = () => convertToSignup();
     document.getElementById('sf-fab').onclick = () => {
       const pane = document.getElementById('sf-demo-agent');
       pane.classList.toggle('sf-hidden');
@@ -278,11 +291,14 @@
       helpersClear = helpers.clearImpersonate || null;
     },
     async boot(session) {
+      mountUi(session || {});
+      try {
+        await api('/demo/prepare', { method: 'POST', body: JSON.stringify({ loadCase: true }) });
+      } catch (_) {}
       try {
         const d = await api('/demo/tour');
         tour = d.steps || [];
       } catch { tour = []; }
-      mountUi(session || {});
       if (tour.length) goTour(session?.tourStep || 0);
     },
   };

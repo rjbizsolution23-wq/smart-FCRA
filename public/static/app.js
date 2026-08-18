@@ -917,7 +917,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   function bindAuth() {
     const params = new URLSearchParams(location.search);
     const verifyEmail = params.get('verifyEmail');
-    if (params.get('mode') === 'register' || params.get('plan')) {
+    if (params.get('mode') === 'register' || params.get('plan') || params.get('from') === 'demo') {
       try { window._switchTab('register'); } catch (_) {}
     }
     if (params.get('mode') === 'demo' || params.get('signup') === 'demo') {
@@ -1021,6 +1021,21 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     }
 
     const lf = $('#login-form'), rf = $('#register-form'), mf = $('#mfa-form'), ff = $('#forgot-form'), rsf = $('#reset-form');
+    if (rf) {
+      const orgPrefill = params.get('org');
+      const emailPrefill = params.get('email');
+      const namePrefill = params.get('name');
+      if (orgPrefill && rf.orgName) rf.orgName.value = orgPrefill;
+      if (emailPrefill && rf.email) rf.email.value = emailPrefill;
+      if (namePrefill && rf.name) rf.name.value = namePrefill;
+      if (params.get('from') === 'demo' && !rf.querySelector('[data-demo-convert]')) {
+        const note = document.createElement('p');
+        note.setAttribute('data-demo-convert', '1');
+        note.className = 'text-[11px] text-sky-300 leading-relaxed';
+        note.textContent = 'Converted from your interactive demo — create this organization to run live clients, uploads, and mail on your own tenant.';
+        rf.prepend(note);
+      }
+    }
     async function demoLogin(email, password) {
       try {
         const d = await api('/auth/login', { method:'POST', body:JSON.stringify({ email, password })});
@@ -2103,6 +2118,12 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   // UPLOAD REPORT — FULL PROCESS FLOW
   // ═══════════════════════════════════════════════════════════════
   async function pgUploadReport(el, data) {
+    if (state.demoSession && (!data || !data.clientId || data.clientId === 'autopilot')) {
+      data = {
+        clientId: state.demoSession.sampleClientId || 'cli_demo_001',
+        clientName: state.demoSession.sampleClientName || 'Salisha McDowell',
+      };
+    }
     if (!data) {
       data = { clientId: 'autopilot', autopilot: true };
     } else if (data.clientId === 'autopilot') {
@@ -4088,7 +4109,15 @@ Status: Discharged`;
   // FULL ANALYSIS COCKPIT (lawyer-facing summary of a report)
   // ═══════════════════════════════════════════════════════════════
   async function pgFullAnalysis(el, data) {
-    const reportId = data?.reportId;
+    let reportId = data?.reportId;
+    if (!reportId && state.demoSession) {
+      try {
+        const list = await api('/reports');
+        const wanted = state.demoSession.sampleClientId || 'cli_demo_001';
+        const first = (list.reports || []).find((r) => r.client_id === wanted) || (list.reports || [])[0];
+        if (first?.id) reportId = first.id;
+      } catch (_) {}
+    }
     if (!reportId) {
       el.innerHTML = `<div class="fade-in glass rounded-xl p-8 border border-gray-800 text-center">
         <i class="fas fa-file-medical-alt text-4xl text-blue-400 mb-3"></i>
@@ -5533,6 +5562,23 @@ Status: Discharged`;
   // GENERATE DOCUMENT
   // ═══════════════════════════════════════════════════════════════
   async function pgGenerateDoc(el, data) {
+    data = data && typeof data === 'object' ? data : {};
+    if (state.demoSession && !data.clientId) {
+      data = {
+        ...data,
+        clientId: state.demoSession.sampleClientId || 'cli_demo_001',
+        clientName: data.clientName || state.demoSession.sampleClientName || 'Salisha McDowell',
+      };
+    }
+    if (!data.clientId) {
+      el.innerHTML = `<div class="fade-in glass rounded-xl p-8 border border-gray-800 text-center">
+        <i class="fas fa-file-contract text-4xl text-blue-400 mb-3"></i>
+        <h2 class="text-xl font-bold text-white mb-2">Generate a letter from a client file</h2>
+        <p class="text-sm text-gray-400 mb-4">Open a client record first, then generate from selected violations and bureau facts.</p>
+        <button onclick="window._nav('clients')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">Browse clients</button>
+      </div>`;
+      return;
+    }
     const typesRes = await api('/document-types');
     // Group by category
     const categories = {};

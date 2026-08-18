@@ -139,6 +139,8 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
   { method: 'patch', path: '/api/demo/session', summary: 'Persist tour step', tags: ['Demo'], security: true },
   { method: 'post', path: '/api/demo/agent/chat', summary: 'Demo guide agent (navigates screens; no IP disclosure)', tags: ['Demo'], security: true },
   { method: 'post', path: '/api/demo/mfsn-live', summary: 'One live MyFreeScoreNow pull per demo account', tags: ['Demo'], security: true },
+  { method: 'post', path: '/api/demo/prepare', summary: 'Load Salisha sample case + consents for the interactive demo session (not super_admin)', tags: ['Demo'], security: true },
+  { method: 'post', path: '/api/demo/convert', summary: 'Handoff interactive demo firm identity into organization signup', tags: ['Demo'], security: true },
   { method: 'post', path: '/api/admin/demo/prepare', summary: 'One-click sales demo: Salisha client, portal password reset, sample case', tags: ['Admin'], security: true },
   { method: 'get', path: '/api/admin/privacy-requests', summary: 'Privacy request queue', tags: ['Admin'], security: true },
   { method: 'post', path: '/api/admin/privacy-requests/{id}/fulfill', summary: 'Fulfill privacy delete/export request', tags: ['Admin'], security: true },

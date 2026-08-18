@@ -147,13 +147,18 @@ const appModule = await import(pathToFileURL(path.join(root, 'src/index.tsx')).h
 const app = appModule.default;
 
 const spa = readFileSync(path.join(root, 'public/static/app.js'), 'utf8');
-const loginHtml = readFileSync(path.join(root, 'public/static/app.js'), 'utf8');
+const overlay = readFileSync(path.join(root, 'public/static/demo-experience.js'), 'utf8');
+const loginHtml = spa;
 
 assert(loginHtml.includes('id="auth-demo"'), 'login page has CRO demo panel');
 assert(loginHtml.includes('id="cro-demo-form"'), 'login page has CRO demo form');
 assert(loginHtml.includes('Credit company? Launch interactive demo'), 'login CTA for credit companies');
 assert(loginHtml.includes("window._switchTab('demo')"), 'login can open demo tab');
 assert(loginHtml.includes('/api/public/demo/start'), 'login posts demo start');
+assert(loginHtml.includes("params.get('from') === 'demo'"), 'register prefill from demo convert');
+assert(overlay.includes('/demo/prepare'), 'overlay prepares sample case without super_admin');
+assert(overlay.includes('Start your organization'), 'overlay convert CTA');
+assert(overlay.includes('/demo/convert'), 'overlay posts convert handoff');
 
 for (const step of DEMO_TOUR) {
   assert(spa.includes(`case '${step.page}'`), `SPA implements tour page ${step.page}`);
@@ -238,6 +243,7 @@ let sessionToken;
   assert(body.user?.isDemo === true, 'user flagged demo');
   assert(body.demo?.businessName === 'Acme Credit Repair LLC', 'firm name on session');
   assert(body.demo?.sampleClientId === 'cli_demo_001', 'salisha sample attached');
+  assert(String(body.demo?.convertUrl || '').includes('from=demo'), 'enter returns convert url');
   sessionToken = body.token;
   assert(db.store.sessions[0]?.demo_session_id, 'auth session tagged with demo_session_id');
 }
@@ -256,6 +262,9 @@ const auth = { Authorization: `Bearer ${sessionToken}` };
   const body = await res.json();
   assert(res.status === 200, 'session 200');
   assert(body.livePullRemaining === 1, 'one live pull remaining');
+  assert(body.uploadReady === true, 'upload flagged ready');
+  assert(String(body.convertUrl || '').includes('mode=register'), 'session convert url');
+  assert(body.ai && Array.isArray(body.ai.providers), 'session lists AI providers');
 }
 
 {
@@ -265,6 +274,44 @@ const auth = { Authorization: `Bearer ${sessionToken}` };
     body: JSON.stringify({ tourStep: 3 }),
   }, env);
   assert(res.status === 200, 'patch tour step');
+}
+
+{
+  const res = await app.request('/api/demo/prepare', {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ loadCase: true }),
+  }, env);
+  const body = await res.json();
+  assert(res.status === 200, `demo prepare 200 got ${res.status} ${JSON.stringify(body)}`);
+  assert(body.clientId === 'cli_demo_001', 'prepare uses salisha');
+  assert(body.uploadReady === true, 'prepare upload ready');
+  assert(!String(body.error || '').includes('super_admin'), 'interactive prepare is not super_admin gated');
+}
+
+{
+  const res = await app.request('/api/demo/convert', {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    body: '{}',
+  }, env);
+  const body = await res.json();
+  assert(res.status === 200, `convert 200 got ${res.status} ${JSON.stringify(body)}`);
+  assert(String(body.registerUrl || '').includes('/login?'), 'convert returns register url');
+  assert(body.registerUrl.includes('from=demo'), 'convert marks from=demo');
+  assert(body.registerUrl.includes('org=') || body.orgName === 'Acme Credit Repair LLC', 'firm name on convert');
+  assert(db.store.activity.some((a) => true), 'convert writes activity');
+}
+
+{
+  const res = await app.request('/api/demo/agent/chat', {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: 'I want to start your organization', page: 'admin-overview' }),
+  }, env);
+  const body = await res.json();
+  assert(res.status === 200, 'agent convert chat 200');
+  assert((body.actions || []).some((a) => a.type === 'convertToSignup'), 'agent can convert to signup');
 }
 
 {
@@ -306,6 +353,8 @@ const auth = { Authorization: `Bearer ${sessionToken}` };
   assert(spec.paths['/api/public/demo/start'], 'openapi demo start');
   assert(spec.paths['/api/demo/agent/chat'], 'openapi demo agent');
   assert(spec.paths['/api/demo/mfsn-live'], 'openapi live mfsn');
+  assert(spec.paths['/api/demo/prepare'], 'openapi demo prepare');
+  assert(spec.paths['/api/demo/convert'], 'openapi demo convert');
 }
 
 {

@@ -23,6 +23,7 @@ const {
   normalizeDemoEmail,
   normalizeDemoPhone,
   livePullBlocked,
+  buildDemoConvertUrl,
   DEMO_MAX_LIVE_PULLS,
 } = await import(pathToFileURL(path.join(root, 'src/engine/demo-experience.ts')).href);
 
@@ -65,5 +66,26 @@ assert(normalizeDemoEmail('  Rick@Firm.COM ') === 'rick@firm.com', 'email');
 assert(normalizeDemoPhone('(555) 123-4567') === '5551234567', 'phone digits');
 assert(livePullBlocked({ mfsn_pulls: 0 }) === false, 'first pull allowed');
 assert(livePullBlocked({ mfsn_pulls: DEMO_MAX_LIVE_PULLS }) === true, 'second pull blocked');
+
+{
+  const url = buildDemoConvertUrl({
+    businessName: 'Acme Credit Repair LLC',
+    email: 'jordan@acme-credit.test',
+    firstName: 'Jordan',
+    lastName: 'Lee',
+    phone: '5551234567',
+  });
+  assert(url.startsWith('/login?'), 'convert is login register');
+  assert(url.includes('mode=register') && url.includes('from=demo'), 'convert flags');
+  assert(url.includes('org=Acme') && url.includes('email=jordan'), 'firm identity on convert url');
+}
+
+{
+  const c = routeDemoIntent('I want to start your organization from this demo');
+  assert(c.matched && c.actions[0].type === 'convertToSignup', 'convert intent');
+}
+
+assert(DEMO_TOUR.find((s) => s.id === 'upload')?.data?.clientId === 'cli_demo_001', 'upload tour pins Salisha');
+assert(DEMO_TOUR.find((s) => s.id === 'letters')?.data?.clientId === 'cli_demo_001', 'letter tour pins Salisha');
 
 console.log('demo-experience tests passed');
