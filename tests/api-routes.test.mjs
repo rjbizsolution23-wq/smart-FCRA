@@ -59,6 +59,8 @@ const mockEnv = {
   assert(spec.paths['/api/public/plans'], 'public plans documented');
   assert(spec.paths['/api/admin/stripe/ensure-catalog'], 'ensure-catalog documented');
   assert(spec.paths['/api/admin/organizations/{id}/summary'], 'tenant summary documented');
+  assert(spec.paths['/api/brand/catalog'], 'brand catalog documented');
+  assert(spec.paths['/api/founder-templates'], 'founder templates documented');
 }
 
 // Daily motivation cron rejects missing secret
@@ -136,6 +138,24 @@ const mockEnv = {
 {
   const res = await app.request('/api/admin/demo/signups', {}, mockEnv);
   assert(res.status === 401, 'GET /api/admin/demo/signups without token returns 401');
+}
+
+{
+  const res = await app.request('/api/brand/leads', {}, mockEnv);
+  assert(res.status === 401, 'GET /api/brand/leads without token returns 401');
+}
+
+{
+  const res = await app.request('/api/founder-templates', {}, mockEnv);
+  assert(res.status === 401, 'GET /api/founder-templates without token returns 401');
+}
+
+{
+  const res = await app.request('/api/company', {}, mockEnv);
+  assert(res.status === 200, 'GET /api/company is public');
+  const body = await res.json();
+  assert(!JSON.stringify(body).includes('Rick Jefferson'), 'public company payload has no owner name');
+  assert(!JSON.stringify(body).includes('Tijeras'), 'public company payload has no HQ address');
 }
 
 {

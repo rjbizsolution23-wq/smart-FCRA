@@ -1676,9 +1676,9 @@ ${data.clientAddress}
 
 ${data.clientCity}, ${data.clientState} ${data.clientZip}
 
-${data.clientPhone || '(414) 430-4277'}
+${data.clientPhone || ''}
 
-${data.clientEmail || 'rjbizsolution23@gmail.com'}
+${data.clientEmail || ''}
 
 
 
@@ -1928,9 +1928,9 @@ ${data.clientAddress}
 
 ${data.clientCity}, ${data.clientState} ${data.clientZip}
 
-${data.clientPhone || '(414) 430-4277'}
+${data.clientPhone || ''}
 
-${data.clientEmail || 'rjbizsolution23@gmail.com'}
+${data.clientEmail || ''}
 
 
 
@@ -2218,9 +2218,9 @@ ${data.clientAddress}
 
 ${data.clientCity}, ${data.clientState} ${data.clientZip}
 
-${data.clientPhone || '(414) 430-4277'}
+${data.clientPhone || ''}
 
-${data.clientEmail || 'rjbizsolution23@gmail.com'}
+${data.clientEmail || ''}
 
 
 
@@ -2522,9 +2522,9 @@ ${data.clientName}
 
 ${data.clientAddress}
 
-${data.clientPhone || '(414) 430-4277'}
+${data.clientPhone || ''}
 
-${data.clientEmail || 'rjbizsolution23@gmail.com'}
+${data.clientEmail || ''}
 
 
 
@@ -4240,9 +4240,9 @@ Please direct your response to:
 
 ${data.clientAddress}
 
-${data.clientPhone || '(414) 430-4277'}
+${data.clientPhone || ''}
 
-${data.clientEmail || 'rjbizsolution23@gmail.com'}
+${data.clientEmail || ''}
 
 
 
@@ -4252,9 +4252,9 @@ ${data.clientName}
 
 ${data.clientAddress}
 
-${data.clientPhone || '(414) 430-4277'}
+${data.clientPhone || ''}
 
-${data.clientEmail || 'rjbizsolution23@gmail.com'}
+${data.clientEmail || ''}
 
 
 
@@ -4262,7 +4262,7 @@ To accept this settlement offer, please contact me immediately to arrange paymen
 
 
 
-If you wish to discuss this matter, I am available at ${data.clientPhone || '(414) 430-4277'} or ${data.clientEmail || 'rjbizsolution23@gmail.com'}.
+If you wish to discuss this matter, I am available at ${data.clientPhone || ''} or ${data.clientEmail || ''}.
 
 
 
@@ -4370,9 +4370,9 @@ export function generateIntentToSueLetterFcra(data: DocumentData): string {
 
 ${data.clientAddress}
 
-${data.clientPhone || '(414) 430-4277'}
+${data.clientPhone || ''}
 
-${data.clientEmail || 'rjbizsolution23@gmail.com'}
+${data.clientEmail || ''}
 
 
 
@@ -4632,9 +4632,9 @@ ${data.clientAddress}
 
 ${data.clientCity}, ${data.clientState} ${data.clientZip}
 
-${data.clientPhone || '(414) 430-4277'}
+${data.clientPhone || ''}
 
-${data.clientEmail || 'rjbizsolution23@gmail.com'}
+${data.clientEmail || ''}
 
 
 
@@ -4860,7 +4860,7 @@ I request that you include the following 100-word victim's statement in my credi
 
 
 
-"I am a victim of identity theft. An identity thief used my personal information to fraudulently open accounts and make unauthorized inquiries. I did not open the accounts listed as fraudulent, did not authorize any inquiries, and did not receive any benefit from these accounts. I have filed reports with law enforcement and the Federal Trade Commission. Any inquiries regarding these fraudulent accounts should be directed to me at ${data.clientPhone || '(414) 430-4277'} or ${data.clientEmail || 'rjbizsolution23@gmail.com'}. I am actively working to resolve this identity theft."
+"I am a victim of identity theft. An identity thief used my personal information to fraudulently open accounts and make unauthorized inquiries. I did not open the accounts listed as fraudulent, did not authorize any inquiries, and did not receive any benefit from these accounts. I have filed reports with law enforcement and the Federal Trade Commission. Any inquiries regarding these fraudulent accounts should be directed to me at ${data.clientPhone || ''} or ${data.clientEmail || ''}. I am actively working to resolve this identity theft."
 
 
 
@@ -5086,7 +5086,7 @@ ${data.clientCity}, ${data.clientState} ${data.clientZip}
 
 Phone: ${data.accountNumber || 'XXXX-XXXX-XXXX'}
 
-Email: ${data.clientEmail || 'rjbizsolution23@gmail.com'}
+Email: ${data.clientEmail || ''}
 
 
 
@@ -5198,7 +5198,7 @@ If you need to verify my identity or have questions, contact me ONLY at:
 
 Phone: ${data.accountNumber || 'XXXX-XXXX-XXXX'}
 
-Email: ${data.clientEmail || 'rjbizsolution23@gmail.com'}
+Email: ${data.clientEmail || ''}
 
 Address: ${data.clientAddress}
 
@@ -5987,9 +5987,9 @@ Direct all correspondence to:
 
 ${data.clientAddress}
 
-${data.clientPhone || '(414) 430-4277'}
+${data.clientPhone || ''}
 
-${data.clientEmail || 'rjbizsolution23@gmail.com'}
+${data.clientEmail || ''}
 
 
 
@@ -6116,9 +6116,9 @@ ${data.clientAddress}
 
 ${data.clientCity}, ${data.clientState} ${data.clientZip}
 
-${data.clientPhone || '(414) 430-4277'}
+${data.clientPhone || ''}
 
-${data.clientEmail || 'rjbizsolution23@gmail.com'}
+${data.clientEmail || ''}
 
 
 
@@ -6694,9 +6694,9 @@ ${data.clientName}
 
 CONTACT INFORMATION:
 
-Phone: ${data.clientPhone || '(414) 430-4277'}
+Phone: ${data.clientPhone || ''}
 
-Email: ${data.clientEmail || 'rjbizsolution23@gmail.com'}
+Email: ${data.clientEmail || ''}
 
 Preferred Contact Method: [METHOD]
 
@@ -6737,9 +6737,9 @@ ${data.clientName}
 
 ${data.clientCity}, ${data.clientState} ${data.clientZip}
 
-${data.clientPhone || '(414) 430-4277'}
+${data.clientPhone || ''}
 
-${data.clientEmail || 'rjbizsolution23@gmail.com'}
+${data.clientEmail || ''}
 
 
 
@@ -7438,9 +7438,9 @@ ${data.clientAddress}
 
 ${data.clientCity}, ${data.clientState} ${data.clientZip}
 
-${data.clientPhone || '(414) 430-4277'}
+${data.clientPhone || ''}
 
-${data.clientEmail || 'rjbizsolution23@gmail.com'}
+${data.clientEmail || ''}
 
 
 
@@ -7650,8 +7650,8 @@ export function generateTexasFinanceCode392Enhanced(data: DocumentData): string 
 ${data.clientName}
 ${data.clientAddress}
 ${data.clientCity}, ${data.clientState} ${data.clientZip}
-${data.clientPhone || '(414) 430-4277'}
-${data.clientEmail || 'rjbizsolution23@gmail.com'}
+${data.clientPhone || ''}
+${data.clientEmail || ''}
 
 ${data.today}
 
@@ -8286,8 +8286,8 @@ ${data.clientName}
 
 CONTACT INFORMATION:
 Texas Address: ${data.clientAddress}
-Phone: ${data.clientPhone || '(414) 430-4277'}
-Email: ${data.clientEmail || 'rjbizsolution23@gmail.com'}
+Phone: ${data.clientPhone || ''}
+Email: ${data.clientEmail || ''}
 
 ENCLOSURES: Exhibits A-Z
 
@@ -8334,8 +8334,8 @@ export function generateNewYorkGbl349Enhanced(data: DocumentData): string {
 ${data.clientName}
 ${data.clientAddress}
 ${data.clientCity}, ${data.clientState} ${data.clientZip}
-${data.clientPhone || '(414) 430-4277'}
-${data.clientEmail || 'rjbizsolution23@gmail.com'}
+${data.clientPhone || ''}
+${data.clientEmail || ''}
 
 ${data.today}
 
@@ -8877,8 +8877,8 @@ ${data.clientName}
 
 CONTACT INFORMATION:
 New York Address: ${data.clientAddress}
-Phone: ${data.clientPhone || '(414) 430-4277'}
-Email: ${data.clientEmail || 'rjbizsolution23@gmail.com'}
+Phone: ${data.clientPhone || ''}
+Email: ${data.clientEmail || ''}
 
 ENCLOSURES: Exhibits A-Z
 
@@ -8926,8 +8926,8 @@ export function generateIllinoisCollectionAgencyActEnhanced(data: DocumentData):
 ${data.clientName}
 ${data.clientAddress}
 ${data.clientCity}, ${data.clientState} ${data.clientZip}
-${data.clientPhone || '(414) 430-4277'}
-${data.clientEmail || 'rjbizsolution23@gmail.com'}
+${data.clientPhone || ''}
+${data.clientEmail || ''}
 
 Date: ${data.today}
 

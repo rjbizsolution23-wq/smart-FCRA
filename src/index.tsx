@@ -167,6 +167,15 @@ import {
 import { CANONICAL_ORIGIN, canonicalRedirectUrl } from './lib/public-origin';
 import { shouldApplyActingOrg } from './lib/acting-org';
 import {
+  isPlatformOwnerUser,
+  withPlatformOwnerFlag,
+  sessionIdFromRequest,
+  isPrivateBrandHubPath,
+  sanitizeTenantInviteRole,
+  sanitizePlatformCreatedRole,
+  PLATFORM_OWNER_ONLY_ERROR,
+} from './lib/platform-owner';
+import {
   claimPendingSaasEntitlement,
   fulfillSaasCheckout,
   planIdFromCheckoutSession,
@@ -632,6 +641,8 @@ type Bindings = {
   MAILING_WEBHOOK_SECRET?: string;
   PLATFORM_BOOTSTRAP_EMAIL?: string;
   PLATFORM_BOOTSTRAP_PASSWORD?: string;
+  /** Comma-separated extra platform-owner emails (never rely on super_admin role alone). */
+  PLATFORM_OWNER_EMAILS?: string;
   /** When "true"/"1", staff (admin/super_admin) must enable MFA before any protected API (except MFA/auth safe paths). */
   STAFF_MFA_REQUIRED_ALL?: string;
   /** Shared secret for scheduled daily journey motivation dispatch (GitHub Actions / cron). */
@@ -814,6 +825,30 @@ app.get('/manifest.webmanifest', (c) => {
   });
 });
 
+/** Brand hub (ops, founder docs, meet-rick, etc.) is owner-only. Public lead forms stay public. */
+app.use('/static/*', async (c, next) => {
+  if (!isPrivateBrandHubPath(c.req.path)) return next();
+  const sessionId = sessionIdFromRequest({
+    authorization: c.req.header('Authorization'),
+    cookie: c.req.header('Cookie'),
+    queryToken: c.req.query('token'),
+  });
+  if (!sessionId || !c.env.DB) {
+    return c.html(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sign in</title></head><body style="font-family:system-ui;background:#0f172a;color:#e2e8f0;padding:3rem;text-align:center"><p>This brand library is private.</p><p><a href="/login" style="color:#38bdf8">Sign in</a></p></body></html>`,
+      401,
+    );
+  }
+  const session = await lookupActiveSession(c.env.DB, sessionId);
+  if (!session || !isPlatformOwnerUser({ email: session.user_email }, c.env)) {
+    return c.html(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Not available</title></head><body style="font-family:system-ui;background:#0f172a;color:#e2e8f0;padding:3rem;text-align:center"><p>This brand library is reserved for the platform owner. Other tenant accounts cannot open it.</p><p><a href="/app" style="color:#38bdf8">Back to Smart FCRA</a></p></body></html>`,
+      403,
+    );
+  }
+  return next();
+});
+
 // Serve other static assets in local development and production
 app.use('/static/*', serveStatic());
 app.use('/content/*', serveStatic());
@@ -893,8 +928,9 @@ async function authMiddleware(c: any, next: any) {
   const homeOrgId = session.org_id;
   const actingHeader = String(c.req.header('X-Acting-Org-Id') || c.req.header('x-acting-org-id') || '').trim();
   let effectiveOrgId = homeOrgId;
+  const ownerSession = isPlatformOwnerUser({ email: session.user_email }, c.env);
   if (
-    session.user_role === 'super_admin' &&
+    ownerSession &&
     actingHeader &&
     actingHeader !== homeOrgId &&
     shouldApplyActingOrg(c.req.path)
@@ -904,7 +940,7 @@ async function authMiddleware(c: any, next: any) {
   }
 
   const org = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(effectiveOrgId).first();
-  if (org && !(session.user_role === 'super_admin' && effectiveOrgId !== homeOrgId)) {
+  if (org && !(ownerSession && effectiveOrgId !== homeOrgId)) {
     try {
       const settings = JSON.parse(org.settings || '{}');
       if (settings.suspended) {
@@ -939,7 +975,7 @@ async function authMiddleware(c: any, next: any) {
     else await touch;
   } catch { /* ignore */ }
 
-  c.set('user', {
+  c.set('user', withPlatformOwnerFlag({
     id: session.user_id,
     name: session.user_name,
     email: session.user_email,
@@ -947,7 +983,7 @@ async function authMiddleware(c: any, next: any) {
     org_id: effectiveOrgId,
     home_org_id: homeOrgId,
     acting_org_id: effectiveOrgId !== homeOrgId ? effectiveOrgId : null,
-  });
+  }, c.env));
   c.set('session', session);
   return next();
 }
@@ -961,8 +997,8 @@ async function verifyOrgPlanLimits(c: any, resourceType: 'client' | 'report' | '
     return { allowed: false, message: 'Unauthorized' };
   }
 
-  // Master bypass check: Rick Jefferson has unlimited access for free
-  if (user.role === 'super_admin' || user.email === 'rjbizsolution23@gmail.com') {
+  // Master bypass: platform owner only (not every super_admin / tenant operator)
+  if (isPlatformOwnerUser(user, c.env)) {
     return { allowed: true };
   }
 
@@ -1425,7 +1461,7 @@ app.post('/api/public/demo/enter', async (c) => {
 
   return c.json({
     token: sessionToken,
-    user: { id: host.user.id, name: host.user.name || 'Demo Host', email: host.user.email, role: host.user.role || 'admin', org_id: host.orgId, isDemo: true },
+    user: withPlatformOwnerFlag({ id: host.user.id, name: host.user.name || 'Demo Host', email: host.user.email, role: host.user.role || 'admin', org_id: host.orgId, isDemo: true }, c.env),
     org: { id: host.orgId, name: 'Smart FCRA Demo', plan: 'professional' },
     demo: {
       id: row.id,
@@ -1743,21 +1779,14 @@ app.post('/api/demo/mfsn-live', authMiddleware, async (c) => {
 
 app.get('/api/brand/leads', authMiddleware, async (c) => {
   const user = c.get('user');
-  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  if (!isPlatformOwnerUser(user, c.env)) return c.json({ error: PLATFORM_OWNER_ONLY_ERROR }, 403);
   try {
     const publicOrg = resolvePublicSignupOrgId(c.env);
-    const rows = brandLeadsVisibleTo(user.role) === 'all'
-      ? await c.env.DB.prepare(
-          `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, source_ip, created_at
-           FROM brand_leads ORDER BY created_at DESC LIMIT 200`,
-        ).all()
-      : await c.env.DB.prepare(
-          `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, source_ip, created_at
-           FROM brand_leads
-           WHERE org_id = ?
-           ORDER BY created_at DESC LIMIT 200`,
-        ).bind(user.org_id).all();
-    return c.json({ ok: true, leads: rows.results || [], publicOrgId: publicOrg, scope: brandLeadsVisibleTo(user.role) });
+    const rows = await c.env.DB.prepare(
+      `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, source_ip, created_at
+       FROM brand_leads ORDER BY created_at DESC LIMIT 200`,
+    ).all();
+    return c.json({ ok: true, leads: rows.results || [], publicOrgId: publicOrg, scope: brandLeadsVisibleTo(true) });
   } catch (e: any) {
     if (String(e?.message || '').includes('no such table')) {
       return c.json({ ok: true, leads: [], warning: 'Migration 0020 required' });
@@ -1768,13 +1797,13 @@ app.get('/api/brand/leads', authMiddleware, async (c) => {
 
 const DEMO_LEAD_FORMS = ['saas-demo', 'interactive-demo', 'smart-fcra-demo'];
 
-/** Inbox: interactive CRO demos, landing request-a-demo leads, and new SaaS orgs. */
+/** Inbox: interactive CRO demos, landing request-a-demo leads, and new SaaS orgs. Platform owner only. */
 app.get('/api/admin/demo/signups', authMiddleware, async (c) => {
   const user = c.get('user');
-  if (user.role !== 'admin' && user.role !== 'super_admin') {
-    return c.json({ error: 'Admin only' }, 403);
+  if (!isPlatformOwnerUser(user, c.env)) {
+    return c.json({ error: PLATFORM_OWNER_ONLY_ERROR }, 403);
   }
-  const all = user.role === 'super_admin';
+  const all = true;
   const leadPlaceholders = DEMO_LEAD_FORMS.map(() => '?').join(',');
 
   let demos: any[] = [];
@@ -1854,6 +1883,7 @@ app.get('/api/admin/demo/signups', authMiddleware, async (c) => {
 });
 
 app.get('/api/brand/catalog', authMiddleware, async (c) => {
+  if (!isPlatformOwnerUser(c.get('user'), c.env)) return c.json({ error: PLATFORM_OWNER_ONLY_ERROR }, 403);
   return c.json({
     ok: true,
     hubUrl: '/static/brand/',
@@ -1905,10 +1935,10 @@ app.get('/sitemap.xml', (c) => {
 app.get('/login', (c) => c.html(getAppHtml()));
 app.get('/app', (c) => c.html(getAppHtml()));
 
-/** Friendly short URLs into the brand library */
-app.get('/brand', (c) => c.redirect('/static/brand/', 302));
-app.get('/brand/', (c) => c.redirect('/static/brand/', 302));
-app.get('/forms', (c) => c.redirect('/static/brand/#forms', 302));
+/** Friendly short URLs into the brand library — owner SPA only (static hub is gated). */
+app.get('/brand', (c) => c.redirect('/login', 302));
+app.get('/brand/', (c) => c.redirect('/login', 302));
+app.get('/forms', (c) => c.redirect('/forms/credit-qualify', 302));
 app.get('/forms/:slug', (c) => {
   const slug = c.req.param('slug');
   const map: Record<string, string> = {
@@ -1924,7 +1954,7 @@ app.get('/forms/:slug', (c) => {
     'podcast-guest': 'podcast-guest.html',
   };
   const file = map[slug];
-  if (!file) return c.redirect('/static/brand/', 302);
+  if (!file) return c.redirect('/', 302);
   return c.redirect(`/static/brand/forms/${file}`, 302);
 });
 
@@ -2395,7 +2425,7 @@ app.post('/api/auth/register', async (c) => {
     await insertSessionRow(c.env.DB, { id: token, userId, orgId, expires, ip, ua });
     return c.json({
       token,
-      user: { id: userId, name, email, role: 'admin', org_id: orgId },
+      user: withPlatformOwnerFlag({ id: userId, name, email, role: 'admin', org_id: orgId }, c.env),
       org: { id: orgId, name: orgName, plan: paid.plan },
       paid: true,
       message: 'Payment matched. Your organization is unlocked.',
@@ -2438,7 +2468,7 @@ app.post('/api/auth/register', async (c) => {
     return c.json({
       requiresVerification: true,
       message: 'Account created. Check your email to verify before signing in.',
-      user: { id: userId, name, email, role: 'admin', org_id: orgId },
+      user: withPlatformOwnerFlag({ id: userId, name, email, role: 'admin', org_id: orgId }, c.env),
       org: { id: orgId, name: orgName, plan: 'free' },
     });
   }
@@ -2446,7 +2476,7 @@ app.post('/api/auth/register', async (c) => {
   return c.json({
     requiresVerification: true,
     message: 'Account created but email verification is required. Contact support to activate — outbound email is not configured on this deployment.',
-    user: { id: userId, name, email, role: 'admin', org_id: orgId },
+    user: withPlatformOwnerFlag({ id: userId, name, email, role: 'admin', org_id: orgId }, c.env),
     org: { id: orgId, name: orgName, plan: 'free' },
   }, 201);
 });
@@ -2568,7 +2598,7 @@ app.post('/api/auth/login', async (c) => {
 
   return c.json({
     token,
-    user: { id: user.id, name: user.name, email: user.email, role: user.role, org_id: user.org_id },
+    user: withPlatformOwnerFlag({ id: user.id, name: user.name, email: user.email, role: user.role, org_id: user.org_id }, c.env),
     org: { id: user.org_id, name: user.org_name, plan: user.org_plan },
   });
 });
@@ -2607,7 +2637,7 @@ app.post('/api/auth/mfa/challenge', async (c) => {
 
   return c.json({
     token,
-    user: { id: user.id, name: user.name, email: user.email, role: user.role, org_id: user.org_id },
+    user: withPlatformOwnerFlag({ id: user.id, name: user.name, email: user.email, role: user.role, org_id: user.org_id }, c.env),
     org: { id: user.org_id, name: user.org_name, plan: user.org_plan },
   });
 });
@@ -2728,7 +2758,7 @@ app.get('/api/security/audit-log', authMiddleware, async (c) => {
   if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
   const limit = Math.min(200, Math.max(1, Number(c.req.query('limit') || 100)));
   try {
-    const rows = user.role === 'super_admin' && c.req.query('all') === '1'
+    const rows = isPlatformOwnerUser(user, c.env) && c.req.query('all') === '1'
       ? await c.env.DB.prepare(
           `SELECT id, org_id, actor_user_id, actor_role, action, resource_type, resource_id, ip_address, success, created_at FROM security_audit_log ORDER BY created_at DESC LIMIT ?`,
         ).bind(limit).all()
@@ -8509,11 +8539,11 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
         bureau: 'Equifax',
         reportDate: new Date().toLocaleDateString(),
         personalInfo: {
-          names: [ 'Rick Jefferson', 'Rick A Jefferson' ],
-          addresses: [ '1342 NM 333, Tijeras, NM 87059' ],
-          employers: [ 'RJ Business Solutions' ],
-          ssns: [ '***-**-9999' ],
-          dobs: [ '05/21/1985' ]
+          names: [ 'Demo Client' ],
+          addresses: [ '100 Demo Street, Austin, TX 78701' ],
+          employers: [ 'Demo Employer' ],
+          ssns: [ '***-**-0000' ],
+          dobs: [ '01/01/1990' ]
         },
         accounts: [
           {
@@ -8566,11 +8596,11 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
         bureau: 'Experian',
         reportDate: new Date().toLocaleDateString(),
         personalInfo: {
-          names: [ 'Rick Jefferson' ],
-          addresses: [ '1342 NM 333, Tijeras, NM 87059' ],
-          employers: [ 'RJ Business Solutions' ],
-          ssns: [ '***-**-9999' ],
-          dobs: [ '05/21/1985' ]
+          names: [ 'Demo Client' ],
+          addresses: [ '100 Demo Street, Austin, TX 78701' ],
+          employers: [ 'Demo Employer' ],
+          ssns: [ '***-**-0000' ],
+          dobs: [ '01/01/1990' ]
         },
         accounts: [
           {
@@ -8623,11 +8653,11 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
         bureau: 'TransUnion',
         reportDate: new Date().toLocaleDateString(),
         personalInfo: {
-          names: [ 'Rick Jefferson' ],
-          addresses: [ '1342 NM 333, Tijeras, NM 87059' ],
-          employers: [ 'RJ Business Solutions' ],
-          ssns: [ '***-**-9999' ],
-          dobs: [ '05/21/1985' ]
+          names: [ 'Demo Client' ],
+          addresses: [ '100 Demo Street, Austin, TX 78701' ],
+          employers: [ 'Demo Employer' ],
+          ssns: [ '***-**-0000' ],
+          dobs: [ '01/01/1990' ]
         },
         accounts: [
           {
@@ -9279,12 +9309,9 @@ app.get('/api/billing/mode', authMiddleware, async (c) => {
 
 app.get('/api/company', async (c) => {
   return c.json({
-    name: c.env.COMPANY_NAME || 'RJ Business Solutions',
-    owner: c.env.COMPANY_OWNER || 'Rick Jefferson',
-    address: c.env.COMPANY_ADDRESS || '',
-    website: c.env.COMPANY_WEBSITE || 'https://rjbusinesssolutions.org',
+    name: 'Smart FCRA',
+    website: c.env.COMPANY_WEBSITE || 'https://smartfcra.com',
     email: c.env.COMPANY_EMAIL || 'support@rjbusinesssolutions.org',
-    logo: c.env.COMPANY_LOGO || '',
   });
 });
 
@@ -9293,6 +9320,7 @@ app.get('/api/company', async (c) => {
 // FOUNDER OS SUITE INTEGRATION ENDPOINTS
 // ═══════════════════════════════════════════════════════════════
 app.get('/api/founder-templates', authMiddleware, async (c) => {
+  if (!isPlatformOwnerUser(c.get('user'), c.env)) return c.json({ error: PLATFORM_OWNER_ONLY_ERROR }, 403);
   const templates = Object.entries(FOUNDER_TEMPLATES).map(([key, val]) => ({
     id: key,
     name: val.name,
@@ -9303,6 +9331,7 @@ app.get('/api/founder-templates', authMiddleware, async (c) => {
 });
 
 app.post('/api/documents/preview-founder', authMiddleware, async (c) => {
+  if (!isPlatformOwnerUser(c.get('user'), c.env)) return c.json({ error: PLATFORM_OWNER_ONLY_ERROR }, 403);
   const { templateId, fields } = await c.req.json();
   const template = FOUNDER_TEMPLATES[templateId];
   if (!template) {
@@ -9314,6 +9343,7 @@ app.post('/api/documents/preview-founder', authMiddleware, async (c) => {
 
 app.post('/api/documents/generate-founder', authMiddleware, async (c) => {
   const user = c.get('user');
+  if (!isPlatformOwnerUser(user, c.env)) return c.json({ error: PLATFORM_OWNER_ONLY_ERROR }, 403);
   const { clientId, templateId, fields } = await c.req.json();
 
   const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first() as any;
@@ -9361,10 +9391,10 @@ app.get('/api/documents/:id/pdf', authMiddleware, async (c) => {
     : firmLh.repAgreementAttached;
 
   const customLetterhead = {
-    orgName: firmLh.firmName || org?.name || 'RJ Business Solutions',
+    orgName: firmLh.firmName || org?.name || 'Your Firm',
     logoBase64: firmLh.logoBase64 || undefined,
     headerText: firmLh.firmName || firmLh.headerText || doc.title,
-    customSubtext: firmLh.customSubtext || `${firmLh.firmName || org?.name || 'RJ Business Solutions'} • Smart FCRA dispute document`,
+    customSubtext: firmLh.customSubtext || `${firmLh.firmName || org?.name || 'Your Firm'} • Smart FCRA dispute document`,
     isHiredAdvocate,
     repAgreementAttached
   };
@@ -9486,7 +9516,9 @@ app.post('/api/team/invite', authMiddleware, async (c) => {
   const planCheck = await verifyOrgPlanLimits(c, 'user');
   if (!planCheck.allowed) return c.json({ error: planCheck.message }, 403);
   
-  const { name, email, password, role } = await c.req.json();
+  const { name, email, password, role: rawRole } = await c.req.json();
+  const role = sanitizeTenantInviteRole(rawRole);
+  if (!role) return c.json({ error: 'Invalid role. Tenant invites are member or admin only.' }, 400);
   const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
   if (existing) return c.json({ error: 'Email already exists' }, 409);
 
@@ -9978,8 +10010,8 @@ app.get('/api/compliance/overview', authMiddleware, async (c) => {
 
 const adminGateMiddleware = async (c: any, next: any) => {
   const user = c.get('user');
-  if (!user || user.role !== 'super_admin') {
-    return c.json({ error: 'Forbidden: Platform super_admin access only' }, 403);
+  if (!isPlatformOwnerUser(user, c.env)) {
+    return c.json({ error: PLATFORM_OWNER_ONLY_ERROR }, 403);
   }
   return next();
 };
@@ -10577,9 +10609,13 @@ app.get('/api/admin/users', authMiddleware, adminGateMiddleware, async (c) => {
 // 5.5. POST /api/admin/users
 app.post('/api/admin/users', authMiddleware, adminGateMiddleware, async (c) => {
   try {
-    const { name, email, password, role, org_id } = await c.req.json();
-    if (!name || !email || !password || !role || !org_id) {
+    const { name, email, password, role: rawRole, org_id } = await c.req.json();
+    if (!name || !email || !password || !rawRole || !org_id) {
       return c.json({ error: 'All fields are required (name, email, password, role, org_id)' }, 400);
+    }
+    const role = sanitizePlatformCreatedRole(rawRole, email, c.env);
+    if (!role) {
+      return c.json({ error: 'That role cannot be assigned to this account' }, 403);
     }
 
     const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
@@ -10810,6 +10846,11 @@ app.post('/api/marketing/campaign/trigger', authMiddleware, async (c) => {
       return c.json({ error: 'Client not found' }, 404);
     }
 
+    const campaignBrand = await loadOrgBrand(c.env, user.org_id);
+    const campaignFirm = campaignBrand.name || 'Your firm';
+    const campaignFooter = [campaignFirm, campaignBrand.address].filter(Boolean).join(' | ');
+    const campaignLogo = campaignBrand.logoUrl || '';
+
     // 2. Query violations count and estimate damages
     const violationSummary = await c.env.DB.prepare(
       'SELECT COUNT(*) as count, SUM(total_damages_max) as total_damages FROM violations WHERE client_id = ? AND org_id = ?'
@@ -10830,7 +10871,7 @@ app.post('/api/marketing/campaign/trigger', authMiddleware, async (c) => {
             Worth a 15-minute call to see if it fits your workflow?<br><br>
             Best,<br>
             ${user.name}<br>
-            RJ Business Solutions`
+            ${campaignFirm}`
         },
         2: {
           subject: `Re: Quick question about ${client.first_name}'s credit report`,
@@ -10879,13 +10920,13 @@ app.post('/api/marketing/campaign/trigger', authMiddleware, async (c) => {
           html: `
               <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff;">
                 <div style="text-align: center; margin-bottom: 20px;">
-                  <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="RJ Business Solutions" style="max-height: 50px; border-radius: 8px;">
+                  ${campaignLogo ? `<img src="${campaignLogo}" alt="${campaignFirm}" style="max-height: 50px; border-radius: 8px;">` : ''}
                 </div>
                 <div style="color: #1e293b; line-height: 1.6; font-size: 14px;">
                   ${template.body}
                 </div>
                 <div style="margin-top: 30px; border-t: 1px solid #e2e8f0; padding-top: 15px; font-size: 11px; color: #64748b; text-align: center;">
-                  RJ Business Solutions | 1342 NM 333, Tijeras, New Mexico 87059
+                  ${campaignFooter || campaignFirm}
                 </div>
               </div>
             `,
@@ -11262,8 +11303,8 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/demo-experience.js?v=20260818-mfsn-apiuser"></script>
-  <script src="/static/app.js?v=20260818-mfsn-apiuser"></script>
+  <script src="/static/demo-experience.js?v=20260818-owner-only"></script>
+  <script src="/static/app.js?v=20260818-owner-only"></script>
 </body>
 </html>`;
 }

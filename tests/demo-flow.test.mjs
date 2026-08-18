@@ -165,6 +165,10 @@ assert(spa.includes('Users → API User') || spa.includes('Users section'), 'SPA
 assert(overlay.includes('Users → API User'), 'demo live modal walks API User setup');
 assert(overlay.includes('myfreescorenow.com/login'), 'overlay links affiliate portal');
 assert(spa.includes('_portalWalkStep'), 'SPA can step Next/Previous through portal tabs');
+assert(spa.includes('OWNER_ONLY_PAGES'), 'SPA gates owner-only pages');
+assert(spa.includes('function isPlatformOwner'), 'SPA checks platformOwner flag, not super_admin');
+assert(spa.includes('Not available on this account'), 'non-owners see forbidden state');
+assert(spa.includes("syncSessionCookie"), 'SPA sets session cookie for private brand hub');
 assert(spa.includes("id: 'client-report'"), 'SPA sidebar includes Report');
 for (const g of CLIENT_PORTAL_GUIDE) {
   assert(spa.includes(`page: '${g.page}'`), `SPA walkthrough lists ${g.page}`);

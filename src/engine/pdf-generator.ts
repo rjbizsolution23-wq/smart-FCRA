@@ -210,7 +210,7 @@ export function generatePDFReport(data: PDFReportData): Uint8Array {
     setPdfFont(doc, font, 'normal');
     doc.setFontSize(8);
     setTextColor(darkGray);
-    doc.text('Built by Rick Jefferson | Powered by RJ Business Solutions', margin, pageHeight - 10);
+    doc.text('Generated with Smart FCRA', margin, pageHeight - 10);
     doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
   }
 
@@ -433,7 +433,7 @@ export function generatePDFFromText(title: string, text: string, customLetterhea
     setTextColor(darkGray);
     const footerText = customLetterhead?.orgName 
       ? `Prepared by ${customLetterhead.orgName} | Authorized Credit Representative` 
-      : 'Built by Rick Jefferson | Powered by RJ Business Solutions';
+      : 'Generated with Smart FCRA';
     doc.text(footerText, margin, pageHeight - 10);
     doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
   }

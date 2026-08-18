@@ -18,6 +18,7 @@ const {
   mergeLetterheadIntoSettings,
   brandLetterContent,
   buildFirmLetterheadBlock,
+  loadOrgBrand,
 } = await import(pathToFileURL(path.join(root, 'src/lib/org-branding.ts')).href);
 
 {
@@ -79,6 +80,16 @@ const {
   const lh = normalizeOrgLetterhead({}).letterhead;
   assert(buildFirmLetterheadBlock(lh) === '', 'empty when unconfigured');
   console.log('✓ unconfigured letterhead is empty');
+}
+
+{
+  const tenant = await loadOrgBrand({}, 'org_other_tenant');
+  assert(!String(tenant.owner || '').includes('Rick'), 'tenant does not inherit owner name');
+  assert(!String(tenant.address || '').includes('Tijeras'), 'tenant does not inherit HQ address');
+  assert(!String(tenant.supportEmail || '').includes('rjbizsolution23'), 'tenant does not inherit owner email');
+  const platform = await loadOrgBrand({}, null);
+  assert(platform.owner.includes('Rick Jefferson'), 'platform context still uses owner brand');
+  console.log('✓ tenant orgs do not inherit platform-owner PII');
 }
 
 console.log('org-branding tests passed');

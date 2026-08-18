@@ -147,9 +147,35 @@
     `, 'vault-pdf-modal');
   }
 
+  function syncSessionCookie(token) {
+    const secure = location.protocol === 'https:' ? '; Secure' : '';
+    if (token) {
+      document.cookie = 'fcra_session=' + encodeURIComponent(token) + '; Path=/; SameSite=Lax; Max-Age=2592000' + secure;
+    } else {
+      document.cookie = 'fcra_session=; Path=/; Max-Age=0; SameSite=Lax' + secure;
+    }
+  }
+
+  function isPlatformOwner(user) {
+    return !!(user && user.platformOwner);
+  }
+
+  const OWNER_ONLY_PAGES = {
+    'founder-os': 'Founder OS',
+    'sales-tools': 'Sales Tools',
+    'brand-library': 'Brand Library',
+    'demo-signups': 'Demo Signups',
+    'product-map': 'Product Map',
+    'roi-calculator': 'ROI Calculator',
+    'admin-console': 'Tenants & Software',
+  };
+
   function setState(u) {
     Object.assign(state, u);
-    if (u.token !== undefined) { u.token ? localStorage.setItem('fcra_token', u.token) : localStorage.removeItem('fcra_token'); }
+    if (u.token !== undefined) {
+      if (u.token) { localStorage.setItem('fcra_token', u.token); syncSessionCookie(u.token); }
+      else { localStorage.removeItem('fcra_token'); syncSessionCookie(null); }
+    }
     if (u.user !== undefined) { u.user ? localStorage.setItem('fcra_user', JSON.stringify(u.user)) : localStorage.removeItem('fcra_user'); }
     if (u.org !== undefined) { u.org ? localStorage.setItem('fcra_org', JSON.stringify(u.org)) : localStorage.removeItem('fcra_org'); }
     if (u.impersonateClientId !== undefined) { u.impersonateClientId ? localStorage.setItem('fcra_impersonate_client_id', u.impersonateClientId) : localStorage.removeItem('fcra_impersonate_client_id'); }
@@ -170,7 +196,7 @@
   };
 
   window._workInTenant = async function(orgId, orgName) {
-    if (state.user?.role !== 'super_admin') return;
+    if (!isPlatformOwner(state.user)) return;
     try {
       if (!state.homeOrg && state.org) setState({ homeOrg: state.org });
       const summary = await api('/admin/organizations/' + encodeURIComponent(orgId) + '/summary');
@@ -226,7 +252,7 @@
   async function api(path, opts = {}) {
     const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
     if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
-    if (state.user?.role === 'super_admin' && state.actingOrgId) {
+    if (isPlatformOwner(state.user) && state.actingOrgId) {
       headers['X-Acting-Org-Id'] = state.actingOrgId;
     }
     const { headers: _ignored, ...rest } = opts;
@@ -1354,20 +1380,24 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'documents', icon: 'fa-file-contract', label: 'Documents' },
         { id: 'compliance-hub', icon: 'fa-shield-alt', label: 'Compliance Hub' },
         { id: 'mailing-campaigns', icon: 'fa-mail-bulk', label: 'Mailing Campaigns' },
-        { id: 'founder-os', icon: 'fa-briefcase', label: 'Founder OS' },
-        { id: 'sales-tools', icon: 'fa-chart-pie', label: 'Sales Tools' },
         { id: 'tradelines', icon: 'fa-layer-group', label: 'Tradelines' },
-        { id: 'brand-library', icon: 'fa-palette', label: 'Brand Library' },
-        { id: 'demo-signups', icon: 'fa-clipboard-list', label: 'Demo Signups' },
-        { id: 'product-map', icon: 'fa-sitemap', label: 'Product Map' },
-        { id: 'roi-calculator', icon: 'fa-calculator', label: 'ROI Calculator' },
         { id: 'team', icon: 'fa-user-friends', label: 'Team' },
         { id: 'settings', icon: 'fa-cog', label: 'Settings' },
         { id: 'ai-studio', icon: 'fa-robot', label: 'AI Studio' },
         { id: 'billing', icon: 'fa-credit-card', label: 'Billing' },
         { id: 'legal', icon: 'fa-gavel', label: 'Legal' },
       ];
-      if (state.user?.role === 'super_admin') {
+      if (isPlatformOwner(state.user)) {
+        navItems.splice(2, 0,
+          { id: 'founder-os', icon: 'fa-briefcase', label: 'Founder OS' },
+          { id: 'sales-tools', icon: 'fa-chart-pie', label: 'Sales Tools' },
+        );
+        navItems.splice(navItems.findIndex((n) => n.id === 'tradelines') + 1, 0,
+          { id: 'brand-library', icon: 'fa-palette', label: 'Brand Library' },
+          { id: 'demo-signups', icon: 'fa-clipboard-list', label: 'Demo Signups' },
+          { id: 'product-map', icon: 'fa-sitemap', label: 'Product Map' },
+          { id: 'roi-calculator', icon: 'fa-calculator', label: 'ROI Calculator' },
+        );
         navItems.unshift({ id: 'admin-console', icon: 'fa-building', label: 'Tenants & Software' });
       }
     }
@@ -1484,6 +1514,16 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         page = 'admin-overview';
         state.currentPage = 'admin-overview';
       }
+    }
+
+    if (OWNER_ONLY_PAGES[page] && !isPlatformOwner(state.user)) {
+      el.innerHTML = `<div class="fade-in max-w-lg mx-auto mt-16 glass rounded-2xl p-8 text-center border border-rose-500/20">
+        <i class="fas fa-lock text-3xl text-rose-300 mb-3" aria-hidden="true"></i>
+        <h1 class="text-lg font-bold text-white">Not available on this account</h1>
+        <p class="text-sm text-gray-400 mt-2">${escapeHtml(OWNER_ONLY_PAGES[page])} is reserved for the platform owner. Other admins, team members, clients, and demo accounts cannot open it.</p>
+        <button type="button" onclick="window._nav('dashboard')" class="mt-5 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">Back to Dashboard</button>
+      </div>`;
+      return;
     }
 
     el.innerHTML = '<div class="flex items-center justify-center h-40"><i class="fas fa-spinner fa-spin text-blue-400 text-xl"></i></div>';
@@ -3555,7 +3595,7 @@ async function pgOnboardingWizard(el, data) {
             </div>
             <div>
               <label class="block text-xs font-bold text-gray-400 uppercase font-mono mb-1.5 tracking-wider">Email Address</label>
-              <input type="email" id="intake-email" class="w-full bg-gray-950/50 border border-gray-800 focus:border-blue-500/50 rounded-lg p-2.5 text-sm text-white focus:outline-none transition" placeholder="e.g. rjbizsolution23@gmail.com" value="${onboardingData.email || ''}" required>
+              <input type="email" id="intake-email" class="w-full bg-gray-950/50 border border-gray-800 focus:border-blue-500/50 rounded-lg p-2.5 text-sm text-white focus:outline-none transition" placeholder="you@yourfirm.com" value="${onboardingData.email || ''}" required>
             </div>
           </div>
 
@@ -7917,7 +7957,7 @@ async function pgAdminConsole(el) {
                   <select name="role" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-xs focus:border-blue-500 outline-none transition">
                     <option value="member">Member (Regular access)</option>
                     <option value="admin">Admin (Tenant controller)</option>
-                    <option value="super_admin">Super Admin (Platform operator)</option>
+                    <option value="client">Client (Consumer portal)</option>
                   </select>
                 </div>
                 <div class="flex gap-2 pt-2">
@@ -13663,6 +13703,24 @@ async function pgAdminConsole(el) {
       } catch (err) {
         toast(err.message || 'Restart the demo at /demo with your firm details', 'error');
       }
+    }
+    if (state.token) {
+      syncSessionCookie(state.token);
+      try {
+        const me = await api('/auth/me');
+        if (me.user) {
+          const nextUser = { ...(state.user || {}), ...me.user };
+          const patch = { user: nextUser };
+          if (me.org) patch.org = me.org;
+          if (!isPlatformOwner(nextUser) && (state.actingOrgId || state.homeOrg)) {
+            patch.actingOrgId = null;
+            patch.actingOrgName = null;
+            patch.homeOrg = null;
+            if (state.homeOrg) patch.org = me.org || state.homeOrg;
+          }
+          setState(patch);
+        }
+      } catch (_) {}
     }
     render();
     if (state.token) maybeStartPendingCheckout();

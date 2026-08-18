@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "include": ["/*"],
+  "exclude": [
+    "/static/app.js",
+    "/static/demo-experience.js",
+    "/static/logos/*",
+    "/static/i18n/*",
+    "/static/brand/forms/*",
+    "/static/brand/brand.css",
+    "/static/brand/forms.css",
+    "/static/brand/turnstile.js",
+    "/static/brand/pwa-icon.jpg"
+  ]
+}
