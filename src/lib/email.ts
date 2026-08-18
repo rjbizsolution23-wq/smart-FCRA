@@ -87,6 +87,16 @@ async function sendViaSendGrid(apiKey: string, from: string, opts: SendEmailOpts
   return { sent: true, provider: 'sendgrid' as const };
 }
 
+/** Which outbound email providers are wired (no secrets returned). */
+export function emailSendingConfigured(env: EmailEnv): { configured: boolean; providers: string[] } {
+  const providers: string[] = [];
+  if (env.CLOUDFLARE_EMAIL_API_TOKEN && env.CLOUDFLARE_ACCOUNT_ID) providers.push('cloudflare');
+  else if (env.CLOUDFLARE_API_TOKEN && env.CLOUDFLARE_ACCOUNT_ID) providers.push('cloudflare');
+  if (env.RESEND_API_KEY) providers.push('resend');
+  if (env.SENDGRID_API_KEY) providers.push('sendgrid');
+  return { configured: providers.length > 0, providers };
+}
+
 /** Prefer Cloudflare Email Sending; fall back to Resend then SendGrid. */
 export async function sendAppEmail(env: EmailEnv, opts: SendEmailOpts): Promise<{ sent: boolean; simulated: boolean; provider: string; messageId?: string }> {
   const errors: string[] = [];

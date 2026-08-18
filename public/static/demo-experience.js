@@ -11,6 +11,8 @@
   let stopImpersonating = () => {};
   let helpersClear = null;
   let tour = [];
+  let mfsnGuide = [];
+  let affiliatePortalUrl = 'https://myfreescorenow.com/login';
   let step = 0;
   let speaking = false;
   let recognition = null;
@@ -149,13 +151,27 @@
   }
 
   function openLiveMfsn() {
-    const html = `<div class="bg-gray-900 border border-gray-700 rounded-2xl p-5 max-w-md w-full text-left">
-      <h3 class="text-white font-display text-lg mb-1">One live MyFreeScoreNow report</h3>
-      <p class="text-xs text-gray-400 mb-3">One person, one pull, this demo account only. Partner credentials stay on the server. You supply the member email and MAPIK# token.</p>
-      <label class="block text-xs text-gray-400 mb-1">Member email</label>
+    const steps = (mfsnGuide && mfsnGuide.length)
+      ? mfsnGuide
+      : [
+          { step: 1, title: 'Open the affiliate portal', body: 'Sign in at myfreescorenow.com/login with your affiliate account — not the consumer member login.' },
+          { step: 2, title: 'Users → API user', body: 'Open Users. Click the dropdown and choose API user. Dashboard password is not the API login.' },
+          { step: 3, title: 'Create the API username and password', body: 'At the top, enter the API username and password you choose, then save.' },
+          { step: 4, title: 'Pull with client email + token', body: 'Enter the member email and MAPIK# client token below. Demo allows one live pull per account.' },
+        ];
+    const stepsHtml = steps.map((s) =>
+      `<li class="flex gap-2 mb-2"><span class="shrink-0 w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">${s.step || ''}</span><div><div class="text-white text-xs font-semibold">${esc(s.title || '')}</div><p class="text-[11px] text-gray-400 leading-relaxed">${esc(s.body || '')}</p></div></li>`
+    ).join('');
+    const html = `<div class="bg-gray-900 border border-blue-500/30 rounded-2xl p-5 max-w-lg w-full text-left max-h-[90vh] overflow-y-auto">
+      <div class="text-[10px] uppercase tracking-[0.16em] font-bold text-sky-300 mb-1">MyFreeScoreNow affiliates</div>
+      <h3 class="text-white font-display text-lg mb-1">Create an API user, then pull once</h3>
+      <p class="text-xs text-gray-400 mb-3">Do not use your affiliate dashboard password. One person, one pull, this demo account only. Partner secrets stay on the server when they are configured.</p>
+      <ol class="mb-4">${stepsHtml}</ol>
+      <p class="text-[11px] text-gray-500 mb-3">Portal: <a class="text-sky-300 underline" href="${esc(affiliatePortalUrl)}" target="_blank" rel="noopener">${esc(affiliatePortalUrl)}</a></p>
+      <label class="block text-xs text-gray-400 mb-1">Member email (client username)</label>
       <input id="sf-mfsn-email" type="email" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm mb-2" />
-      <label class="block text-xs text-gray-400 mb-1">Member token (MAPIK#)</label>
-      <input id="sf-mfsn-token" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm mb-3" />
+      <label class="block text-xs text-gray-400 mb-1">Client token (MAPIK#)</label>
+      <input id="sf-mfsn-token" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm mb-3" placeholder="MAPIK#…" />
       <div class="flex gap-2">
         <button data-modal-close class="flex-1 bg-gray-800 text-gray-200 rounded-lg py-2 text-sm">Cancel</button>
         <button id="sf-mfsn-go" class="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-semibold">Pull once</button>
@@ -221,7 +237,7 @@
         }
       </style>
       <div id="sf-demo-banner">
-        <span>Interactive demo for <strong>${esc(session.businessName || 'your firm')}</strong> · tour + agent · one live MFSN report max</span>
+        <span>Interactive demo · tour every component · Consumer Rights · email/Twilio · one live MFSN pull</span>
         <span>
           <button type="button" class="sf-ghost" id="sf-show-tour">Tour</button>
           <button type="button" class="sf-ghost" id="sf-live">Live report</button>
@@ -255,7 +271,7 @@
       const pane = document.getElementById('sf-demo-agent');
       pane.classList.toggle('sf-hidden');
       if (!pane.classList.contains('sf-hidden') && !document.querySelector('#sf-demo-log .sf-msg')) {
-        addMsg('agent', 'Ask me anything about Smart FCRA. I can open violations, generated letters, the client portal, tutors, CROA cancel, or help you pull one live MyFreeScoreNow report. I will not disclose engine internals or promise lawsuit outcomes.');
+        addMsg('agent', 'Ask me anything about Smart FCRA. I can open violations, generated letters, Consumer Rights, AU tradelines, email/Twilio, CROA cancel, or walk you through the MyFreeScoreNow affiliate portal (Users → API user) so you can pull one live report. I will not disclose engine internals or promise lawsuit outcomes.');
       }
     };
     document.getElementById('sf-agent-close').onclick = () => document.getElementById('sf-demo-agent').classList.add('sf-hidden');
@@ -298,6 +314,8 @@
       try {
         const d = await api('/demo/tour');
         tour = d.steps || [];
+        mfsnGuide = d.mfsnGuide || [];
+        if (d.affiliatePortalUrl) affiliatePortalUrl = d.affiliatePortalUrl;
       } catch { tour = []; }
       if (tour.length) goTour(session?.tourStep || 0);
     },

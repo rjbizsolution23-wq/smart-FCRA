@@ -45,7 +45,7 @@ const CONSENT_CATALOG = [
   { type: 'OPTIONAL_MARKETING', version: '1.0', label: 'Optional marketing' },
 ];
 
-const CONSUMER_RIGHTS = {
+export const CONSUMER_RIGHTS = {
   disclaimer: 'Educational summary of federal consumer rights. Not legal advice. Official sources control.',
   topics: [
     {

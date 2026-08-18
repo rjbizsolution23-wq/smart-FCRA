@@ -87,5 +87,21 @@ assert(livePullBlocked({ mfsn_pulls: DEMO_MAX_LIVE_PULLS }) === true, 'second pu
 
 assert(DEMO_TOUR.find((s) => s.id === 'upload')?.data?.clientId === 'cli_demo_001', 'upload tour pins Salisha');
 assert(DEMO_TOUR.find((s) => s.id === 'letters')?.data?.clientId === 'cli_demo_001', 'letter tour pins Salisha');
+assert(/API user/i.test(DEMO_TOUR.find((s) => s.id === 'live')?.body || ''), 'live tour teaches API user');
+assert(DEMO_TOUR.some((s) => s.id === 'tradelines'), 'tour covers tradelines');
+assert(DEMO_TOUR.some((s) => s.id === 'comms'), 'tour covers email/Twilio');
+assert(/affiliate portal/i.test(DEMO_PRODUCT_KNOWLEDGE), 'agent memory has affiliate portal');
+assert(/Users → API user/i.test(DEMO_PRODUCT_KNOWLEDGE), 'agent memory has Users → API user');
+assert(/email that sends/i.test(DEMO_PRODUCT_KNOWLEDGE) || /Cloudflare Email/i.test(DEMO_PRODUCT_KNOWLEDGE), 'agent memory brags email');
+assert(!/12\.5%/.test(DEMO_PRODUCT_KNOWLEDGE), 'agent must not quote tradeline markup %');
+
+{
+  const t = routeDemoIntent('show me authorized user tradelines');
+  assert(t.matched && t.actions[0].page === 'tradelines', 'tradeline intent');
+  const sms = routeDemoIntent('is Twilio SMS actually sending?');
+  assert(sms.matched && sms.actions[0].page === 'settings', 'twilio intent');
+  const apiUser = routeDemoIntent('how do I create an API user in the affiliate portal?');
+  assert(apiUser.matched && apiUser.actions[0].type === 'openLiveMfsn', 'affiliate api user opens live MFSN');
+}
 
 console.log('demo-experience tests passed');

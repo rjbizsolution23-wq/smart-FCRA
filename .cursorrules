@@ -45,3 +45,5 @@ See docs/agents/api-integration-master/SYSTEM_PROMPT.txt and BRAIN_REFRESH_PROTO
 - Official OpenAPI: login / fetch-3B-json / logout only
 - Docs: https://www.myfreescorenow.com/api-integration · Swagger: https://myfreescorenow.portal.swaggerhub.com/reporting/docs/mfsn-reports-v-1-0-0
 - Members under this affiliate each have their own `MAPIK#` client token; partner Bearer ≠ member token
+- Affiliates must create an **API user** in the portal (Users → dropdown → API user), set username/password at the top, then pull with **client email + client token**. Dashboard password is not the API login. Portal: https://myfreescorenow.com/login
+- Demo/agent copy lives in `src/engine/demo-experience.ts` (`DEMO_TOUR`, `DEMO_PRODUCT_KNOWLEDGE`) plus the upload popup in `public/static/app.js` / `public/static/demo-experience.js`

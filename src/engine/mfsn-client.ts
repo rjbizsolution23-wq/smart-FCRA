@@ -302,6 +302,11 @@ export type MfsnEnv = {
   MFSN_API_URL?: string;
 };
 
+/** True when partner login email + password are present (member token is supplied per pull). */
+export function mfsnPartnerLoginReady(env: MfsnEnv): boolean {
+  return !!(String(env.MFSN_EMAIL || '').trim() && String(env.MFSN_PASSWORD || '').trim());
+}
+
 /** Partner API credentials from env only (never from client form). */
 export function resolvePartnerMfsnCredentials(env: MfsnEnv): MFSNClientConfig | null {
   const email = String(env.MFSN_EMAIL || '').trim();

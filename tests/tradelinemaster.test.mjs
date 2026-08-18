@@ -63,4 +63,12 @@ assert(matched.matches.length === 1, 'match count');
 assert(matched.matches[0].tier === 'best' || matched.matches[0].matchScore > 40, 'match score');
 assert(matched.agentBrief.includes('tradelines@smartfcra.com'), 'ops email in brief');
 
+{
+  const { listTradelineEducation } = await import(
+    pathToFileURL(path.join(root, 'src/data/tradeline-education.ts')).href
+  );
+  const blob = JSON.stringify(listTradelineEducation());
+  assert(!blob.includes('12.5%'), 'education must not advertise markup %');
+}
+
 console.log('tradelinemaster tests passed');

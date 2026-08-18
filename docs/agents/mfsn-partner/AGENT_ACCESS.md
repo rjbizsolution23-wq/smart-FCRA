@@ -30,6 +30,19 @@ MFSN_AFFILIATE_PORTAL_URL=https://myfreescorenow.com/login
 
 Production: same keys via `wrangler pages secret put … --project-name smart-fcra-v2`.
 
+## How affiliates create an API user (required for live 3B pull)
+
+MyFreeScoreNow dashboard login ≠ API login. Affiliates must:
+
+1. Open the affiliate portal: https://myfreescorenow.com/login
+2. Go to **Users** → dropdown → **API user**
+3. At the top, enter the API **username and password they choose**, then save
+4. In Smart FCRA, enter that API username/password (or leave blank when `MFSN_EMAIL` / `MFSN_PASSWORD` are already on Pages)
+5. Enter the **member email** (the client’s MyFreeScoreNow username) and the member **client token** (`MAPIK#…`)
+6. Pull — `login` with API user, then `fetch-3B-json` with member email + member token
+
+Demo overlay, credit-report upload page, and the interactive demo agent all teach this same sequence. One live demo pull per account.
+
 ## Official API surface (v1.0.0)
 
 | Method | Path | Auth | Purpose |

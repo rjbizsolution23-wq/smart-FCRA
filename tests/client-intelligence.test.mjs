@@ -5,6 +5,7 @@
 import { pathToFileURL } from 'url';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { readFileSync } from 'fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
@@ -239,6 +240,19 @@ const { recommendLetterStrategy } = await import(
   assert(!html.includes('111-22-3333'), 'ssn in remarks redacted');
   assert(html.includes('Current'), 'payment legend');
   console.log('✓ report sandbox redaction + paper HTML');
+}
+
+{
+  const { CONSUMER_RIGHTS } = await import(
+    pathToFileURL(path.join(root, 'src/lib/client-intelligence-routes.ts')).href
+  );
+  assert(CONSUMER_RIGHTS.topics.length >= 5, 'rights hub has FCRA/CROA/TSR/FDCPA/ID theft');
+  assert(CONSUMER_RIGHTS.topics.every((t) => t.title && t.body && t.source), 'each rights topic is complete');
+  const idxSrc = readFileSync(path.join(root, 'src/index.tsx'), 'utf8');
+  const intel = idxSrc.indexOf('registerClientIntelligenceRoutes(app');
+  const catchAll = idxSrc.indexOf("app.get('*'");
+  assert(intel > 0 && intel < catchAll, 'client intelligence routes register before SPA catch-all');
+  console.log('✓ consumer rights content + route order');
 }
 
 console.log('client-intelligence tests passed');

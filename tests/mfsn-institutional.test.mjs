@@ -19,6 +19,7 @@ const {
   resolveMfsnCredentials,
   resolvePartnerMfsnCredentials,
   resolvePublicSignupMfsnCredentials,
+  mfsnPartnerLoginReady,
   MFSNError,
 } = await import(
   pathToFileURL(path.join(root, 'src/engine/mfsn-client.ts')).href
@@ -51,6 +52,8 @@ assert(
   resolveMfsnCredentials({}, { MFSN_EMAIL: 'a@b.com', MFSN_PASSWORD: 'x' }) === null,
   'missing token → null',
 );
+assert(mfsnPartnerLoginReady({ MFSN_EMAIL: 'a@b.com', MFSN_PASSWORD: 'x' }) === true, 'login ready without partner token');
+assert(mfsnPartnerLoginReady({ MFSN_EMAIL: 'a@b.com' }) === false, 'login needs password');
 
 const fromEnv = resolveMfsnCredentials(
   {},

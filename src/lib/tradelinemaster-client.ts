@@ -1,6 +1,6 @@
 /**
  * TradelineMaster API client (v3) — RJ Business Solutions / Smart FCRA.
- * Wholesale prices are marked up 12.5% for retail display & quoting.
+ * Client-facing UI shows placement price only. Internal wholesale math stays off-screen.
  */
 
 export const TRADELINE_MARKUP_RATE = 0.125;

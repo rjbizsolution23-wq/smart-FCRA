@@ -5,7 +5,7 @@ import Stripe from 'stripe';
 import { generateId, hashPassword, verifyPassword, needsPasswordRehash, createSessionToken, generateEmailToken, generateMFASecret, verifyTOTP } from './lib/auth';
 import { encryptText, decryptText, decryptTextSafe, requireEncryptionKey } from './lib/crypto';
 import { generateAiText, listConfiguredProviders, generateFreeImage } from './lib/ai-providers';
-import { sendAppEmail } from './lib/email';
+import { sendAppEmail, emailSendingConfigured } from './lib/email';
 import { MENTORS, buildMentorContext, KNOWLEDGE_CORPUS_META, retrieveCaseLawKnowledge, type MentorId } from './lib/mentors';
 import { estimateViolationScoreLift } from './data/fundability-engine';
 import { sendPortalWelcomeEmail, computeAndStoreFundability, portalBaseUrl, isSyntheticPortalEmail, tradelineRecsForClient } from './lib/portal-services';
@@ -44,6 +44,7 @@ import {
   resolveMfsnCredentials,
   resolvePartnerMfsnCredentials,
   resolvePublicSignupMfsnCredentials,
+  mfsnPartnerLoginReady,
 } from './engine/mfsn-client';
 import { mapSmartCreditToInternal } from './engine/smartcredit-mapper';
 import { LenderMatchingEngine } from './data/funding/institutional-matching';
@@ -102,6 +103,7 @@ import {
   MFSN_API_DOCS_URL,
   MFSN_OPERATOR_ACCOUNTS,
   MFSN_OPENAPI_URL,
+  MFSN_AFFILIATE_API_USER_STEPS,
   isWhitelistedMfsnOperatorEmail,
   primaryMfsnOperatorEmail,
 } from './data/mfsn-operator-accounts';
@@ -1354,7 +1356,13 @@ app.get('/api/demo/tour', authMiddleware, async (c) => {
   const demo = await lookupDemoSession(c);
   if (demo?._missing) return c.json({ error: 'Migration 0023 required', code: 'MIGRATION_REQUIRED' }, 503);
   if (!demo) return c.json({ error: 'Interactive demo session required' }, 403);
-  return c.json({ steps: DEMO_TOUR, product: 'Smart FCRA', brand: 'RJ Business Solutions' });
+  return c.json({
+    steps: DEMO_TOUR,
+    product: 'Smart FCRA',
+    brand: 'RJ Business Solutions',
+    affiliatePortalUrl: String(c.env.MFSN_AFFILIATE_PORTAL_URL || MFSN_AFFILIATE_PORTAL_URL),
+    mfsnGuide: MFSN_AFFILIATE_API_USER_STEPS,
+  });
 });
 
 app.get('/api/demo/session', authMiddleware, async (c) => {
@@ -1573,7 +1581,11 @@ app.post('/api/demo/mfsn-live', authMiddleware, async (c) => {
 
   const creds = resolvePublicSignupMfsnCredentials(c.env, memberToken);
   if (!creds) {
-    return c.json({ error: 'Live MFSN is not configured on this deployment (partner credentials missing). Use the Salisha sandbox case instead.' }, 503);
+    return c.json({
+      error: 'Live MFSN needs partner login on the server plus the member email and MAPIK# token. Affiliate portal: Users → API user, then pull with the client email + token. Or use the Salisha sandbox case.',
+      affiliatePortalUrl: String(c.env.MFSN_AFFILIATE_PORTAL_URL || MFSN_AFFILIATE_PORTAL_URL),
+      apiUserGuide: MFSN_AFFILIATE_API_USER_STEPS,
+    }, 503);
   }
 
   const clientId = 'cli_demo_live_' + demo.id.slice(0, 16);
@@ -3909,7 +3921,10 @@ app.get('/api/integrations/mfsn/status', authMiddleware, async (c) => {
   return c.json({
     ok: !!login.ok,
     email: login.email || null,
-    partnerConfigured: !!resolvePartnerMfsnCredentials(c.env),
+    partnerConfigured: mfsnPartnerLoginReady(c.env),
+    partnerTokenOnServer: !!resolvePartnerMfsnCredentials(c.env),
+    affiliatePortalUrl: String(c.env.MFSN_AFFILIATE_PORTAL_URL || MFSN_AFFILIATE_PORTAL_URL),
+    apiUserGuide: MFSN_AFFILIATE_API_USER_STEPS,
     activeMemberCount: activeCount,
     error: login.error || null,
     ghlConfigured: ghlConfigured(c.env),
@@ -3917,7 +3932,7 @@ app.get('/api/integrations/mfsn/status', authMiddleware, async (c) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// TRADELINEMASTER — RJ Business Solutions marketplace (12.5% markup)
+// TRADELINEMASTER — RJ Business Solutions marketplace (placement price on screen)
 // ═══════════════════════════════════════════════════════════════
 
 function parseTradelineFilters(q: Record<string, string | undefined>) {
@@ -3976,7 +3991,7 @@ app.get('/api/tradelines/status', authMiddleware, async (c) => {
     ok: configured && (apiOk || !!cached.tradelines.length),
     configured,
     brand: TRADELINE_BRAND,
-    markupRate: Number(c.env.TRADELINE_MARKUP_RATE || TRADELINE_MARKUP_RATE),
+    markupRate: user.role !== 'client' ? Number(c.env.TRADELINE_MARKUP_RATE || TRADELINE_MARKUP_RATE) : undefined,
     opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT,
     fromEmail: c.env.TRADELINE_FROM_EMAIL || TRADELINE_FROM_EMAIL_DEFAULT,
     balance: user.role === 'client' ? undefined : balance,
@@ -3988,15 +4003,16 @@ app.get('/api/tradelines/status', authMiddleware, async (c) => {
 });
 
 app.get('/api/tradelines/meta', authMiddleware, async (c) => {
+  const staff = c.get('user').role !== 'client';
   return c.json({
     ok: true,
     brand: TRADELINE_BRAND,
-    markupRate: Number(c.env.TRADELINE_MARKUP_RATE || TRADELINE_MARKUP_RATE),
     opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT,
     citizenship: CITIZENSHIP_STATUSES,
     genders: GENDER_OPTIONS,
     maritalStatuses: MARITAL_STATUS_OPTIONS,
     education: listTradelineEducation(),
+    ...(staff ? { markupRate: Number(c.env.TRADELINE_MARKUP_RATE || TRADELINE_MARKUP_RATE) } : {}),
   });
 });
 
@@ -4036,7 +4052,7 @@ app.get('/api/tradelines/inventory', authMiddleware, async (c) => {
   return c.json({
     ok: true,
     brand: TRADELINE_BRAND,
-    markupRate: Number(c.env.TRADELINE_MARKUP_RATE || TRADELINE_MARKUP_RATE),
+    markupRate: staff ? Number(c.env.TRADELINE_MARKUP_RATE || TRADELINE_MARKUP_RATE) : undefined,
     opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT,
     summary: summarizeInventory(inv.tradelines),
     filteredCount: rows.length,
@@ -7397,8 +7413,14 @@ app.get('/api/settings/integrations', authMiddleware, async (c) => {
     stripe: { configured: stripeConfigured(c.env) },
     twilioSms: { configured: !!(c.env.TWILIO_ACCOUNT_SID && c.env.TWILIO_AUTH_TOKEN && c.env.TWILIO_PHONE_NUMBER) },
     twilioVideo: { configured: videoConfigured(c.env) },
+    email: emailSendingConfigured(c.env),
     ghl: { configured: ghlConfigured(c.env) },
-    mfsn: { configured: !!resolvePartnerMfsnCredentials(c.env as any) },
+    mfsn: {
+      configured: mfsnPartnerLoginReady(c.env as any),
+      partnerTokenOnServer: !!resolvePartnerMfsnCredentials(c.env as any),
+      affiliatePortalUrl: String(c.env.MFSN_AFFILIATE_PORTAL_URL || MFSN_AFFILIATE_PORTAL_URL),
+      apiUserGuide: MFSN_AFFILIATE_API_USER_STEPS,
+    },
     tradelineMaster: { configured: tradelineMasterConfigured(c.env) },
     turnstile: turnstilePublicConfig(c.env),
     ron: {
@@ -7413,18 +7435,21 @@ app.get('/api/settings/integrations', authMiddleware, async (c) => {
 
 app.get('/api/health/ready', async (c) => {
   const providers = listConfiguredProviders(c.env);
+  const emailStatus = emailSendingConfigured(c.env);
   const checks: Record<string, boolean | string | number> = {
     db: false,
     encryptionKey: !!(c.env.PII_ENCRYPTION_KEY && c.env.PII_ENCRYPTION_KEY.length >= 32),
     stripe: !!c.env.STRIPE_API_KEY,
     stripePublishable: !!c.env.STRIPE_PUBLISHABLE_KEY,
+    emailConfigured: emailStatus.configured,
+    emailProviders: emailStatus.providers.join(','),
     cloudflareEmail: !!(c.env.CLOUDFLARE_EMAIL_API_TOKEN && c.env.CLOUDFLARE_ACCOUNT_ID),
     resend: !!c.env.RESEND_API_KEY,
     sendgrid: !!c.env.SENDGRID_API_KEY,
     nvidia: !!c.env.NVIDIA_API_KEY,
     freeAiOnly: String(c.env.FREE_AI_ONLY || 'true').toLowerCase() !== 'false',
     smartcredit: !!(c.env.SMARTCREDIT_CLIENT_KEY && c.env.SMARTCREDIT_CLIENT_SECRET),
-    mfsn: !!resolvePartnerMfsnCredentials(c.env as any),
+    mfsn: mfsnPartnerLoginReady(c.env as any),
         mfsnAffiliateOffers: listPublicAffiliateOffers().length,
         mfsnAffiliateId: MFSN_AFFILIATE_ID,
     click2mail: !!(c.env.CLICK2MAIL_USERNAME && c.env.CLICK2MAIL_AUTH_BASIC),
@@ -8056,14 +8081,23 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
   const body = await c.req.json();
   const { clientId, clientEmail } = body;
 
-  if (!clientId || !clientEmail) {
-    return c.json({ error: 'Client ID and client email are required' }, 400);
+  if (!clientId || clientId === 'autopilot' || !clientEmail) {
+    return c.json({ error: 'Open a client workspace first, then import with the member email and client token (MAPIK#).' }, 400);
   }
 
-  const creds = resolveMfsnCredentials(body, c.env);
+  const memberToken = String(body.secretWord || body.clientToken || body.memberToken || '').trim();
+  const creds =
+    resolveMfsnCredentials({
+      username: body.username,
+      password: body.password,
+      secretWord: memberToken,
+    }, c.env) ||
+    resolvePublicSignupMfsnCredentials(c.env, memberToken);
   if (!creds) {
     return c.json({
-      error: 'MFSN credentials required (username/password/secretWord in body, or MFSN_EMAIL / MFSN_PASSWORD / MFSN_CLIENT_TOKEN secrets)',
+      error: 'Create an API user in the MyFreeScoreNow affiliate portal (Users → API user), then enter that username/password plus the client email and MAPIK# token. Or leave API username/password blank if this server already has MFSN_EMAIL / MFSN_PASSWORD.',
+      affiliatePortalUrl: String(c.env.MFSN_AFFILIATE_PORTAL_URL || MFSN_AFFILIATE_PORTAL_URL),
+      apiUserGuide: MFSN_AFFILIATE_API_USER_STEPS,
     }, 400);
   }
 
@@ -8218,7 +8252,12 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
   } catch (err: any) {
     console.error('MFSN Import Error:', err);
     if (err instanceof MFSNError) {
-      return c.json({ error: err.message, code: err.code }, err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode as any : 500);
+      const hint = err.code === 'LOGIN_FAILED'
+        ? ' Create an API user under Users → API user in the affiliate portal. Dashboard login is not the API login.'
+        : err.code === 'TOKEN_INVALID'
+          ? ' Use the member’s client token (MAPIK#), not the partner Bearer token.'
+          : '';
+      return c.json({ error: `${err.message}${hint}`, code: err.code, affiliatePortalUrl: String(c.env.MFSN_AFFILIATE_PORTAL_URL || MFSN_AFFILIATE_PORTAL_URL) }, err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode as any : 500);
     }
     return c.json({ error: `Connection Error: ${err.message}` }, 500);
   }
@@ -10585,6 +10624,14 @@ app.post('/api/marketing/campaign/trigger', authMiddleware, async (c) => {
   }
 });
 
+// Client-portal intelligence (rights, disputes, clocks) MUST register before the SPA catch-all.
+registerClientIntelligenceRoutes(app, {
+  authMiddleware,
+  resolvePortalClientSafe,
+  isPortalAnalysisUnlocked,
+  decryptPII,
+});
+
 // ═══════════════════════════════════════════════════════════════
 // SERVE FRONTEND SPA
 // ═══════════════════════════════════════════════════════════════
@@ -10927,17 +10974,10 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/demo-experience.js?v=20260818-demo-complete"></script>
-  <script src="/static/app.js?v=20260818-demo-complete"></script>
+  <script src="/static/demo-experience.js?v=20260818-mfsn-guide"></script>
+  <script src="/static/app.js?v=20260818-mfsn-guide"></script>
 </body>
 </html>`;
 }
-
-registerClientIntelligenceRoutes(app, {
-  authMiddleware,
-  resolvePortalClientSafe,
-  isPortalAnalysisUnlocked,
-  decryptPII,
-});
 
 export default app;

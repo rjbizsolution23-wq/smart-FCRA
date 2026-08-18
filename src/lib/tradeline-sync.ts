@@ -174,8 +174,7 @@ export async function sendTradelineOrderEmails(
           <li>Limit: <strong>${money(t.creditLimit)}</strong> · Spots: ${t.spotsAvailable}</li>
           <li>Statement: ${t.statementLabel} · Posting: ${t.postingWindowLabel}</li>
           <li>Age: ${t.accountAgeLabel} · Cycles: ${t.cycles}</li>
-          <li>Client price (12.5% markup): <strong>${money(t.retailPrice)}</strong></li>
-          <li>Wholesale cost: ${money(t.wholesalePrice)}</li>
+          <li>Placement price: <strong>${money(t.retailPrice)}</strong></li>
         </ul>
         <h3 style="margin:16px 0 8px">Client</h3>
         <ul>

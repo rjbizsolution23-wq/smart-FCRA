@@ -107,6 +107,44 @@
     });
   };
 
+  const MFSN_AFFILIATE_PORTAL = 'https://myfreescorenow.com/login';
+  const MFSN_API_USER_STEPS = [
+    { step: 1, title: 'Open the affiliate portal', body: 'Sign in at myfreescorenow.com/login with your affiliate account — not the consumer member login.' },
+    { step: 2, title: 'Users → API user', body: 'Open Users. Click the dropdown and choose API user. Your dashboard password is not the API login.' },
+    { step: 3, title: 'Create the API username and password', body: 'At the top, enter the API username and password you choose, then save. Those credentials authenticate fetch-3B-json.' },
+    { step: 4, title: 'Pull with the client email + token', body: 'Enter that API username/password here (or leave blank if this org already has partner secrets). Then enter the client’s MyFreeScoreNow email and paste their client token (MAPIK#). That generates the API pull and starts analysis.' },
+  ];
+  function mfsnAffiliateGuideInnerHtml() {
+    return `<ol class="space-y-3 text-sm text-gray-300">${MFSN_API_USER_STEPS.map((s) =>
+      `<li class="flex gap-3"><span class="shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">${s.step}</span><div><div class="font-semibold text-white">${s.title}</div><p class="text-xs text-gray-400 mt-0.5 leading-relaxed">${s.body}</p></div></li>`
+    ).join('')}</ol>`;
+  }
+  window._showMfsnAffiliateGuide = function () {
+    window._openModal(`
+      <div class="bg-gray-900 border border-blue-500/30 rounded-2xl p-5 max-w-lg w-full text-left max-h-[90vh] overflow-y-auto">
+        <div class="text-[10px] uppercase tracking-[0.16em] font-bold text-sky-300 mb-1">MyFreeScoreNow affiliates</div>
+        <h3 class="text-white font-display text-lg mb-1">Create an API user, then pull the client file</h3>
+        <p class="text-xs text-gray-400 mb-4">Smart FCRA does not use your affiliate dashboard password. Follow this once per firm, then pull every member with their email + MAPIK# token.</p>
+        ${mfsnAffiliateGuideInnerHtml()}
+        <p class="text-[11px] text-gray-500 mt-4">Portal: <a class="text-sky-300 underline" href="${MFSN_AFFILIATE_PORTAL}" target="_blank" rel="noopener">${MFSN_AFFILIATE_PORTAL}</a></p>
+        <div class="flex gap-2 mt-4">
+          <a href="${MFSN_AFFILIATE_PORTAL}" target="_blank" rel="noopener" class="flex-1 text-center bg-blue-600 hover:bg-blue-500 text-white rounded-lg py-2 text-sm font-semibold">Open affiliate portal</a>
+          <button type="button" data-modal-close class="flex-1 bg-gray-800 text-gray-200 rounded-lg py-2 text-sm">Got it</button>
+        </div>
+      </div>`, 'mfsn-affiliate-guide');
+  };
+
+  const FALLBACK_CONSUMER_RIGHTS = {
+    disclaimer: 'Educational summary of federal consumer rights. Not legal advice. Official sources control.',
+    topics: [
+      { id: 'fcra-dispute', title: 'Credit report disputes (FCRA)', body: 'Consumers may dispute inaccurate or incomplete information with consumer reporting companies and with furnishers. The CFPB states that consumer reporting companies generally investigate disputes within 30 days; some circumstances permit up to 45 days. Results generally follow after the investigation.', source: 'Consumer Financial Protection Bureau' },
+      { id: 'croa', title: 'Credit repair (CROA)', body: 'The Credit Repair Organizations Act requires specified consumer disclosures, a written contract, and cancellation rights. It prohibits charging for covered credit-repair services before the promised service has been fully performed.', source: 'Federal Trade Commission' },
+      { id: 'tsr', title: 'Telemarketing Sales Rule', body: 'The TSR contains additional restrictions applicable to certain telemarketed credit-repair transactions, including advance-fee limits where the rule applies.', source: 'eCFR / FTC' },
+      { id: 'fdcpa', title: 'Debt collection (FDCPA)', body: 'Collectors are restricted in how they may communicate and must, when applicable, validate debts. This portal does not automatically file complaints.', source: 'CFPB / FTC' },
+      { id: 'identity-theft', title: 'Identity theft', body: 'Identity-theft disputes require you to affirmatively identify the account or transaction as related to identity theft. This system will not recommend a false identity-theft claim as a deletion tactic.', source: 'FTC / FCRA § 1681c-2' },
+    ],
+  };
+
   async function previewVaultPdf(uploadId, fileName) {
     const qs = portalClientQs();
     const res = await fetch('/api/client-portal/uploads/' + uploadId + '/download' + qs, {
@@ -1272,7 +1310,6 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     };
     // Branding URLs
     const RJ_LOGO = 'https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg';
-    const MFSN_BANNER = '/static/logos/mfsn-banner.png';
     const FCRA_LOGO = RJ_LOGO;
     const impersonationBanner = state.impersonateClientId 
       ? `<div class="bg-amber-600/90 text-white text-xs font-semibold px-4 py-2.5 flex items-center justify-between z-[1000] border-b border-amber-500/30">
@@ -1295,9 +1332,8 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         <button type="button" onclick="window._nav('settings')" class="bg-rose-600 hover:bg-rose-500 text-white px-3 py-1 rounded-lg text-[10px] uppercase tracking-wider font-bold">Enable MFA</button>
       </div>
       <!-- Top Branding Header -->
-      ${MFSN_BANNER ? `<div class="h-16 bg-gray-900 border-b border-gray-800 flex items-center px-4 shrink-0"><img src="${MFSN_BANNER}" alt="MyFreeScoreNow" class="h-14 object-contain"></div>` : ''}
             <div class="flex flex-1 overflow-hidden">
-      <button type="button" class="md:hidden fixed top-20 left-3 z-50 bg-gray-800 text-white p-2.5 rounded-lg border border-gray-700 min-h-[44px] min-w-[44px]" onclick="window._toggleMobileNav()" aria-label="Toggle navigation" aria-controls="mobile-nav" aria-expanded="false"><i class="fas fa-bars"></i></button>
+      <button type="button" class="md:hidden fixed top-4 left-3 z-50 bg-gray-800 text-white p-2.5 rounded-lg border border-gray-700 min-h-[44px] min-w-[44px]" onclick="window._toggleMobileNav()" aria-label="Toggle navigation" aria-controls="mobile-nav" aria-expanded="false"><i class="fas fa-bars"></i></button>
       <div id="nav-backdrop" class="hidden md:hidden fixed inset-0 z-30" onclick="window._closeMobileNav()" aria-hidden="true"></div>
       <aside id="mobile-nav" class="w-64 max-w-[85vw] bg-gray-900/95 border-r border-gray-800 flex flex-col shrink-0 fixed md:relative inset-y-0 left-0 z-40 md:translate-x-0 -translate-x-full transition-transform md:flex pt-[env(safe-area-inset-top)]" aria-label="${t('a11y.mainNavigation')}">
         <div class="p-4 border-b border-gray-800"><div class="flex items-center gap-2.5">
@@ -2144,7 +2180,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 
     const description = isAutopilot 
       ? `Zero-friction onboarding. Drop raw credit report PDFs (Equifax, Experian, TransUnion) or paste raw text. The system will automatically extract demographics, resolve or register client files, run complete litigation scans, and redirect you directly to their workspace.` 
-      : `Import via MyFreeScoreNow, SmartCredit, or upload raw text / AnnualCreditReport.com PDFs. The system will parse, detect ALL violations, and calculate litigation value.`;
+      : `Import a live MyFreeScoreNow 3B file (affiliate API user + member email + MAPIK#), SmartCredit, or upload raw text / AnnualCreditReport.com PDFs. The engine parses, detects violations, and calculates litigation value.`;
 
     const mfsnClass = isAutopilot 
       ? 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-2 transition'
@@ -2162,7 +2198,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       <p class="text-sm text-gray-400 mb-6">${description}</p>
 
       <div class="mb-4 border-b border-gray-700 pb-2 flex flex-wrap gap-2">
-        <button id="tab-mfsn" class="${mfsnClass}"><i class="fas fa-cloud-download-alt mr-2"></i>MyFreeScoreNow Integration</button>
+        <button id="tab-mfsn" class="${mfsnClass}"><i class="fas fa-cloud-download-alt mr-2"></i>MyFreeScoreNow 3B pull</button>
         <button id="tab-smartcredit" class="px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-2 transition"><i class="fas fa-lock mr-2"></i>SmartCredit Integration</button>
         <button id="tab-acr" class="${acrClass}"><i class="fas fa-file-pdf mr-2 text-red-400"></i>Annual Credit Report PDF</button>
         <button id="tab-manual" class="px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white transition"><i class="fas fa-file-alt mr-2"></i>Manual Raw File Text</button>
@@ -2170,13 +2206,24 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 
       <!-- MFSN IMPORT TAB -->
       <form id="mfsn-form" class="space-y-5 ${mfsnFormHidden}">
+        <div class="rounded-xl border border-sky-500/30 bg-sky-950/20 p-4 space-y-3">
+          <div class="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <div class="text-[10px] uppercase tracking-[0.16em] font-bold text-sky-300">Affiliate API user required</div>
+              <p class="text-sm text-slate-200 mt-1">Do not type your MyFreeScoreNow dashboard password here. Create an <strong class="text-white">API user</strong> in the affiliate portal, then pull with the client’s email and MAPIK# token.</p>
+            </div>
+            <button type="button" id="mfsn-guide-btn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-2 rounded-lg shrink-0">How to create an API user</button>
+          </div>
+          ${mfsnAffiliateGuideInnerHtml()}
+          <p class="text-[11px] text-gray-500">Portal: <a class="text-sky-300 underline" href="${MFSN_AFFILIATE_PORTAL}" target="_blank" rel="noopener">${MFSN_AFFILIATE_PORTAL}</a> · Users → dropdown → API user.</p>
+        </div>
         <div class="grid grid-cols-2 gap-4">
-          <div><label class="block text-xs text-gray-400 mb-1.5">API Username (Email)</label>
-          <input type="text" name="username" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="apiuser@test.com"></div>
+          <div><label class="block text-xs text-gray-400 mb-1.5">API username (from Users → API user)</label>
+          <input type="text" name="username" autocomplete="off" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="Leave blank to use Smart FCRA partner connection"></div>
           <div>
-            <label class="block text-xs text-gray-400 mb-1.5">API Password</label>
+            <label class="block text-xs text-gray-400 mb-1.5">API password</label>
             <div class="relative">
-              <input type="password" id="mfsn-password" name="password" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-3 pr-10 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="Password">
+              <input type="password" id="mfsn-password" name="password" autocomplete="off" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-3 pr-10 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="API user password (not dashboard login)">
               <button type="button" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white" onclick="const input = document.getElementById('mfsn-password'); const icon = this.querySelector('i'); if (input.type === 'password') { input.type = 'text'; icon.className = 'fas fa-eye-slash'; } else { input.type = 'password'; icon.className = 'fas fa-eye'; }">
                 <i class="fas fa-eye"></i>
               </button>
@@ -2184,13 +2231,13 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           </div>
         </div>
         <div class="grid grid-cols-2 gap-4">
-          <div><label class="block text-xs text-gray-400 mb-1.5">Client Email</label>
-          <input type="text" name="clientEmail" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="david_webber2@gmail.com"></div>
-          <div><label class="block text-xs text-gray-400 mb-1.5">Client Token</label>
-          <input type="text" name="secretWord" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="Partner client token (or leave blank to use server secret)"></div>
+          <div><label class="block text-xs text-gray-400 mb-1.5">Client email (member username)</label>
+          <input type="email" name="clientEmail" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="client@email.com"></div>
+          <div><label class="block text-xs text-gray-400 mb-1.5">Client token (MAPIK#)</label>
+          <input type="text" name="secretWord" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="MAPIK#…"></div>
         </div>
         <div class="flex gap-3">
-          <button type="submit" id="mfsn-btn" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition shadow-lg"><i class="fas fa-cloud-download-alt mr-2"></i>Authenticate & Import Report</button>
+          <button type="submit" id="mfsn-btn" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition shadow-lg"><i class="fas fa-cloud-download-alt mr-2"></i>Pull 3B &amp; start analysis</button>
         </div>
 
         <div class="relative flex py-3 items-center">
@@ -2909,7 +2956,23 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       formSmartcredit.classList.add('hidden');
       formAcr.classList.add('hidden');
       formMan.classList.add('hidden');
+      try {
+        if (!sessionStorage.getItem('sf-mfsn-guide-seen')) {
+          sessionStorage.setItem('sf-mfsn-guide-seen', '1');
+          window._showMfsnAffiliateGuide();
+        }
+      } catch (_) {}
     };
+    const mfsnGuideBtn = $('#mfsn-guide-btn');
+    if (mfsnGuideBtn) mfsnGuideBtn.onclick = (e) => { e.preventDefault(); window._showMfsnAffiliateGuide(); };
+    if (!isAutopilot) {
+      try {
+        if (!sessionStorage.getItem('sf-mfsn-guide-seen')) {
+          sessionStorage.setItem('sf-mfsn-guide-seen', '1');
+          setTimeout(() => window._showMfsnAffiliateGuide(), 400);
+        }
+      } catch (_) {}
+    }
     tabSmartcredit.onclick = () => {
       tabSmartcredit.className = 'px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-500 mr-2 transition';
       tabMfsn.className = 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-2 transition';
@@ -3013,7 +3076,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       }, true, 'MyFreeScoreNow');
 
       btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-cloud-download-alt mr-2"></i>Authenticate & Import Report';
+      btn.innerHTML = '<i class="fas fa-cloud-download-alt mr-2"></i>Pull 3B &amp; start analysis';
     };
 
     formSmartcredit.onsubmit = async (e) => {
@@ -6048,6 +6111,12 @@ Status: Discharged`;
           <pre id="ghl-sync-log" class="mt-4 hidden text-[10px] text-gray-400 bg-gray-950/60 border border-gray-800 rounded-lg p-3 max-h-40 overflow-auto whitespace-pre-wrap"></pre>
         </div>
 
+        <div class="glass rounded-xl p-6 border border-emerald-900/40" id="comms-status-panel">
+          <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-paper-plane text-emerald-400"></i> Email + Twilio</h2>
+          <p class="text-xs text-gray-500 mb-4">Outbound mail (Cloudflare Email → Resend → SendGrid) and Twilio SMS / Video. Delivery is logged on each client file — sent, simulated, or failed.</p>
+          <div id="comms-status-body" class="text-xs text-gray-400">Checking providers…</div>
+        </div>
+
         <div class="glass rounded-xl p-6 border border-gray-700">
           <h2 class="text-sm font-semibold text-white mb-4 flex items-center gap-2"><i class="fas fa-key text-amber-400"></i> Change Password</h2>
           <form id="staff-pwd-form" class="flex flex-wrap gap-3 items-end">
@@ -6099,6 +6168,27 @@ Status: Discharged`;
               <td class="py-2"><a class="text-cyan-400 hover:underline" href="${escapeHtml(o.enrollUrl)}" target="_blank" rel="noopener">Open</a></td>
             </tr>`).join('')}</tbody></table></div>`;
         }).catch(() => { affTable.textContent = 'Could not load affiliate offers.'; });
+      }
+
+      const commsEl = $('#comms-status-body');
+      if (commsEl) {
+        Promise.all([
+          api('/settings/integrations').catch(() => null),
+          api('/health/ready').catch(() => null),
+        ]).then(([integ, ready]) => {
+          const email = integ?.email || {};
+          const emailOn = !!(email.configured || ready?.cloudflareEmail || ready?.resend || ready?.sendgrid);
+          const smsOn = !!(integ?.twilioSms?.configured || ready?.twilioSms);
+          const videoOn = !!(integ?.twilioVideo?.configured);
+          const providers = (email.providers || []).join(', ') || (emailOn ? 'configured' : 'none');
+          const pill = (on) => `<span class="${on ? 'text-emerald-400' : 'text-amber-300'} font-semibold">${on ? 'Ready' : 'Not configured'}</span>`;
+          commsEl.innerHTML = `<div class="grid sm:grid-cols-3 gap-2">
+            <div>Email: ${pill(emailOn)} <span class="text-gray-500">· ${escapeHtml(providers)}</span></div>
+            <div>Twilio SMS: ${pill(smsOn)}</div>
+            <div>Twilio Video: ${pill(videoOn)}</div>
+          </div>
+          <p class="text-[11px] text-gray-500 mt-2">Client alerts email always (when a provider is live) and SMS when Twilio is live. Tradeline quotes send to tradelines@smartfcra.com.</p>`;
+        }).catch(() => { commsEl.textContent = 'Could not load email/Twilio status.'; });
       }
 
       const ghlStatusEl = $('#ghl-integration-status');
@@ -8678,7 +8768,7 @@ async function pgAdminConsole(el) {
         ['Compliance Hub', 'Consent, disclaimers, legal status'],
         ['Mailing Campaigns', 'Click2Mail certified / first-class'],
         ['Founder OS / Sales / ROI', 'Owner OS, pitch tools, deal math'],
-        ['Tradelines', 'TradelineMaster inventory, 12.5% markup, filters, cart, smart match, order email'],
+        ['Tradelines', 'TradelineMaster inventory, filters, cart, smart match, order email'],
         ['Brand Library', 'Forms, color tokens, inbound leads'],
         ['Team / Settings / Billing', 'Users, GHL/MFSN/Twilio/Stripe/Click2Mail, org Stripe'],
         ['AI Studio / Legal / Admin', 'Mentors, in-app legal, super-admin console'],
@@ -8789,7 +8879,6 @@ async function pgAdminConsole(el) {
       const rows = inventory.tradelines || [];
       const edu = meta.education || [];
       const ops = meta.opsEmail || 'tradelines@smartfcra.com';
-      const markupPct = Math.round(Number(meta.markupRate || 0.125) * 1000) / 10;
 
       el.innerHTML = `<div class="fade-in space-y-5">
         <div class="relative overflow-hidden rounded-2xl border border-sky-500/25 bg-gradient-to-br from-slate-950 via-[#0b1f33] to-slate-950 p-6">
@@ -8798,7 +8887,7 @@ async function pgAdminConsole(el) {
             <div>
               <div class="text-[10px] uppercase tracking-[0.2em] text-sky-300/80 font-bold mb-1">RJ Business Solutions · Smart FCRA</div>
               <h1 class="text-2xl font-bold text-white tracking-tight">Authorized User Tradelines</h1>
-              <p class="text-sm text-slate-300/90 mt-1 max-w-2xl">Live TradelineMaster inventory with <strong class="text-sky-300">${markupPct}%</strong> RJ markup. Filter, smart-match to credit profiles, and request placement — payment via <a class="text-sky-300 underline" href="mailto:${escapeHtml(ops)}">${escapeHtml(ops)}</a>.</p>
+              <p class="text-sm text-slate-300/90 mt-1 max-w-2xl">Live TradelineMaster inventory. Filter, smart-match to credit profiles, and request placement — payment via <a class="text-sky-300 underline" href="mailto:${escapeHtml(ops)}">${escapeHtml(ops)}</a>.</p>
             </div>
             <div class="flex flex-wrap gap-2 text-xs">
               <div class="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-slate-200"><span class="text-slate-500">Lines</span> <strong class="text-white ml-1">${inventory.summary?.count ?? '—'}</strong></div>
@@ -8854,7 +8943,7 @@ async function pgAdminConsole(el) {
                     <td class="py-3 pr-3 text-gray-300">${escapeHtml(t.statementLabel||'—')}</td>
                     <td class="py-3 pr-3 text-gray-400 text-xs">${escapeHtml(t.postingWindowLabel||'—')}</td>
                     <td class="py-3 pr-3 text-gray-300">${escapeHtml(t.accountAgeLabel||'—')}</td>
-                    <td class="py-3 pr-3"><div class="text-emerald-300 font-bold">${money(t.retailPrice)}</div>${!isClient && t.wholesalePrice!=null?`<div class="text-[10px] text-gray-500">Cost ${money(t.wholesalePrice)}</div>`:''}</td>
+                    <td class="py-3 pr-3"><div class="text-emerald-300 font-bold">${money(t.retailPrice)}</div></td>
                     <td class="py-3 pr-3 text-gray-300">${t.cycles}</td>
                     <td class="py-3"><button type="button" data-id="${t.id}" class="tl-select bg-orange-700 hover:bg-orange-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg">Select</button></td>
                   </tr>`).join('') || `<tr><td colspan="9" class="py-8 text-center text-gray-500">No tradelines match these filters.</td></tr>`}
@@ -10141,11 +10230,19 @@ async function pgAdminConsole(el) {
   }
 
   async function pgClientRights(el) {
-    const data = await api('/client-portal/rights' + portalClientQs());
+    let data = FALLBACK_CONSUMER_RIGHTS;
+    try {
+      const r = await api('/client-portal/rights' + portalClientQs());
+      if (r && Array.isArray(r.topics) && r.topics.length) data = r;
+    } catch (_) { /* educational fallback — never leave this page blank */ }
     el.innerHTML = `
       <div class="fade-in space-y-5 max-w-3xl">
-        <h1 class="text-xl font-bold text-white font-display">Consumer rights</h1>
-        <p class="text-sm text-gray-400">${escapeHtml(data.disclaimer)}</p>
+        <div class="rounded-2xl border border-sky-500/25 bg-gradient-to-br from-slate-950 via-blue-950/40 to-slate-950 p-5">
+          <div class="text-[10px] uppercase tracking-[0.18em] font-bold text-sky-300 mb-1">Full compliance insight</div>
+          <h1 class="text-xl font-bold text-white font-display">Consumer rights</h1>
+          <p class="text-sm text-gray-300 mt-2 leading-relaxed">FCRA dispute clocks, CROA written-contract and no-advance-fee rules, TSR, FDCPA collector limits, and identity-theft gates that refuse fake deletion tactics. Educational only — official sources control.</p>
+        </div>
+        <p class="text-sm text-gray-400">${escapeHtml(data.disclaimer || FALLBACK_CONSUMER_RIGHTS.disclaimer)}</p>
         ${(data.topics||[]).map((t) => `<div class="glass rounded-xl p-4"><h2 class="text-sm font-bold text-white">${escapeHtml(t.title)}</h2><p class="text-sm text-gray-300 mt-2 leading-relaxed">${escapeHtml(t.body)}</p><div class="text-[10px] text-sky-300 mt-2">${escapeHtml(t.source)}</div></div>`).join('')}
       </div>`;
   }
