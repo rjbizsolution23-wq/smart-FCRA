@@ -3,6 +3,7 @@
  * Products/prices are created idempotently via metadata.smartfcra_plan.
  */
 import Stripe from 'stripe';
+import { CANONICAL_ORIGIN, resolvePublicOrigin } from './public-origin';
 
 export type SaaSPlanId = 'professional' | 'unlimited' | 'enterprise';
 
@@ -94,19 +95,7 @@ export function subscribePathForPlan(planId: SaaSPlanId): string {
 }
 
 export function resolveFrontendUrl(env: { FRONTEND_URL?: string; APP_BASE_URL?: string }, requestUrl?: string): string {
-  const fromEnv = String(env.FRONTEND_URL || env.APP_BASE_URL || '').replace(/\/$/, '');
-  if (fromEnv) return fromEnv;
-  try {
-    if (requestUrl) {
-      const u = new URL(requestUrl);
-      if (u.hostname && u.hostname !== 'localhost' && u.hostname !== '127.0.0.1') {
-        return `${u.protocol}//${u.host}`;
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-  return 'https://smart-fcra-v2.pages.dev';
+  return resolvePublicOrigin(env, requestUrl);
 }
 
 export function staticPublicPlans(): PublicPlanView[] {
@@ -212,7 +201,7 @@ export async function ensureStripeCatalog(
   stripe: Stripe,
   opts: { frontendUrl?: string; secretKey: string },
 ): Promise<EnsuredCatalog> {
-  const successBase = (opts.frontendUrl || 'https://smart-fcra-v2.pages.dev').replace(/\/$/, '');
+  const successBase = (opts.frontendUrl || CANONICAL_ORIGIN).replace(/\/$/, '');
   const plans: EnsuredPlan[] = [];
 
   for (const spec of STRIPE_CATALOG) {
@@ -248,6 +237,18 @@ export async function ensureStripeCatalog(
 
     let paymentLinkUrl = product.metadata?.smartfcra_payment_link_url || null;
     let paymentLinkId = product.metadata?.smartfcra_payment_link_id || null;
+    const afterUrl = `${successBase}/login?mode=register&billing=success&plan=${spec.id}`;
+
+    if (paymentLinkId) {
+      try {
+        await stripe.paymentLinks.update(paymentLinkId, {
+          after_completion: { type: 'redirect', redirect: { url: afterUrl } },
+          active: true,
+        });
+      } catch {
+        /* keep stored URL */
+      }
+    }
 
     if (!paymentLinkUrl || !paymentLinkId) {
       try {
@@ -255,7 +256,7 @@ export async function ensureStripeCatalog(
           line_items: [{ price: price.id, quantity: 1 }],
           after_completion: {
             type: 'redirect',
-            redirect: { url: `${successBase}/login?mode=register&billing=success&plan=${spec.id}` },
+            redirect: { url: afterUrl },
           },
           metadata: { [META_PLAN]: spec.id },
           subscription_data: { metadata: { [META_PLAN]: spec.id, planId: spec.id } },

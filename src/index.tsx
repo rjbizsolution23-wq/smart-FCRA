@@ -155,6 +155,7 @@ import {
   resolveFrontendUrl,
   staticPublicPlans,
 } from './lib/stripe-catalog';
+import { CANONICAL_ORIGIN, canonicalRedirectUrl } from './lib/public-origin';
 import {
   claimPendingSaasEntitlement,
   fulfillSaasCheckout,
@@ -651,6 +652,15 @@ type Variables = { user?: any; org?: any; session?: any };
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
+app.use('*', async (c, next) => {
+  const method = c.req.method;
+  if ((method === 'GET' || method === 'HEAD') && !c.req.path.startsWith('/api/')) {
+    const dest = canonicalRedirectUrl(c.req.url, c.req.header('host'));
+    if (dest) return c.redirect(dest, 301);
+  }
+  return next();
+});
+
 // Stripe initialization helper
 const getStripe = (env: Bindings) => {
   if (!env.STRIPE_API_KEY) throw new Error('STRIPE_API_KEY is not configured');
@@ -1003,7 +1013,7 @@ app.get('/api/health', async (c) => {
 
 // Partner API documentation (OpenAPI + Swagger UI)
 app.get('/api/openapi.json', (c) => {
-  const base = c.env.FRONTEND_URL || c.env.APP_BASE_URL || new URL(c.req.url).origin;
+  const base = resolveFrontendUrl(c.env, c.req.url);
   return c.json(buildOpenApiSpec(base.replace(/\/$/, '')));
 });
 
@@ -1835,6 +1845,21 @@ app.get('/api/brand/catalog', authMiddleware, async (c) => {
 app.get('/', (c) => c.html(marketingLandingHtml));
 app.get('/pricing', (c) => c.redirect('/#pricing', 302));
 app.get('/demo', (c) => c.html(marketingDemoHtml));
+app.get('/robots.txt', (c) => {
+  const body = `User-agent: *\nAllow: /\nSitemap: ${CANONICAL_ORIGIN}/sitemap.xml\n`;
+  return c.text(body, 200, { 'Content-Type': 'text/plain; charset=utf-8' });
+});
+app.get('/sitemap.xml', (c) => {
+  const urls = ['/', '/pricing', '/demo', '/login', '/app'];
+  const body =
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+    urls
+      .map((path) => `  <url><loc>${CANONICAL_ORIGIN}${path}</loc></url>`)
+      .join('\n') +
+    `\n</urlset>\n`;
+  return c.text(body, 200, { 'Content-Type': 'application/xml; charset=utf-8' });
+});
 app.get('/login', (c) => c.html(getAppHtml()));
 app.get('/app', (c) => c.html(getAppHtml()));
 
@@ -2343,7 +2368,7 @@ app.post('/api/auth/register', async (c) => {
     await c.env.DB.prepare(
       'INSERT INTO email_verification_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
     ).bind(generateId(), userId, verifyToken, expires).run();
-    const base = c.env.FRONTEND_URL || c.env.APP_BASE_URL || 'https://smart-fcra-v2.pages.dev';
+    const base = resolveFrontendUrl(c.env, c.req.url);
     const verifyUrl = `${base}/?verifyEmail=${verifyToken}`;
     try {
       const brand = await loadOrgBrand(c.env, orgId);
@@ -2818,7 +2843,7 @@ app.post('/api/auth/forgot-password', async (c) => {
     'INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
   ).bind(generateId(), user.id, token, expires).run();
 
-  const base = c.env.FRONTEND_URL || c.env.APP_BASE_URL || 'https://smart-fcra-v2.pages.dev';
+  const base = resolveFrontendUrl(c.env, c.req.url);
   const resetUrl = `${base}/?resetToken=${token}`;
   try {
     const brand = await loadOrgBrand(c.env, null);

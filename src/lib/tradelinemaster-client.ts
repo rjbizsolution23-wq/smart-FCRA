@@ -147,7 +147,7 @@ function referer(env: TradelineMasterEnv): string {
     env.TRADELINEMASTER_REFERER ||
     env.FRONTEND_URL ||
     env.APP_BASE_URL ||
-    'https://smart-fcra-v2.pages.dev'
+    'https://smartfcra.com'
   );
 }
 

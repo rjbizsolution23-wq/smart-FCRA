@@ -7,6 +7,7 @@ import { buildFundabilityReport, type FundabilityInput } from '../data/fundabili
 import { computeRevolvingUtilization } from '../engine/parser';
 import type { ParsedAccount } from '../engine/violations';
 import { recommendTradelines } from '../data/portal-education';
+import { resolvePublicOrigin } from './public-origin';
 
 export type PortalEnv = EmailEnv & {
   FRONTEND_URL?: string;
@@ -21,17 +22,7 @@ export type PortalEnv = EmailEnv & {
 };
 
 export function portalBaseUrl(env: PortalEnv, requestUrl?: string): string {
-  const configured = String(env.FRONTEND_URL || env.APP_BASE_URL || '').trim().replace(/\/$/, '');
-  if (configured) return configured;
-  try {
-    if (requestUrl) {
-      const u = new URL(requestUrl);
-      return `${u.protocol}//${u.host}`;
-    }
-  } catch {
-    /* ignore */
-  }
-  return 'https://smart-fcra-v2.pages.dev';
+  return resolvePublicOrigin(env, requestUrl);
 }
 
 export function isSyntheticPortalEmail(email: string | null | undefined): boolean {

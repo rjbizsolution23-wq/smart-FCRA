@@ -64,8 +64,10 @@ const publicLive = publicPlansFromCatalog({
 assert(publicLive.every((p) => p.live && p.priceId && p.productId && p.paymentLink), 'live payload has ids');
 assert(publicLive.every((p) => p.subscribeUrl.startsWith('/login?mode=register')), 'checkout still via register');
 
-assert(resolveFrontendUrl({ FRONTEND_URL: 'https://smart-fcra-v2.pages.dev/' }) === 'https://smart-fcra-v2.pages.dev', 'strip slash');
+assert(resolveFrontendUrl({ FRONTEND_URL: 'https://smartfcra.com/' }) === 'https://smartfcra.com', 'strip slash');
+assert(resolveFrontendUrl({ FRONTEND_URL: 'https://smart-fcra-v2.pages.dev/' }) === 'https://smartfcra.com', 'pages.dev env');
 assert(resolveFrontendUrl({}, 'https://example.com/api/public/plans') === 'https://example.com', 'from request');
-assert(resolveFrontendUrl({}, 'http://localhost:3000/api') === 'https://smart-fcra-v2.pages.dev', 'localhost fallback');
+assert(resolveFrontendUrl({}, 'http://localhost:3000/api') === 'https://smartfcra.com', 'localhost fallback');
+assert(resolveFrontendUrl({}, 'https://www.smartfcra.com/api') === 'https://smartfcra.com', 'www request');
 
 console.log('stripe-catalog.test.mjs OK');

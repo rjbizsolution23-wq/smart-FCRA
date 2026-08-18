@@ -151,4 +151,30 @@ const mockEnv = {
   assert(swText.includes('smart-fcra-shell'), 'service worker cache name');
 }
 
+// Canonical domain: www / pages.dev HTML 301 to smartfcra.com; APIs stay put
+{
+  const www = await app.request('https://www.smartfcra.com/demo', { headers: { host: 'www.smartfcra.com' } }, mockEnv);
+  assert(www.status === 301, 'www HTML redirects');
+  assert(www.headers.get('location') === 'https://smartfcra.com/demo', 'www location');
+  const pages = await app.request('https://smart-fcra-v2.pages.dev/login', { headers: { host: 'smart-fcra-v2.pages.dev' } }, mockEnv);
+  assert(pages.status === 301, 'pages.dev HTML redirects');
+  assert(pages.headers.get('location') === 'https://smartfcra.com/login', 'pages.dev location');
+  const api = await app.request('https://smart-fcra-v2.pages.dev/api/health', { headers: { host: 'smart-fcra-v2.pages.dev' } }, mockEnv);
+  assert(api.status === 200, 'pages.dev API is not redirected');
+  const apex = await app.request('https://smartfcra.com/', { headers: { host: 'smartfcra.com' } }, mockEnv);
+  assert(apex.status === 200, 'apex landing is not redirected');
+}
+
+{
+  const robots = await app.request('/robots.txt', {}, mockEnv);
+  assert(robots.status === 200, 'GET /robots.txt');
+  const robotsText = await robots.text();
+  assert(robotsText.includes('https://smartfcra.com/sitemap.xml'), 'robots sitemap');
+  const sitemap = await app.request('/sitemap.xml', {}, mockEnv);
+  assert(sitemap.status === 200, 'GET /sitemap.xml');
+  const xml = await sitemap.text();
+  assert(xml.includes('https://smartfcra.com/login'), 'sitemap login');
+  assert(xml.includes('https://smartfcra.com/demo'), 'sitemap demo');
+}
+
 console.log('PASS: API route integration tests');

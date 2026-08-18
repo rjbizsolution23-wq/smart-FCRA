@@ -73,7 +73,7 @@ assert(html.includes('Salisha') && html.includes('Temp123!'), 'portal welcome va
 
 assert(isSyntheticPortalEmail('x@smartfcra.local') === true, 'synthetic local');
 assert(isSyntheticPortalEmail('real@gmail.com') === false, 'real email');
-assert(portalBaseUrl({}).includes('smart-fcra-v2.pages.dev'), 'default portal base');
+assert(portalBaseUrl({}).includes('smartfcra.com'), 'default portal base');
 
 // Simulated send path (no email keys) — honest status
 const fakeDb = {

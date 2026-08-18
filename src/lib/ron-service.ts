@@ -178,7 +178,7 @@ export async function createRonSession(
   if (vendor !== 'sandbox' && env.RON_VENDOR_API_KEY) {
     const client = await env.DB.prepare(`SELECT first_name, last_name, email FROM clients WHERE id = ? AND org_id = ?`)
       .bind(opts.clientId, opts.orgId).first() as any;
-    const base = env.APP_BASE_URL || env.FRONTEND_URL || 'https://smart-fcra-v2.pages.dev';
+    const base = env.APP_BASE_URL || env.FRONTEND_URL || 'https://smartfcra.com';
     try {
       const created = await createRonVendorSession({
         vendor,
