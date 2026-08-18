@@ -56,6 +56,8 @@ const mockEnv = {
   assert(spec.paths['/api/cron/daily-motivation'], 'daily motivation cron documented');
   assert(spec.paths['/api/compliance/data-inventory'], 'data inventory documented');
   assert(spec.paths['/api/security/audit-log'], 'security audit log documented');
+  assert(spec.paths['/api/public/plans'], 'public plans documented');
+  assert(spec.paths['/api/admin/stripe/ensure-catalog'], 'ensure-catalog documented');
 }
 
 // Daily motivation cron rejects missing secret
@@ -113,6 +115,19 @@ const mockEnv = {
   assert(res.status === 200, 'GET /api/public/turnstile returns 200');
   const body = await res.json();
   assert(body.enabled === false, 'turnstile disabled without keys');
+}
+
+// Public SaaS plans (no Stripe key → static catalog, no secrets)
+{
+  const res = await app.request('/api/public/plans', {}, mockEnv);
+  assert(res.status === 200, 'GET /api/public/plans returns 200');
+  const body = await res.json();
+  assert(body.live === false, 'plans not live without Stripe');
+  assert(body.mode === 'unconfigured', 'unconfigured mode');
+  assert(Array.isArray(body.plans) && body.plans.length === 3, 'three public plans');
+  assert(body.plans[0].id === 'professional' && body.plans[0].amountCents === 49700, 'professional amount');
+  assert(body.plans.every((p) => p.subscribeUrl.includes('/login?mode=register')), 'register subscribe urls');
+  assert(body.plans.every((p) => !p.priceId && !String(JSON.stringify(body)).includes('sk_')), 'no stripe secrets');
 }
 
 // PWA shell

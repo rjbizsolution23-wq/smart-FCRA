@@ -467,6 +467,7 @@
       <p class="section-kicker">Packages</p>
       <h2 class="section-title">What each package actually runs for your firm.</h2>
       <p class="section-support">Pick the capacity and litigation depth you need. Letters are generated from violations on the file in every package — there is no template library upsell.</p>
+      <p class="section-support" id="pricing-live-badge" hidden>Live Stripe checkout is on. Create your organization, then you are sent to the matching Professional, Unlimited, or Enterprise subscription.</p>
       <div class="price-grid">
         <article class="price featured">
           <h3>Professional</h3>
@@ -483,7 +484,7 @@
             <li>CROA in-portal cancel + completion ledger gates</li>
             <li>Priority email support</li>
           </ul>
-          <a class="btn btn-primary" href="/login?mode=register&amp;plan=professional">Start Professional</a>
+          <a class="btn btn-primary" id="cta-professional" href="/login?mode=register&amp;plan=professional">Start Professional</a>
         </article>
         <article class="price">
           <h3>Unlimited</h3>
@@ -499,7 +500,7 @@
             <li>Faster support SLA; quarterly business review available</li>
             <li>Multi-org management for agencies running more than one brand</li>
           </ul>
-          <a class="btn btn-primary" href="/login?mode=register&amp;plan=unlimited">Start Unlimited</a>
+          <a class="btn btn-primary" id="cta-unlimited" href="/login?mode=register&amp;plan=unlimited">Start Unlimited</a>
         </article>
         <article class="price">
           <h3>Enterprise</h3>
@@ -515,7 +516,8 @@
             <li>Dedicated account manager</li>
             <li>Expert legal-ops consultation add-on</li>
           </ul>
-          <a class="btn btn-primary" href="#demo">Talk to sales</a>
+          <a class="btn btn-primary" id="cta-enterprise" href="/login?mode=register&amp;plan=enterprise">Start Enterprise</a>
+          <p class="who" style="margin-top:0.75rem"><a href="#demo">Talk to sales</a> if you need a custom SLA first.</p>
         </article>
       </div>
     </div>
@@ -592,6 +594,24 @@
           if (signin) { signin.textContent = 'Open app'; signin.href = '/app'; }
         }
       } catch (_) {}
+
+      const applyLivePlans = (payload) => {
+        const loggedIn = (() => { try { return !!localStorage.getItem('fcra_token'); } catch (_) { return false; } })();
+        const plans = Array.isArray(payload && payload.plans) ? payload.plans : [];
+        plans.forEach((p) => {
+          const btn = document.getElementById('cta-' + p.id);
+          if (!btn || !p) return;
+          if (loggedIn) {
+            btn.setAttribute('href', '/app?plan=' + encodeURIComponent(p.id));
+            btn.textContent = 'Subscribe ' + (p.name || p.id);
+          } else if (p.subscribeUrl) {
+            btn.setAttribute('href', p.subscribeUrl);
+          }
+        });
+        const badge = document.getElementById('pricing-live-badge');
+        if (badge && payload && payload.live) badge.hidden = false;
+      };
+      fetch('/api/public/plans').then((r) => r.json()).then(applyLivePlans).catch(() => {});
 
       const form = document.getElementById('demo-form');
       const status = document.getElementById('form-status');

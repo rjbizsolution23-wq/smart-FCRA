@@ -146,6 +146,16 @@ import { persistInvestigationClock, closeInvestigationClock, FCRA_611_OPERATIONA
 import { recordServiceCompleted, assertCoveredChargeAllowed, writeBillingLedger } from './lib/service-ledger';
 import { sendLetterViaClick2Mail } from './lib/click2mail';
 import {
+  ensureStripeCatalog,
+  ensureStripeCatalogCached,
+  isSaaSPlanId,
+  planIdFromStripePrice,
+  publicPlansFromCatalog,
+  resolveCheckoutPriceId,
+  resolveFrontendUrl,
+  staticPublicPlans,
+} from './lib/stripe-catalog';
+import {
   D1_BACKUP_TABLES,
   brandLeadsVisibleTo,
   collectPrivacyExport,
@@ -697,6 +707,7 @@ app.use('/api/auth/register', rateLimiter);
 app.use('/api/public/mfsn-signup', rateLimiter);
 app.use('/api/public/lead/*', rateLimiter);
 app.use('/api/public/demo/*', rateLimiter);
+app.use('/api/public/plans', rateLimiter);
 app.use('/api/demo/agent/chat', rateLimiter);
 app.use('/api/demo/mfsn-live', rateLimiter);
 app.use('/api/demo/prepare', rateLimiter);
@@ -1019,6 +1030,45 @@ const BRAND_FORM_IDS = new Set([
 
 /** Public RJ brand lead capture (interactive forms). */
 app.get('/api/public/turnstile', (c) => c.json(turnstilePublicConfig(c.env)));
+
+/** Live SaaS plan catalog for the sales site — creates Stripe products/prices if missing. */
+app.get('/api/public/plans', async (c) => {
+  const base = {
+    subscribeFlow: 'register-then-checkout',
+    currency: 'usd',
+    interval: 'month',
+  };
+  if (!stripeConfigured(c.env) || !c.env.STRIPE_API_KEY) {
+    return c.json({
+      ...base,
+      live: false,
+      mode: 'unconfigured',
+      plans: staticPublicPlans(),
+    });
+  }
+  try {
+    const stripe = getStripe(c.env);
+    const catalog = await ensureStripeCatalogCached(stripe, {
+      frontendUrl: resolveFrontendUrl(c.env, c.req.url),
+      secretKey: c.env.STRIPE_API_KEY,
+    });
+    return c.json({
+      ...base,
+      live: true,
+      mode: catalog.mode,
+      plans: publicPlansFromCatalog(catalog),
+    });
+  } catch (err: any) {
+    console.warn('[public/plans] catalog ensure failed', err?.message || err);
+    return c.json({
+      ...base,
+      live: false,
+      mode: c.env.STRIPE_API_KEY.startsWith('sk_live_') ? 'live' : 'test',
+      plans: staticPublicPlans(),
+      error: 'Catalog unavailable',
+    });
+  }
+});
 
 app.post('/api/public/lead/:formId', async (c) => {
   const formId = String(c.req.param('formId') || '').trim().toLowerCase();
@@ -6986,47 +7036,31 @@ app.post('/api/billing/checkout', authMiddleware, async (c) => {
   const user = c.get('user');
   const { planId } = await c.req.json();
   if (!planId) return c.json({ error: 'Plan ID required' }, 400);
-  if (!stripeConfigured(c.env)) return c.json({ error: 'Stripe is not configured for this environment' }, 503);
+  if (!isSaaSPlanId(planId)) return c.json({ error: 'Invalid plan' }, 400);
+  if (!stripeConfigured(c.env) || !c.env.STRIPE_API_KEY) {
+    return c.json({ error: 'Stripe is not configured for this environment' }, 503);
+  }
 
   const stripe = getStripe(c.env);
   const org = await c.env.DB.prepare('SELECT * FROM organizations WHERE id = ?').bind(user.org_id).first();
-
-  const planPrices: Record<string, { amount: number; name: string; interval: 'month' }> = {
-    'professional': { amount: 49700, name: 'Basic Plan', interval: 'month' },
-    'unlimited': { amount: 250000, name: 'Unlimited Plan', interval: 'month' },
-    'enterprise': { amount: 999700, name: 'Enterprise Plan', interval: 'month' }
-  };
-
-  const plan = planPrices[planId as string];
-  if (!plan) return c.json({ error: 'Invalid plan' }, 400);
-
-  const priceIdMap: Record<string, string | undefined> = {
-    professional: c.env.STRIPE_PROFESSIONAL_PRICE_ID,
-    unlimited: c.env.STRIPE_UNLIMITED_PRICE_ID,
-    enterprise: c.env.STRIPE_ENTERPRISE_PRICE_ID,
-  };
+  const appUrl = resolveFrontendUrl(c.env, c.req.url);
 
   let session;
   try {
-    const configuredPriceId = priceIdMap[planId as string];
-    const lineItems = configuredPriceId
-      ? [{ price: configuredPriceId, quantity: 1 }]
-      : [{
-          price_data: {
-            currency: 'usd',
-            product_data: { name: plan.name, metadata: { planId } },
-            unit_amount: plan.amount,
-            recurring: { interval: plan.interval as 'month' },
-          },
-          quantity: 1,
-        }];
+    const resolved = await resolveCheckoutPriceId(stripe, {
+      STRIPE_API_KEY: c.env.STRIPE_API_KEY,
+      STRIPE_PROFESSIONAL_PRICE_ID: c.env.STRIPE_PROFESSIONAL_PRICE_ID,
+      STRIPE_UNLIMITED_PRICE_ID: c.env.STRIPE_UNLIMITED_PRICE_ID,
+      STRIPE_ENTERPRISE_PRICE_ID: c.env.STRIPE_ENTERPRISE_PRICE_ID,
+      FRONTEND_URL: appUrl,
+    }, planId);
 
     session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      line_items: lineItems,
+      line_items: [{ price: resolved.priceId, quantity: 1 }],
       mode: 'subscription',
-      success_url: `${c.env.FRONTEND_URL || 'http://localhost:3000'}/?checkout=success`,
-      cancel_url: `${c.env.FRONTEND_URL || 'http://localhost:3000'}/?page=billing&checkout=cancelled`,
+      success_url: `${appUrl}/app?checkout=success&plan=${planId}`,
+      cancel_url: `${appUrl}/app?page=billing&checkout=cancelled`,
       client_reference_id: user.org_id,
       metadata: { planId, orgId: user.org_id },
       subscription_data: { metadata: { planId, orgId: user.org_id } },
@@ -7050,7 +7084,7 @@ app.post('/api/billing/portal', authMiddleware, async (c) => {
   if (!org?.stripe_customer_id) return c.json({ error: 'Subscribe first' }, 400);
   const session = await stripe.billingPortal.sessions.create({
     customer: org.stripe_customer_id,
-    return_url: `${c.env.FRONTEND_URL || c.req.url.split('/api')[0]}/?page=billing`,
+    return_url: `${resolveFrontendUrl(c.env, c.req.url)}/app`,
   });
   return c.json({ url: session.url });
 });
@@ -7184,17 +7218,17 @@ app.post('/api/billing/webhook', async (c) => {
       const stripeSubId = session.subscription as string;
       if (!orgId || !stripeSubId) break;
 
-      const stripe = getStripe(c.env);
-      const subscription = await stripe.subscriptions.retrieve(stripeSubId);
+      const stripeClient = getStripe(c.env);
+      const subscription = await stripeClient.subscriptions.retrieve(stripeSubId);
       const priceId = subscription.items.data[0]?.price.id;
       const metaPlan = session.metadata?.planId || subscription.metadata?.planId;
-      const plan = metaPlan || (priceId === c.env.STRIPE_UNLIMITED_PRICE_ID ? 'unlimited'
-        : priceId === c.env.STRIPE_ENTERPRISE_PRICE_ID ? 'enterprise'
-        : priceId === c.env.STRIPE_PROFESSIONAL_PRICE_ID ? 'professional' : 'professional');
+      const mapped = isSaaSPlanId(metaPlan)
+        ? metaPlan
+        : (await planIdFromStripePrice(stripeClient, c.env, priceId)) || 'professional';
 
       await c.env.DB.prepare(
         'UPDATE organizations SET plan = ?, stripe_customer_id = ?, stripe_subscription_id = ? WHERE id = ?'
-      ).bind(plan, stripeCustomerId, stripeSubId, orgId).run();
+      ).bind(mapped, stripeCustomerId, stripeSubId, orgId).run();
       break;
     }
 
@@ -7206,15 +7240,13 @@ app.post('/api/billing/webhook', async (c) => {
 
     case 'customer.subscription.updated': {
       const subId = session.id as string;
-      const stripe = getStripe(c.env);
+      const stripeClient = getStripe(c.env);
       try {
-        const subscription = await stripe.subscriptions.retrieve(subId);
+        const subscription = await stripeClient.subscriptions.retrieve(subId);
         const priceId = subscription.items.data[0]?.price.id;
         const status = subscription.status;
         if (status === 'active' || status === 'trialing') {
-          const plan = priceId === c.env.STRIPE_UNLIMITED_PRICE_ID ? 'unlimited'
-            : priceId === c.env.STRIPE_ENTERPRISE_PRICE_ID ? 'enterprise'
-            : priceId === c.env.STRIPE_PROFESSIONAL_PRICE_ID ? 'professional' : 'professional';
+          const plan = (await planIdFromStripePrice(stripeClient, c.env, priceId)) || 'professional';
           await c.env.DB.prepare('UPDATE organizations SET plan = ? WHERE stripe_subscription_id = ?').bind(plan, subId).run();
         } else if (status === 'past_due') {
           await c.env.DB.prepare('UPDATE organizations SET plan = \'free\' WHERE stripe_subscription_id = ?').bind(subId).run();
@@ -7226,13 +7258,11 @@ app.post('/api/billing/webhook', async (c) => {
     case 'invoice.payment_succeeded': {
       const subId = session.subscription as string;
       if (!subId) break;
-      const stripe = getStripe(c.env);
+      const stripeClient = getStripe(c.env);
       try {
-        const subscription = await stripe.subscriptions.retrieve(subId);
+        const subscription = await stripeClient.subscriptions.retrieve(subId);
         const priceId = subscription.items.data[0]?.price.id;
-        const plan = priceId === c.env.STRIPE_UNLIMITED_PRICE_ID ? 'unlimited'
-          : priceId === c.env.STRIPE_ENTERPRISE_PRICE_ID ? 'enterprise'
-          : priceId === c.env.STRIPE_PROFESSIONAL_PRICE_ID ? 'professional' : 'professional';
+        const plan = (await planIdFromStripePrice(stripeClient, c.env, priceId)) || 'professional';
         await c.env.DB.prepare('UPDATE organizations SET plan = ? WHERE stripe_subscription_id = ?').bind(plan, subId).run();
       } catch {}
       break;
@@ -7418,6 +7448,7 @@ app.get('/api/health/ready', async (c) => {
     encryptionKey: !!(c.env.PII_ENCRYPTION_KEY && c.env.PII_ENCRYPTION_KEY.length >= 32),
     stripe: !!c.env.STRIPE_API_KEY,
     stripePublishable: !!c.env.STRIPE_PUBLISHABLE_KEY,
+    stripePriceIds: !!(c.env.STRIPE_PROFESSIONAL_PRICE_ID && c.env.STRIPE_UNLIMITED_PRICE_ID && c.env.STRIPE_ENTERPRISE_PRICE_ID),
     cloudflareEmail: !!(c.env.CLOUDFLARE_EMAIL_API_TOKEN && c.env.CLOUDFLARE_ACCOUNT_ID),
     resend: !!c.env.RESEND_API_KEY,
     sendgrid: !!c.env.SENDGRID_API_KEY,
@@ -9736,6 +9767,37 @@ const adminGateMiddleware = async (c: any, next: any) => {
   return next();
 };
 
+app.post('/api/admin/stripe/ensure-catalog', authMiddleware, adminGateMiddleware, async (c) => {
+  if (!stripeConfigured(c.env) || !c.env.STRIPE_API_KEY) {
+    return c.json({ error: 'Stripe is not configured' }, 503);
+  }
+  const stripe = getStripe(c.env);
+  const catalog = await ensureStripeCatalog(stripe, {
+    frontendUrl: resolveFrontendUrl(c.env, c.req.url),
+    secretKey: c.env.STRIPE_API_KEY,
+  });
+  return c.json({
+    ok: true,
+    mode: catalog.mode,
+    plans: catalog.plans.map((p) => ({
+      id: p.id,
+      name: p.name,
+      amountCents: p.amountCents,
+      productId: p.productId,
+      priceId: p.priceId,
+      paymentLinkUrl: p.paymentLinkUrl,
+      createdProduct: p.createdProduct,
+      createdPrice: p.createdPrice,
+      createdPaymentLink: p.createdPaymentLink,
+    })),
+    optionalSecrets: {
+      STRIPE_PROFESSIONAL_PRICE_ID: catalog.plans.find((p) => p.id === 'professional')?.priceId || null,
+      STRIPE_UNLIMITED_PRICE_ID: catalog.plans.find((p) => p.id === 'unlimited')?.priceId || null,
+      STRIPE_ENTERPRISE_PRICE_ID: catalog.plans.find((p) => p.id === 'enterprise')?.priceId || null,
+    },
+  });
+});
+
 app.post('/api/admin/knowledge/seed', authMiddleware, adminGateMiddleware, async (c) => {
   const user = c.get('user');
   const kb = await seedKnowledgeBase(c.env);
@@ -10927,8 +10989,8 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/demo-experience.js?v=20260818-demo-complete"></script>
-  <script src="/static/app.js?v=20260818-demo-complete"></script>
+  <script src="/static/demo-experience.js?v=20260818-stripe-catalog"></script>
+  <script src="/static/app.js?v=20260818-stripe-catalog"></script>
 </body>
 </html>`;
 }

@@ -649,6 +649,44 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     });
   }
 
+  const PENDING_PLAN_KEY = 'sf_pending_plan';
+  const SAAS_PLANS = ['professional', 'unlimited', 'enterprise'];
+  function rememberPendingPlan(plan) {
+    const id = String(plan || '').toLowerCase();
+    if (!SAAS_PLANS.includes(id)) return;
+    try { localStorage.setItem(PENDING_PLAN_KEY, id); } catch (_) {}
+  }
+  function readPendingPlan() {
+    const params = new URLSearchParams(location.search);
+    const fromQs = String(params.get('plan') || '').toLowerCase();
+    if (SAAS_PLANS.includes(fromQs)) return fromQs;
+    try { return localStorage.getItem(PENDING_PLAN_KEY) || ''; } catch (_) { return ''; }
+  }
+  async function maybeStartPendingCheckout() {
+    if (!state.token || typeof window._checkout !== 'function') return;
+    const params = new URLSearchParams(location.search);
+    if (params.get('checkout') === 'success') {
+      toast('Payment received — your plan will activate as soon as Stripe confirms.', 'success');
+      history.replaceState({}, '', '/app');
+      return;
+    }
+    if (params.get('checkout') === 'cancelled') {
+      toast('Checkout cancelled — you can subscribe any time from Billing.', 'info');
+      history.replaceState({}, '', '/app');
+      return;
+    }
+    if (state.demoSession) return;
+    const plan = readPendingPlan();
+    if (!SAAS_PLANS.includes(plan)) return;
+    if (state.org?.plan === plan) {
+      try { localStorage.removeItem(PENDING_PLAN_KEY); } catch (_) {}
+      return;
+    }
+    try { localStorage.removeItem(PENDING_PLAN_KEY); } catch (_) {}
+    toast('Opening live Stripe checkout for ' + plan + '…', 'info');
+    await window._checkout(plan);
+  }
+
   function navigate(page, data) { state.currentPage = page; state.pageData = data; render(); }
 
   function render() {
@@ -852,6 +890,8 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
             </div>
           </div>
           <div id="auth-register" class="hidden"><form id="register-form" class="space-y-4">
+            <input type="hidden" name="plan" id="register-plan" value="">
+            <p id="register-plan-note" class="hidden text-[11px] text-sky-300 leading-relaxed"></p>
             <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Organization Name</label><input type="text" name="orgName" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none" placeholder="Your Firm Name"></div>
             <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Full Name</label><input type="text" name="name" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none" placeholder="John Doe"></div>
             <div><label class="block text-xs font-medium text-gray-400 mb-1.5">Email</label><input type="email" name="email" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3.5 py-2.5 text-white text-sm outline-none" placeholder="you@company.com"></div>
@@ -917,6 +957,15 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   function bindAuth() {
     const params = new URLSearchParams(location.search);
     const verifyEmail = params.get('verifyEmail');
+    rememberPendingPlan(params.get('plan'));
+    const pendingPlan = readPendingPlan();
+    const planInput = document.getElementById('register-plan');
+    if (planInput && pendingPlan) planInput.value = pendingPlan;
+    const planNote = document.getElementById('register-plan-note');
+    if (planNote && pendingPlan) {
+      planNote.classList.remove('hidden');
+      planNote.textContent = 'After you verify and sign in, we open live Stripe checkout for the ' + pendingPlan + ' plan.';
+    }
     if (params.get('mode') === 'register' || params.get('plan') || params.get('from') === 'demo') {
       try { window._switchTab('register'); } catch (_) {}
     }
@@ -1052,6 +1101,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         toast('Welcome — demo ready','success');
         history.replaceState({}, '', '/app');
         render();
+        maybeStartPendingCheckout();
       } catch (err) { toast(err.message || 'Demo login failed', 'error'); }
     }
     const demoAdmin = document.getElementById('demo-login-admin');
@@ -1121,6 +1171,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         toast('Welcome back!','success');
         history.replaceState({}, '', '/app');
         render();
+        maybeStartPendingCheckout();
       } catch(err) {
         if (err.code === 'EMAIL_NOT_VERIFIED') {
           const msg = $('#verify-pending-msg');
@@ -1139,6 +1190,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         toast('MFA verified','success');
         history.replaceState({}, '', '/app');
         render();
+        maybeStartPendingCheckout();
       } catch(err) { toast(err.message,'error'); }
     };
     if (ff) ff.onsubmit = async (e) => {
@@ -1163,6 +1215,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     if (rf) rf.onsubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
+      rememberPendingPlan(fd.get('plan') || new URLSearchParams(location.search).get('plan'));
       try {
         const d = await api('/auth/register', { method:'POST', body:JSON.stringify({orgName:fd.get('orgName'),name:fd.get('name'),email:fd.get('email'),password:fd.get('password')})});
         if (d.requiresVerification) {
@@ -1176,6 +1229,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         toast('Account created!','success');
         history.replaceState({}, '', '/app');
         render();
+        maybeStartPendingCheckout();
       } catch(err) { toast(err.message,'error'); }
     };
   }
@@ -6503,10 +6557,14 @@ Status: Discharged`;
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Redirecting...'; }
     try {
       const { url } = await api('/billing/checkout', { method: 'POST', body: JSON.stringify({ planId }) });
+      if (!url) throw new Error('Checkout URL missing');
       window.location.href = url;
+      return true;
     } catch(err) {
+      rememberPendingPlan(planId);
       toast(err.message, 'error');
       if (btn) { btn.disabled = false; btn.innerHTML = 'Upgrade'; }
+      return false;
     }
   };
 
@@ -13068,6 +13126,7 @@ async function pgAdminConsole(el) {
       }
     }
     render();
+    if (state.token) maybeStartPendingCheckout();
     if (state.demoSession && window.SmartFcraDemo) {
       window.SmartFcraDemo.mount({
         api,
