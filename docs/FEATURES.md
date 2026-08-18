@@ -15,7 +15,7 @@ This is the operator map of **everything the app does today**, plus **what is st
 |---|---|---|
 | **Staff / admin / super_admin** | Email + password, MFA, demo `demo@example.com` | Full ops console: clients, reports, violations, letters, mailing, tradelines, brand library, billing, admin |
 | **Client (consumer)** | Invite, register, MFSN signup, or demo `salisha.mcdowell@example.com` | Client portal: cockpit, journey, vault, fundability, tradelines, tutors, documents |
-| **Public visitor** | No login | Login, register, forgot password, MFSN signup (`/?signup=mfsn`), brand forms (`/forms/*`), `/brand`, legal pages, API docs |
+| **Public visitor** | No login | Software sales funnel (`/`), login (`/login`), MFSN signup (`/login?signup=mfsn`), brand forms (`/forms/*`), `/brand`, legal pages, API docs |
 | **Partner / GHL / MFSN** | Webhooks + affiliate links | Inbound leads, MFSN members, CRM sync |
 
 ---
@@ -24,9 +24,11 @@ This is the operator map of **everything the app does today**, plus **what is st
 
 | URL / entry | What it does |
 |---|---|
-| `/` | SPA shell. Login by default. `?signup=mfsn` opens MFSN partner signup. Hash routes after login (`#dashboard`, `#client-cockpit`, …). |
-| `/login` `/register` `/forgot-password` `/reset-password` `/verify-email` `/mfa` | Auth screens |
-| `/brand` | RJ Business Solutions brand library hub (69 assets: forms, marketing, legal, ops, founder) |
+| `/` | Smart FCRA by RJ Business Solutions sales funnel (product, pricing, demo lead). |
+| `/login` `/app` | SPA shell. **CRO Demo tab** on login for credit-company owners (`/login?mode=demo`). `/login?signup=mfsn` opens MFSN partner signup; `/login?mode=register` opens Create Account. |
+| `/demo` | Gated interactive demo (firm details required). Popup tour + text/voice agent. Optional one live MFSN pull. |
+| `/pricing` | Redirect to `/#pricing`. |
+| `/brand` | RJ Business Solutions brand library hub (forms, marketing, legal, ops, founder) |
 | `/forms/credit-qualify` | Interactive credit / dispute qualification |
 | `/forms/funding-qualify` | Business funding qualification |
 | `/forms/universal-funnel` | Combined credit + funding + consulting |
@@ -90,20 +92,31 @@ Shown when `isClient` is true. Analysis / letters stay **locked** until staff ru
 
 | Nav id | Page | What it does |
 |---|---|---|
-| `client-cockpit` | My Credit | Scores, accounts, next actions |
+| `client-cockpit` | Dashboard | Named-model scores, next-best action, result taxonomy, credit health, recent events. **No deletion/score-lift simulator.** |
+| `client-credit` | My Credit | Tri-bureau compare, utilization (educational), credit event ledger, open report sandbox |
+| `client-report` | Report sandbox | Scrollable paper copy in a scriptless iframe; original PDF tab when vaulted; jump to accounts; payment-history legend; hard/soft inquiries; print; Confirm facts. Owner-only. |
+| `client-case` | My Credit Case | Disputes, findings (not auto-labeled as FCRA violations), action receipts |
+| `client-attest` | Confirm Facts | Structured interview; immutable attestations; identity-theft gate |
+| `client-disputes` | Disputes | Evidence-first drafts; client approval; **mail via Click2Mail** starts the 30-day FCRA § 611 clock |
+| `client-actions` | Action Plan | One primary consumer action |
+| `client-progress` | Progress | Measured report-to-report changes |
+| `client-rights` | Consumer Rights | FCRA / CROA / TSR / FDCPA / identity-theft education |
+| `client-consents` | Consents | Separate grants/revokes (not a single T&C checkbox) |
+| `client-billing` | Billing | Current/completed services; cancel link |
+| `client-cancel` | Cancel Services | CROA cancellation in-portal (not buried in support) |
 | `client-journey` | My Journey | 6-stage pipeline (New → Funded) |
 | `onboarding-wizard` | Get Started | Intake wizard |
 | `messages` | Messages | Client ↔ staff |
-| `client-vault` | Secure Vault | ID, SSN card, proof of address, reports (R2) |
-| `client-fundability` | Fundability | Deterministic fundability score + lender matches |
+| `client-vault` | Documents / Vault | ID, SSN card, proof of address, reports (R2) |
+| `client-fundability` | Readiness | Deterministic fundability score + lender matches |
 | `client-boost` | Boost Tools | Educational tradeline / utilization guidance |
 | `client-tradelines` | AU Tradelines | Client-facing TradelineMaster catalog + match + order request |
 | `client-tutor` | Credit Tutor | Scripted Alex Rivera tutor |
-| `client-documents` | My Documents | Their letters / PDFs |
+| `client-documents` | Letters | Their letters / PDFs |
 | `client-legal` | Legal & Notary | RON session request (sandbox unless live notary keys) |
-| `client-video` | Video Consultation | Issues Twilio Video **tokens only** — **no in-browser Video SDK yet** |
-| `client-education` | Education Hub | Articles / lessons |
-| `client-security` | Security | Password, MFA, sessions |
+| `client-video` | Video Consultation | Twilio Video JS join |
+| `client-education` | Academy | Articles / lessons |
+| `client-security` | Privacy & Security | Password, MFA, sessions, privacy export/delete, cancel link |
 | `ai-mentors` | AI Mentors | Rick / Alex / Maya / Jordan chat (free-only AI cascade) |
 
 ---
@@ -123,6 +136,12 @@ Shown when `isClient` is true. Analysis / letters stay **locked** until staff ru
 | `lvs.ts` | Legal Vulnerability Score |
 | `damages.ts` | Statutory / actual damage estimates |
 | `documents.ts` | ~45 letter types (dispute, 623, method of verification, C&D, intent to sue, …) |
+| `dispute-attestation.ts` | Structured fact interview; no fabricated reasons; identity-theft gate |
+| `hallucination-firewall.ts` | Source-tagged assertions; blocks guaranteed-outcome copy and ID-theft injection |
+| `credit-events.ts` | Digital twin diffs + result taxonomy (DELETED vs CORRECTED vs BALANCE_CHANGE, …) |
+| `next-best-action.ts` | One primary consumer action + case stage |
+| `metro2-findings.ts` | Cross-bureau variance as REVIEW/OBSERVATION — never auto “FCRA VIOLATION” |
+| `utilization.ts` | Educational utilization targets (no score guarantee) |
 | `letter-strategy.ts` | Which letter, which bureau, which round |
 | `pdf-letterhead.ts` | Branded PDF output |
 | `fundability.ts` | Business / consumer fundability |
@@ -164,23 +183,25 @@ Mentors: Rick Jefferson (strategy), Alex Rivera (credit tutor), Maya Chen (compl
 
 ## 8. Data, security, ops
 
+Canonical inventory: [`docs/DATA_AND_COMPLIANCE.md`](./DATA_AND_COMPLIANCE.md) and `GET /api/compliance/data-inventory`.
+
 | Layer | Behavior |
 |---|---|
-| Auth | JWT (Web Crypto), refresh rotation, MFA TOTP, lockout, password reset |
-| Tenancy | `org_id` on almost every table; `org_platform_master` for public brand leads |
+| Auth | Opaque D1 session tokens (not JWT), MFA TOTP, password reset, `session_events` + `security_audit_log` |
+| Tenancy | `org_id` on tenant tables; brand leads org-scoped (super_admin sees all); demo visitors isolated by `demo_session_id` |
 | Roles | `super_admin`, `admin`, `staff`, `client` |
-| PII | Encryption helpers, audit log, retention jobs |
-| Files | R2 vault + report PDFs |
-| Cron | GitHub Action `platform-ops.yml` → `POST /api/cron/ops` with packs: `daily`, `weekly`, `monthly`, plus `tradeline_inventory_refresh` inside daily |
-| Health | `/api/health/ready` checks D1 |
+| PII | AES-256-GCM on reports/vault; DOB/SSN enc columns written when key set; legal hold; CCPA/GDPR export+purge |
+| Files | R2 vault for original reports and uploads; deleted on privacy purge |
+| Cron | GitHub Action `platform-ops.yml` → `POST /api/cron/ops`; housekeeping **keeps** session rows |
+| Health | `/api/health/ready` checks D1 + integrations |
 
 ---
 
 ## 9. Database (high-signal tables)
 
-`users`, `clients`, `credit_reports`, `credit_accounts`, `violations`, `generated_documents`, `consent_records`, `mfsn_members`, `brand_leads`, `tradeline_orders`, `ghl_sync_log`, `audit_logs`, `refresh_tokens`, `orgs` / branding, mailing campaigns, journey stages, vault files.
+`organizations`, `users`, `sessions`, `session_events`, `clients`, `credit_reports`, `violations`, `documents`, `activity_log`, `security_audit_log`, `privacy_requests`, `brand_leads`, `client_consents`, `portal_disputes`, `investigation_clocks`, `service_records`, `billing_ledger`, `legal_contracts`, `esign_consent_events`, `demo_sessions`, plus the full catalog in DATA_AND_COMPLIANCE.md.
 
-Migrations live in `migrations/` (`0001`–`0020`+). Newest: `0020_brand_leads.sql`.
+Migrations live in `migrations/` (`0001`–`0024`). Newest: `0024_tenant_session_compliance.sql`.
 
 ---
 
@@ -209,6 +230,12 @@ Migrations live in `migrations/` (`0001`–`0020`+). Newest: `0020_brand_leads.s
 - **PWA** `/manifest.webmanifest` + `/sw.js`, Add to Home Screen, overlay mobile nav, horizontal table scroll
 - **Playwright CI gate** login → upload → detect → letter (`tests/login-upload-letter.spec.ts`)
 - **Live RON** Proof (`ApiKey` → `https://api.proof.com/transactions`) and BlueNotary (`Bearer` → `https://app.bluenotary.us/api/integrationsv2/sessions`) with ceremony join URLs + HMAC webhooks
+- **Client intelligence portal** — evidence-first disputes, immutable attestations, hallucination firewall, credit event ledger, CROA in-portal cancellation, named score models, mobile Home/Credit/Case/Actions/More nav. Removed FICO deletion simulator / guaranteed-lift copy.
+- **Report sandbox** — scrollable paper copy of the imported report in a scriptless iframe; original file tab when stored in R2; owner-only API; SSN redacted; payment-history grid + legend; hard vs soft inquiries; FCRA § 605 DOFD education; print paper copy; Confirm facts from a tradeline. Viewing is not a dispute.
+- **Upload hygiene + original vault** — magic-byte malware gates; original PDF/JSON stored on R2 `DOCS`; blocked files are not downloadable.
+- **FCRA § 611 clocks** — every Click2Mail send writes `investigation_clocks` (30-day statutory / 35-day operational).
+- **CROA ledger** — `service_records` on analysis and mailing; Stripe analysis-unlock blocked until completion.
+- **Tenant + session persistence (0024)** — every session kept after logout (`revoked_at`, last-seen, IP/UA); demo visitors isolated; brand leads org-scoped; full privacy export/purge + R2 delete; legal hold setter; catalog at `docs/DATA_AND_COMPLIANCE.md` / `GET /api/compliance/data-inventory`.
 
 ### Operator secrets still required in Pages (not code)
 

@@ -37,8 +37,22 @@ jobs:
       - name: Copy static assets
         run: mkdir -p dist/static && cp -r public/static/* dist/static/
 
+      - name: Check Cloudflare Pages secrets
+        id: cfcreds
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$ACCOUNT" ]; then
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Add GitHub Actions secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (repo Settings → Secrets and variables → Actions) so this PR can deploy to Cloudflare Pages project smart-fcra-v2."
+          else
+            echo "missing=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy preview to Cloudflare Pages
         id: deploy
+        if: steps.cfcreds.outputs.missing != 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -46,10 +60,24 @@ jobs:
           command: pages deploy dist --project-name=smart-fcra-v2
 
       - name: Comment preview URL
+        if: steps.cfcreds.outputs.missing != 'true'
         uses: actions/github-script@v7
         with:
           script: |
             const body = `## Smart FCRA v2 Preview\n\nPR #${{ github.event.pull_request.number }} deployed to Cloudflare Pages.\n\n**Branch alias:** \`pr-${{ github.event.pull_request.number }}\`\n\nVerify:\n- Health: https://pr-${{ github.event.pull_request.number }}.smart-fcra-v2.pages.dev/api/health\n- API docs: https://pr-${{ github.event.pull_request.number }}.smart-fcra-v2.pages.dev/api/docs\n`;
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+
+      - name: Comment missing Cloudflare secrets
+        if: steps.cfcreds.outputs.missing == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `## Preview deploy skipped\n\nGitHub Actions secrets **CLOUDFLARE_API_TOKEN** and **CLOUDFLARE_ACCOUNT_ID** are not set.\n\nAdd them under **Settings → Secrets and variables → Actions**, then re-run this workflow. Token needs Cloudflare **Account / Cloudflare Pages / Edit** on project \`smart-fcra-v2\`.`;
             github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,

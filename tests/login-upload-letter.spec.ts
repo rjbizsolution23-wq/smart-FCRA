@@ -22,7 +22,7 @@ End of Report
 
 test.describe('Login → upload → detect → letter', () => {
   test('staff can sign in, ingest a report, and generate a bureau dispute letter', async ({ page, request }) => {
-    await page.goto('/');
+    await page.goto('/login');
     await expect(page.locator('#login-form')).toBeVisible();
 
     await page.locator('#login-form input[name="email"]').fill('demo@example.com');

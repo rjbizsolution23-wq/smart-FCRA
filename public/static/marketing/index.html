@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Smart FCRA by RJ Business Solutions — Violation detection, generated letters, client portal</title>
+  <meta name="description" content="Smart FCRA by RJ Business Solutions detects FCRA/FDCPA/ECOA violations on the file, generates litigation-ready letters from those facts, and runs a compliant client portal with learning resources — not fill-in templates." />
+  <meta name="theme-color" content="#2563eb" />
+  <link rel="icon" href="/static/brand/pwa-icon.jpg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/brand/brand.css" />
+  <style>
+    :root {
+      --sf-blue: #2563eb;
+      --sf-sky: #0ea5e9;
+      --sf-deep: #1e3a8a;
+      --sf-navy: #0f172a;
+      --sf-ink: #0f172a;
+      --sf-muted: #475569;
+      --sf-line: #dbe3f0;
+      --sf-paper: #f4f7fb;
+      --sf-white: #ffffff;
+      --font-head: "Space Grotesk", sans-serif;
+      --font-body: Inter, sans-serif;
+      --grad: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: var(--font-body);
+      color: var(--sf-ink);
+      background: var(--sf-paper);
+      -webkit-font-smoothing: antialiased;
+    }
+    h1, h2, h3 { font-family: var(--font-head); letter-spacing: -0.03em; margin: 0; }
+    a { color: inherit; }
+    .wrap { width: min(1120px, calc(100% - 2.5rem)); margin-inline: auto; }
+
+    .nav {
+      position: absolute; left: 0; right: 0; top: 0; z-index: 5;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.1rem 0; color: #fff;
+    }
+    .nav-links { display: flex; gap: 1.15rem; align-items: center; font-size: 0.875rem; font-weight: 500; }
+    .nav-links a { text-decoration: none; opacity: 0.92; }
+    .nav-links a:hover { opacity: 1; }
+    .nav-cta {
+      display: inline-flex; align-items: center; padding: 0.55rem 1rem;
+      border-radius: 10px; background: #fff; color: var(--sf-deep);
+      font-family: var(--font-head); font-weight: 600; font-size: 0.875rem;
+      text-decoration: none;
+    }
+
+    .hero {
+      position: relative;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      align-items: flex-end;
+      overflow: hidden;
+      color: #fff;
+      background: #0b1b36;
+    }
+    .hero-media {
+      position: absolute; inset: 0;
+      background:
+        linear-gradient(105deg, rgba(8, 18, 36, 0.9) 0%, rgba(8, 18, 36, 0.58) 42%, rgba(8, 18, 36, 0.25) 100%),
+        url("/static/marketing/smart-fcra-hero.jpg") center / cover no-repeat;
+      transform: scale(1.04);
+      animation: heroDrift 18s ease-in-out infinite alternate;
+    }
+    @keyframes heroDrift {
+      from { transform: scale(1.04) translate3d(0, 0, 0); }
+      to { transform: scale(1.08) translate3d(-1.2%, -0.8%, 0); }
+    }
+    .hero-copy {
+      position: relative; z-index: 2;
+      padding: 7.5rem 0 4.5rem;
+      animation: riseIn 0.9s ease both;
+    }
+    @keyframes riseIn {
+      from { opacity: 0; transform: translateY(18px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .brand-mark {
+      font-family: var(--font-head);
+      font-weight: 700;
+      font-size: clamp(2.6rem, 7vw, 4.75rem);
+      line-height: 0.95;
+      letter-spacing: -0.045em;
+      margin: 0 0 0.35rem;
+    }
+    .brand-by {
+      font-family: var(--font-head);
+      font-size: clamp(0.95rem, 2vw, 1.15rem);
+      font-weight: 600;
+      color: #cfe8ff;
+      margin: 0 0 1.6rem;
+    }
+    .hero h2 {
+      max-width: 18ch;
+      font-size: clamp(1.55rem, 3.4vw, 2.35rem);
+      line-height: 1.15;
+      font-weight: 600;
+      margin: 0 0 0.85rem;
+    }
+    .hero-support {
+      max-width: 40ch;
+      margin: 0 0 1.75rem;
+      font-size: 1.05rem;
+      line-height: 1.55;
+      color: rgba(255,255,255,0.86);
+    }
+    .cta-row { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 0.9rem 1.25rem; border-radius: 10px; border: 0;
+      font-family: var(--font-head); font-weight: 600; font-size: 0.95rem;
+      text-decoration: none; cursor: pointer;
+      transition: transform .18s ease, filter .18s ease;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn-primary { background: var(--grad); color: #fff; }
+    .btn-ghost {
+      background: transparent; color: #fff;
+      border: 1.5px solid rgba(255,255,255,0.55);
+    }
+
+    section { padding: 5rem 0; }
+    .section-kicker {
+      font-family: var(--font-head);
+      font-size: 0.72rem; font-weight: 700;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--sf-blue); margin: 0 0 0.75rem;
+    }
+    .section-title {
+      font-size: clamp(1.7rem, 3vw, 2.4rem);
+      line-height: 1.12; max-width: 22ch; margin: 0 0 0.75rem;
+    }
+    .section-support {
+      max-width: 58ch; color: var(--sf-muted);
+      font-size: 1.05rem; line-height: 1.6; margin: 0;
+    }
+
+    .violations {
+      background:
+        radial-gradient(ellipse at 8% 0%, rgba(37,99,235,0.1), transparent 42%),
+        var(--sf-white);
+    }
+    .cap-list {
+      margin: 2.25rem 0 0; padding: 0; list-style: none;
+      display: grid; gap: 1.35rem; max-width: 58rem;
+    }
+    .cap-list li {
+      display: grid;
+      grid-template-columns: 7.5rem 1fr;
+      gap: 1rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 1px solid var(--sf-line);
+    }
+    .cap-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+    .cap-list .tag {
+      font-family: var(--font-head);
+      font-size: 0.78rem; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--sf-deep);
+      padding-top: 0.15rem;
+    }
+    .cap-list strong {
+      display: block;
+      font-family: var(--font-head);
+      font-size: 1.05rem;
+      margin-bottom: 0.3rem;
+      color: var(--sf-ink);
+    }
+    .cap-list p {
+      margin: 0;
+      color: var(--sf-muted);
+      font-size: 0.98rem;
+      line-height: 1.55;
+    }
+
+    .portal {
+      background: linear-gradient(180deg, #eff6ff 0%, #f8fafc 100%);
+      border-block: 1px solid var(--sf-line);
+    }
+    .portal-grid {
+      margin-top: 2.25rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.75rem 2.5rem;
+      max-width: 58rem;
+    }
+    .portal-grid h3 {
+      font-size: 1.05rem;
+      margin: 0 0 0.4rem;
+    }
+    .portal-grid p {
+      margin: 0;
+      color: var(--sf-muted);
+      font-size: 0.95rem;
+      line-height: 1.55;
+    }
+
+    .compliance { background: var(--sf-white); }
+    .compliance-list {
+      margin: 2rem 0 0; padding: 0; list-style: none;
+      display: grid; gap: 1rem; max-width: 52rem;
+    }
+    .compliance-list li {
+      padding-left: 1.1rem;
+      border-left: 3px solid var(--sf-blue);
+      color: var(--sf-muted);
+      line-height: 1.55;
+    }
+    .compliance-list strong { color: var(--sf-ink); font-family: var(--font-head); }
+
+    .pricing {
+      background:
+        radial-gradient(ellipse at 90% 0%, rgba(14,165,233,0.08), transparent 40%),
+        var(--sf-paper);
+    }
+    .price-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-top: 2.25rem;
+      align-items: stretch;
+    }
+    .price {
+      border: 1px solid var(--sf-line);
+      border-radius: 14px;
+      padding: 1.45rem 1.35rem 1.55rem;
+      background: #fff;
+      display: flex; flex-direction: column; gap: 0.7rem;
+      transition: border-color .2s ease, transform .2s ease;
+    }
+    .price:hover { border-color: #93c5fd; transform: translateY(-2px); }
+    .price.featured {
+      border-color: var(--sf-blue);
+      background: linear-gradient(180deg, #eff6ff 0%, #fff 40%);
+    }
+    .price .who {
+      font-size: 0.82rem;
+      color: var(--sf-muted);
+      line-height: 1.45;
+      margin: 0;
+    }
+    .price h3 { font-size: 1.2rem; }
+    .price .amt {
+      font-family: var(--font-head);
+      font-size: 2rem; font-weight: 700; letter-spacing: -0.03em;
+    }
+    .price .amt span { font-size: 0.95rem; font-weight: 500; color: var(--sf-muted); }
+    .price .does {
+      font-size: 0.88rem;
+      color: var(--sf-ink);
+      line-height: 1.5;
+      margin: 0;
+      font-weight: 500;
+    }
+    .price ul {
+      margin: 0.15rem 0 0; padding: 0; list-style: none;
+      display: grid; gap: 0.55rem;
+      color: var(--sf-muted); font-size: 0.86rem; line-height: 1.45;
+      flex: 1;
+    }
+    .price ul li { padding-left: 0.85rem; position: relative; }
+    .price ul li::before {
+      content: "";
+      position: absolute; left: 0; top: 0.55em;
+      width: 0.35rem; height: 0.35rem; border-radius: 50%;
+      background: var(--sf-blue);
+    }
+    .price .btn { width: 100%; margin-top: 0.65rem; }
+
+    .demo {
+      background:
+        radial-gradient(ellipse at 80% 0%, rgba(14,165,233,0.12), transparent 40%),
+        linear-gradient(180deg, #0f172a 0%, #1e3a8a 100%);
+      color: #fff;
+    }
+    .demo .section-kicker { color: #7dd3fc; }
+    .demo .section-support { color: rgba(255,255,255,0.75); }
+    .demo-form {
+      margin-top: 2rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.85rem;
+      max-width: 40rem;
+    }
+    .demo-form label {
+      display: grid; gap: 0.35rem;
+      font-size: 0.8rem; font-weight: 600; color: #dbeafe;
+    }
+    .demo-form label.full { grid-column: 1 / -1; }
+    .demo-form input, .demo-form select, .demo-form textarea {
+      width: 100%;
+      border: 1px solid rgba(191,219,254,0.28);
+      background: rgba(15, 23, 42, 0.35);
+      color: #fff;
+      border-radius: 10px;
+      padding: 0.75rem 0.85rem;
+      font: inherit;
+    }
+    .demo-form input::placeholder, .demo-form textarea::placeholder { color: rgba(255,255,255,0.45); }
+    .demo-form .btn { justify-self: start; margin-top: 0.35rem; }
+    .form-note { grid-column: 1 / -1; font-size: 0.8rem; color: rgba(255,255,255,0.55); }
+    .form-status {
+      grid-column: 1 / -1;
+      min-height: 1.25rem;
+      font-size: 0.9rem;
+      color: #bbf7d0;
+    }
+    .form-status.err { color: #fecaca; }
+
+    footer {
+      background: #fff;
+      border-top: 1px solid var(--sf-line);
+      padding: 2rem 0 2.5rem;
+    }
+    .foot {
+      display: flex; flex-wrap: wrap; gap: 1rem;
+      justify-content: space-between; align-items: center;
+      color: var(--sf-muted); font-size: 0.875rem;
+    }
+    .foot strong { color: var(--sf-ink); font-family: var(--font-head); }
+    .foot a { color: var(--sf-blue); text-decoration: none; }
+    .reveal { opacity: 0; transform: translateY(16px); transition: opacity .7s ease, transform .7s ease; }
+    .reveal.in { opacity: 1; transform: none; }
+
+    @media (max-width: 900px) {
+      .price-grid, .portal-grid { grid-template-columns: 1fr; }
+      .cap-list li { grid-template-columns: 1fr; gap: 0.35rem; }
+      .nav-links a:not(.nav-cta) { display: none; }
+      .hero-copy { padding-bottom: 3.25rem; }
+      .demo-form { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .hero-media, .hero-copy, .reveal { animation: none !important; transition: none !important; opacity: 1; transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero" id="top">
+    <div class="hero-media" aria-hidden="true"></div>
+    <nav class="nav wrap" aria-label="Primary">
+      <a href="/" style="text-decoration:none;color:#fff;font-family:var(--font-head);font-weight:700;font-size:0.95rem;opacity:0">Smart FCRA</a>
+      <div class="nav-links">
+        <a href="#violations">Violations</a>
+        <a href="#portal">Portal</a>
+        <a href="/login?mode=demo">Book a demo</a>
+        <a href="#pricing">Packages</a>
+        <a class="nav-cta" href="/login" id="nav-signin">Sign in</a>
+      </div>
+    </nav>
+    <div class="hero-copy wrap">
+      <p class="brand-mark">Smart FCRA</p>
+      <p class="brand-by">by RJ Business Solutions</p>
+      <h2>Pinpoint the violations. Generate the letters. Run the case in one portal.</h2>
+      <p class="hero-support">Smart FCRA reads the bureau file, scores FCRA / FDCPA / ECOA / Metro&nbsp;2 issues for litigation, generates dispute and demand letters from those facts, and gives clients a sandbox report, tutors, and CROA-safe controls.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="/login?mode=demo">Launch interactive demo</a>
+        <a class="btn btn-ghost" href="/login?mode=register">Start organization</a>
+      </div>
+    </div>
+  </header>
+
+  <section class="violations" id="violations">
+    <div class="wrap reveal">
+      <p class="section-kicker">Violations &amp; litigation</p>
+      <h2 class="section-title">Built around the finding — not a blank form.</h2>
+      <p class="section-support">Every letter Smart FCRA generates is driven by what the engine found on that client’s report: statute, evidence, damages range, and which defendant gets the demand. Operators QA findings before anything mails.</p>
+      <ul class="cap-list">
+        <li>
+          <div class="tag">Detect</div>
+          <div>
+            <strong>15-category violation engine</strong>
+            <p>FCRA accuracy and investigation failures, FDCPA collection abuses, ECOA discrimination flags, Metro&nbsp;2 field defects, state overlays, and bankruptcy reporting issues — each tied to statute text and the account evidence on file.</p>
+          </div>
+        </li>
+        <li>
+          <div class="tag">Score</div>
+          <div>
+            <strong>Litigation Vulnerability Score + damages</strong>
+            <p>LVS ranks how trial-ready a finding is. Statutory and actual damage bands, willfulness framing, and attorney-fee estimates sit on the violation record so staff know what is worth fighting versus educating.</p>
+          </div>
+        </li>
+        <li>
+          <div class="tag">Generate</div>
+          <div>
+            <strong>Letters generated from the file — never fill-in templates</strong>
+            <p>Bureau §&nbsp;611 disputes, furnisher §&nbsp;623 challenges, method-of-verification demands, cease-and-desist, intent-to-sue, CFPB/AG paths, and specialty rounds are composed from the selected violations, account facts, and letter strategy — then branded as PDF under your org letterhead.</p>
+          </div>
+        </li>
+        <li>
+          <div class="tag">Cite</div>
+          <div>
+            <strong>Case law + SOL on the finding</strong>
+            <p>Findings carry case-law hooks and a statute-of-limitations calculator by state and debt type so operators do not chase time-barred accounts or invent citations.</p>
+          </div>
+        </li>
+        <li>
+          <div class="tag">Mail</div>
+          <div>
+            <strong>Click2Mail + FCRA §&nbsp;611 clocks</strong>
+            <p>Approved letters can mail through Click2Mail. Each send starts the 30-day statutory investigation clock (35-day operational buffer) so the portal knows when a bureau is late.</p>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="portal" id="portal">
+    <div class="wrap reveal">
+      <p class="section-kicker">Client portal &amp; learning</p>
+      <h2 class="section-title">What the consumer actually sees and does.</h2>
+      <p class="section-support">This is not a staff-only scanner. Clients work inside Smart FCRA: read the real report, confirm facts, approve disputes, learn their rights, and cancel under CROA without calling support.</p>
+      <div class="portal-grid">
+        <div>
+          <h3>Report sandbox</h3>
+          <p>Scrollable paper copy of the imported Experian / Equifax / TransUnion file in a scriptless iframe — accounts, payment-history legend, hard vs soft inquiries, original PDF when vaulted. Viewing is not a dispute.</p>
+        </div>
+        <div>
+          <h3>Evidence-first disputes</h3>
+          <p>Structured fact interview and attestation. Identity-theft claims stay gated. The hallucination firewall blocks fabricated reasons and guaranteed-deletion language before a letter ever drafts.</p>
+        </div>
+        <div>
+          <h3>Credit case &amp; action plan</h3>
+          <p>Findings as observations until staff QA, next-best-action for the consumer, credit-event ledger (deleted vs corrected vs balance change), and utilization education without fake FICO promises.</p>
+        </div>
+        <div>
+          <h3>Learning resources</h3>
+          <p>Consumer Rights hub (FCRA / CROA / TSR / FDCPA / identity theft), Credit Tutor (Alex Rivera), strategy mentors for staff, journey rituals, and document vault for every generated letter the client is allowed to see.</p>
+        </div>
+        <div>
+          <h3>CROA / TSR billing controls</h3>
+          <p>In-portal cancel services. Analysis unlock blocked until service completion is recorded on the ledger. Named score models only — VantageScore / FICO labeled when known.</p>
+        </div>
+        <div>
+          <h3>Ops that stay attached</h3>
+          <p>Staff console for clients, violation QA, letter generation, mailing, MFSN imports, GHL sync, tradelines, fundability, and RON legal sessions — same RJ Business Solutions brand the client already trusts.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="compliance" id="compliance">
+    <div class="wrap reveal">
+      <p class="section-kicker">Compliance posture</p>
+      <h2 class="section-title">Software for operators — not outcome guarantees.</h2>
+      <p class="section-support">Smart FCRA does not promise deletions, score lifts, lending approval, or funding. It documents the file, the finding, the letter, and the clock.</p>
+      <ul class="compliance-list">
+        <li><strong>Facts before fight</strong> — dispute language must come from the report or the consumer’s attestation.</li>
+        <li><strong>QA before mail</strong> — staff review findings; Metro&nbsp;2 cross-bureau variance stays REVIEW/OBSERVATION until someone owns it.</li>
+        <li><strong>CROA cancellation in-portal</strong> — not buried in a support ticket.</li>
+        <li><strong>Completion before charge</strong> — covered credit-repair billing waits on a recorded service completion.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="pricing" id="pricing">
+    <div class="wrap reveal">
+      <p class="section-kicker">Packages</p>
+      <h2 class="section-title">What each package actually runs for your firm.</h2>
+      <p class="section-support">Pick the capacity and litigation depth you need. Letters are generated from violations on the file in every package — there is no template library upsell.</p>
+      <div class="price-grid">
+        <article class="price featured">
+          <h3>Professional</h3>
+          <div class="amt">$497<span>/mo</span></div>
+          <p class="who">Solo CRO or small team running up to 100 active clients through detection → QA → generated letter → portal.</p>
+          <p class="does">Puts the violation engine and generated dispute/demand letters on every intake, with a full client portal so consumers can see the sandbox report and learn while you litigate the file.</p>
+          <ul>
+            <li>Up to 100 active clients; unlimited report analyses on those files</li>
+            <li>15-category violation engine across FCRA, FDCPA, ECOA, Metro&nbsp;2, state, bankruptcy</li>
+            <li>Litigation Vulnerability Score + statutory/actual damage estimates on each finding</li>
+            <li>Generated letters from selected violations (bureau, furnisher, MOV, intent paths) — not blank forms</li>
+            <li>Case-law hooks on findings + state SOL calculator</li>
+            <li>Client portal: report sandbox, attestations, disputes, action plan, rights hub, Credit Tutor</li>
+            <li>CROA in-portal cancel + completion ledger gates</li>
+            <li>Priority email support</li>
+          </ul>
+          <a class="btn btn-primary" href="/login?mode=register&amp;plan=professional">Start Professional</a>
+        </article>
+        <article class="price">
+          <h3>Unlimited</h3>
+          <div class="amt">$2,500<span>/mo</span></div>
+          <p class="who">High-volume shops that live on monitoring imports, mailed rounds, and multi-seat operator queues.</p>
+          <p class="does">Removes client caps, wires MyFreeScoreNow / monitoring pulls, and turns approved letters into mailed campaigns with live FCRA §&nbsp;611 investigation clocks so late bureaus show up in the case.</p>
+          <ul>
+            <li>Everything in Professional, unlimited clients and scans</li>
+            <li>MFSN / monitoring imports with analysis lock until staff unlock</li>
+            <li>Click2Mail campaigns + 30-day statutory / 35-day operational clocks</li>
+            <li>Full in-product FCRA knowledge base and staff mentor assist for strategy sequencing</li>
+            <li>Team operator seats for violation QA and mail ops</li>
+            <li>Faster support SLA; quarterly business review available</li>
+            <li>Multi-org management for agencies running more than one brand</li>
+          </ul>
+          <a class="btn btn-primary" href="/login?mode=register&amp;plan=unlimited">Start Unlimited</a>
+        </article>
+        <article class="price">
+          <h3>Enterprise</h3>
+          <div class="amt">$9,997<span>/mo</span></div>
+          <p class="who">Law firms, white-label networks, and litigation desks that need the full generated document pack and API.</p>
+          <p class="does">Unlocks the complete generated litigation document set (~45 letter types including C&amp;D, AG, CFPB specialty rounds), the full case-law library, white-label client portals, and a dedicated account manager for legal-ops design.</p>
+          <ul>
+            <li>Unlimited seats, clients, and analyses</li>
+            <li>Full generated litigation document pack from violation → PDF under your letterhead</li>
+            <li>Full case-law database (300+ cited themes) for willfulness / damages framing</li>
+            <li>White-label client portals + branded sandbox reports</li>
+            <li>API access for CRM / case-management glue</li>
+            <li>Dedicated account manager</li>
+            <li>Expert legal-ops consultation add-on</li>
+          </ul>
+          <a class="btn btn-primary" href="#demo">Talk to sales</a>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="demo" id="demo">
+    <div class="wrap reveal">
+      <p class="section-kicker">Demo</p>
+      <h2 class="section-title">Walk the violation → letter → portal path on your pipeline.</h2>
+      <p class="section-support">Tell RJ Business Solutions about your firm. We will show detection, generated letters, the client sandbox, and learning resources — not a consumer credit signup.</p>
+      <form class="demo-form" id="demo-form">
+        <label>First name
+          <input name="firstName" required autocomplete="given-name" placeholder="Jordan" />
+        </label>
+        <label>Last name
+          <input name="lastName" required autocomplete="family-name" placeholder="Lee" />
+        </label>
+        <label class="full">Work email
+          <input name="email" type="email" required autocomplete="email" placeholder="you@yourfirm.com" />
+        </label>
+        <label>Phone
+          <input name="phone" type="tel" autocomplete="tel" placeholder="(555) 555-5555" />
+        </label>
+        <label>Team size
+          <select name="teamSize">
+            <option value="1-3">1–3 people</option>
+            <option value="4-10">4–10 people</option>
+            <option value="11-25">11–25 people</option>
+            <option value="26+">26+</option>
+          </select>
+        </label>
+        <label class="full">What do you want to see?
+          <textarea name="notes" rows="3" placeholder="Violation scoring, generated § 611 / 623 letters, client sandbox, tutors, Click2Mail clocks…"></textarea>
+        </label>
+        <div id="cf-turnstile" class="full"></div>
+        <p class="form-note">By submitting, you agree we may contact you about Smart FCRA. This is not credit repair enrollment for consumers.</p>
+        <button class="btn btn-primary" type="submit">Request demo</button>
+        <div class="form-status" id="form-status" role="status" aria-live="polite"></div>
+      </form>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap foot">
+      <div>
+        <strong>Smart FCRA</strong> by RJ Business Solutions · Empowering Generational Wealth
+      </div>
+      <div>
+        <a href="/login">Sign in</a>
+        ·
+        <a href="/brand">Brand library</a>
+        ·
+        <a href="https://rjbusinesssolutions.org" rel="noopener">rjbusinesssolutions.org</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/static/brand/turnstile.js"></script>
+  <script>
+    (function () {
+      const reveals = document.querySelectorAll('.reveal');
+      if ('IntersectionObserver' in window) {
+        const io = new IntersectionObserver((entries) => {
+          entries.forEach((e) => { if (e.isIntersecting) e.target.classList.add('in'); });
+        }, { threshold: 0.15 });
+        reveals.forEach((el) => io.observe(el));
+      } else {
+        reveals.forEach((el) => el.classList.add('in'));
+      }
+
+      try {
+        if (localStorage.getItem('fcra_token')) {
+          const signin = document.getElementById('nav-signin');
+          if (signin) { signin.textContent = 'Open app'; signin.href = '/app'; }
+        }
+      } catch (_) {}
+
+      const form = document.getElementById('demo-form');
+      const status = document.getElementById('form-status');
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        status.classList.remove('err');
+        status.textContent = 'Sending…';
+        const fd = new FormData(form);
+        const body = Object.fromEntries(fd.entries());
+        body.form = 'saas-demo';
+        body.product = 'Smart FCRA';
+        body.brand = 'RJ Business Solutions';
+        if (typeof window.rjGetTurnstileToken === 'function') {
+          body.cfTurnstileToken = window.rjGetTurnstileToken() || '';
+        }
+        try {
+          const res = await fetch('/api/public/lead/saas-demo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || data.detail || 'Could not submit');
+          status.textContent = 'Received. We will reach out about your Smart FCRA demo.';
+          form.reset();
+        } catch (err) {
+          status.classList.add('err');
+          status.textContent = err.message || 'Submission failed';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

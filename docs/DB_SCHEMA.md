@@ -1,22 +1,12 @@
-# Database Schema — FCRA Supreme Violation Detector
+# Database schema — Smart FCRA
 
-The relational multi-tenant SQLite database schema (Cloudflare D1) has been fully defined, documented, and consolidated into the Master API manual.
+Canonical table roster, tenancy, retention, and compliance mapping:
 
-👉 **Refer to the Master Documentation:** [docs/API_INTEGRATIONS_AND_SPECS.md#️-relational-database-schema-design-cloudflare-d1](file:///c:/Users/ricky/Downloads/fcra-detector-main/fcra-detector-main/docs/API_INTEGRATIONS_AND_SPECS.md#️-relational-database-schema-design-cloudflare-d1)
+**[`docs/DATA_AND_COMPLIANCE.md`](./DATA_AND_COMPLIANCE.md)**  
+Code: `src/lib/data-compliance.ts` · migrations `0001`–`0024`
 
----
+High-signal tables: `organizations`, `users`, `sessions`, `session_events`, `clients`, `credit_reports`, `violations`, `documents`, `activity_log`, `security_audit_log`, `privacy_requests`, `brand_leads`, `client_consents`, `investigation_clocks`, `service_records`, `billing_ledger`, `demo_sessions`.
 
-## 🏛️ Quick Database Table Roster
-- `organizations`: B2B Tenants with dynamically adjustable tier and compliance limit fields.
-- `users`: Registered users, including `'super_admin'`, `'admin'`, and `'member'` roles.
-- `sessions`: Active device cookies.
-- `clients`: Consumer clients (PIN fields are fully encrypted at rest using Aes-256-Gcm).
-- `credit_reports`: Extracted credit report details and tradelines.
-- `violations`: Detected FCRA/FDCPA compliance statutory violations.
-- `documents`: Generated dispute letters and litigation complaints.
-- `activity_logs`: Global security audit trails tracking operator actions, IP addresses, and timestamps.
+Sessions are opaque D1 tokens (IP/UA/last-seen). Activity logs are operational (`activity_log`); security events are `security_audit_log`. IP/UA on `activity_log` exist from migration 0024 onward for new optional writes.
 
----
-⏰ **Anchor Date:** 2026-07-08 MST  
-🏢 **RJ Business Solutions**  
-👤 **Owner:** Rick Jefferson  
+Anchor: 2026-08-14 · RJ Business Solutions

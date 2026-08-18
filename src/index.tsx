@@ -53,6 +53,24 @@ import { buildInstitutionalProfile, slimInstitutionalReport } from './data/fundi
 import { DOCUMENT_TYPES, type DocumentData } from './engine/documents';
 import { generatePDFReport, type PDFReportData, generatePDFFromText } from './engine/pdf-generator';
 import { turnstilePublicConfig, verifyTurnstileToken } from './lib/turnstile';
+import {
+  DEMO_ORG_ID,
+  DEMO_STAFF_EMAIL,
+  DEMO_CLIENT_ID,
+  DEMO_CLIENT_NAME,
+  DEMO_TOUR,
+  DEMO_PRODUCT_KNOWLEDGE,
+  DEMO_SESSION_HOURS,
+  routeDemoIntent,
+  fallbackDemoReply,
+  parseAgentActions,
+  hashDemoToken,
+  normalizeDemoEmail,
+  normalizeDemoPhone,
+  demoSessionExpiryIso,
+  livePullBlocked,
+  buildDemoConvertUrl,
+} from './engine/demo-experience';
 import { fillSixMonthSeries, sparklinePath } from './lib/overview-metrics';
 import { resolveTenantTheme } from './lib/tenant-theme';
 import { FOUNDER_TEMPLATES } from './engine/founder-templates';
@@ -119,7 +137,28 @@ import { CITIZENSHIP_STATUSES, GENDER_OPTIONS, MARITAL_STATUS_OPTIONS } from './
 import { listTradelineEducation } from './data/tradeline-education';
 import { sendSms } from './lib/alerts';
 import sampleMfsnReport from './data/sample-mfsn-report.json';
-import { spaAppSource, pwaSwSource, pwaManifestSource } from './generated/spa-source';
+import { spaAppSource, pwaSwSource, pwaManifestSource, marketingLandingHtml, marketingDemoHtml, demoExperienceSource } from './generated/spa-source';
+import { persistCreditTwinFromParsed } from './lib/credit-twin';
+import { registerClientIntelligenceRoutes } from './lib/client-intelligence-routes';
+import { inspectUpload, decodeBase64Bytes, sanitizeFileName } from './lib/upload-hygiene';
+import { vaultOriginalFromBody } from './lib/report-vault';
+import { persistInvestigationClock, closeInvestigationClock, FCRA_611_OPERATIONAL_DAYS } from './lib/investigation-clocks';
+import { recordServiceCompleted, assertCoveredChargeAllowed, writeBillingLedger } from './lib/service-ledger';
+import { sendLetterViaClick2Mail } from './lib/click2mail';
+import {
+  D1_BACKUP_TABLES,
+  brandLeadsVisibleTo,
+  collectPrivacyExport,
+  dataInventoryPayload,
+  insertSessionRow,
+  lookupActiveSession,
+  purgeClientRecords,
+  revokeSessions,
+  sessionsListScope,
+  touchSessionActivity,
+  writeSessionEvent,
+} from './lib/data-compliance';
+import { evaluateIdentityTheftGate } from './engine/dispute-attestation';
 
 // Secure field-level cryptographic helpers mapped to Worker bindings
 async function encryptPII(c: any, text: string): Promise<string> {
@@ -176,6 +215,32 @@ async function persistBureauScores(
     } catch (e) {
       console.warn('[scores] client update skipped', e);
     }
+  }
+
+  try {
+    await persistCreditTwinFromParsed(c.env.DB, {
+      orgId: opts.orgId,
+      clientId: opts.clientId,
+      reportId: opts.reportId,
+      bureau: opts.bureau,
+      parsed: opts.parsed,
+    });
+  } catch (e) {
+    console.warn('[credit-twin] snapshot skipped', e);
+  }
+
+  try {
+    await recordServiceCompleted({
+      db: c.env.DB,
+      id: generateId(),
+      orgId: opts.orgId,
+      clientId: opts.clientId,
+      serviceType: 'credit_report_analysis',
+      performedBy: 'system',
+      deliverableId: opts.reportId,
+    });
+  } catch (e) {
+    console.warn('[service-ledger] analysis completion skipped', e);
   }
 }
 
@@ -396,8 +461,15 @@ async function backpopulateClientInfo(c: any, clientId: string, personalInfo: an
 
     // 2. Backpopulate Date of Birth if currently empty
     if (!client.dob && personalInfo.dobs?.[0]) {
+      const dobVal = personalInfo.dobs[0].trim();
       updates.push('dob = ?');
-      binds.push(personalInfo.dobs[0].trim());
+      binds.push(dobVal);
+      if (!client.dob_enc) {
+        try {
+          updates.push('dob_enc = ?');
+          binds.push(await encryptPII(c, dobVal));
+        } catch { /* key missing */ }
+      }
     }
 
     // 3. Backpopulate Clean SSN Last 4 if currently empty
@@ -414,6 +486,12 @@ async function backpopulateClientInfo(c: any, clientId: string, personalInfo: an
       if (ssnVal) {
         updates.push('ssn_last4 = ?');
         binds.push(ssnVal);
+        if (!client.ssn_last4_enc) {
+          try {
+            updates.push('ssn_last4_enc = ?');
+            binds.push(await encryptPII(c, ssnVal));
+          } catch { /* key missing */ }
+        }
       }
     }
 
@@ -446,8 +524,8 @@ async function backpopulateClientInfo(c: any, clientId: string, personalInfo: an
 
     if (updates.length > 0) {
       updates.push('updated_at = datetime("now")');
-      binds.push(clientId);
-      const sql = `UPDATE clients SET ${updates.join(', ')} WHERE id = ?`;
+      binds.push(clientId, orgId);
+      const sql = `UPDATE clients SET ${updates.join(', ')} WHERE id = ? AND org_id = ?`;
       await c.env.DB.prepare(sql).bind(...binds).run();
     }
   } catch (err) {
@@ -577,7 +655,7 @@ app.use('/api/*', cors());
 // ═══════════════════════════════════════════════════════════════
 app.use('*', async (c, next) => {
   await next();
-  c.res.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://sdk.twilio.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://storage.googleapis.com https://images.unsplash.com https://imagedelivery.net https://api.qrserver.com; media-src 'self' blob: mediastream:; worker-src 'self' blob:; child-src blob: https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://api.stripe.com https://fonts.googleapis.com https://api.groq.com https://openrouter.ai https://api-inference.huggingface.co https://generativelanguage.googleapis.com https://cdn.jsdelivr.net https://sdk.twilio.com https://*.twilio.com wss://*.twilio.com https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+  c.res.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://sdk.twilio.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://storage.googleapis.com https://images.unsplash.com https://imagedelivery.net https://api.qrserver.com; media-src 'self' blob: mediastream:; worker-src 'self' blob:; child-src 'self' blob: about:srcdoc https://challenges.cloudflare.com; frame-src 'self' blob: about:srcdoc https://challenges.cloudflare.com; connect-src 'self' https://api.stripe.com https://fonts.googleapis.com https://api.groq.com https://openrouter.ai https://api-inference.huggingface.co https://generativelanguage.googleapis.com https://cdn.jsdelivr.net https://sdk.twilio.com https://*.twilio.com wss://*.twilio.com https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
   c.res.headers.set('X-Frame-Options', 'DENY');
   c.res.headers.set('X-Content-Type-Options', 'nosniff');
   c.res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -618,6 +696,11 @@ app.use('/api/auth/login', rateLimiter);
 app.use('/api/auth/register', rateLimiter);
 app.use('/api/public/mfsn-signup', rateLimiter);
 app.use('/api/public/lead/*', rateLimiter);
+app.use('/api/public/demo/*', rateLimiter);
+app.use('/api/demo/agent/chat', rateLimiter);
+app.use('/api/demo/mfsn-live', rateLimiter);
+app.use('/api/demo/prepare', rateLimiter);
+app.use('/api/demo/convert', rateLimiter);
 app.use('/api/auth/forgot-password', rateLimiter);
 app.use('/api/auth/change-password', rateLimiter);
 app.use('/api/auth/mfa/setup', rateLimiter);
@@ -666,6 +749,13 @@ app.onError(async (err, c) => {
 // Serve SPA from the Worker bundle first (prevents blank screen if Pages asset is stale/corrupt)
 app.get('/static/app.js', (c) => {
   return c.body(spaAppSource, 200, {
+    'Content-Type': 'application/javascript; charset=utf-8',
+    'Cache-Control': 'no-cache, must-revalidate',
+    'X-Content-Type-Options': 'nosniff',
+  });
+});
+app.get('/static/demo-experience.js', (c) => {
+  return c.body(demoExperienceSource, 200, {
     'Content-Type': 'application/javascript; charset=utf-8',
     'Cache-Control': 'no-cache, must-revalidate',
     'X-Content-Type-Options': 'nosniff',
@@ -726,9 +816,7 @@ async function authMiddleware(c: any, next: any) {
     c.req.query('token');
   if (!sessionId) return c.json({ error: 'Unauthorized' }, 401);
 
-  const session = await c.env.DB.prepare(
-    'SELECT s.*, u.id as user_id, u.name as user_name, u.email as user_email, u.role as user_role, u.is_active, u.org_id, COALESCE(u.must_change_password, 0) as must_change_password, COALESCE(u.mfa_enabled, 0) as mfa_enabled FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND s.expires_at > datetime("now")'
-  ).bind(sessionId).first();
+  const session = await lookupActiveSession(c.env.DB, sessionId);
 
   if (!session) return c.json({ error: 'Session expired' }, 401);
 
@@ -782,10 +870,25 @@ async function authMiddleware(c: any, next: any) {
 
   if (session.ip_address && session.ip_address !== 'unknown' && session.ip_address !== currentIp) {
     console.warn(`[SECURITY] Session IP change. Session: ${session.id}. Saved: ${session.ip_address}, Request: ${currentIp}`);
+    await writeSessionEvent(c.env, {
+      sessionId: session.id, orgId: session.org_id, userId: session.user_id, demoSessionId: session.demo_session_id,
+      eventType: 'fingerprint_ip_mismatch', ip: currentIp, ua: currentUa, path: c.req.path,
+      detail: { saved: session.ip_address },
+    });
   }
   if (session.user_agent && session.user_agent !== 'unknown' && session.user_agent !== currentUa) {
     console.warn(`[SECURITY] Session UA change. Session: ${session.id}. Saved: ${session.user_agent?.slice(0, 80)}, Request: ${currentUa?.slice(0, 80)}`);
+    await writeSessionEvent(c.env, {
+      sessionId: session.id, orgId: session.org_id, userId: session.user_id, demoSessionId: session.demo_session_id,
+      eventType: 'fingerprint_ua_mismatch', ip: currentIp, ua: currentUa, path: c.req.path,
+    });
   }
+
+  const touch = touchSessionActivity(c.env, session.id, c.req.path);
+  try {
+    if (c.executionCtx?.waitUntil) c.executionCtx.waitUntil(touch);
+    else await touch;
+  } catch { /* ignore */ }
 
   c.set('user', { id: session.user_id, name: session.user_name, email: session.user_email, role: session.user_role, org_id: session.org_id });
   c.set('session', session);
@@ -909,6 +1012,9 @@ const BRAND_FORM_IDS = new Set([
   'whitelabel',
   'partnership',
   'podcast-guest',
+  'saas-demo',
+  'smart-fcra-demo',
+  'interactive-demo',
 ]);
 
 /** Public RJ brand lead capture (interactive forms). */
@@ -934,19 +1040,30 @@ app.post('/api/public/lead/:formId', async (c) => {
   const orgId = resolvePublicSignupOrgId(c.env);
   const leadId = generateId();
   const payload = { ...body, form: body.form || formId };
+  const sourceIp = c.req.header('CF-Connecting-IP') || null;
+  const sourceUa = (c.req.header('User-Agent') || '').slice(0, 240) || null;
   try {
     await c.env.DB.prepare(
-      `INSERT INTO brand_leads (id, org_id, form_id, email, phone, first_name, last_name, payload_json, source_url, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', datetime('now'), datetime('now'))`,
+      `INSERT INTO brand_leads (id, org_id, form_id, email, phone, first_name, last_name, payload_json, source_url, source_ip, user_agent, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', datetime('now'), datetime('now'))`,
     ).bind(
       leadId, orgId, formId, email || null, phone || null, firstName || null, lastName || null,
-      JSON.stringify(payload), c.req.header('Referer') || null,
+      JSON.stringify(payload), c.req.header('Referer') || null, sourceIp, sourceUa,
     ).run();
   } catch (e: any) {
-    if (String(e?.message || '').includes('no such table')) {
+    if (String(e?.message || '').includes('no such column')) {
+      await c.env.DB.prepare(
+        `INSERT INTO brand_leads (id, org_id, form_id, email, phone, first_name, last_name, payload_json, source_url, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', datetime('now'), datetime('now'))`,
+      ).bind(
+        leadId, orgId, formId, email || null, phone || null, firstName || null, lastName || null,
+        JSON.stringify(payload), c.req.header('Referer') || null,
+      ).run();
+    } else if (String(e?.message || '').includes('no such table')) {
       return c.json({ error: 'Migration 0020 required', code: 'MIGRATION_REQUIRED' }, 503);
+    } else {
+      throw e;
     }
-    throw e;
   }
 
   // Soft: email ops + sync GHL contact
@@ -1006,23 +1123,531 @@ app.post('/api/public/lead/:formId', async (c) => {
   }, 201);
 });
 
+async function lookupDemoSession(c: any) {
+  const session = c.get('session');
+  if (!session?.id) return null;
+  try {
+    return await c.env.DB.prepare(
+      `SELECT * FROM demo_sessions WHERE auth_session_id = ? AND expires_at > datetime('now') AND status IN ('active','pending')`,
+    ).bind(session.id).first() as any;
+  } catch (e: any) {
+    if (String(e?.message || '').includes('no such table')) return { _missing: true };
+    throw e;
+  }
+}
+
+async function ensureDemoHost(c: any) {
+  const orgId = DEMO_ORG_ID;
+  await c.env.DB.prepare(
+    `INSERT OR IGNORE INTO organizations (id, name, slug, plan, max_users, max_clients, max_reports_per_month, settings)
+     VALUES (?, ?, ?, 'professional', 25, 500, 200, '{}')`,
+  ).bind(orgId, 'Smart FCRA Demo', 'smart-fcra-demo').run();
+  await c.env.DB.prepare(
+    `UPDATE organizations SET plan = 'professional', name = 'Smart FCRA Demo' WHERE id = ?`,
+  ).bind(orgId).run().catch(() => {});
+  let user = await c.env.DB.prepare(
+    `SELECT * FROM users WHERE lower(email) = ? AND org_id = ?`,
+  ).bind(DEMO_STAFF_EMAIL, orgId).first() as any;
+  if (!user) {
+    const passwordHash = await hashPassword(createSessionToken() + 'Aa1!');
+    await c.env.DB.prepare(
+      `INSERT INTO users (id, org_id, email, name, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, 'admin', 1)`,
+    ).bind('usr_demo_001', orgId, DEMO_STAFF_EMAIL, 'Demo Host', passwordHash).run();
+    user = await c.env.DB.prepare(`SELECT * FROM users WHERE id = ?`).bind('usr_demo_001').first() as any;
+  }
+  return { orgId, user };
+}
+
+/** Gate: business identity required, then issue a hashed demo token. */
+app.post('/api/public/demo/start', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const email = normalizeDemoEmail(body.email || body.Email);
+  const phone = String(body.phone || body.Phone || '').trim();
+  const phoneDigits = normalizeDemoPhone(phone);
+  const businessName = String(body.businessName || body.business_name || '').trim();
+  const businessAddress = String(body.businessAddress || body.business_address || '').trim();
+  const firstName = String(body.firstName || body.first_name || '').trim();
+  const lastName = String(body.lastName || body.last_name || '').trim();
+  if (!email || !phoneDigits || phoneDigits.length < 10 || !businessName || !businessAddress) {
+    return c.json({ error: 'Work email, phone, business name, and business address are required before the demo opens.' }, 400);
+  }
+  const turnstile = await verifyTurnstileToken(
+    c.env,
+    body.cfTurnstileToken || body['cf-turnstile-response'] || c.req.header('cf-turnstile-response'),
+    c.req.header('CF-Connecting-IP'),
+  );
+  if (!turnstile.ok) return c.json({ error: 'Bot check failed', detail: turnstile.error }, 403);
+
+  const token = createSessionToken();
+  const tokenHash = await hashDemoToken(token);
+  const id = generateId();
+  const orgId = resolvePublicSignupOrgId(c.env);
+  const expiresAt = demoSessionExpiryIso(DEMO_SESSION_HOURS);
+  const sourceIp = c.req.header('CF-Connecting-IP') || null;
+  const sourceUa = (c.req.header('User-Agent') || '').slice(0, 240) || null;
+
+  try {
+    const existing = await c.env.DB.prepare(
+      `SELECT id, status, expires_at, mfsn_pulls FROM demo_sessions
+       WHERE email = ? AND expires_at > datetime('now') AND status IN ('active','pending')
+       ORDER BY created_at DESC LIMIT 1`,
+    ).bind(email).first() as any;
+    if (existing) {
+      try {
+        await c.env.DB.prepare(
+          `UPDATE demo_sessions SET token_hash = ?, phone = ?, business_name = ?, business_address = ?, first_name = ?, last_name = ?, org_id = ?, source_ip = ?, user_agent = ?, updated_at = datetime('now') WHERE id = ?`,
+        ).bind(tokenHash, phone, businessName, businessAddress, firstName || null, lastName || null, orgId, sourceIp, sourceUa, existing.id).run();
+      } catch {
+        await c.env.DB.prepare(
+          `UPDATE demo_sessions SET token_hash = ?, phone = ?, business_name = ?, business_address = ?, first_name = ?, last_name = ?, updated_at = datetime('now') WHERE id = ?`,
+        ).bind(tokenHash, phone, businessName, businessAddress, firstName || null, lastName || null, existing.id).run();
+      }
+    } else {
+      try {
+        await c.env.DB.prepare(
+          `INSERT INTO demo_sessions (id, email, phone, business_name, business_address, first_name, last_name, token_hash, status, expires_at, org_id, source_ip, user_agent)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
+        ).bind(id, email, phone, businessName, businessAddress, firstName || null, lastName || null, tokenHash, expiresAt, orgId, sourceIp, sourceUa).run();
+      } catch {
+        await c.env.DB.prepare(
+          `INSERT INTO demo_sessions (id, email, phone, business_name, business_address, first_name, last_name, token_hash, status, expires_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+        ).bind(id, email, phone, businessName, businessAddress, firstName || null, lastName || null, tokenHash, expiresAt).run();
+      }
+    }
+  } catch (e: any) {
+    if (String(e?.message || '').includes('no such table')) {
+      return c.json({ error: 'Migration 0023 required', code: 'MIGRATION_REQUIRED' }, 503);
+    }
+    throw e;
+  }
+
+  const leadId = generateId();
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO brand_leads (id, org_id, form_id, email, phone, first_name, last_name, payload_json, source_url, source_ip, user_agent, status, created_at, updated_at)
+       VALUES (?, ?, 'interactive-demo', ?, ?, ?, ?, ?, ?, ?, ?, 'new', datetime('now'), datetime('now'))`,
+    ).bind(
+      leadId, orgId, email, phone, firstName || null, lastName || null,
+      JSON.stringify({ ...body, form: 'interactive-demo', businessName, businessAddress }),
+      c.req.header('Referer') || '/demo',
+      sourceIp, sourceUa,
+    ).run();
+    await c.env.DB.prepare(`UPDATE demo_sessions SET lead_id = ? WHERE token_hash = ?`).bind(leadId, tokenHash).run();
+  } catch { /* brand_leads optional if 0020 missing */ }
+
+  try {
+    const opsEmail = c.env.TRADELINE_OPS_EMAIL || c.env.COMPANY_EMAIL || 'support@rjbusinesssolutions.org';
+    await sendAppEmail(c.env, {
+      to: opsEmail,
+      from: c.env.CLOUDFLARE_EMAIL_FROM_ONBOARDING || c.env.CLOUDFLARE_EMAIL_FROM_NOREPLY || 'welcome@onboarding.smartfcra.com',
+      fromName: 'RJ Business Solutions',
+      subject: `[Smart FCRA Demo] ${businessName} — ${firstName} ${lastName}`.trim(),
+      html: `<p>Interactive demo started for <b>${businessName}</b><br/>${firstName} ${lastName}<br/>${email}<br/>${phone}<br/>${businessAddress}</p>`,
+      text: `Demo ${businessName} ${email} ${phone} ${businessAddress}`,
+      purpose: 'onboarding',
+    });
+  } catch { /* soft */ }
+
+  try {
+    if (ghlConfigured(c.env)) {
+      await syncClientToGhl(c.env, {
+        id: leadId,
+        email,
+        phone,
+        first_name: firstName,
+        last_name: lastName,
+        case_status: 'LEAD',
+        payment_status: 'lead',
+        signup_source: 'interactive-demo',
+      }, {
+        orgName: businessName,
+        analysisUnlocked: false,
+        tags: ['RJ Lead', 'Interactive Demo', 'Smart FCRA'],
+      });
+    }
+  } catch { /* soft */ }
+
+  return c.json({ ok: true, token, expiresHours: DEMO_SESSION_HOURS, enter: '/app?demo=' + token });
+});
+
+app.post('/api/public/demo/enter', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const token = String(body.token || c.req.query('token') || '').trim();
+  if (!token) return c.json({ error: 'Demo token required' }, 400);
+  const tokenHash = await hashDemoToken(token);
+  let row: any;
+  try {
+    row = await c.env.DB.prepare(
+      `SELECT * FROM demo_sessions WHERE token_hash = ? AND expires_at > datetime('now')`,
+    ).bind(tokenHash).first();
+  } catch (e: any) {
+    if (String(e?.message || '').includes('no such table')) {
+      return c.json({ error: 'Migration 0023 required', code: 'MIGRATION_REQUIRED' }, 503);
+    }
+    throw e;
+  }
+  if (!row) return c.json({ error: 'Demo session expired or invalid. Restart at /demo with your firm details.' }, 401);
+
+  const host = await ensureDemoHost(c);
+  let sampleCase: any = null;
+  try {
+    const seeded = await ensureDemoClientAndPortal(c, host.orgId, {
+      loadCase: true,
+      actingUser: { id: host.user.id, org_id: host.orgId },
+    });
+    sampleCase = seeded.sampleCase || null;
+  } catch { /* sample client optional — overlay /api/demo/prepare retries */ }
+
+  const sessionToken = createSessionToken();
+  const expires = new Date(Date.now() + DEMO_SESSION_HOURS * 60 * 60 * 1000).toISOString();
+  const ip = c.req.header('CF-Connecting-IP') || 'unknown';
+  const ua = c.req.header('User-Agent') || 'unknown';
+  await insertSessionRow(c.env.DB, {
+    id: sessionToken, userId: host.user.id, orgId: host.orgId, expires, ip, ua, demoSessionId: row.id,
+  });
+
+  await c.env.DB.prepare(
+    `UPDATE demo_sessions SET status = 'active', auth_session_id = ?, org_id = ?, user_id = ?, last_seen_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
+  ).bind(sessionToken, host.orgId, host.user.id, row.id).run();
+
+  await writeSessionEvent(c.env, {
+    sessionId: sessionToken, orgId: host.orgId, userId: host.user.id, demoSessionId: row.id,
+    eventType: 'demo_enter', ip, ua, path: '/api/public/demo/enter',
+    detail: { email: row.email, businessName: row.business_name },
+  });
+  await writeSecurityAudit(c.env, {
+    orgId: host.orgId, actorUserId: host.user.id, actorRole: host.user.role || 'admin', action: 'demo_enter',
+    resourceType: 'demo_session', resourceId: row.id, ip, ua,
+  });
+
+  return c.json({
+    token: sessionToken,
+    user: { id: host.user.id, name: host.user.name || 'Demo Host', email: host.user.email, role: host.user.role || 'admin', org_id: host.orgId, isDemo: true },
+    org: { id: host.orgId, name: 'Smart FCRA Demo', plan: 'professional' },
+    demo: {
+      id: row.id,
+      businessName: row.business_name,
+      email: row.email,
+      firstName: row.first_name || null,
+      lastName: row.last_name || null,
+      phone: row.phone || null,
+      mfsnPulls: row.mfsn_pulls || 0,
+      liveClientId: row.live_client_id || null,
+      tourStep: row.tour_step || 0,
+      sampleClientId: DEMO_CLIENT_ID,
+      sampleClientName: DEMO_CLIENT_NAME,
+      sampleLoaded: !!(sampleCase && (sampleCase.alreadyLoaded || sampleCase.violationsFound || sampleCase.reports)),
+      convertUrl: buildDemoConvertUrl({
+        businessName: row.business_name,
+        email: row.email,
+        firstName: row.first_name,
+        lastName: row.last_name,
+        phone: row.phone,
+      }),
+      uploadReady: true,
+    },
+  });
+});
+
+app.get('/api/demo/tour', authMiddleware, async (c) => {
+  const demo = await lookupDemoSession(c);
+  if (demo?._missing) return c.json({ error: 'Migration 0023 required', code: 'MIGRATION_REQUIRED' }, 503);
+  if (!demo) return c.json({ error: 'Interactive demo session required' }, 403);
+  return c.json({ steps: DEMO_TOUR, product: 'Smart FCRA', brand: 'RJ Business Solutions' });
+});
+
+app.get('/api/demo/session', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const demo = await lookupDemoSession(c);
+  if (demo?._missing) return c.json({ error: 'Migration 0023 required', code: 'MIGRATION_REQUIRED' }, 503);
+  if (!demo) return c.json({ error: 'Interactive demo session required' }, 403);
+  let reports = 0;
+  let violations = 0;
+  try {
+    const r = await c.env.DB.prepare(
+      `SELECT COUNT(*) as c FROM credit_reports WHERE client_id = ? AND org_id = ?`,
+    ).bind(DEMO_CLIENT_ID, user.org_id).first() as any;
+    reports = Number(r?.c || 0);
+    const v = await c.env.DB.prepare(
+      `SELECT COUNT(*) as c FROM violations WHERE client_id = ? AND org_id = ?`,
+    ).bind(DEMO_CLIENT_ID, user.org_id).first() as any;
+    violations = Number(v?.c || 0);
+  } catch { /* schema optional in tests */ }
+  const providers = listConfiguredProviders(c.env);
+  const convertUrl = buildDemoConvertUrl({
+    businessName: demo.business_name,
+    email: demo.email,
+    firstName: demo.first_name,
+    lastName: demo.last_name,
+    phone: demo.phone,
+  });
+  return c.json({
+    id: demo.id,
+    businessName: demo.business_name,
+    email: demo.email,
+    mfsnPulls: demo.mfsn_pulls || 0,
+    liveClientId: demo.live_client_id,
+    tourStep: demo.tour_step || 0,
+    sampleClientId: DEMO_CLIENT_ID,
+    sampleClientName: DEMO_CLIENT_NAME,
+    sampleLoaded: reports > 0,
+    reports,
+    violations,
+    livePullRemaining: livePullBlocked(demo) ? 0 : 1,
+    uploadReady: true,
+    convertUrl,
+    ai: {
+      configured: providers.filter((p) => p.configured && p.free).length,
+      providers: providers.filter((p) => p.free).map((p) => ({ id: p.id, configured: p.configured })),
+    },
+  });
+});
+
+app.post('/api/demo/prepare', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const demo = await lookupDemoSession(c);
+  if (demo?._missing) return c.json({ error: 'Migration 0023 required', code: 'MIGRATION_REQUIRED' }, 503);
+  if (!demo) return c.json({ error: 'Interactive demo session required' }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const ensured = await ensureDemoClientAndPortal(c, user.org_id, {
+    loadCase: body.loadCase !== false,
+    forceReload: !!body.forceReload,
+    actingUser: { id: user.id, org_id: user.org_id },
+  });
+  const sample = ensured.sampleCase || null;
+  return c.json({
+    ok: true,
+    sandbox: true,
+    clientId: ensured.clientId,
+    clientName: DEMO_CLIENT_NAME,
+    portalEmail: ensured.email,
+    caseLoaded: !!(sample && (sample.alreadyLoaded || sample.violationsFound || sample.reports || sample.totalViolations)),
+    sampleCase: sample,
+    uploadReady: true,
+    convertUrl: buildDemoConvertUrl({
+      businessName: demo.business_name,
+      email: demo.email,
+      firstName: demo.first_name,
+      lastName: demo.last_name,
+      phone: demo.phone,
+    }),
+    message: 'Interactive demo sandbox ready — Salisha sample case, upload, and generated letters are on this org.',
+  });
+});
+
+app.post('/api/demo/convert', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const demo = await lookupDemoSession(c);
+  if (demo?._missing) return c.json({ error: 'Migration 0023 required', code: 'MIGRATION_REQUIRED' }, 503);
+  if (!demo) return c.json({ error: 'Interactive demo session required' }, 403);
+  const registerUrl = buildDemoConvertUrl({
+    businessName: demo.business_name,
+    email: demo.email,
+    firstName: demo.first_name,
+    lastName: demo.last_name,
+    phone: demo.phone,
+  });
+  await c.env.DB.prepare(
+    'INSERT INTO activity_log (id, org_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?)',
+  ).bind(
+    generateId(), user.org_id, user.id, 'demo_convert_to_signup',
+    'Interactive demo converted to organization signup',
+    JSON.stringify({ demoSessionId: demo.id, email: demo.email, businessName: demo.business_name }),
+  ).run().catch(() => {});
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role || 'admin', action: 'demo_convert_to_signup',
+    resourceType: 'demo_session', resourceId: demo.id,
+    ip: c.req.header('CF-Connecting-IP'), ua: c.req.header('User-Agent'),
+  });
+  return c.json({
+    ok: true,
+    registerUrl,
+    orgName: demo.business_name,
+    email: demo.email,
+    planHint: { professional: 497, unlimited: 2500, enterprise: 9997 },
+  });
+});
+
+app.patch('/api/demo/session', authMiddleware, async (c) => {
+  const demo = await lookupDemoSession(c);
+  if (!demo || demo._missing) return c.json({ error: 'Interactive demo session required' }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const tourStep = Number(body.tourStep);
+  if (Number.isFinite(tourStep)) {
+    await c.env.DB.prepare(`UPDATE demo_sessions SET tour_step = ?, last_seen_at = datetime('now') WHERE id = ?`)
+      .bind(Math.max(0, Math.min(DEMO_TOUR.length - 1, tourStep)), demo.id).run();
+  }
+  return c.json({ ok: true });
+});
+
+app.post('/api/demo/agent/chat', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const demo = await lookupDemoSession(c);
+  if (demo?._missing) return c.json({ error: 'Migration 0023 required', code: 'MIGRATION_REQUIRED' }, 503);
+  if (!demo) return c.json({ error: 'Interactive demo session required' }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const message = String(body.message || '').trim().slice(0, 2000);
+  if (!message) return c.json({ error: 'message required' }, 400);
+
+  const routed = routeDemoIntent(message);
+  let reply = '';
+  let actions = routed.actions;
+  try {
+    const result = await generateAiText(c.env, [
+      {
+        role: 'system',
+        content: `${DEMO_PRODUCT_KNOWLEDGE}
+
+Respond as the in-app demo guide. Current screen: ${String(body.page || '')}.
+If you want the UI to move, append a JSON block:
+\`\`\`json
+{"reply":"spoken explanation","actions":[{"type":"navigate","page":"violations"}]}
+\`\`\`
+Valid action types: navigate (page + optional data), impersonate, exitImpersonate, tour (step number), prepare, openLiveMfsn, convertToSignup.
+Keep reply under 180 words. No legal advice. No internals.`,
+      },
+      { role: 'user', content: message },
+    ]);
+    const parsed = parseAgentActions(result.text);
+    reply = parsed.reply || routed.speak;
+    if (parsed.actions.length) actions = parsed.actions;
+    else if (routed.matched && !parsed.actions.length) actions = routed.actions;
+  } catch {
+    const fb = fallbackDemoReply(message);
+    reply = fb.reply;
+    actions = fb.actions.length ? fb.actions : actions;
+  }
+  if (!reply) reply = fallbackDemoReply(message).reply;
+
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO demo_agent_turns (id, demo_session_id, org_id, role, content, actions_json) VALUES (?, ?, ?, 'user', ?, null)`,
+    ).bind(generateId(), demo.id, user.org_id, message).run();
+    await c.env.DB.prepare(
+      `INSERT INTO demo_agent_turns (id, demo_session_id, org_id, role, content, actions_json) VALUES (?, ?, ?, 'agent', ?, ?)`,
+    ).bind(generateId(), demo.id, user.org_id, reply, JSON.stringify(actions)).run();
+  } catch {
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO demo_agent_turns (id, demo_session_id, role, content, actions_json) VALUES (?, ?, 'user', ?, null)`,
+      ).bind(generateId(), demo.id, message).run();
+      await c.env.DB.prepare(
+        `INSERT INTO demo_agent_turns (id, demo_session_id, role, content, actions_json) VALUES (?, ?, 'agent', ?, ?)`,
+      ).bind(generateId(), demo.id, reply, JSON.stringify(actions)).run();
+    } catch { /* ignore log failure */ }
+  }
+
+  await c.env.DB.prepare(`UPDATE demo_sessions SET last_seen_at = datetime('now') WHERE id = ?`).bind(demo.id).run().catch(() => {});
+  await c.env.DB.prepare(
+    'INSERT INTO activity_log (id, org_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?)',
+  ).bind(
+    generateId(), user.org_id, user.id, 'demo_agent_chat',
+    'Interactive demo agent turn',
+    JSON.stringify({ demoSessionId: demo.id }),
+  ).run().catch(() => {});
+
+  return c.json({ reply, actions, routed: routed.matched });
+});
+
+app.post('/api/demo/mfsn-live', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const demo = await lookupDemoSession(c);
+  if (!demo || demo._missing) return c.json({ error: 'Interactive demo session required' }, 403);
+  if (livePullBlocked(demo)) {
+    return c.json({ error: 'This demo account already used its one live MyFreeScoreNow report. Open a paid organization to run production imports.' }, 409);
+  }
+  const prior = await c.env.DB.prepare(
+    `SELECT id FROM demo_sessions WHERE (email = ? OR phone = ?) AND mfsn_pulls >= 1 AND id != ? LIMIT 1`,
+  ).bind(demo.email, demo.phone, demo.id).first();
+  if (prior) {
+    return c.json({ error: 'This email or phone already ran a live demo pull. One person, one report, per account.' }, 409);
+  }
+
+  const body = await c.req.json().catch(() => ({}));
+  const memberEmail = normalizeDemoEmail(body.memberEmail || body.mfsnUsername);
+  const memberToken = String(body.memberToken || body.mfsnToken || '').trim();
+  if (!memberEmail || !memberToken) {
+    return c.json({ error: 'MyFreeScoreNow member email and MAPIK# token are required for the live pull.' }, 400);
+  }
+
+  const creds = resolvePublicSignupMfsnCredentials(c.env, memberToken);
+  if (!creds) {
+    return c.json({ error: 'Live MFSN is not configured on this deployment (partner credentials missing). Use the Salisha sandbox case instead.' }, 503);
+  }
+
+  const clientId = 'cli_demo_live_' + demo.id.slice(0, 16);
+  const existingClient = await c.env.DB.prepare(`SELECT id FROM clients WHERE id = ?`).bind(clientId).first();
+  if (!existingClient) {
+    await c.env.DB.prepare(
+      `INSERT INTO clients (id, org_id, created_by, first_name, last_name, email, phone, address_line1, status, notes, tags, portal_analysis_unlocked)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, '["demo-live"]', 1)`,
+    ).bind(
+      clientId, user.org_id, user.id,
+      demo.first_name || 'Demo', demo.last_name || 'Visitor',
+      memberEmail, demo.phone, demo.business_address,
+      `Live demo pull for ${demo.business_name}`,
+    ).run();
+  }
+
+  try {
+    const mfsn = new MFSNClient(creds);
+    const pulled = await mfsn.fetchAndNormalize(memberEmail);
+    const bureauReports = mapMfsnToInternal(pulled.raw || pulled);
+    if (!bureauReports.length) return c.json({ error: 'No bureau data returned for that member.' }, 404);
+    const demoViolationCount = bureauReports.reduce((s, r) => s + liveAnalyzeParsedReport(r).violations.length, 0);
+    await importBureauReportsBatch(c, {
+      generateId,
+      encryptPII,
+      backpopulateClientInfo,
+      saveViolationsForReport,
+      persistBureauScores,
+      markPriorBureauReportsStale,
+      refreshBureauPackStatus,
+      computeAndStoreFundability,
+    }, {
+      clientId,
+      bureauReports,
+      rawPayload: pulled.raw || pulled,
+      sourceProvider: 'DemoLiveMFSN',
+      sourcePayloadType: 'mfsn-live',
+      fileNamePrefix: 'demo-live-mfsn',
+      activityAction: 'demo_live_mfsn',
+      activityDescription: `Demo live MFSN pull (${bureauReports.length} bureaus, ${demoViolationCount} findings)`,
+    });
+    await c.env.DB.prepare(
+      `UPDATE demo_sessions SET mfsn_pulls = 1, mfsn_member_email = ?, live_client_id = ?, updated_at = datetime('now') WHERE id = ?`,
+    ).bind(memberEmail, clientId, demo.id).run();
+    return c.json({
+      ok: true,
+      clientId,
+      bureaus: bureauReports.length,
+      findings: demoViolationCount,
+      message: 'Live file imported. This account cannot pull another demo report. Open Violations to see findings generated from this file.',
+    });
+  } catch (e: any) {
+    const msg = e instanceof MFSNError ? e.message : (e?.message || 'Live pull failed');
+    return c.json({ error: msg }, 502);
+  }
+});
+
 app.get('/api/brand/leads', authMiddleware, async (c) => {
   const user = c.get('user');
   if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
   try {
     const publicOrg = resolvePublicSignupOrgId(c.env);
-    const rows = (user.role === 'admin' || user.role === 'super_admin')
+    const rows = brandLeadsVisibleTo(user.role) === 'all'
       ? await c.env.DB.prepare(
-          `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, created_at
+          `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, source_ip, created_at
            FROM brand_leads ORDER BY created_at DESC LIMIT 200`,
         ).all()
       : await c.env.DB.prepare(
-          `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, created_at
+          `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, source_ip, created_at
            FROM brand_leads
-           WHERE org_id = ? OR org_id = ? OR org_id IS NULL
+           WHERE org_id = ?
            ORDER BY created_at DESC LIMIT 200`,
-        ).bind(user.org_id, publicOrg).all();
-    return c.json({ ok: true, leads: rows.results || [], publicOrgId: publicOrg });
+        ).bind(user.org_id).all();
+    return c.json({ ok: true, leads: rows.results || [], publicOrgId: publicOrg, scope: brandLeadsVisibleTo(user.role) });
   } catch (e: any) {
     if (String(e?.message || '').includes('no such table')) {
       return c.json({ ok: true, leads: [], warning: 'Migration 0020 required' });
@@ -1044,18 +1669,28 @@ app.get('/api/brand/catalog', authMiddleware, async (c) => {
       { id: 'whitelabel-app', title: 'Whitelabel Application', url: '/forms/whitelabel' },
       { id: 'partnership', title: 'Partnership Application', url: '/forms/partnership' },
       { id: 'podcast-guest', title: 'Podcast Guest', url: '/forms/podcast-guest' },
+      { id: 'saas-demo', title: 'Smart FCRA SaaS Demo', url: '/#demo' },
     ],
     brand: {
       name: 'RJ Business Solutions',
+      product: 'Smart FCRA',
       tagline: 'Empowering Generational Wealth',
       colors: { blue: '#2563eb', sky: '#0ea5e9', deep: '#1e3a8a', navy: '#0f172a' },
       fonts: { head: 'Space Grotesk', body: 'Inter' },
       logo: 'https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg',
       web: 'https://rjbusinesssolutions.org',
+      marketing: '/',
       email: 'support@rjbusinesssolutions.org',
     },
   });
 });
+
+/** Public Smart FCRA sales funnel (software landing). */
+app.get('/', (c) => c.html(marketingLandingHtml));
+app.get('/pricing', (c) => c.redirect('/#pricing', 302));
+app.get('/demo', (c) => c.html(marketingDemoHtml));
+app.get('/login', (c) => c.html(getAppHtml()));
+app.get('/app', (c) => c.html(getAppHtml()));
 
 /** Friendly short URLs into the brand library */
 app.get('/brand', (c) => c.redirect('/static/brand/', 302));
@@ -1629,10 +2264,22 @@ app.post('/api/auth/login', async (c) => {
     user = await c.env.DB.prepare(
       'SELECT u.*, o.name as org_name, o.plan as org_plan, o.settings as org_settings FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ?'
     ).bind(email).first() as any;
-    if (!user) return c.json({ error: 'Invalid credentials' }, 401);
+    if (!user) {
+      await writeSecurityAudit(c.env, {
+        action: 'login_failed', ip: c.req.header('CF-Connecting-IP'), ua: c.req.header('User-Agent'),
+        success: false, detail: { reason: 'unknown_user' },
+      });
+      return c.json({ error: 'Invalid credentials' }, 401);
+    }
 
     const valid = await verifyPassword(password, user.password_hash);
-    if (!valid) return c.json({ error: 'Invalid credentials' }, 401);
+    if (!valid) {
+      await writeSecurityAudit(c.env, {
+        orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'login_failed',
+        ip: c.req.header('CF-Connecting-IP'), ua: c.req.header('User-Agent'), success: false, detail: { reason: 'bad_password' },
+      });
+      return c.json({ error: 'Invalid credentials' }, 401);
+    }
 
     if (user.is_active !== 1) {
       return c.json({
@@ -1670,8 +2317,14 @@ app.post('/api/auth/login', async (c) => {
   const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   const ip = c.req.header('CF-Connecting-IP') || 'unknown';
   const ua = c.req.header('User-Agent') || 'unknown';
-  await c.env.DB.prepare('INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)').bind(token, user.id, user.org_id, expires, ip, ua).run();
+  await insertSessionRow(c.env.DB, { id: token, userId: user.id, orgId: user.org_id, expires, ip, ua });
   await c.env.DB.prepare('UPDATE users SET last_login = datetime("now") WHERE id = ?').bind(user.id).run();
+  await writeSessionEvent(c.env, {
+    sessionId: token, orgId: user.org_id, userId: user.id, eventType: 'login', ip, ua, path: '/api/auth/login',
+  });
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'login', ip, ua,
+  });
 
   return c.json({
     token,
@@ -1703,8 +2356,14 @@ app.post('/api/auth/mfa/challenge', async (c) => {
   const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   const ip = c.req.header('CF-Connecting-IP') || 'unknown';
   const ua = c.req.header('User-Agent') || 'unknown';
-  await c.env.DB.prepare('INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)').bind(token, user.id, user.org_id, expires, ip, ua).run();
+  await insertSessionRow(c.env.DB, { id: token, userId: user.id, orgId: user.org_id, expires, ip, ua });
   await c.env.DB.prepare('UPDATE users SET last_login = datetime("now") WHERE id = ?').bind(user.id).run();
+  await writeSessionEvent(c.env, {
+    sessionId: token, orgId: user.org_id, userId: user.id, eventType: 'mfa_login', ip, ua, path: '/api/auth/mfa/challenge',
+  });
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'mfa_login', ip, ua,
+  });
 
   return c.json({
     token,
@@ -1795,7 +2454,7 @@ app.post('/api/auth/change-password', authMiddleware, async (c) => {
     await c.env.DB.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`).bind(hash, user.id).run();
   }
   const session = c.get('session');
-  await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND id != ?').bind(user.id, session.id).run();
+  await revokeSessions(c.env.DB, { userId: user.id, exceptId: session.id });
   await writeSecurityAudit(c.env, {
     orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'password_changed',
     ip: c.req.header('CF-Connecting-IP'), ua: c.req.header('User-Agent'),
@@ -1818,9 +2477,83 @@ app.get('/api/security/trust-center', async (c) => {
   });
 });
 
+app.get('/api/compliance/data-inventory', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  return c.json(dataInventoryPayload());
+});
+
+app.get('/api/security/audit-log', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  const limit = Math.min(200, Math.max(1, Number(c.req.query('limit') || 100)));
+  try {
+    const rows = user.role === 'super_admin' && c.req.query('all') === '1'
+      ? await c.env.DB.prepare(
+          `SELECT id, org_id, actor_user_id, actor_role, action, resource_type, resource_id, ip_address, success, created_at FROM security_audit_log ORDER BY created_at DESC LIMIT ?`,
+        ).bind(limit).all()
+      : await c.env.DB.prepare(
+          `SELECT id, org_id, actor_user_id, actor_role, action, resource_type, resource_id, ip_address, success, created_at FROM security_audit_log WHERE org_id = ? ORDER BY created_at DESC LIMIT ?`,
+        ).bind(user.org_id, limit).all();
+    return c.json({ events: rows?.results || [] });
+  } catch (e: any) {
+    if (String(e?.message || '').includes('no such table')) return c.json({ events: [], warning: 'Migration 0008 required' });
+    throw e;
+  }
+});
+
+app.get('/api/auth/session-events', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const session = c.get('session');
+  const scope = sessionsListScope(session);
+  try {
+    const rows = scope.mode === 'demo'
+      ? await c.env.DB.prepare(
+          `SELECT id, event_type, ip_address, path, created_at FROM session_events WHERE user_id = ? AND demo_session_id = ? ORDER BY created_at DESC LIMIT 100`,
+        ).bind(user.id, scope.demoSessionId).all()
+      : await c.env.DB.prepare(
+          `SELECT id, event_type, ip_address, path, created_at FROM session_events WHERE user_id = ? AND (demo_session_id IS NULL OR demo_session_id = '') ORDER BY created_at DESC LIMIT 100`,
+        ).bind(user.id).all();
+    return c.json({ events: rows?.results || [] });
+  } catch {
+    return c.json({ events: [], warning: 'Migration 0024 required' });
+  }
+});
+
+app.post('/api/admin/clients/:id/legal-hold', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (!(user.role === 'admin' || user.role === 'super_admin')) return c.json({ error: 'Admin only' }, 403);
+  const body = await c.req.json().catch(() => ({}));
+  const hold = body.hold === true || body.hold === 1 || body.hold === '1';
+  const client = await c.env.DB.prepare(`SELECT id, org_id FROM clients WHERE id = ? AND org_id = ?`)
+    .bind(c.req.param('id'), user.org_id).first() as any;
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  await c.env.DB.prepare(
+    `UPDATE clients SET data_retention_holds = ?, notes = COALESCE(notes, '') || ?, updated_at = datetime('now') WHERE id = ? AND org_id = ?`,
+  ).bind(hold ? 1 : 0, hold ? `\n[legal-hold ${new Date().toISOString()}] ${String(body.reason || 'litigation/retention')}` : `\n[legal-hold released ${new Date().toISOString()}]`, client.id, user.org_id).run();
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role,
+    action: hold ? 'legal_hold_set' : 'legal_hold_released',
+    resourceType: 'client', resourceId: client.id, ip: c.req.header('CF-Connecting-IP'),
+    detail: { reason: body.reason || null },
+  });
+  return c.json({ ok: true, hold });
+});
+
 app.post('/api/auth/logout', authMiddleware, async (c) => {
   const session = c.get('session');
-  await c.env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(session.id).run();
+  const user = c.get('user');
+  const ip = c.req.header('CF-Connecting-IP') || 'unknown';
+  const ua = c.req.header('User-Agent') || 'unknown';
+  await revokeSessions(c.env.DB, { userId: user.id, sessionId: session.id });
+  await writeSessionEvent(c.env, {
+    sessionId: session.id, orgId: user.org_id, userId: user.id, demoSessionId: session.demo_session_id,
+    eventType: 'logout', ip, ua, path: '/api/auth/logout',
+  });
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'logout', ip, ua,
+    resourceType: 'session', resourceId: session.id,
+  });
   return c.json({ ok: true });
 });
 
@@ -1833,26 +2566,51 @@ app.get('/api/auth/me', authMiddleware, async (c) => {
 
 app.get('/api/auth/sessions', authMiddleware, async (c) => {
   const user = c.get('user');
-  const rows = await c.env.DB.prepare(
-    `SELECT id, ip_address, user_agent, created_at, expires_at FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`
-  ).bind(user.id).all();
-  const current = c.get('session').id;
-  return c.json({ sessions: (rows?.results || []).map((s: any) => ({ ...s, current: s.id === current })) });
+  const current = c.get('session');
+  const scope = sessionsListScope(current);
+  const sql = scope.mode === 'demo'
+    ? `SELECT id, ip_address, user_agent, created_at, expires_at, last_seen_at, last_path, demo_session_id FROM sessions WHERE user_id = ? AND demo_session_id = ? AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 50`
+    : `SELECT id, ip_address, user_agent, created_at, expires_at, last_seen_at, last_path, demo_session_id FROM sessions WHERE user_id = ? AND demo_session_id IS NULL AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 50`;
+  let rows;
+  try {
+    rows = scope.mode === 'demo'
+      ? await c.env.DB.prepare(sql).bind(user.id, scope.demoSessionId).all()
+      : await c.env.DB.prepare(sql).bind(user.id).all();
+  } catch {
+    rows = await c.env.DB.prepare(
+      `SELECT id, ip_address, user_agent, created_at, expires_at FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`,
+    ).bind(user.id).all();
+  }
+  return c.json({ sessions: (rows?.results || []).map((s: any) => ({ ...s, current: s.id === current.id })), scope: scope.mode });
 });
 
 app.post('/api/auth/sessions/:id/revoke', authMiddleware, async (c) => {
   const user = c.get('user');
   const sessionId = c.req.param('id');
   if (sessionId === c.get('session').id) return c.json({ error: 'Cannot revoke current session' }, 400);
-  await c.env.DB.prepare('DELETE FROM sessions WHERE id = ? AND user_id = ?').bind(sessionId, user.id).run();
+  await revokeSessions(c.env.DB, { userId: user.id, sessionId });
   await writeSecurityAudit(c.env, { orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'session_revoked', resourceId: sessionId, ip: c.req.header('CF-Connecting-IP') });
+  await writeSessionEvent(c.env, {
+    sessionId, orgId: user.org_id, userId: user.id, eventType: 'session_revoked', ip: c.req.header('CF-Connecting-IP'),
+  });
   return c.json({ ok: true });
 });
 
 app.post('/api/auth/sessions/revoke-all', authMiddleware, async (c) => {
   const user = c.get('user');
-  const current = c.get('session').id;
-  await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND id != ?').bind(user.id, current).run();
+  const current = c.get('session');
+  const scope = sessionsListScope(current);
+  if (scope.mode === 'demo') {
+    try {
+      await c.env.DB.prepare(
+        `UPDATE sessions SET revoked_at = datetime('now') WHERE user_id = ? AND demo_session_id = ? AND id != ? AND revoked_at IS NULL`,
+      ).bind(user.id, scope.demoSessionId, current.id).run();
+    } catch {
+      await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND id != ?').bind(user.id, current.id).run();
+    }
+  } else {
+    await revokeSessions(c.env.DB, { userId: user.id, exceptId: current.id });
+  }
   await writeSecurityAudit(c.env, { orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'sessions_revoked_all', ip: c.req.header('CF-Connecting-IP') });
   return c.json({ ok: true });
 });
@@ -1934,8 +2692,8 @@ app.post('/api/auth/reset-password', async (c) => {
   await c.env.DB.batch([
     c.env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(newHash, record.user_id),
     c.env.DB.prepare('DELETE FROM password_reset_tokens WHERE token = ?').bind(token),
-    c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(record.user_id),
   ]);
+  await revokeSessions(c.env.DB, { userId: record.user_id, allForUser: true });
 
   return c.json({ ok: true, message: 'Password reset successfully' });
 });
@@ -2418,7 +3176,20 @@ app.post('/api/client-portal/onboard', authMiddleware, async (c) => {
     bureau: resolvedBureau,
     parsed,
     sourceProvider: 'ClientPortal',
-    sourcePayloadType: 'text',
+    sourcePayloadType: body.fileBase64 ? 'original_file' : 'text',
+  });
+  await vaultOriginalFromBody({
+    env: c.env,
+    db: c.env.DB,
+    orgId: user.org_id,
+    clientId: client.id,
+    reportId,
+    uploadedBy: user.id,
+    fileName,
+    fileBase64: body.fileBase64,
+    declaredMime: body.mimeType,
+    extractedText: rawText,
+    ocrUsed: !!body.ocrUsed,
   });
 
   let fundability = null;
@@ -2812,6 +3583,25 @@ app.post('/api/client-portal/unlock/checkout', authMiddleware, async (c) => {
   if (isPortalAnalysisUnlocked(client)) return c.json({ ok: true, alreadyUnlocked: true });
   if (!stripeConfigured(c.env)) {
     return c.json({ error: 'Card checkout is not configured yet. Your advisor will unlock analysis after payment is received.', stripeConfigured: false }, 503);
+  }
+  const gate = await assertCoveredChargeAllowed({
+    db: c.env.DB,
+    orgId: user.org_id,
+    clientId: client.id,
+    serviceType: 'credit_report_analysis',
+    contractSigned: !!client.croa_contract_agreed,
+    croaDisclosuresAcknowledged: !!client.croa_contract_agreed,
+    tsrApplies: false,
+    generateId,
+  });
+  if (!gate.allowed) {
+    return c.json({
+      error: 'CROA blocks this charge until the promised analysis is fully performed and recorded.',
+      result: gate.eval.result,
+      requirements: gate.eval.requirements,
+      explanation: gate.eval.explanation,
+      decision_id: gate.decisionId,
+    }, 403);
   }
   const amount = Math.max(100, Number(c.env.ANALYSIS_UNLOCK_PRICE_CENTS || 29700));
   const stripe = getStripe(c.env);
@@ -3637,7 +4427,7 @@ app.get('/api/client-portal/uploads', authMiddleware, async (c) => {
   const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
   if (!client) return c.json({ error: 'Client not found' }, 404);
   const rows = await c.env.DB.prepare(
-    `SELECT id, category, file_name, mime_type, notes, analysis_json, r2_key, byte_size, sha256, created_at
+    `SELECT id, category, file_name, mime_type, notes, analysis_json, r2_key, byte_size, sha256, scan_status, ocr_status, created_at
      FROM portal_uploads WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 100`
   ).bind(client.id, user.org_id).all().catch(async () =>
     c.env.DB.prepare(
@@ -3661,6 +4451,9 @@ app.get('/api/client-portal/uploads/:id/download', authMiddleware, async (c) => 
     resourceType: 'portal_upload', resourceId: row.id, ip: c.req.header('CF-Connecting-IP'),
   });
   if (row.r2_key && c.env.DOCS) {
+    if (String(row.scan_status || '') === 'blocked') {
+      return c.json({ error: 'This file was blocked by the malware/hygiene scanner and cannot be downloaded.' }, 403);
+    }
     const obj = await c.env.DOCS.get(row.r2_key);
     if (!obj) return c.json({ error: 'Object missing from vault' }, 404);
     const headers = new Headers();
@@ -3712,6 +4505,7 @@ app.post('/api/client-portal/uploads', authMiddleware, async (c) => {
               `UPDATE violations SET status = 'resolved', updated_at = datetime('now') WHERE client_id = ? AND org_id = ? AND status != 'resolved'`
             ).bind(client.id, user.org_id).run().catch(() => {});
           }
+          await closeInvestigationClock(c.env.DB, { documentId: openDoc.id, orgId: user.org_id });
           await c.env.DB.prepare(
             'INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
           ).bind(
@@ -3775,39 +4569,61 @@ app.post('/api/client-portal/uploads', authMiddleware, async (c) => {
   let r2Key: string | null = null;
   let byteSize: number | null = null;
   let sha256: string | null = null;
+  const enc = contentText ? await encryptPII(c, contentText) : null;
 
   if (fileBase64) {
     if (!c.env.DOCS) return c.json({ error: 'Document vault (R2) is not bound on this deployment' }, 503);
     const raw = fileBase64.includes(',') ? fileBase64.split(',').pop()! : fileBase64;
-    const binary = Uint8Array.from(atob(raw), (ch) => ch.charCodeAt(0));
+    const binary = decodeBase64Bytes(raw);
     if (binary.byteLength > 15 * 1024 * 1024) return c.json({ error: 'File too large (15MB max)' }, 400);
-    byteSize = binary.byteLength;
-    const digest = await crypto.subtle.digest('SHA-256', binary);
-    sha256 = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
-    r2Key = `org/${user.org_id}/client/${client.id}/${id}/${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    await c.env.DOCS.put(r2Key, binary, {
-      httpMetadata: { contentType: mimeType },
-      customMetadata: { orgId: user.org_id, clientId: client.id, sha256, uploadedBy: user.id },
+    const hygiene = await inspectUpload({
+      bytes: binary,
+      fileName,
+      declaredMime: mimeType,
+      extractedText: contentText,
+      ocrUsed: !!body.ocrUsed,
+      category,
     });
-  }
-
-  const enc = contentText ? await encryptPII(c, contentText) : null;
-  try {
-    await c.env.DB.prepare(
-      `INSERT INTO portal_uploads (id, org_id, client_id, uploaded_by, category, file_name, mime_type, content_text, notes, analysis_json, r2_key, byte_size, sha256, encrypted, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))`
-    ).bind(
-      id, user.org_id, client.id, user.id, category, fileName, mimeType, enc, body.notes || null,
-      analysis ? JSON.stringify(analysis) : null, r2Key, byteSize, sha256,
-    ).run();
-  } catch {
-    await c.env.DB.prepare(
-      `INSERT INTO portal_uploads (id, org_id, client_id, uploaded_by, category, file_name, mime_type, content_text, notes, analysis_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-    ).bind(
-      id, user.org_id, client.id, user.id, category, fileName, mimeType, enc, body.notes || null,
-      analysis ? JSON.stringify(analysis) : null,
-    ).run();
+    if (!hygiene.ok) {
+      return c.json({ error: hygiene.scanDetail, hygiene }, 400);
+    }
+    byteSize = hygiene.byteSize;
+    sha256 = hygiene.sha256;
+    r2Key = `org/${user.org_id}/client/${client.id}/${id}/${sanitizeFileName(fileName)}`;
+    await c.env.DOCS.put(r2Key, binary, {
+      httpMetadata: { contentType: hygiene.detectedMime || mimeType },
+      customMetadata: { orgId: user.org_id, clientId: client.id, sha256, uploadedBy: user.id, scanStatus: hygiene.scanStatus },
+    });
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO portal_uploads (id, org_id, client_id, uploaded_by, category, file_name, mime_type, content_text, notes, analysis_json, r2_key, byte_size, sha256, encrypted, scan_status, scan_detail, ocr_status, ocr_chars, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, datetime('now'))`
+      ).bind(
+        id, user.org_id, client.id, user.id, category, fileName, hygiene.detectedMime || mimeType, enc, body.notes || null,
+        analysis ? JSON.stringify(analysis) : null, r2Key, byteSize, sha256,
+        hygiene.scanStatus, hygiene.scanDetail, hygiene.ocrStatus, hygiene.ocrChars,
+      ).run();
+    } catch {
+      await c.env.DB.prepare(
+        `INSERT INTO portal_uploads (id, org_id, client_id, uploaded_by, category, file_name, mime_type, content_text, notes, analysis_json, r2_key, byte_size, sha256, encrypted, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))`
+      ).bind(
+        id, user.org_id, client.id, user.id, category, fileName, mimeType, enc, body.notes || null,
+        analysis ? JSON.stringify(analysis) : null, r2Key, byteSize, sha256,
+      ).run();
+    }
+  } else {
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO portal_uploads (id, org_id, client_id, uploaded_by, category, file_name, mime_type, content_text, notes, analysis_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+      ).bind(
+        id, user.org_id, client.id, user.id, category, fileName, mimeType, enc, body.notes || null,
+        analysis ? JSON.stringify(analysis) : null,
+      ).run();
+    } catch (e: any) {
+      return c.json({ error: e.message || 'Upload insert failed' }, 500);
+    }
   }
 
   await writeSecurityAudit(c.env, {
@@ -4832,35 +5648,12 @@ app.post('/api/privacy/export', authMiddleware, async (c) => {
      VALUES (?, ?, ?, ?, 'export', 'in_progress', ?, ?, datetime('now'))`
   ).bind(reqId, user.org_id, client.id, user.id, body.legalBasis || 'ccpa', body.notes || null).run();
 
-  const reports = await c.env.DB.prepare(`SELECT id, bureau, report_date, file_name, status, created_at FROM credit_reports WHERE client_id = ?`).bind(client.id).all();
-  const violations = await c.env.DB.prepare(`SELECT id, statute, severity, status, created_at FROM violations WHERE client_id = ?`).bind(client.id).all();
-  const docs = await c.env.DB.prepare(`SELECT id, doc_type, title, status, created_at FROM documents WHERE client_id = ?`).bind(client.id).all();
-  const messages = await c.env.DB.prepare(`SELECT id, sender_role, subject, created_at FROM portal_messages WHERE client_id = ?`).bind(client.id).all().catch(() => ({ results: [] }));
-  const uploads = await c.env.DB.prepare(`SELECT id, category, file_name, created_at, sha256 FROM portal_uploads WHERE client_id = ?`).bind(client.id).all().catch(() => ({ results: [] }));
-
-  const pack = {
-    exportedAt: new Date().toISOString(),
+  const pack = await collectPrivacyExport(c.env.DB, {
+    orgId: user.org_id,
+    client,
     requestId: reqId,
     legalBasis: body.legalBasis || 'ccpa',
-    client: {
-      id: client.id,
-      first_name: client.first_name,
-      last_name: client.last_name,
-      email: client.email,
-      phone: client.phone,
-      city: client.city,
-      state: client.state,
-      zip: client.zip,
-      // Never export encrypted SSN material in clear form beyond last4 if present
-      ssn_last4: client.ssn_last4 || null,
-    },
-    reports: reports?.results || [],
-    violations: violations?.results || [],
-    documents: docs?.results || [],
-    messages: messages?.results || [],
-    uploads: uploads?.results || [],
-    notice: 'Raw credit report payloads are available to authorized staff via encrypted vault access; consumer export includes metadata inventory.',
-  };
+  });
 
   await c.env.DB.prepare(
     `UPDATE privacy_requests SET status = 'fulfilled', fulfilled_at = datetime('now'), fulfillment_json = ? WHERE id = ?`
@@ -4920,43 +5713,17 @@ app.post('/api/admin/privacy-requests/:id/fulfill', authMiddleware, async (c) =>
   if (!req) return c.json({ error: 'Not found' }, 404);
   if (req.request_type !== 'delete') return c.json({ error: 'Only delete requests are fulfilled here' }, 400);
   const clientId = req.client_id;
-  const priorClient = await c.env.DB.prepare(`SELECT email FROM clients WHERE id = ? AND org_id = ?`).bind(clientId, user.org_id).first() as any;
+  const priorClient = await c.env.DB.prepare(`SELECT email, data_retention_holds FROM clients WHERE id = ? AND org_id = ?`).bind(clientId, user.org_id).first() as any;
+  if (priorClient?.data_retention_holds === 1) {
+    return c.json({ error: 'Deletion is on legal hold. Release the hold before fulfilling.' }, 409);
+  }
   const priorEmail = priorClient?.email || null;
 
-  // Purge client-scoped sensitive data (retain anonymized audit)
-  const tables = [
-    'portal_messages', 'portal_uploads', 'portal_alerts', 'education_progress', 'tutor_memory', 'roadmap_progress',
-    'fundability_snapshots', 'underwriting_snapshots', 'tradeline_orders', 'violations', 'documents',
-  ];
-  for (const table of tables) {
-    try { await c.env.DB.prepare(`DELETE FROM ${table} WHERE client_id = ? AND org_id = ?`).bind(clientId, user.org_id).run(); } catch { /* soft */ }
-  }
-  // Scrub credit reports content but keep stub for case history if needed
-  try {
-    await c.env.DB.prepare(
-      `UPDATE credit_reports SET raw_text = NULL, parsed_data = NULL, file_name = 'REDACTED', status = 'purged' WHERE client_id = ? AND org_id = ?`
-    ).bind(clientId, user.org_id).run();
-  } catch { /* soft */ }
-  // Anonymize client
-  await c.env.DB.prepare(
-    `UPDATE clients SET first_name = 'REDACTED', last_name = 'REDACTED', email = ?, phone = NULL, phone_e164 = NULL,
-       address_line1 = NULL, address_line2 = NULL, city = NULL, state = NULL, zip = NULL, dob = NULL, ssn_last4 = NULL,
-       ssn_last4_enc = NULL, dob_enc = NULL, notes = 'Purged per privacy request', status = 'purged', updated_at = datetime('now')
-     WHERE id = ? AND org_id = ?`
-  ).bind(`purged+${clientId.slice(0, 8)}@privacy.local`, clientId, user.org_id).run();
-
-  // Disable matching portal login
-  try {
-    if (priorEmail) {
-      await c.env.DB.prepare(
-        `UPDATE users SET is_active = 0, email = ? WHERE org_id = ? AND role = 'client' AND email = ?`
-      ).bind(`purged+${clientId.slice(0, 8)}@privacy.local`, user.org_id, priorEmail).run();
-    }
-  } catch { /* soft */ }
+  const purge = await purgeClientRecords(c.env, { orgId: user.org_id, clientId, priorEmail });
 
   await c.env.DB.prepare(
     `UPDATE privacy_requests SET status = 'fulfilled', fulfilled_at = datetime('now'), fulfillment_json = ? WHERE id = ?`
-  ).bind(JSON.stringify({ purgedBy: user.id, at: new Date().toISOString() }), req.id).run();
+  ).bind(JSON.stringify({ purgedBy: user.id, at: new Date().toISOString(), ...purge }), req.id).run();
 
   await writeSecurityAudit(c.env, {
     orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'privacy_delete_fulfilled',
@@ -4964,7 +5731,7 @@ app.post('/api/admin/privacy-requests/:id/fulfill', authMiddleware, async (c) =>
     detail: { clientId },
   });
 
-  return c.json({ ok: true, purged: true });
+  return c.json({ ok: true, purged: true, ...purge });
 });
 
 
@@ -5099,7 +5866,7 @@ app.get('/api/clients/:clientId/disputes/rounds', authMiddleware, async (c) => {
   let start: number | null = null;
   for (const d of items) {
     const ts = new Date(d.created_at).getTime();
-    if (start === null || ts - start > 35 * 86400000) { if (cur.length) rounds.push({ round: roundNum++, letters: cur }); cur = []; start = ts; }
+    if (start === null || ts - start > FCRA_611_OPERATIONAL_DAYS * 86400000) { if (cur.length) rounds.push({ round: roundNum++, letters: cur }); cur = []; start = ts; }
     cur.push(d);
   }
   if (cur.length) rounds.push({ round: roundNum, letters: cur });
@@ -5334,7 +6101,7 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
   if (!planCheck.allowed) return c.json({ error: planCheck.message }, 403);
 
   const body = await c.req.json();
-  const { clientId, bureau, rawText, fileName, replaceCurrent, autoWorkflow } = body;
+  const { clientId, bureau, rawText, fileName, replaceCurrent, autoWorkflow, fileBase64, mimeType, ocrUsed } = body;
 
   if (!clientId || !rawText) return c.json({ error: 'Client ID and report text required' }, 400);
 
@@ -5455,7 +6222,21 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
     bureau: resolvedBureau,
     parsed,
     sourceProvider: 'AnnualCreditReport',
-    sourcePayloadType: 'text',
+    sourcePayloadType: fileBase64 ? 'original_file' : 'text',
+  });
+
+  const vault = await vaultOriginalFromBody({
+    env: c.env,
+    db: c.env.DB,
+    orgId: user.org_id,
+    clientId,
+    reportId,
+    uploadedBy: user.id,
+    fileName: fileName || 'upload.txt',
+    fileBase64,
+    declaredMime: mimeType,
+    extractedText: rawText,
+    ocrUsed: !!ocrUsed,
   });
 
   const pack = await refreshBureauPackStatus(c, clientId, user.org_id);
@@ -5523,6 +6304,7 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
     bureauPack: pack,
     workflow,
     scores: parsed.scores || null,
+    originalFile: { stored: vault.stored, scanStatus: vault.scanStatus, scanDetail: vault.scanDetail, mime: vault.detectedMime },
   });
 });
 
@@ -5537,7 +6319,7 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
   if (!reportCheck.allowed) return c.json({ error: reportCheck.message }, 403);
 
   const body = await c.req.json();
-  const { rawText, fileName, bureau, clientId: bodyClientId } = body;
+  const { rawText, fileName, bureau, clientId: bodyClientId, fileBase64, mimeType, ocrUsed } = body;
 
   if (!rawText) return c.json({ error: 'Report text required for onboarding' }, 400);
 
@@ -6029,7 +6811,20 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
     bureau: onboardBureau,
     parsed,
     sourceProvider: 'AnnualCreditReport',
-    sourcePayloadType: 'text',
+    sourcePayloadType: fileBase64 ? 'original_file' : 'text',
+  });
+  await vaultOriginalFromBody({
+    env: c.env,
+    db: c.env.DB,
+    orgId: user.org_id,
+    clientId,
+    reportId,
+    uploadedBy: user.id,
+    fileName: fileName || 'onboard-credit-report.txt',
+    fileBase64,
+    declaredMime: mimeType,
+    extractedText: rawText,
+    ocrUsed: !!ocrUsed,
   });
   const onboardPack = await refreshBureauPackStatus(c, clientId, user.org_id);
 
@@ -6338,6 +7133,19 @@ app.post('/api/billing/webhook', async (c) => {
             'portal_analysis_unlocked', 'Stripe checkout unlocked portal analysis',
             JSON.stringify({ paymentIntent: sessionObj.payment_intent || sessionObj.id }),
           ).run().catch(() => {});
+          await writeBillingLedger({
+            db: c.env.DB,
+            id: generateId(),
+            orgId: sessionObj.metadata.orgId,
+            clientId: sessionObj.metadata.clientId,
+            stripeObjectId: String(sessionObj.payment_intent || sessionObj.id),
+            eventType: 'checkout.session.completed',
+            amountCents: sessionObj.amount_total || null,
+            serviceType: 'credit_report_analysis',
+            decision: 'ALLOW',
+            status: 'PAID',
+            explanation: ['Stripe checkout completed after CROA completion gate'],
+          });
         } catch (e) { console.warn('[unlock webhook]', e); }
         break;
       }
@@ -6461,13 +7269,24 @@ app.post('/api/billing/mailing-callback', async (c) => {
   }
 
   const mDate = mailingDate ? new Date(mailingDate) : new Date();
-  const due = new Date(mDate.getTime() + 35 * 24 * 60 * 60 * 1000);
-  const responseDueDateStr = due.toISOString().split('T')[0];
-  const sentDateStr = mDate.toISOString().split('T')[0];
+  const clockId = generateId();
+  const clock = await persistInvestigationClock({
+    db: c.env.DB,
+    id: clockId,
+    orgId: doc.org_id,
+    clientId: doc.client_id,
+    documentId,
+    mailingDate: mDate,
+  });
+  const sentDateStr = clock.mailingDate;
 
   await c.env.DB.prepare(
-    'UPDATE documents SET usps_tracking_number = ?, response_due_date = ?, sent_date = ?, status = \'sent\', updated_at = datetime("now") WHERE id = ?'
-  ).bind(uspsTrackingNumber || null, responseDueDateStr, sentDateStr, documentId).run();
+    'UPDATE documents SET usps_tracking_number = ?, response_due_date = ?, sent_date = ?, status = \'sent\', investigation_clock_id = ?, updated_at = datetime("now") WHERE id = ?'
+  ).bind(uspsTrackingNumber || null, clock.operationalTarget, sentDateStr, clockId, documentId).run().catch(async () => {
+    await c.env.DB.prepare(
+      'UPDATE documents SET usps_tracking_number = ?, response_due_date = ?, sent_date = ?, status = \'sent\', updated_at = datetime("now") WHERE id = ?'
+    ).bind(uspsTrackingNumber || null, clock.operationalTarget, sentDateStr, documentId).run();
+  });
 
   await c.env.DB.prepare(
     'INSERT INTO mailing_webhook_events (id, document_id, payload) VALUES (?, ?, ?)'
@@ -6482,8 +7301,8 @@ app.post('/api/billing/mailing-callback', async (c) => {
     documentId,
     'system_usps',
     'document_mailed',
-    `Certified letter sent via USPS. Tracking: ${uspsTrackingNumber || 'N/A'}. Due date set to ${responseDueDateStr} (15 U.S.C. § 1681i).`,
-    JSON.stringify({ trackingNumber: uspsTrackingNumber, responseDueDate: responseDueDateStr, sentDate: sentDateStr })
+    `Certified letter sent via USPS. Tracking: ${uspsTrackingNumber || 'N/A'}. Statutory FCRA § 611 due ${clock.statutoryTarget}; operational due ${clock.operationalTarget}.`,
+    JSON.stringify({ trackingNumber: uspsTrackingNumber, statutoryTarget: clock.statutoryTarget, operationalTarget: clock.operationalTarget, sentDate: sentDateStr })
   ).run();
 
   try {
@@ -6508,7 +7327,7 @@ app.post('/api/billing/mailing-callback', async (c) => {
     }
   } catch { /* soft */ }
 
-  return c.json({ ok: true, responseDueDate: responseDueDateStr });
+  return c.json({ ok: true, responseDueDate: clock.operationalTarget, statutoryTarget: clock.statutoryTarget, clockId: clock.clockId });
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -6668,6 +7487,10 @@ app.get('/api/reports/:id', authMiddleware, async (c) => {
   const id = c.req.param('id');
   const report = await c.env.DB.prepare('SELECT * FROM credit_reports WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
   if (!report) return c.json({ error: 'Not found' }, 404);
+
+  if (user.role === 'client') {
+    return c.json({ error: 'Open this report from My Credit. Client access uses the sandboxed viewer.' }, 403);
+  }
 
   if (report.raw_text) report.raw_text = await decryptPII(c, report.raw_text);
   if (report.parsed_data) report.parsed_data = await decryptPII(c, report.parsed_data);
@@ -7883,6 +8706,22 @@ app.post('/api/documents/generate', authMiddleware, async (c) => {
   const docDef = (DOCUMENT_TYPES as any)[docType];
   if (!docDef) return c.json({ error: 'Unknown document type' }, 400);
 
+  if (String(docType).toLowerCase().includes('identity-theft')) {
+    const att = await c.env.DB.prepare(
+      `SELECT question_id, response FROM client_attestations WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 80`
+    ).bind(clientId, user.org_id).all().catch(() => ({ results: [] as any[] }));
+    const affirmed = (att?.results || []).some((a: any) => a.question_id === 'identity_theft' && String(a.response).toUpperCase() === 'YES');
+    const mine = (att?.results || []).some((a: any) => a.question_id === 'opened_account' && String(a.response).toUpperCase() === 'YES');
+    const gate = evaluateIdentityTheftGate({
+      consumerAffirmedIdentityTheft: affirmed,
+      accountIsMine: mine,
+      promptInjection: !affirmed,
+    });
+    if (gate.blocked) {
+      return c.json({ error: 'IDENTITY_THEFT_BLOCKED', message: gate.reason }, 403);
+    }
+  }
+
   const firmLh = await loadOrgLetterhead(c.env, user.org_id);
   const docData: DocumentData = {
     clientName: `${client.first_name} ${client.last_name}`,
@@ -8305,86 +9144,53 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
   const doc = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
   if (!doc) return c.json({ error: 'Document not found' }, 404);
 
-  const username = c.env.CLICK2MAIL_USERNAME;
-  const authBasic = c.env.CLICK2MAIL_AUTH_BASIC;
-  const apiUrl = c.env.CLICK2MAIL_API_URL;
-
-  // Step 1: Get account addresses
-  const addrRes = await fetch(`${apiUrl}/account/addresses`, {
-    headers: {
-      'Authorization': `Basic ${authBasic}`,
-      'Content-Type': 'application/json',
-    },
-  });
-  if (!addrRes.ok) {
-    const errText = await addrRes.text();
-    return c.json({ error: `Click2Mail address fetch failed: ${errText}` }, 502);
-  }
-  const addrData = await addrRes.json() as any;
-  const fromAddress = addrData.addresses?.[0]?.id;
-  if (!fromAddress) return c.json({ error: 'No sender address found in Click2Mail account' }, 400);
-
-  // Step 2: Create document job (plain text letter)
-  const letterContent = doc.content || '';
-  const docName = doc.title || 'FCRA Legal Document';
-
-  const createRes = await fetch(`${apiUrl}/documents`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${authBasic}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      documentName: docName,
-      documentType: '00',
-      fileExtension: 'txt',
-      content: btoa(letterContent),
-    }),
-  });
-  if (!createRes.ok) {
-    const errText = await createRes.text();
-    return c.json({ error: `Click2Mail document creation failed: ${errText}` }, 502);
-  }
-  const createData = await createRes.json() as any;
-  const documentId = createData.id;
-
-  // Step 3: Create mailing
-  const mailingRes = await fetch(`${apiUrl}/mailings`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${authBasic}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      documentId,
-      fromAddressId: fromAddress,
-      toName: recipientName || doc.recipient_name || '',
-      toAddress1: recipientAddress || doc.recipient_address || '',
-      toCity: recipientCity || '',
-      toState: recipientState || '',
-      toZip: recipientZip || '',
-      toCountry: 'USA',
+  let mailing;
+  try {
+    mailing = await sendLetterViaClick2Mail(c.env, {
+      title: doc.title || 'FCRA Legal Document',
+      content: doc.content || '',
+      recipient: {
+        name: recipientName || doc.recipient_name || '',
+        address1: recipientAddress || doc.recipient_address || '',
+        city: recipientCity || '',
+        state: recipientState || '',
+        zip: recipientZip || '',
+      },
       mailClass: 'FIRST_CLASS',
-      format: 'LETTER',
-    }),
-  });
-  if (!mailingRes.ok) {
-    const errText = await mailingRes.text();
-    return c.json({ error: `Click2Mail mailing creation failed: ${errText}` }, 502);
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message || 'Mail send failed' }, err.status || 502);
   }
-  const mailingData = await mailingRes.json() as any;
 
-  // Update document status to "sent" using correct database schema columns
-  const mDate = new Date();
-  const due = new Date(mDate.getTime() + 35 * 24 * 60 * 60 * 1000);
-  const responseDueDateStr = due.toISOString().split('T')[0];
-  const sentDateStr = mDate.toISOString().split('T')[0];
+  const clockId = generateId();
+  const clock = await persistInvestigationClock({
+    db: c.env.DB,
+    id: clockId,
+    orgId: user.org_id,
+    clientId: doc.client_id,
+    documentId: id,
+  });
 
+  const sentDateStr = clock.mailingDate || new Date().toISOString().split('T')[0];
   await c.env.DB.prepare(
-    'UPDATE documents SET status = ?, sent_date = ?, response_due_date = ?, updated_at = datetime("now") WHERE id = ?'
-  ).bind('sent', sentDateStr, responseDueDateStr, id).run();
+    'UPDATE documents SET status = ?, sent_date = ?, response_due_date = ?, mailing_id = ?, mail_class = ?, investigation_clock_id = ?, updated_at = datetime("now") WHERE id = ?'
+  ).bind('sent', sentDateStr, clock.operationalTarget, mailing.mailingId, mailing.mailClass, clockId, id).run().catch(async () => {
+    await c.env.DB.prepare(
+      'UPDATE documents SET status = ?, sent_date = ?, response_due_date = ?, updated_at = datetime("now") WHERE id = ?'
+    ).bind('sent', sentDateStr, clock.operationalTarget, id).run();
+  });
 
-  await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, doc.client_id, id, user.id, 'document_mailed', `Mailed "${doc.title}" to ${recipientName || doc.recipient_name || 'recipient'}`).run();
+  await recordServiceCompleted({
+    db: c.env.DB,
+    id: generateId(),
+    orgId: user.org_id,
+    clientId: doc.client_id,
+    serviceType: 'dispute_mailing',
+    performedBy: user.id,
+    deliverableId: id,
+  });
+
+  await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, doc.client_id, id, user.id, 'document_mailed', `Mailed "${doc.title}" to ${recipientName || doc.recipient_name || 'recipient'} · FCRA 611 clock ${clock.statutoryTarget}`).run();
 
   try {
     const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(doc.client_id, user.org_id).first() as any;
@@ -8401,14 +9207,19 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
         notifyEmail: !!email && client.notify_email !== 0,
         vars: {
           clientName: `${client.first_name} ${client.last_name}`,
-          tracking: mailingData?.id ? String(mailingData.id) : 'pending',
+          tracking: mailing.mailingId || 'pending',
           portalUrl: `${portalBaseUrl(c.env)}/`,
         },
       });
     }
   } catch { /* soft */ }
 
-  return c.json({ success: true, mailingId: mailingData.id, message: `Document mailed successfully` });
+  return c.json({
+    success: true,
+    mailingId: mailing.mailingId,
+    investigationClock: clock,
+    message: 'Document mailed. FCRA § 611 30-day investigation clock started (35-day operational due date includes mail transit).',
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -9031,17 +9842,6 @@ app.get('/api/clients/:id/compliance-summary', authMiddleware, async (c) => {
 });
 
 // 0. POST /api/admin/backup/trigger — snapshot D1 tables to R2 vault
-const D1_BACKUP_TABLES = [
-  'organizations', 'users', 'clients', 'credit_reports', 'violations', 'documents',
-  'sessions', 'activity_log', 'portal_messages', 'portal_uploads', 'portal_alerts',
-  'education_progress', 'tutor_memory', 'fundability_snapshots', 'tradeline_orders',
-  'underwriting_snapshots', 'security_audit_log', 'privacy_requests', 'roadmap_progress',
-  'client_journey_state', 'daily_motivation_log', 'knowledge_chunks', 'email_template_registry',
-  'legal_contracts', 'esign_consent_events', 'video_conference_sessions', 'ron_sessions', 'ron_state_rules',
-  'email_delivery_log', 'onboarding_drip_log',
-  'scheduled_job_runs', 'email_suppressions', 'newsletter_subscriptions', 'newsletter_issues',
-  'newsletter_deliveries', 'compliance_snapshots', 'ops_alerts',
-];
 
 app.post('/api/admin/journey/dispatch-daily', authMiddleware, adminGateMiddleware, async (c) => {
   const body = await c.req.json().catch(() => ({}));
@@ -9101,12 +9901,69 @@ app.post('/api/admin/backup/trigger', authMiddleware, adminGateMiddleware, async
   });
 });
 
-const DEMO_CLIENT_ID = 'cli_demo_001';
 const DEMO_CLIENT_EMAIL = 'salisha.mcdowell@example.com';
 const DEMO_PORTAL_PASSWORD = 'demo123456';
 
-/** Ensure Salisha demo client + portal login exist for live walkthroughs. */
-async function ensureDemoClientAndPortal(c: any, orgId: string) {
+async function loadDemoSampleCase(
+  c: any,
+  orgId: string,
+  clientId: string,
+  opts: { forceReload?: boolean; actingUser?: { id: string; org_id: string } } = {},
+) {
+  let reportCount = 0;
+  try {
+    const row = await c.env.DB.prepare(
+      `SELECT COUNT(*) as c FROM credit_reports WHERE client_id = ? AND org_id = ?`,
+    ).bind(clientId, orgId).first() as any;
+    reportCount = Number(row?.c || 0);
+  } catch {
+    return { skipped: true, reason: 'schema' as const };
+  }
+  if (reportCount > 0 && !opts.forceReload) {
+    let violations = 0;
+    try {
+      const v = await c.env.DB.prepare(
+        `SELECT COUNT(*) as c FROM violations WHERE client_id = ? AND org_id = ?`,
+      ).bind(clientId, orgId).first() as any;
+      violations = Number(v?.c || 0);
+    } catch { /* optional */ }
+    return { skipped: true, alreadyLoaded: true, reports: reportCount, violations };
+  }
+
+  const bureauReports = mapMfsnToInternal(sampleMfsnReport as any);
+  if (!bureauReports.length) return { skipped: true, reason: 'unmap' as const };
+
+  const demoViolationCount = bureauReports.reduce((s, r) => s + liveAnalyzeParsedReport(r).violations.length, 0);
+  const actingUser = opts.actingUser || c.get('user') || { id: 'usr_demo_001', org_id: orgId };
+  const batch = await importBureauReportsBatch(c, {
+    generateId,
+    encryptPII,
+    backpopulateClientInfo,
+    saveViolationsForReport,
+    persistBureauScores,
+    markPriorBureauReportsStale,
+    refreshBureauPackStatus,
+    computeAndStoreFundability,
+  }, {
+    clientId,
+    bureauReports,
+    rawPayload: sampleMfsnReport,
+    sourceProvider: 'DemoSandbox',
+    sourcePayloadType: 'mfsn-sample',
+    fileNamePrefix: 'demo-mfsn',
+    activityAction: 'demo_case_loaded',
+    activityDescription: `Prepared demo walkthrough (${bureauReports.length} bureaus, ${demoViolationCount} violations)`,
+    actingUser,
+  });
+  return { ...batch, violationsFound: demoViolationCount, alreadyLoaded: false, reports: bureauReports.length };
+}
+
+/** Ensure Salisha demo client + portal login + sample tri-bureau case exist. */
+async function ensureDemoClientAndPortal(
+  c: any,
+  orgId: string,
+  opts: { loadCase?: boolean; forceReload?: boolean; actingUser?: { id: string; org_id: string } } = {},
+) {
   let client = await c.env.DB.prepare(
     `SELECT * FROM clients WHERE id = ? AND org_id = ?`
   ).bind(DEMO_CLIENT_ID, orgId).first() as any;
@@ -9140,6 +9997,9 @@ async function ensureDemoClientAndPortal(c: any, orgId: string) {
          updated_at = datetime('now')
        WHERE id = ?`
     ).bind(client.id).run();
+    await c.env.DB.prepare(
+      `UPDATE clients SET permissible_purpose_consent = 1, croa_contract_agreed = 1, tsr_advance_fee_waived = 1, updated_at = datetime('now') WHERE id = ?`
+    ).bind(client.id).run().catch(() => {});
   }
 
   const email = (client.email || DEMO_CLIENT_EMAIL).trim();
@@ -9158,7 +10018,19 @@ async function ensureDemoClientAndPortal(c: any, orgId: string) {
     ).bind(passwordHash, `${client.first_name} ${client.last_name}`, existingUser.id).run();
   }
 
-  return { clientId: client.id as string, email, portalPassword: DEMO_PORTAL_PASSWORD };
+  let sampleCase: any = null;
+  if (opts.loadCase !== false) {
+    try {
+      sampleCase = await loadDemoSampleCase(c, orgId, client.id, {
+        forceReload: !!opts.forceReload,
+        actingUser: opts.actingUser || c.get('user') || { id: 'usr_demo_001', org_id: orgId },
+      });
+    } catch (e: any) {
+      sampleCase = { skipped: true, error: String(e?.message || e) };
+    }
+  }
+
+  return { clientId: client.id as string, email, portalPassword: DEMO_PORTAL_PASSWORD, sampleCase };
 }
 
 // One-click sales demo prep: Salisha client + portal login + optional sample case
@@ -9167,40 +10039,12 @@ app.post('/api/admin/demo/prepare', authMiddleware, adminGateMiddleware, async (
   const body = await c.req.json().catch(() => ({}));
   const loadCase = body.loadCase !== false;
 
-  const ensured = await ensureDemoClientAndPortal(c, user.org_id);
-  let caseResult: any = null;
-
-  if (loadCase) {
-    const reportCount = await c.env.DB.prepare(
-      `SELECT COUNT(*) as c FROM credit_reports WHERE client_id = ? AND org_id = ?`
-    ).bind(ensured.clientId, user.org_id).first() as any;
-    if (!reportCount?.c || body.forceReload) {
-      const bureauReports = mapMfsnToInternal(sampleMfsnReport as any);
-      if (bureauReports.length) {
-        const demoViolationCount = bureauReports.reduce((s, r) => s + liveAnalyzeParsedReport(r).violations.length, 0);
-        caseResult = await importBureauReportsBatch(c, {
-          generateId,
-          encryptPII,
-          backpopulateClientInfo,
-          saveViolationsForReport,
-          persistBureauScores,
-          markPriorBureauReportsStale,
-          refreshBureauPackStatus,
-          computeAndStoreFundability,
-        }, {
-          clientId: ensured.clientId,
-          bureauReports,
-          rawPayload: sampleMfsnReport,
-          sourceProvider: 'DemoSandbox',
-          sourcePayloadType: 'mfsn-sample',
-          fileNamePrefix: 'demo-mfsn',
-          activityAction: 'demo_case_loaded',
-          activityDescription: `Prepared demo walkthrough (${bureauReports.length} bureaus, ${demoViolationCount} violations)`,
-        });
-        caseResult = { ...caseResult, violationsFound: demoViolationCount };
-      }
-    }
-  }
+  const ensured = await ensureDemoClientAndPortal(c, user.org_id, {
+    loadCase,
+    forceReload: !!body.forceReload,
+    actingUser: { id: user.id, org_id: user.org_id },
+  });
+  const caseResult = ensured.sampleCase || null;
 
   let fundingPreview = null;
   try {
@@ -9479,7 +10323,7 @@ app.post('/api/admin/users/:id/toggle-status', authMiddleware, adminGateMiddlewa
 
     // Force expire any active sessions for the suspended user instantly
     if (newStatus === 0) {
-      await c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id).run();
+      await revokeSessions(c.env.DB, { userId: id, allForUser: true });
     }
 
     // Log the action
@@ -10083,9 +10927,17 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/app.js?v=20260813-finish-polish"></script>
+  <script src="/static/demo-experience.js?v=20260818-demo-complete"></script>
+  <script src="/static/app.js?v=20260818-demo-complete"></script>
 </body>
 </html>`;
 }
+
+registerClientIntelligenceRoutes(app, {
+  authMiddleware,
+  resolvePortalClientSafe,
+  isPortalAnalysisUnlocked,
+  decryptPII,
+});
 
 export default app;

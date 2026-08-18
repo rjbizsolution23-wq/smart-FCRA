@@ -2,6 +2,71 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.8.0] - 2026-08-14
+### Added
+- Migration `0024_tenant_session_compliance.sql`: session last-seen / last-path / demo isolation / revoke-without-delete, `session_events`, demo + lead IP/UA, org indexes.
+- Full data + compliance catalog: `docs/DATA_AND_COMPLIANCE.md`, `src/lib/data-compliance.ts`, `GET /api/compliance/data-inventory`.
+- Session rows kept after logout/expiry (`revoked_at`). Login, logout, MFA, and demo enter write `session_events` + `security_audit_log`.
+- Privacy export pack covers consents, clocks, contracts, disputes, billing, and related 0021–0023 records (org-scoped). Purge deletes R2 originals and remaining PII tables; legal hold has an admin setter.
+- `GET /api/security/audit-log` (tenant-scoped). Brand leads visible to `super_admin` globally and to other staff **only in their org**.
+
+### Changed
+- Housekeeping no longer deletes session history; expired demo sessions are marked `expired` and kept.
+- Public privacy policy: opaque sessions (not JWT RS256); garbled CCPA phone removed.
+
+## [3.7.0] - 2026-08-14
+### Added
+- Login and `/demo`: CRO **interactive demo** signup on the Sign In screen (`/login?mode=demo`) — business name, address, email, phone — then popup tour + text/voice agent.
+- In-app popup **product tour** of the full console (ingest, violations, LVS/damages, generated letters, mail clocks, portal, sandbox, tutors, CROA).
+- **Demo agent** (text + browser voice) answers product questions and navigates screens. Does not disclose engine internals or promise lawsuit outcomes.
+- Optional **one live MyFreeScoreNow report / one person per demo account**. Repeat pulls blocked.
+- Migration `0023_demo_experience.sql`.
+
+## [3.6.1] - 2026-08-13
+### Changed
+- Sales funnel copy: violations / LVS / damages, **generated** letters (no “templates” language), client portal + learning resources, and package cards that state what each tier does for litigation ops.
+- In-app Billing plan bullets aligned: generated letters from file facts; removed template wording.
+
+## [3.6.0] - 2026-08-13
+### Added
+- Public **Smart FCRA by RJ Business Solutions** sales funnel at `/` (`public/static/marketing/index.html`): full-bleed hero, product, compliance posture, SaaS pricing ($497 / $2,500 / $9,997), demo lead form → `POST /api/public/lead/saas-demo`.
+- App shell moved to `/login` and `/app`. `/pricing` and `/demo` redirect to landing anchors.
+
+### Changed
+- Brand library hub links to the software site and Sign in. Auth flows keep users on `/login` / `/app` instead of the marketing root.
+
+## [3.5.0] - 2026-08-13
+### Added
+- Original report files stored in R2 (`credit_reports.r2_key`) and opened beside the paper sandbox.
+- Upload hygiene: magic-byte allowlist, executable/polyglot block, PDF JavaScript review, OCR-required for image reports. Migration `0022_production_ops.sql`.
+- Portal **Mail via Click2Mail** on approved disputes. Persists `investigation_clocks` with FCRA § 611 30-day statutory + 35-day operational (mail buffer) targets.
+- CROA Stripe completion ledger (`service_records` writers + `billing_ledger`). Analysis unlock is blocked until analysis is recorded as performed.
+- GitHub Actions: PR preview skips Pages deploy with a comment when `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` are missing; production/hotfix fail with an explicit secrets error.
+
+## [3.4.1] - 2026-08-13
+### Added
+- Interactive report sandbox: consumers open a scrollable paper copy of the imported Experian/Equifax/TransUnion file (accounts, payment history, inquiries, source text) in a scriptless iframe.
+- Payment-history legend, hard vs soft inquiry labels, FCRA § 605 DOFD education (no deletion promise), print paper copy, section jump, confidential watermark.
+- `GET /api/client-portal/reports` and `GET /api/client-portal/reports/:id` (owner-only, SSN redacted, view audit).
+- Staff “Paper sandbox” on report detail. Clients are blocked from the staff `/api/reports/:id` payload (litigation pack).
+- CSP `frame-src` allows `about:srcdoc` so the sandbox can render.
+
+### Changed
+- My Credit lists imported reports with **Open report**. Confirm-facts can be launched from a tradeline.
+
+## [3.4.0] - 2026-08-13
+### Added
+- Client portal intelligence: D1 `0021_client_intelligence.sql` (attestations, tradeline snapshots, credit events, findings, disputes, consents, CROA cancellations, compliance decisions, action receipts).
+- Evidence-first dispute engine, AI hallucination firewall, next-best-action, utilization education, CROA/TSR billing gate.
+- Portal screens: My Credit, Credit Case, Confirm Facts, Disputes, Action Plan, Progress, Consumer Rights, Consents, Billing, **Cancel Services**.
+- APIs under `/api/client-portal/intelligence`, attestations, disputes, cancel-services, consents, rights, plus `POST /api/compliance/evaluate`.
+- Mobile bottom nav: Home / Credit / Case / Actions / More.
+- Identity-theft letter generation and letter-strategy gated on affirmative consumer identification.
+
+### Changed
+- Dashboard no longer simulates FICO lifts from “deleting” accounts. Scores show the named model when known.
+- Staff impersonation banner states that attestations, approvals, and cancellation are blocked.
+
 ## [3.3.0] - 2026-08-13
 ### Added
 - Installable PWA: `/manifest.webmanifest`, `/sw.js` (app-shell cache, never caches `/api`), overlay mobile nav, table scroll, Add to Home Screen.

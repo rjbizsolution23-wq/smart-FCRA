@@ -115,6 +115,8 @@ export function recommendLetterStrategy(
     litigationScore?: number;
     clientState?: string;
     includeLitigationPack?: boolean;
+    /** Identity-theft letters require an affirmative consumer identification. */
+    identityTheftConsumerAffirmed?: boolean;
   } = {},
 ): LetterStrategyResult {
   const map = new Map<string, LetterRecommendation>();
@@ -161,8 +163,12 @@ export function recommendLetterStrategy(
       add(map, 'medical-debt-cfpb-2024', 3, 'Medical debt / CFPB 2024 signal', 'Dispute Letters');
     }
     if (hasAny(t, ['identity theft', 'fraud', '1681c-2', 'victim'])) {
-      signals.push('identity-theft');
-      add(map, 'identity-theft-block', 2, 'Identity theft / fraud block path', 'Dispute Letters', true);
+      if (opts.identityTheftConsumerAffirmed === true) {
+        signals.push('identity-theft');
+        add(map, 'identity-theft-block', 2, 'Identity theft / fraud block path', 'Dispute Letters', true);
+      } else {
+        signals.push('identity-theft-gated');
+      }
     }
     if (hasAny(t, ['mixed file', 'mixed-file', 'file merger', 'wrong person'])) {
       signals.push('mixed-file');
