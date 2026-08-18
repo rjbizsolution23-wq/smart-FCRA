@@ -124,6 +124,7 @@ const mockEnv = {
   const body = await res.json();
   assert(body.live === false, 'plans not live without Stripe');
   assert(body.mode === 'unconfigured', 'unconfigured mode');
+  assert(body.chargesReal === false, 'no real charges without Stripe');
   assert(Array.isArray(body.plans) && body.plans.length === 3, 'three public plans');
   assert(body.plans[0].id === 'professional' && body.plans[0].amountCents === 49700, 'professional amount');
   assert(body.plans.every((p) => p.subscribeUrl.includes('/login?mode=register')), 'register subscribe urls');

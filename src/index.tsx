@@ -1043,6 +1043,7 @@ app.get('/api/public/plans', async (c) => {
       ...base,
       live: false,
       mode: 'unconfigured',
+      chargesReal: false,
       plans: staticPublicPlans(),
     });
   }
@@ -1056,6 +1057,7 @@ app.get('/api/public/plans', async (c) => {
       ...base,
       live: true,
       mode: catalog.mode,
+      chargesReal: catalog.mode === 'live',
       plans: publicPlansFromCatalog(catalog),
     });
   } catch (err: any) {
@@ -1064,6 +1066,7 @@ app.get('/api/public/plans', async (c) => {
       ...base,
       live: false,
       mode: c.env.STRIPE_API_KEY.startsWith('sk_live_') ? 'live' : 'test',
+      chargesReal: false,
       plans: staticPublicPlans(),
       error: 'Catalog unavailable',
     });

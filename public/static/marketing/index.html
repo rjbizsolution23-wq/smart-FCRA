@@ -609,7 +609,12 @@
           }
         });
         const badge = document.getElementById('pricing-live-badge');
-        if (badge && payload && payload.live) badge.hidden = false;
+        if (badge && payload && payload.live) {
+          badge.hidden = false;
+          if (payload.mode === 'test' || payload.chargesReal === false) {
+            badge.textContent = 'Stripe test checkout is on (no real charges). Create your organization, then you are sent to the matching Professional, Unlimited, or Enterprise subscription.';
+          }
+        }
       };
       fetch('/api/public/plans').then((r) => r.json()).then(applyLivePlans).catch(() => {});
 
