@@ -255,9 +255,10 @@ export async function ensureStripeCatalog(
           line_items: [{ price: price.id, quantity: 1 }],
           after_completion: {
             type: 'redirect',
-            redirect: { url: `${successBase}/login?billing=success&plan=${spec.id}` },
+            redirect: { url: `${successBase}/login?mode=register&billing=success&plan=${spec.id}` },
           },
           metadata: { [META_PLAN]: spec.id },
+          subscription_data: { metadata: { [META_PLAN]: spec.id, planId: spec.id } },
           allow_promotion_codes: true,
         });
         paymentLinkUrl = link.url;

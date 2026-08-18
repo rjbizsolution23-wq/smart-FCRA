@@ -665,7 +665,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   async function maybeStartPendingCheckout() {
     if (!state.token || typeof window._checkout !== 'function') return;
     const params = new URLSearchParams(location.search);
-    if (params.get('checkout') === 'success') {
+    if (params.get('checkout') === 'success' || params.get('billing') === 'success') {
       toast('Payment received — your plan will activate as soon as Stripe confirms.', 'success');
       history.replaceState({}, '', '/app');
       return;
@@ -964,7 +964,15 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     const planNote = document.getElementById('register-plan-note');
     if (planNote && pendingPlan) {
       planNote.classList.remove('hidden');
-      planNote.textContent = 'After you verify and sign in, we open live Stripe checkout for the ' + pendingPlan + ' plan.';
+      if (params.get('billing') === 'success') {
+        planNote.textContent = 'Stripe payment received. Create (or sign in to) your organization with the SAME email you used at Stripe to unlock the software. Demo accounts stay in the sandbox.';
+      } else {
+        planNote.textContent = 'After you verify and sign in, we open Stripe checkout for the ' + pendingPlan + ' plan. Use the same email if you already paid with a payment link.';
+      }
+    }
+    if (params.get('billing') === 'success') {
+      toast('Payment received. Sign in or create your organization with the same email to unlock the software.', 'success');
+      try { window._switchTab('register'); } catch (_) {}
     }
     if (params.get('mode') === 'register' || params.get('plan') || params.get('from') === 'demo') {
       try { window._switchTab('register'); } catch (_) {}
@@ -1226,7 +1234,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           return;
         }
         setState({token:d.token,user:d.user,org:d.org});
-        toast('Account created!','success');
+        toast(d.paid ? 'Payment matched — software unlocked' : 'Account created!','success');
         history.replaceState({}, '', '/app');
         render();
         maybeStartPendingCheckout();
@@ -8728,7 +8736,7 @@ async function pgAdminConsole(el) {
 
   async function pgDemoSignups(el) {
     el.innerHTML = `<div class="flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-3xl text-blue-400"></i></div>`;
-    let data = { demos: [], requestDemos: [], saasSignups: [], counts: {}, scope: 'org' };
+    let data = { demos: [], requestDemos: [], saasSignups: [], payments: [], counts: {}, scope: 'org' };
     try {
       data = await api('/admin/demo/signups');
     } catch (err) {
@@ -8738,6 +8746,7 @@ async function pgAdminConsole(el) {
     const demos = data.demos || [];
     const requests = data.requestDemos || [];
     const saas = data.saasSignups || [];
+    const payments = data.payments || [];
     const row = (cells) => `<tr class="border-b border-slate-800/80">${cells}</tr>`;
     el.innerHTML = `<div class="fade-in space-y-6">
       <div class="flex flex-wrap items-start justify-between gap-3">
@@ -8750,10 +8759,11 @@ async function pgAdminConsole(el) {
           <a href="/#demo" target="_blank" class="px-3 py-2 rounded-lg text-xs font-semibold border border-blue-500/30 text-blue-200 hover:bg-blue-500/10">Landing demo form</a>
         </div>
       </div>
-      <div class="grid sm:grid-cols-3 gap-3">
+      <div class="grid sm:grid-cols-4 gap-3">
         <div class="glass rounded-xl p-4"><div class="text-[10px] uppercase tracking-wider text-slate-500">Interactive CRO demos</div><div class="text-2xl font-bold text-white mt-1">${demos.length}</div></div>
         <div class="glass rounded-xl p-4"><div class="text-[10px] uppercase tracking-wider text-slate-500">Request-a-demo forms</div><div class="text-2xl font-bold text-white mt-1">${requests.length}</div></div>
         <div class="glass rounded-xl p-4"><div class="text-[10px] uppercase tracking-wider text-slate-500">SaaS org signups</div><div class="text-2xl font-bold text-white mt-1">${saas.length}</div></div>
+        <div class="glass rounded-xl p-4"><div class="text-[10px] uppercase tracking-wider text-slate-500">Stripe payments</div><div class="text-2xl font-bold text-white mt-1">${payments.length}</div><div class="text-[10px] text-amber-300 mt-1">${data.counts?.pendingPayments || 0} unmatched</div></div>
       </div>
 
       <div class="glass rounded-xl p-5">
@@ -8795,10 +8805,10 @@ async function pgAdminConsole(el) {
 
       <div class="glass rounded-xl p-5">
         <h2 class="text-sm font-bold text-white mb-1">SaaS organization signups</h2>
-        <p class="text-[11px] text-slate-500 mb-3">Create Account from Start Professional / Unlimited / Enterprise. After email verify they are sent to Stripe checkout. Super admin only.</p>
+        <p class="text-[11px] text-slate-500 mb-3">Real firms (not the demo sandbox). Paid plan unlocks software. Super admin only.</p>
         ${saas.length ? `<div class="overflow-x-auto"><table class="w-full text-xs">
           <thead><tr class="text-left text-slate-500 border-b border-slate-800">
-            <th class="py-2 pr-3">When</th><th class="py-2 pr-3">Organization</th><th class="py-2 pr-3">Contact</th><th class="py-2 pr-3">Email</th><th class="py-2 pr-3">Plan</th><th class="py-2 pr-3">Verified</th>
+            <th class="py-2 pr-3">When</th><th class="py-2 pr-3">Organization</th><th class="py-2 pr-3">Contact</th><th class="py-2 pr-3">Email</th><th class="py-2 pr-3">Plan</th><th class="py-2 pr-3">Access</th>
           </tr></thead>
           <tbody>${saas.map((o) => row(`
             <td class="py-2 pr-3 text-slate-400 whitespace-nowrap">${demoSignupWhen(o.created_at)}</td>
@@ -8806,9 +8816,26 @@ async function pgAdminConsole(el) {
             <td class="py-2 pr-3 text-slate-200">${escapeHtml(o.contact_name || '—')}</td>
             <td class="py-2 pr-3 text-sky-300">${escapeHtml(o.email || '')}</td>
             <td class="py-2 pr-3">${escapeHtml(o.plan || 'free')}</td>
-            <td class="py-2 pr-3">${Number(o.is_active) === 1 ? '<span class="text-emerald-300">Yes</span>' : '<span class="text-amber-300">Pending email</span>'}</td>
+            <td class="py-2 pr-3">${o.plan && o.plan !== 'free' ? '<span class="text-emerald-300">Paid software</span>' : (Number(o.is_active) === 1 ? '<span class="text-amber-300">Unpaid (gated)</span>' : '<span class="text-amber-300">Pending email</span>')}</td>
           `)).join('')}</tbody>
         </table></div>` : `<p class="text-sm text-slate-500">${data.scope === 'all' ? 'No SaaS organizations yet.' : 'Sign in as platform super admin to see every tenant signup.'}</p>`}
+      </div>
+
+      <div class="glass rounded-xl p-5">
+        <h2 class="text-sm font-bold text-white mb-1">Stripe payment links &amp; checkout</h2>
+        <p class="text-[11px] text-slate-500 mb-3">Every Checkout / Payment Link charge. Applied = real org unlocked. Pending = paid but no matching account yet (same email required). Skipped demo = sandbox emails are never upgraded.</p>
+        ${payments.length ? `<div class="overflow-x-auto"><table class="w-full text-xs">
+          <thead><tr class="text-left text-slate-500 border-b border-slate-800">
+            <th class="py-2 pr-3">When</th><th class="py-2 pr-3">Email</th><th class="py-2 pr-3">Plan</th><th class="py-2 pr-3">Status</th><th class="py-2 pr-3">Org</th>
+          </tr></thead>
+          <tbody>${payments.map((p) => row(`
+            <td class="py-2 pr-3 text-slate-400 whitespace-nowrap">${demoSignupWhen(p.created_at)}</td>
+            <td class="py-2 pr-3 text-sky-300">${escapeHtml(p.email || '')}</td>
+            <td class="py-2 pr-3">${escapeHtml(p.plan || '')}</td>
+            <td class="py-2 pr-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${p.status === 'applied' ? 'bg-emerald-900/40 text-emerald-300' : p.status === 'skipped_demo' ? 'bg-gray-800 text-gray-400' : 'bg-amber-900/30 text-amber-300'}">${escapeHtml(p.status || '')}</span></td>
+            <td class="py-2 pr-3 text-slate-400 font-mono text-[10px]">${escapeHtml(p.org_id || '—')}</td>
+          `)).join('')}</tbody>
+        </table></div>` : `<p class="text-sm text-slate-500">No Stripe SaaS payments recorded yet. Use Pay with Stripe on the sales site or in-app Billing checkout.</p>`}
       </div>
     </div>`;
   }

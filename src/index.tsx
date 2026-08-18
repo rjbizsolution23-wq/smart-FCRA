@@ -156,6 +156,11 @@ import {
   staticPublicPlans,
 } from './lib/stripe-catalog';
 import {
+  claimPendingSaasEntitlement,
+  fulfillSaasCheckout,
+  planIdFromCheckoutSession,
+} from './lib/saas-entitlement';
+import {
   D1_BACKUP_TABLES,
   brandLeadsVisibleTo,
   collectPrivacyExport,
@@ -1754,17 +1759,28 @@ app.get('/api/admin/demo/signups', authMiddleware, async (c) => {
   if (all) {
     try {
       const orgRows = await c.env.DB.prepare(
-        `SELECT o.id, o.name, o.slug, o.plan, o.created_at,
+        `SELECT o.id, o.name, o.slug, o.plan, o.created_at, o.stripe_subscription_id, o.stripe_customer_id,
                 (SELECT email FROM users WHERE org_id = o.id ORDER BY created_at ASC LIMIT 1) AS email,
                 (SELECT name FROM users WHERE org_id = o.id ORDER BY created_at ASC LIMIT 1) AS contact_name,
                 (SELECT is_active FROM users WHERE org_id = o.id ORDER BY created_at ASC LIMIT 1) AS is_active
          FROM organizations o
-         WHERE o.id != 'org_platform_master'
+         WHERE o.id != 'org_platform_master' AND o.id != 'org_demo_001'
          ORDER BY o.created_at DESC
          LIMIT 150`,
       ).all();
       saasSignups = orgRows?.results || [];
     } catch { /* optional */ }
+  }
+
+  let payments: any[] = [];
+  if (all) {
+    try {
+      const payRows = await c.env.DB.prepare(
+        `SELECT id, email, plan, status, stripe_subscription_id, stripe_session_id, org_id, created_at, applied_at
+         FROM saas_entitlements ORDER BY created_at DESC LIMIT 200`,
+      ).all();
+      payments = payRows?.results || [];
+    } catch { /* migration 0025 */ }
   }
 
   return c.json({
@@ -1773,10 +1789,14 @@ app.get('/api/admin/demo/signups', authMiddleware, async (c) => {
     demos,
     requestDemos,
     saasSignups,
+    payments,
     counts: {
       demos: demos.length,
       requestDemos: requestDemos.length,
       saasSignups: saasSignups.length,
+      payments: payments.length,
+      paid: saasSignups.filter((o: any) => o.plan && o.plan !== 'free').length,
+      pendingPayments: payments.filter((p: any) => p.status === 'pending').length,
     },
   });
 });
@@ -2297,6 +2317,22 @@ app.post('/api/auth/register', async (c) => {
     return c.json({ error: `Internal error (db insert): ${e.message}` }, 500);
   }
 
+  const paid = await claimPendingSaasEntitlement(c.env.DB, { email, orgId }).catch(() => ({ applied: false, plan: null as any }));
+  if (paid.applied) {
+    const token = createSessionToken();
+    const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const ip = c.req.header('CF-Connecting-IP') || 'unknown';
+    const ua = c.req.header('User-Agent') || 'unknown';
+    await insertSessionRow(c.env.DB, { id: token, userId, orgId, expires, ip, ua });
+    return c.json({
+      token,
+      user: { id: userId, name, email, role: 'admin', org_id: orgId },
+      org: { id: orgId, name: orgName, plan: paid.plan },
+      paid: true,
+      message: 'Payment matched. Your organization is unlocked.',
+    });
+  }
+
   if (
     ((c.env.CLOUDFLARE_EMAIL_API_TOKEN || c.env.CLOUDFLARE_API_TOKEN) && c.env.CLOUDFLARE_ACCOUNT_ID) ||
     c.env.RESEND_API_KEY ||
@@ -2408,10 +2444,19 @@ app.post('/api/auth/login', async (c) => {
     }
 
     if (user.is_active !== 1) {
-      return c.json({
-        error: 'Email not verified. Check your inbox for the activation link, or contact support.',
-        code: 'EMAIL_NOT_VERIFIED',
-      }, 403);
+      const paid = await claimPendingSaasEntitlement(c.env.DB, { email: user.email, orgId: user.org_id }).catch(() => ({ applied: false, plan: null as any }));
+      if (paid.applied) {
+        user.is_active = 1;
+        user.org_plan = paid.plan;
+      } else {
+        return c.json({
+          error: 'Email not verified. Check your inbox for the activation link, or contact support.',
+          code: 'EMAIL_NOT_VERIFIED',
+        }, 403);
+      }
+    } else {
+      const paid = await claimPendingSaasEntitlement(c.env.DB, { email: user.email, orgId: user.org_id }).catch(() => ({ applied: false, plan: null as any }));
+      if (paid.applied) user.org_plan = paid.plan;
     }
 
     if (needsPasswordRehash(user.password_hash)) {
@@ -7289,22 +7334,31 @@ app.post('/api/billing/webhook', async (c) => {
         break;
       }
 
-      const orgId = session.client_reference_id;
+      const orgIdHint = session.client_reference_id || session.metadata?.orgId || null;
       const stripeCustomerId = session.customer as string;
       const stripeSubId = session.subscription as string;
-      if (!orgId || !stripeSubId) break;
+      if (!stripeSubId) break;
 
       const stripeClient = getStripe(c.env);
       const subscription = await stripeClient.subscriptions.retrieve(stripeSubId);
       const priceId = subscription.items.data[0]?.price.id;
-      const metaPlan = session.metadata?.planId || subscription.metadata?.planId;
-      const mapped = isSaaSPlanId(metaPlan)
-        ? metaPlan
-        : (await planIdFromStripePrice(stripeClient, c.env, priceId)) || 'professional';
+      const email = String(session.customer_details?.email || session.customer_email || session.metadata?.email || '').trim();
+      const metaPlan = planIdFromCheckoutSession(session)
+        || planIdFromCheckoutSession(subscription)
+        || (isSaaSPlanId(session.metadata?.planId) ? session.metadata.planId : null);
+      const mapped = metaPlan
+        || (await planIdFromStripePrice(stripeClient, c.env, priceId))
+        || 'professional';
 
-      await c.env.DB.prepare(
-        'UPDATE organizations SET plan = ?, stripe_customer_id = ?, stripe_subscription_id = ? WHERE id = ?'
-      ).bind(mapped, stripeCustomerId, stripeSubId, orgId).run();
+      await fulfillSaasCheckout(c.env.DB, {
+        generateId,
+        orgIdHint,
+        email,
+        plan: mapped,
+        stripeCustomerId,
+        stripeSubscriptionId: stripeSubId,
+        stripeSessionId: session.id,
+      });
       break;
     }
 
@@ -11065,8 +11119,8 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/demo-experience.js?v=20260818-demo-inbox"></script>
-  <script src="/static/app.js?v=20260818-demo-inbox"></script>
+  <script src="/static/demo-experience.js?v=20260818-pay-access"></script>
+  <script src="/static/app.js?v=20260818-pay-access"></script>
 </body>
 </html>`;
 }

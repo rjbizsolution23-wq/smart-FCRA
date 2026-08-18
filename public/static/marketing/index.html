@@ -485,6 +485,7 @@
             <li>Priority email support</li>
           </ul>
           <a class="btn btn-primary" id="cta-professional" href="/login?mode=register&amp;plan=professional">Start Professional</a>
+          <a class="btn btn-ghost" id="pay-professional" href="/login?mode=register&amp;plan=professional">Pay with Stripe</a>
         </article>
         <article class="price">
           <h3>Unlimited</h3>
@@ -501,6 +502,7 @@
             <li>Multi-org management for agencies running more than one brand</li>
           </ul>
           <a class="btn btn-primary" id="cta-unlimited" href="/login?mode=register&amp;plan=unlimited">Start Unlimited</a>
+          <a class="btn btn-ghost" id="pay-unlimited" href="/login?mode=register&amp;plan=unlimited">Pay with Stripe</a>
         </article>
         <article class="price">
           <h3>Enterprise</h3>
@@ -517,6 +519,7 @@
             <li>Expert legal-ops consultation add-on</li>
           </ul>
           <a class="btn btn-primary" id="cta-enterprise" href="/login?mode=register&amp;plan=enterprise">Start Enterprise</a>
+          <a class="btn btn-ghost" id="pay-enterprise" href="/login?mode=register&amp;plan=enterprise">Pay with Stripe</a>
           <p class="who" style="margin-top:0.75rem"><a href="#demo">Talk to sales</a> if you need a custom SLA first.</p>
         </article>
       </div>
@@ -600,12 +603,25 @@
         const plans = Array.isArray(payload && payload.plans) ? payload.plans : [];
         plans.forEach((p) => {
           const btn = document.getElementById('cta-' + p.id);
-          if (!btn || !p) return;
-          if (loggedIn) {
-            btn.setAttribute('href', '/app?plan=' + encodeURIComponent(p.id));
-            btn.textContent = 'Subscribe ' + (p.name || p.id);
-          } else if (p.subscribeUrl) {
-            btn.setAttribute('href', p.subscribeUrl);
+          const pay = document.getElementById('pay-' + p.id);
+          if (btn && p) {
+            if (loggedIn) {
+              btn.setAttribute('href', '/app?plan=' + encodeURIComponent(p.id));
+              btn.textContent = 'Subscribe ' + (p.name || p.id);
+            } else if (p.subscribeUrl) {
+              btn.setAttribute('href', p.subscribeUrl);
+            }
+          }
+          if (pay && p) {
+            if (loggedIn) {
+              pay.setAttribute('href', '/app?plan=' + encodeURIComponent(p.id));
+              pay.textContent = 'Open checkout';
+            } else if (p.paymentLink) {
+              pay.setAttribute('href', p.paymentLink);
+              pay.setAttribute('rel', 'noopener');
+            } else if (p.subscribeUrl) {
+              pay.setAttribute('href', p.subscribeUrl);
+            }
           }
         });
         const badge = document.getElementById('pricing-live-badge');
