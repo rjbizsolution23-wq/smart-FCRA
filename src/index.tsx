@@ -44,6 +44,8 @@ import {
   resolveMfsnCredentials,
   resolvePartnerMfsnCredentials,
   resolvePublicSignupMfsnCredentials,
+  hasPartnerApiLogin,
+  explainMfsnPullError,
 } from './engine/mfsn-client';
 import { mapSmartCreditToInternal } from './engine/smartcredit-mapper';
 import { LenderMatchingEngine } from './data/funding/institutional-matching';
@@ -106,6 +108,7 @@ import {
 import {
   MFSN_AFFILIATE_PORTAL_URL,
   MFSN_API_DOCS_URL,
+  MFSN_PULL_GUIDE_STEPS,
   MFSN_OPERATOR_ACCOUNTS,
   MFSN_OPENAPI_URL,
   isWhitelistedMfsnOperatorEmail,
@@ -1733,7 +1736,7 @@ app.post('/api/demo/mfsn-live', authMiddleware, async (c) => {
       message: 'Live file imported. This account cannot pull another demo report. Open Violations to see findings generated from this file.',
     });
   } catch (e: any) {
-    const msg = e instanceof MFSNError ? e.message : (e?.message || 'Live pull failed');
+    const msg = e instanceof MFSNError ? explainMfsnPullError(e) : (e?.message || 'Live pull failed');
     return c.json({ error: msg }, 502);
   }
 });
@@ -2332,11 +2335,13 @@ app.get('/api/mfsn/operator-access', authMiddleware, async (c) => {
     configuredEmail: configuredEmail || null,
     configuredEmailWhitelisted: isWhitelistedMfsnOperatorEmail(configuredEmail),
     partnerConfigured: !!resolvePartnerMfsnCredentials(c.env),
+    partnerApiLoginConfigured: hasPartnerApiLogin(c.env),
     operators: MFSN_OPERATOR_ACCOUNTS,
     affiliatePortalUrl: String(c.env.MFSN_AFFILIATE_PORTAL_URL || MFSN_AFFILIATE_PORTAL_URL),
     apiDocsUrl: String(c.env.MFSN_API_DOCS_URL || MFSN_API_DOCS_URL),
     openApiUrl: MFSN_OPENAPI_URL,
     agentRunbook: '/docs/agents/mfsn-partner/AGENT_ACCESS.md',
+    pullGuide: MFSN_PULL_GUIDE_STEPS,
   });
 });
 
@@ -4154,6 +4159,7 @@ app.get('/api/integrations/mfsn/status', authMiddleware, async (c) => {
     ok: !!login.ok,
     email: login.email || null,
     partnerConfigured: !!resolvePartnerMfsnCredentials(c.env),
+    partnerApiLoginConfigured: hasPartnerApiLogin(c.env),
     activeMemberCount: activeCount,
     error: login.error || null,
     ghlConfigured: ghlConfigured(c.env),
@@ -8279,16 +8285,32 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
   if (!planCheck.allowed) return c.json({ error: planCheck.message }, 403);
 
   const body = await c.req.json();
-  const { clientId, clientEmail } = body;
+  let { clientId, clientEmail } = body;
+
+  if (!clientId || clientId === 'autopilot') {
+    return c.json({ error: 'Add your own client first, then import their MyFreeScoreNow file.' }, 400);
+  }
+
+  if (!clientEmail) {
+    try {
+      const row = await c.env.DB.prepare('SELECT email, mfsn_member_email FROM clients WHERE id = ? AND org_id = ?')
+        .bind(clientId, user.org_id).first() as any;
+      clientEmail = row?.mfsn_member_email || row?.email || '';
+    } catch {
+      const row = await c.env.DB.prepare('SELECT email FROM clients WHERE id = ? AND org_id = ?')
+        .bind(clientId, user.org_id).first() as any;
+      clientEmail = row?.email || '';
+    }
+  }
 
   if (!clientId || !clientEmail) {
-    return c.json({ error: 'Client ID and client email are required' }, 400);
+    return c.json({ error: 'Client ID and the member’s MyFreeScoreNow email are required' }, 400);
   }
 
   const creds = resolveMfsnCredentials(body, c.env);
   if (!creds) {
     return c.json({
-      error: 'MFSN credentials required (username/password/secretWord in body, or MFSN_EMAIL / MFSN_PASSWORD / MFSN_CLIENT_TOKEN secrets)',
+      error: 'Need an API User email/password (affiliate portal → Users → API User, then paste into My Free Score API login) plus this client’s MAPIK# token.',
     }, 400);
   }
 
@@ -8443,7 +8465,8 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
   } catch (err: any) {
     console.error('MFSN Import Error:', err);
     if (err instanceof MFSNError) {
-      return c.json({ error: err.message, code: err.code }, err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode as any : 500);
+      const status = err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode as any : 500;
+      return c.json({ error: explainMfsnPullError(err), code: err.code }, status);
     }
     return c.json({ error: `Connection Error: ${err.message}` }, 500);
   }
@@ -11239,8 +11262,8 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/demo-experience.js?v=20260818-portal-walk"></script>
-  <script src="/static/app.js?v=20260818-portal-walk"></script>
+  <script src="/static/demo-experience.js?v=20260818-mfsn-apiuser"></script>
+  <script src="/static/app.js?v=20260818-mfsn-apiuser"></script>
 </body>
 </html>`;
 }

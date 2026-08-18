@@ -11,6 +11,8 @@ const {
   primaryMfsnOperatorEmail,
   MFSN_OPERATOR_ACCOUNTS,
   MFSN_API_BASE,
+  MFSN_PULL_GUIDE_STEPS,
+  MFSN_AFFILIATE_PORTAL_URL,
 } = await import(pathToFileURL(path.join(root, 'src/data/mfsn-operator-accounts.ts')).href);
 
 assert(primaryMfsnOperatorEmail() === 'rickyjefferson1006@gmail.com', 'primary');
@@ -20,5 +22,10 @@ assert(!isWhitelistedMfsnOperatorEmail('random@example.com'), 'reject outsider')
 assert(MFSN_OPERATOR_ACCOUNTS.length >= 2, 'accounts');
 assert(MFSN_API_BASE.includes('myfreescorenow.com'), 'api base');
 assert(!JSON.stringify(MFSN_OPERATOR_ACCOUNTS).includes('Nadia'), 'no passwords in source');
+assert(MFSN_PULL_GUIDE_STEPS.length === 5, 'five pull steps');
+assert(MFSN_PULL_GUIDE_STEPS[1].title.toLowerCase().includes('api user'), 'step 2 is API User');
+assert(MFSN_PULL_GUIDE_STEPS.every((s) => s.why && s.action), 'each step explains why');
+assert(MFSN_AFFILIATE_PORTAL_URL.includes('myfreescorenow.com/login'), 'affiliate login url');
+assert(!JSON.stringify(MFSN_PULL_GUIDE_STEPS).includes('Nadia'), 'guide has no secrets');
 
 console.log('mfsn-operator-accounts.test.mjs OK');

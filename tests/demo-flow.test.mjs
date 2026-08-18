@@ -160,7 +160,10 @@ assert(overlay.includes('/demo/prepare'), 'overlay prepares sample case without 
 assert(overlay.includes('Start your organization'), 'overlay convert CTA');
 assert(overlay.includes('/demo/convert'), 'overlay posts convert handoff');
 assert(overlay.includes('id="sf-portal"'), 'overlay jumps into the client portal tour');
-assert(spa.includes('portal-walkthrough-bar'), 'SPA has portal walkthrough chip bar');
+assert(spa.includes('mfsn-api-user-guide'), 'SPA shows MFSN API User walkthrough');
+assert(spa.includes('Users → API User') || spa.includes('Users section'), 'SPA tells staff to open Users → API User');
+assert(overlay.includes('Users → API User'), 'demo live modal walks API User setup');
+assert(overlay.includes('myfreescorenow.com/login'), 'overlay links affiliate portal');
 assert(spa.includes('_portalWalkStep'), 'SPA can step Next/Previous through portal tabs');
 assert(spa.includes("id: 'client-report'"), 'SPA sidebar includes Report');
 for (const g of CLIENT_PORTAL_GUIDE) {
@@ -270,6 +273,15 @@ const auth = { Authorization: `Bearer ${sessionToken}` };
   assert(res.status === 200, 'portal guide 200');
   assert(Array.isArray(body.pages) && body.pages.length === CLIENT_PORTAL_GUIDE.length, 'portal guide pages');
   assert(/Preview Portal/i.test(body.previewHint || ''), 'guide tells staff to preview');
+}
+
+{
+  const res = await app.request('/api/mfsn/operator-access', { headers: auth }, env);
+  const body = await res.json();
+  assert(res.status === 200, 'mfsn operator access 200');
+  assert(Array.isArray(body.pullGuide) && body.pullGuide.length === 5, 'pull guide has five steps');
+  assert(/API User/i.test(body.pullGuide[1].title), 'step 2 is API User');
+  assert(String(body.affiliatePortalUrl || '').includes('myfreescorenow.com'), 'affiliate portal url');
 }
 
 {

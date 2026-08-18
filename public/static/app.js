@@ -1641,13 +1641,45 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       <img src="/static/logos/mfsn-logo.png" alt="My Free Score Now" class="h-14 md:h-[4.5rem] w-auto max-w-full object-contain object-left">
       <h2 class="mt-3 text-xl font-bold text-slate-900 font-display">My Free Score Now</h2>
       <p class="text-xs italic text-slate-600">Know the Score and More</p>
-      <p class="text-sm text-slate-600 mt-2 max-w-2xl">Add <strong>your own client</strong>, import a MyFreeScoreNow report, then <strong>Preview Portal</strong> to walk every consumer tab — Dashboard, My Credit, Case, Disputes, Action Plan, Rights, Tutor, Letters, Billing, Cancel Services, and the rest.</p>
+      <p class="text-sm text-slate-600 mt-2 max-w-2xl">Add <strong>your own client</strong>. Then Import MyFreeScoreNow: log in to the <strong>affiliate portal</strong>, Users → <strong>API User</strong> → create it, paste that login here, then the client’s email + <strong>MAPIK#</strong> token to pull the 3B file and run the full process. After that, Preview Portal walks every consumer tab.</p>
       <div class="flex flex-wrap gap-2 mt-3">
         <button type="button" onclick="window._nav('clients')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-user-plus mr-1.5"></i>Add your client</button>
         <button type="button" onclick="window._previewOwnClientPortal()" class="bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-user-shield mr-1.5"></i>Preview client portal</button>
-        <button type="button" onclick="window._nav('upload-report')" class="bg-sky-700 hover:bg-sky-600 text-white text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-cloud-download-alt mr-1.5"></i>Import MyFreeScoreNow</button>
+        <button type="button" onclick="window._nav('upload-report', { tab: 'mfsn' })" class="bg-sky-700 hover:bg-sky-600 text-white text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-cloud-download-alt mr-1.5"></i>Import MyFreeScoreNow</button>
+        <a href="https://myfreescorenow.com/login" target="_blank" rel="noopener" class="inline-flex items-center bg-white border border-sky-300 hover:bg-sky-50 text-sky-800 text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-external-link-alt mr-1.5"></i>Affiliate portal</a>
         <a href="/login?signup=mfsn" class="inline-flex items-center bg-white border border-sky-300 hover:bg-sky-50 text-sky-800 text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-bolt mr-1.5"></i>MFSN enrollment</a>
       </div>
+    </div>`;
+  }
+
+  function mfsnPullGuideHtml(access) {
+    const portal = escapeHtml((access && access.affiliatePortalUrl) || 'https://myfreescorenow.com/login');
+    const saved = !!(access && (access.partnerApiLoginConfigured || access.partnerConfigured));
+    const steps = (access && Array.isArray(access.pullGuide) && access.pullGuide.length)
+      ? access.pullGuide
+      : [
+          { n: 1, title: 'Log in to the MyFreeScoreNow affiliate portal', why: 'The partner dashboard is where you create an API User. Official login is POST /api/auth/login (email + password → Bearer).', action: 'Sign in with your partner account.', href: 'https://myfreescorenow.com/login', hrefLabel: 'Open affiliate portal login' },
+          { n: 2, title: 'Users section → click API User → create it', why: 'An API User is a machine login for your firm, not a client. Without it Smart FCRA cannot get a Bearer token.', action: 'Open Users, click API User, create it, copy the email and password.' },
+          { n: 3, title: 'Add that API User to My Free Score API login', why: 'Those fields are the partner login, not the consumer password.', action: 'Paste API User email and password into the fields below (or leave blank if this server already stores them).' },
+          { n: 4, title: 'Enter this client’s MFSN email and MAPIK# token', why: 'fetch-3B-json needs the member email plus that member’s MAPIK# token. Each member has their own token.', action: 'Client Email = membership email. Client Token = MAPIK#… then pull.' },
+          { n: 5, title: 'The pull starts the full process', why: 'The 3B JSON is vaulted, parsed, violation-scanned, and opened on the client file.', action: 'QA findings, generate letters from the file, then Preview Portal.' },
+        ];
+    return `<div id="mfsn-api-user-guide" class="rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-4 mb-5 space-y-3">
+      <div class="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 class="text-sm font-bold text-cyan-200"><i class="fas fa-list-ol mr-1.5"></i>How the live MyFreeScoreNow pull works</h3>
+          <p class="text-[11px] text-cyan-100/80 mt-1">Two logins, one pull. <strong>API User</strong> authenticates your firm. <strong>Client email + MAPIK#</strong> selects whose 3B file to fetch. Official API: login → fetch-3B-json → logout.</p>
+        </div>
+        <a href="${portal}" target="_blank" rel="noopener" class="shrink-0 bg-cyan-700 hover:bg-cyan-600 text-white text-[11px] font-bold px-3 py-2 rounded-lg"><i class="fas fa-external-link-alt mr-1"></i>Affiliate portal</a>
+      </div>
+      ${saved ? `<p class="text-[11px] text-emerald-300"><i class="fas fa-check-circle mr-1"></i>This server already has a partner API User. You can skip steps 1–3 and enter this client’s email + MAPIK# token.</p>` : `<p class="text-[11px] text-amber-200"><i class="fas fa-info-circle mr-1"></i>No partner API User is stored on this server yet — complete steps 1–3, then pull.</p>`}
+      <ol class="space-y-2.5">
+        ${steps.map((s) => `<li class="rounded-lg border border-cyan-800/40 bg-gray-950/40 p-3">
+          <div class="text-xs font-bold text-white"><span class="inline-flex w-5 h-5 mr-1.5 items-center justify-center rounded-full bg-cyan-700 text-[10px]">${s.n}</span>${escapeHtml(s.title)}</div>
+          <p class="text-[11px] text-gray-400 mt-1"><span class="text-cyan-300 font-semibold">Why:</span> ${escapeHtml(s.why)}</p>
+          <p class="text-[11px] text-gray-300 mt-1">${escapeHtml(s.action)}${s.href ? ` <a class="text-cyan-400 hover:underline" href="${escapeHtml(s.href)}" target="_blank" rel="noopener">${escapeHtml(s.hrefLabel || 'Open')}</a>` : ''}</p>
+        </li>`).join('')}
+      </ol>
     </div>`;
   }
 
@@ -2306,6 +2338,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   async function pgUploadReport(el, data) {
     if (state.demoSession && (!data || !data.clientId || data.clientId === 'autopilot')) {
       data = {
+        ...(data || {}),
         clientId: state.demoSession.sampleClientId || 'cli_demo_001',
         clientName: state.demoSession.sampleClientName || 'Demo Client',
       };
@@ -2314,6 +2347,17 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       data = { clientId: 'autopilot', autopilot: true };
     } else if (data.clientId === 'autopilot') {
       data.autopilot = true;
+    }
+
+    let mfsnAccess = { affiliatePortalUrl: 'https://myfreescorenow.com/login', partnerApiLoginConfigured: false, pullGuide: null };
+    try { mfsnAccess = await api('/mfsn/operator-access'); } catch (_) {}
+    let prefillEmail = '';
+    if (data.clientId && data.clientId !== 'autopilot') {
+      try {
+        const profile = await api(`/clients/${data.clientId}`);
+        prefillEmail = profile.client?.mfsn_member_email || profile.client?.email || '';
+        if (!data.clientName && profile.client) data.clientName = `${profile.client.first_name || ''} ${profile.client.last_name || ''}`.trim();
+      } catch (_) {}
     }
 
     const isAutopilot = !!data.autopilot;
@@ -2332,15 +2376,15 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       ? `Zero-friction onboarding. Drop raw credit report PDFs (Equifax, Experian, TransUnion) or paste raw text. The system will automatically extract demographics, resolve or register client files, run complete litigation scans, and redirect you directly to their workspace.` 
       : `Import via MyFreeScoreNow, SmartCredit, or upload raw text / AnnualCreditReport.com PDFs. The system will parse, detect ALL violations, and calculate litigation value.`;
 
-    const mfsnClass = isAutopilot 
+    const mfsnClass = (isAutopilot && data.tab !== 'mfsn')
       ? 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-2 transition'
       : 'px-4 py-2 font-semibold text-blue-400 border-b-2 border-blue-500 mr-2 transition';
-    const acrClass = isAutopilot
+    const acrClass = (isAutopilot && data.tab !== 'mfsn')
       ? 'px-4 py-2 font-semibold text-red-400 border-b-2 border-red-500 mr-2 transition'
       : 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-2 transition';
 
-    const mfsnFormHidden = isAutopilot ? 'hidden' : '';
-    const acrFormHidden = isAutopilot ? '' : 'hidden';
+    const mfsnFormHidden = (isAutopilot && data.tab !== 'mfsn') ? 'hidden' : '';
+    const acrFormHidden = (isAutopilot && data.tab !== 'mfsn') ? '' : 'hidden';
 
     el.innerHTML = `<div class="fade-in max-w-4xl">
       <button onclick="${backNav}" class="text-gray-400 hover:text-white text-sm mb-4 inline-flex items-center gap-1.5 transition"><i class="fas fa-arrow-left text-xs"></i>${backText}</button>
@@ -2356,27 +2400,36 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 
       <!-- MFSN IMPORT TAB -->
       <form id="mfsn-form" class="space-y-5 ${mfsnFormHidden}">
-        <div class="grid grid-cols-2 gap-4">
-          <div><label class="block text-xs text-gray-400 mb-1.5">API Username (Email)</label>
-          <input type="text" name="username" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="apiuser@test.com"></div>
-          <div>
-            <label class="block text-xs text-gray-400 mb-1.5">API Password</label>
-            <div class="relative">
-              <input type="password" id="mfsn-password" name="password" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-3 pr-10 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="Password">
-              <button type="button" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white" onclick="const input = document.getElementById('mfsn-password'); const icon = this.querySelector('i'); if (input.type === 'password') { input.type = 'text'; icon.className = 'fas fa-eye-slash'; } else { input.type = 'password'; icon.className = 'fas fa-eye'; }">
-                <i class="fas fa-eye"></i>
-              </button>
+        ${mfsnPullGuideHtml(mfsnAccess)}
+        <div class="rounded-xl border border-blue-700/40 bg-blue-950/20 p-4 space-y-3">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-blue-300">My Free Score API login (API User)</h4>
+          <p class="text-[11px] text-gray-400">Paste the email and password from affiliate portal → Users → API User. This authenticates your firm. ${mfsnAccess.partnerApiLoginConfigured || mfsnAccess.partnerConfigured ? 'This server already has a partner API User — fields are optional.' : 'Required unless partner secrets are already stored on the server.'}</p>
+          <div class="grid grid-cols-2 gap-4">
+            <div><label class="block text-xs text-gray-400 mb-1.5">API Username (Email)</label>
+            <input type="text" name="username" autocomplete="off" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="api-user@yourfirm.com"></div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1.5">API Password</label>
+              <div class="relative">
+                <input type="password" id="mfsn-password" name="password" autocomplete="off" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg pl-3 pr-10 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="API User password">
+                <button type="button" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white" onclick="const input = document.getElementById('mfsn-password'); const icon = this.querySelector('i'); if (input.type === 'password') { input.type = 'text'; icon.className = 'fas fa-eye-slash'; } else { input.type = 'password'; icon.className = 'fas fa-eye'; }">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </div>
             </div>
           </div>
         </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div><label class="block text-xs text-gray-400 mb-1.5">Client Email</label>
-          <input type="text" name="clientEmail" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="david_webber2@gmail.com"></div>
-          <div><label class="block text-xs text-gray-400 mb-1.5">Client Token</label>
-          <input type="text" name="secretWord" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="Partner client token (or leave blank to use server secret)"></div>
+        <div class="rounded-xl border border-amber-700/40 bg-amber-950/15 p-4 space-y-3">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-amber-300">This client’s pull (member email + MAPIK#)</h4>
+          <p class="text-[11px] text-gray-400">Not the API User. This is the consumer enrolled under affiliate A8289. fetch-3B-json uses their email and their own MAPIK# token.</p>
+          <div class="grid grid-cols-2 gap-4">
+            <div><label class="block text-xs text-gray-400 mb-1.5">Client Email</label>
+            <input type="text" name="clientEmail" required value="${escapeHtml(prefillEmail)}" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="member@email.com"></div>
+            <div><label class="block text-xs text-gray-400 mb-1.5">Client Token (MAPIK#)</label>
+            <input type="text" name="secretWord" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-blue-500 outline-none" placeholder="MAPIK#…"></div>
+          </div>
         </div>
         <div class="flex gap-3">
-          <button type="submit" id="mfsn-btn" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition shadow-lg"><i class="fas fa-cloud-download-alt mr-2"></i>Authenticate & Import Report</button>
+          <button type="submit" id="mfsn-btn" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition shadow-lg"><i class="fas fa-cloud-download-alt mr-2"></i>Authenticate &amp; Import Report</button>
         </div>
 
         <div class="relative flex py-3 items-center">
@@ -3166,7 +3219,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         }
 
         if (actualEndpoint === '/reports/upload' || actualEndpoint === '/reports/import-mfsn' || actualEndpoint === '/reports/import-smartcredit') {
-          toast(`COMPLETE: ${result.violationsFound} violations found! Opening Dispute Cockpit Workspace...`, 'success');
+          toast(`COMPLETE: ${result.violationsFound} violations found. Opening the file — next: QA findings, generate letters, Preview Portal.`, 'success');
           await sleep(1500);
           window._nav('report-detail', { reportId: result.reportId, clientId: data.clientId });
           return;
@@ -3187,15 +3240,32 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       e.preventDefault();
       const fd = new FormData(e.target);
       const btn = $('#mfsn-btn');
+      const token = String(fd.get('secretWord') || '').trim();
+      if (token && !/^MAPIK#/i.test(token)) {
+        toast('Client token usually starts with MAPIK# — that is the member token, not the API User password.', 'info');
+      }
+      let clientId = data.clientId;
+      if (!clientId || clientId === 'autopilot') {
+        const clients = await api('/clients').catch(() => ({ clients: [] }));
+        clientId = clients.clients?.[0]?.id;
+        if (!clientId) {
+          toast('Add your own client first, then pull their MyFreeScoreNow file.', 'info');
+          window._nav('clients');
+          return;
+        }
+        data.clientId = clientId;
+      }
       btn.disabled = true;
       btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Connecting...';
 
       await runAnalysisPipeline('/reports/import-mfsn', {
-        clientId: data.clientId,
+        clientId,
         username: fd.get('username'),
         password: fd.get('password'),
         clientEmail: fd.get('clientEmail'),
-        secretWord: fd.get('secretWord')
+        secretWord: token,
+        memberToken: token,
+        clientToken: token
       }, true, 'MyFreeScoreNow');
 
       btn.disabled = false;
@@ -6221,6 +6291,16 @@ Status: Discharged`;
           <p class="text-[10px] text-gray-600 mt-3">Public signup: <a class="text-cyan-400" href="/login?signup=mfsn" target="_blank">/login?signup=mfsn</a></p>
         </div>
 
+        <div class="glass rounded-xl p-6 border border-cyan-700/40" id="mfsn-api-user-settings">
+          <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-user-cog text-cyan-400"></i> My Free Score API login (API User)</h2>
+          <p class="text-xs text-gray-400 mb-3">Create the API User in the affiliate portal, then use it on Import. Partner secrets on this server (if set) skip the username/password fields — you still need each client’s email + MAPIK#.</p>
+          <div id="mfsn-settings-guide" class="text-xs text-gray-400">Loading guide…</div>
+          <div class="flex flex-wrap gap-2 mt-4">
+            <a href="https://myfreescorenow.com/login" target="_blank" rel="noopener" class="bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-bold px-3 py-2 rounded-lg">Open affiliate portal</a>
+            <button type="button" onclick="window._nav('upload-report', { tab: 'mfsn' })" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-2 rounded-lg">Open Import + pull</button>
+          </div>
+        </div>
+
         <div class="glass rounded-xl p-6 border border-orange-900/40" id="ghl-mfsn-sync-panel">
           <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-cloud-upload-alt text-orange-400"></i> GoHighLevel + MyFreeScoreNow Sync</h2>
           <p class="text-xs text-gray-500 mb-4">Push every CRM client and every MFSN member into your GHL location with full custom fields, scores, offer codes, and tags.</p>
@@ -6285,6 +6365,12 @@ Status: Discharged`;
               <td class="py-2"><a class="text-cyan-400 hover:underline" href="${escapeHtml(o.enrollUrl)}" target="_blank" rel="noopener">Open</a></td>
             </tr>`).join('')}</tbody></table></div>`;
         }).catch(() => { affTable.textContent = 'Could not load affiliate offers.'; });
+      }
+      const guideBox = $('#mfsn-settings-guide');
+      if (guideBox) {
+        api('/mfsn/operator-access').then((d) => {
+          guideBox.innerHTML = mfsnPullGuideHtml(d);
+        }).catch(() => { guideBox.innerHTML = mfsnPullGuideHtml(null); });
       }
 
       const ghlStatusEl = $('#ghl-integration-status');
@@ -9137,7 +9223,7 @@ async function pgAdminConsole(el) {
         ['Violation engine', 'FCRA / FDCPA / ECOA / Metro2 / state / BK + fact-check, LVS, damages'],
         ['Letters', '~45 types, letter-strategy, branded PDF letterhead'],
         ['GoHighLevel', 'Full custom fields + tags; bulk CRM + MFSN sync'],
-        ['MyFreeScoreNow', 'Partner signup, affiliate A8289, token gate, analysis lock'],
+        ['MyFreeScoreNow', 'Affiliate portal → Users → API User → paste into API login, then member email + MAPIK# to fetch-3B-json'],
         ['TradelineMaster', 'Live inventory, listed prices, daily refresh cron job'],
         ['Twilio / Email / Stripe / Click2Mail', 'SMS, Verify, Video tokens, transactional mail, org billing, certified mail'],
         ['AI cascade', 'Groq → Gemini → Workers AI → OpenAI free-only'],

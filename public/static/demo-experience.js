@@ -158,13 +158,20 @@
   }
 
   function openLiveMfsn() {
-    const html = `<div class="bg-gray-900 border border-gray-700 rounded-2xl p-5 max-w-md w-full text-left">
-      <h3 class="text-white font-display text-lg mb-1">One live MyFreeScoreNow report</h3>
-      <p class="text-xs text-gray-400 mb-3">One person, one pull, this demo account only. Partner credentials stay on the server. You supply the member email and MAPIK# token.</p>
+    const html = `<div class="bg-gray-900 border border-gray-700 rounded-2xl p-5 max-w-lg w-full text-left max-h-[90vh] overflow-y-auto">
+      <h3 class="text-white font-display text-lg mb-1">Live MyFreeScoreNow pull</h3>
+      <p class="text-xs text-gray-400 mb-3">One person, one pull, this demo account only. Do it in this order — API User first, then the member.</p>
+      <ol class="text-[11px] text-gray-300 space-y-2 mb-4 list-decimal pl-4">
+        <li><strong class="text-white">Affiliate portal</strong> — <a class="text-cyan-400 underline" href="https://myfreescorenow.com/login" target="_blank" rel="noopener">myfreescorenow.com/login</a></li>
+        <li><strong class="text-white">Users → API User → create it</strong> — copy that email and password. That is the partner login (Bearer), not the consumer.</li>
+        <li><strong class="text-white">My Free Score API login</strong> — on Import, paste the API User. This demo may already have partner secrets; then skip to the member fields.</li>
+        <li><strong class="text-white">Client email + MAPIK# token</strong> — this member under affiliate A8289. Each member has their own token. Official API: login / fetch-3B-json / logout.</li>
+        <li><strong class="text-white">Pull starts the full process</strong> — vault, parse, named scores, violations, client file, then Preview Portal.</li>
+      </ol>
       <label class="block text-xs text-gray-400 mb-1">Member email</label>
       <input id="sf-mfsn-email" type="email" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm mb-2" />
       <label class="block text-xs text-gray-400 mb-1">Member token (MAPIK#)</label>
-      <input id="sf-mfsn-token" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm mb-3" />
+      <input id="sf-mfsn-token" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm mb-3" placeholder="MAPIK#…" />
       <div class="flex gap-2">
         <button data-modal-close class="flex-1 bg-gray-800 text-gray-200 rounded-lg py-2 text-sm">Cancel</button>
         <button id="sf-mfsn-go" class="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-semibold">Pull once</button>

@@ -47,6 +47,8 @@ assert(/GENERATED from selected violations/i.test(DEMO_PRODUCT_KNOWLEDGE), 'know
   assert(p.matched && p.actions[0].type === 'impersonate', 'portal intent');
   const m = routeDemoIntent('I want to pull my MyFreeScoreNow report with MAPIK');
   assert(m.matched && m.actions[0].type === 'openLiveMfsn', 'live mfsn intent');
+  const apiUser = routeDemoIntent('how do I create an api user in the affiliate portal');
+  assert(apiUser.matched && apiUser.actions[0].page === 'upload-report', 'api user intent opens import');
 }
 
 {
