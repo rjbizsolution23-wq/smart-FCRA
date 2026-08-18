@@ -196,8 +196,24 @@
 
   window._startImpersonating = function(clientId, clientName) {
     setState({ impersonateClientId: clientId, impersonateClientName: clientName });
-    toast('Entering Client Portal Preview Mode', 'warning');
+    toast('Previewing the client portal — use Next tab or the chips to walk every page', 'warning');
     navigate('client-cockpit');
+  };
+
+  window._previewOwnClientPortal = async function() {
+    try {
+      const d = await api('/clients');
+      const list = d.clients || [];
+      if (!list.length) {
+        toast('Add your own client first, then Preview Portal walks every consumer tab.', 'info');
+        window._nav('clients');
+        return;
+      }
+      const c = list[0];
+      window._startImpersonating(c.id, `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Client');
+    } catch (err) {
+      toast(err.message || 'Could not open the client portal', 'error');
+    }
   };
 
   window._stopImpersonating = function() {
@@ -1297,7 +1313,9 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     if (state.user?.role === 'client' || state.impersonateClientId) {
       navItems = [
         { id: 'client-cockpit', icon: 'fa-home', label: 'Dashboard' },
+        { id: 'client-self-onboard', icon: 'fa-file-upload', label: t('nav.getStarted') },
         { id: 'client-credit', icon: 'fa-chart-bar', label: 'My Credit' },
+        { id: 'client-report', icon: 'fa-file-alt', label: 'Report' },
         { id: 'client-case', icon: 'fa-balance-scale', label: 'My Credit Case' },
         { id: 'client-attest', icon: 'fa-clipboard-check', label: 'Confirm Facts' },
         { id: 'client-disputes', icon: 'fa-file-signature', label: 'Disputes' },
@@ -1305,7 +1323,6 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'client-progress', icon: 'fa-chart-line', label: 'Progress' },
         { id: 'client-rights', icon: 'fa-landmark', label: 'Consumer Rights' },
         { id: 'client-journey', icon: 'fa-route', label: t('nav.myJourney') },
-        { id: 'client-self-onboard', icon: 'fa-file-upload', label: t('nav.getStarted') },
         { id: 'client-messages', icon: 'fa-comments', label: t('nav.messages'), badgeId: 'notif-badge-msg' },
         { id: 'client-uploads', icon: 'fa-folder-open', label: 'Documents' },
         { id: 'client-fundability', icon: 'fa-house-user', label: 'Readiness' },
@@ -1396,7 +1413,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       ? `<div class="bg-amber-600/90 text-white text-xs font-semibold px-4 py-2.5 flex items-center justify-between z-[1000] border-b border-amber-500/30">
           <div class="flex items-center gap-2">
             <i class="fas fa-user-shield text-sm animate-pulse"></i>
-            <span><strong>Impersonation Mode:</strong> Previewing the portal for <strong>${escapeHtml(state.impersonateClientName || state.impersonateClientId)}</strong>. Signatures, attestations, dispute approvals, and cancellation are blocked.</span>
+            <span><strong>Impersonation Mode:</strong> Previewing the portal for <strong>${escapeHtml(state.impersonateClientName || state.impersonateClientId)}</strong>. Use <strong>Next tab</strong> or the left nav to walk every page. Signatures, attestations, dispute approvals, and cancellation are blocked.</span>
           </div>
           <button onclick="window._stopImpersonating()" class="bg-black/30 hover:bg-black/50 px-3 py-1 rounded-lg transition text-[10px] uppercase tracking-wider font-extrabold flex items-center gap-1 border border-white/20"><i class="fas fa-times-circle"></i>Exit Preview</button>
          </div>`
@@ -1536,6 +1553,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         default: el.innerHTML = '<p class="text-gray-400">Page not found.</p>';
       }
     } catch(err) { el.innerHTML = `<div class="text-red-400 p-4"><i class="fas fa-exclamation-triangle mr-2"></i>${err.message}</div>`; }
+    prependPortalWalkthrough(el, page);
   }
 
   function statCard(icon,label,value,color) {
@@ -1543,14 +1561,90 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   }
 
   // ═══════════════════════════════════════════════════════════════
+  const CLIENT_PORTAL_GUIDE = [
+    { page: 'client-cockpit', navLabel: 'Dashboard' },
+    { page: 'client-self-onboard', navLabel: 'Get Started' },
+    { page: 'client-credit', navLabel: 'My Credit' },
+    { page: 'client-report', navLabel: 'Report' },
+    { page: 'client-case', navLabel: 'My Credit Case' },
+    { page: 'client-attest', navLabel: 'Confirm Facts' },
+    { page: 'client-disputes', navLabel: 'Disputes' },
+    { page: 'client-actions', navLabel: 'Action Plan' },
+    { page: 'client-progress', navLabel: 'Progress' },
+    { page: 'client-rights', navLabel: 'Consumer Rights' },
+    { page: 'client-journey', navLabel: 'My Journey' },
+    { page: 'client-messages', navLabel: 'Messages' },
+    { page: 'client-uploads', navLabel: 'Documents' },
+    { page: 'client-fundability', navLabel: 'Readiness' },
+    { page: 'client-tradelines', navLabel: 'Boost Tools' },
+    { page: 'tradelines', navLabel: 'AU Tradelines' },
+    { page: 'client-tutor', navLabel: 'Tutor' },
+    { page: 'client-documents', navLabel: 'Letters' },
+    { page: 'client-legal', navLabel: 'Legal & Notary' },
+    { page: 'client-video', navLabel: 'Video' },
+    { page: 'client-knowledge', navLabel: 'Academy' },
+    { page: 'client-billing', navLabel: 'Billing' },
+    { page: 'client-consents', navLabel: 'Consents' },
+    { page: 'client-settings', navLabel: 'Privacy & Security' },
+    { page: 'client-cancel', navLabel: 'Cancel Services' },
+    { page: 'ai-studio', navLabel: 'AI Mentors' },
+  ];
+
+  function portalWalkthroughBar(currentPage) {
+    const preview = !!state.impersonateClientId;
+    const isConsumer = state.user?.role === 'client' || preview;
+    if (!isConsumer) return '';
+    let idx = CLIENT_PORTAL_GUIDE.findIndex((g) => g.page === currentPage);
+    if (idx < 0) idx = 0;
+    const current = CLIENT_PORTAL_GUIDE[idx];
+    const next = CLIENT_PORTAL_GUIDE[Math.min(CLIENT_PORTAL_GUIDE.length - 1, idx + 1)];
+    return `<div id="portal-walkthrough-bar" class="rounded-xl border ${preview ? 'border-amber-500/30 bg-amber-950/25' : 'border-sky-500/25 bg-sky-950/20'} p-3 mb-5">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <div class="text-[10px] uppercase tracking-wider font-bold ${preview ? 'text-amber-300' : 'text-sky-300'}">
+          ${preview ? 'Walk every consumer tab' : 'Your portal pages'}
+        </div>
+        <div class="text-[10px] text-gray-400">${idx + 1} of ${CLIENT_PORTAL_GUIDE.length} · ${escapeHtml(current.navLabel)}${next && next.page !== current.page ? ' · next: ' + escapeHtml(next.navLabel) : ''}</div>
+      </div>
+      <div class="flex flex-wrap gap-2 mb-2">
+        <button type="button" onclick="window._portalWalkStep(-1)" class="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-gray-700 text-gray-200 hover:border-gray-500 ${idx===0?'opacity-40 pointer-events-none':''}"><i class="fas fa-chevron-left mr-1"></i>Previous</button>
+        <button type="button" onclick="window._portalWalkStep(1)" class="text-[11px] font-semibold px-3 py-1.5 rounded-lg ${idx>=CLIENT_PORTAL_GUIDE.length-1?'bg-gray-800 text-gray-500 pointer-events-none':'bg-amber-600 hover:bg-amber-500 text-white'}">${idx>=CLIENT_PORTAL_GUIDE.length-1?'Last page':'Next tab'}<i class="fas fa-chevron-right ml-1"></i></button>
+      </div>
+      <div class="flex flex-wrap gap-1.5">
+        ${CLIENT_PORTAL_GUIDE.map((g) => `<button type="button" onclick="window._nav('${g.page}')" class="text-[10px] font-semibold px-2 py-1 rounded-lg border ${currentPage===g.page?'bg-blue-600/35 border-blue-400 text-blue-100':'border-gray-700 text-gray-300 hover:border-gray-500'}">${escapeHtml(g.navLabel)}</button>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  window._portalWalkStep = function(delta) {
+    const page = state.currentPage;
+    let i = CLIENT_PORTAL_GUIDE.findIndex((g) => g.page === page);
+    if (i < 0) i = 0;
+    const next = CLIENT_PORTAL_GUIDE[Math.max(0, Math.min(CLIENT_PORTAL_GUIDE.length - 1, i + Number(delta || 0)))];
+    if (next) window._nav(next.page);
+  };
+
+  function prependPortalWalkthrough(el, page) {
+    if (!el) return;
+    const preview = !!state.impersonateClientId;
+    const dedicated = String(page || '').startsWith('client-') && page !== 'client-detail';
+    const shared = (page === 'tradelines' || page === 'ai-studio') && preview;
+    if (!(dedicated || shared || state.user?.role === 'client')) return;
+    if (el.querySelector('#portal-walkthrough-bar')) return;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = portalWalkthroughBar(page);
+    const bar = wrap.firstElementChild;
+    if (bar) el.insertBefore(bar, el.firstChild);
+  }
+
   function mfsnDashboardHero() {
     return `<div class="rounded-2xl border border-sky-200/70 bg-white p-5 mb-6 shadow-[0_8px_30px_rgba(14,116,144,0.08)]">
       <img src="/static/logos/mfsn-logo.png" alt="My Free Score Now" class="h-14 md:h-[4.5rem] w-auto max-w-full object-contain object-left">
       <h2 class="mt-3 text-xl font-bold text-slate-900 font-display">My Free Score Now</h2>
       <p class="text-xs italic text-slate-600">Know the Score and More</p>
-      <p class="text-sm text-slate-600 mt-2 max-w-2xl">Add <strong>your own client</strong> to see the full process — import a MyFreeScoreNow report, review findings, and generate letters from the file. The interactive demo keeps a generic sample case; this CRM does not ship a named walkthrough person.</p>
+      <p class="text-sm text-slate-600 mt-2 max-w-2xl">Add <strong>your own client</strong>, import a MyFreeScoreNow report, then <strong>Preview Portal</strong> to walk every consumer tab — Dashboard, My Credit, Case, Disputes, Action Plan, Rights, Tutor, Letters, Billing, Cancel Services, and the rest.</p>
       <div class="flex flex-wrap gap-2 mt-3">
         <button type="button" onclick="window._nav('clients')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-user-plus mr-1.5"></i>Add your client</button>
+        <button type="button" onclick="window._previewOwnClientPortal()" class="bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-user-shield mr-1.5"></i>Preview client portal</button>
         <button type="button" onclick="window._nav('upload-report')" class="bg-sky-700 hover:bg-sky-600 text-white text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-cloud-download-alt mr-1.5"></i>Import MyFreeScoreNow</button>
         <a href="/login?signup=mfsn" class="inline-flex items-center bg-white border border-sky-300 hover:bg-sky-50 text-sky-800 text-sm font-semibold px-4 py-2 rounded-lg"><i class="fas fa-bolt mr-1.5"></i>MFSN enrollment</a>
       </div>
@@ -1572,6 +1666,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       </div>
       <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">Dashboard</h1><p class="text-sm text-gray-400">Credit dispute operations overview</p></div>
         <div class="flex gap-2">
+          <button onclick="window._previewOwnClientPortal()" class="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-user-shield"></i>Preview Portal</button>
           <button onclick="window._nav('onboarding-wizard', { step: 1 })" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition shadow-lg flex items-center gap-1.5"><i class="fas fa-magic"></i>Smart Autopilot Ingest</button>
           <button onclick="window._nav('clients')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-plus"></i>New Client</button>
         </div>
@@ -1619,8 +1714,9 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   async function pgClients(el) {
     const d = await api('/clients');
     el.innerHTML = `<div class="fade-in">
-      <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">Clients</h1><p class="text-sm text-gray-400">${d.clients.length} total · Add your own client to run the full process</p></div>
+      <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">Clients</h1><p class="text-sm text-gray-400">${d.clients.length} total · Add your own client, then Preview Portal to walk every consumer tab</p></div>
         <div class="flex gap-2">
+          <button onclick="window._previewOwnClientPortal()" class="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-user-shield"></i>Preview Portal</button>
           <button onclick="window._nav('onboarding-wizard', { step: 1 })" class="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition shadow-lg flex items-center gap-1.5"><i class="fas fa-magic"></i>Smart Autopilot Ingest</button>
           <button onclick="$('#add-client-form').classList.toggle('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-plus"></i>Add Client</button>
         </div>
@@ -1637,7 +1733,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           <div><label class="block text-xs text-gray-400 mb-1">SSN Last 4</label><input type="text" name="ssnLast4" maxlength="4" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none" placeholder="1234"></div>
           <div class="md:col-span-2 flex gap-2"><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition">Save Client</button><button type="button" onclick="$('#add-client-form').classList.add('hidden')" class="bg-gray-700 hover:bg-gray-600 text-white px-5 py-2 rounded-lg text-sm transition">Cancel</button></div>
         </form></div>
-      ${d.clients.length?`<div class="space-y-2">${d.clients.map(c=>`<div onclick="window._nav('client-detail',{clientId:'${c.id}'})" class="glass rounded-xl p-4 card-hover cursor-pointer"><div class="flex items-center gap-4"><div class="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 font-bold text-sm">${(c.first_name||'?')[0]}${(c.last_name||'?')[0]}</div><div class="flex-1 min-w-0"><div class="text-sm font-semibold text-white">${c.first_name} ${c.last_name}</div><div class="text-xs text-gray-400">${c.email||'No email'} ${c.phone?'&bull; '+c.phone:''}</div></div><div class="text-right shrink-0"><div class="text-xs text-gray-400">${c.report_count||0} reports &bull; ${c.violation_count||0} violations</div>${c.damages_max?`<div class="text-xs text-green-400">${money(c.damages_min)} - ${money(c.damages_max)}</div>`:''}<span class="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-medium ${c.status==='active'?'bg-green-900/30 text-green-400':'bg-gray-700 text-gray-400'}">${c.status||'active'}</span></div><i class="fas fa-chevron-right text-gray-600 text-xs"></i></div></div>`).join('')}</div>`:`<div class="glass rounded-xl p-8 text-center"><i class="fas fa-users text-4xl text-gray-600 mb-4"></i><p class="text-gray-300 font-semibold mb-1">No clients yet</p><p class="text-sm text-gray-400 mb-3">Add your own client to import a report and see the process end to end.</p><button onclick="$('#add-client-form').classList.toggle('hidden')" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">Add First Client</button></div>`}
+      ${d.clients.length?`<div class="space-y-2">${d.clients.map(c=>`<div onclick="window._nav('client-detail',{clientId:'${c.id}'})" class="glass rounded-xl p-4 card-hover cursor-pointer"><div class="flex items-center gap-4"><div class="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 font-bold text-sm">${(c.first_name||'?')[0]}${(c.last_name||'?')[0]}</div><div class="flex-1 min-w-0"><div class="text-sm font-semibold text-white">${c.first_name} ${c.last_name}</div><div class="text-xs text-gray-400">${c.email||'No email'} ${c.phone?'&bull; '+c.phone:''}</div></div><div class="text-right shrink-0"><div class="text-xs text-gray-400">${c.report_count||0} reports &bull; ${c.violation_count||0} violations</div>${c.damages_max?`<div class="text-xs text-green-400">${money(c.damages_min)} - ${money(c.damages_max)}</div>`:''}<span class="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-medium ${c.status==='active'?'bg-green-900/30 text-green-400':'bg-gray-700 text-gray-400'}">${c.status||'active'}</span></div><button type="button" onclick="event.stopPropagation(); window._startImpersonating('${c.id}', '${escapeHtml((c.first_name||'')+' '+(c.last_name||''))}')" class="bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shrink-0"><i class="fas fa-user-shield mr-1"></i>Preview Portal</button><i class="fas fa-chevron-right text-gray-600 text-xs"></i></div></div>`).join('')}</div>`:`<div class="glass rounded-xl p-8 text-center"><i class="fas fa-users text-4xl text-gray-600 mb-4"></i><p class="text-gray-300 font-semibold mb-1">No clients yet</p><p class="text-sm text-gray-400 mb-3">Add your own client to import a report, then Preview Portal to walk every consumer tab.</p><button onclick="$('#add-client-form').classList.toggle('hidden')" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">Add First Client</button></div>`}
     </div>`;
     const f = $('#client-form');
     if (f) f.onsubmit = async (e) => { e.preventDefault(); const fd = new FormData(e.target); const b = {}; for (const [k,v] of fd.entries()) b[k]=v; try { await api('/clients',{method:'POST',body:JSON.stringify(b)}); toast('Client created!','success'); await pgClients(el); } catch(err) { toast(err.message,'error'); } };
@@ -1659,7 +1755,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           <div><h1 class="text-xl font-bold text-white">${c.first_name} ${c.last_name}</h1><div class="text-sm text-gray-400">${c.email||''} ${c.phone?'&bull; '+c.phone:''}</div>${c.address_line1?`<div class="text-xs text-gray-500">${c.address_line1}${c.city?', '+c.city:''} ${c.state||''} ${c.zip||''}</div>`:''}</div>
         </div>
         <div class="flex gap-2">
-          <button onclick="window._startImpersonating('${c.id}', '${escapeHtml(c.first_name + ' ' + c.last_name)}')" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 border border-amber-500/20 shadow-[0_0_15px_rgba(217,119,6,0.15)]"><i class="fas fa-user-shield"></i>Preview Portal</button>
+          <button title="Walk every consumer tab and page" onclick="window._startImpersonating('${c.id}', '${escapeHtml(c.first_name + ' ' + c.last_name)}')" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 border border-amber-500/20 shadow-[0_0_15px_rgba(217,119,6,0.15)]"><i class="fas fa-user-shield"></i>Preview Portal</button>
           <button id="btn-email-client" class="bg-cyan-700 hover:bg-cyan-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-envelope"></i>Message / Email</button>
           <button id="btn-portal-invite" class="bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-key"></i>Portal Invite</button>
           <button id="btn-sms-client" class="bg-teal-700 hover:bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5"><i class="fas fa-sms"></i>Text SMS</button>
@@ -9009,16 +9105,33 @@ async function pgAdminConsole(el) {
         ['Team / Settings / Billing', 'Users, GHL/MFSN/Twilio/Stripe/Click2Mail, org Stripe'],
         ['AI Studio / Legal / Admin', 'Mentors, in-app legal, super-admin console'],
       ]},
-      { title: 'Client portal', items: [
-        ['Dashboard', 'Named-model scores, next action, results taxonomy (not every change is a deletion), credit health'],
-        ['My Credit / Report sandbox / Case', 'Open a scrollable paper copy of the imported report (scriptless iframe). Confirm facts. Disputes require attestation.'],
-        ['Action Plan / Progress / Consumer Rights', 'One primary NBA, measured changes, FCRA/CROA/FDCPA education'],
-        ['Cancel Services / Consents / Billing', 'CROA cancellation in-portal; separate consents; client invoices without internal billing rules'],
-        ['Messages / Vault', 'Client ↔ staff chat; ID, SSN, proof, reports in R2'],
-        ['Fundability / Boost / AU Tradelines', 'Deterministic fundability + educational AU catalog'],
-        ['Tutor / Letters / Legal & Notary', 'Alex Rivera tutor, letters, RON (Proof/BlueNotary ceremony when live keys set)'],
-        ['Video', 'Twilio Video JS — live room when keys set, local camera preview otherwise'],
-        ['Academy / Privacy & Security / Mentors', 'Lessons, MFA, Rick / Alex / Maya / Jordan chat'],
+      { title: 'Client portal (Preview Portal walks every tab)', items: [
+        ['Dashboard', 'Named-model scores, next action, credit health, journey percent'],
+        ['Get Started', 'Consumer self-onboard: intake, ID upload, start a file'],
+        ['My Credit', 'Scores, utilization education, credit-event ledger — named models only'],
+        ['Report', 'Scriptless paper copy of the imported Experian / Equifax / TransUnion file'],
+        ['My Credit Case', 'Findings the consumer may see, round status, waiting-on-them vs staff'],
+        ['Confirm Facts', 'Attestation gate before disputes. Preview cannot sign'],
+        ['Disputes', 'Evidence-first queue; consumer approves what goes out'],
+        ['Action Plan', 'One primary next-best action plus supporting tasks'],
+        ['Progress', 'Measured file changes — verified, updated, deleted, or inconclusive'],
+        ['Consumer Rights', 'FCRA, CROA, TSR, FDCPA education in-product'],
+        ['My Journey', 'Daily check-ins and next step'],
+        ['Messages', 'Client ↔ staff chat on the case file'],
+        ['Documents', 'ID, proof, SSN docs, and reports in the R2 vault'],
+        ['Readiness', 'Deterministic fundability education — not a lending promise'],
+        ['Boost Tools', 'Educational authorized-user matching at listed prices'],
+        ['AU Tradelines', 'Live TradelineMaster catalog the consumer can also see'],
+        ['Tutor', 'Alex Rivera literacy coaching — no fake FICO promises'],
+        ['Letters', 'Generated letters released to the consumer'],
+        ['Legal & Notary', 'CROA/LPOA packs and RON when keys are live'],
+        ['Video', 'Twilio Video when keys set, local camera preview otherwise'],
+        ['Academy', 'Lessons on credit, disputes, and rights'],
+        ['Billing', 'Consumer invoices and analysis unlock — not SaaS plan math'],
+        ['Consents', 'Permissible purpose, CROA, TSR, E-SIGN with timestamps'],
+        ['Privacy & Security', 'MFA, password, and privacy requests'],
+        ['Cancel Services', 'In-portal CROA cancellation. Preview cannot complete cancel'],
+        ['AI Mentors', 'Rick / Alex / Maya / Jordan style coaching — not legal advice'],
       ]},
       { title: 'Engines & integrations', items: [
         ['Violation engine', 'FCRA / FDCPA / ECOA / Metro2 / state / BK + fact-check, LVS, damages'],
@@ -11733,6 +11846,7 @@ async function pgAdminConsole(el) {
               </div>
               <div class="flex gap-2">
                 <button onclick="window._nav('upload-report', { clientId: 'autopilot', autopilot: true })" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-lg shadow-blue-500/20"><i class="fas fa-magic"></i>Autopilot Onboard</button>
+                <button onclick="window._previewOwnClientPortal()" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5"><i class="fas fa-user-shield"></i>Preview client portal</button>
                 <button onclick="window._nav('admin-clients')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5"><i class="fas fa-users"></i>Manage Clients</button>
                 <button onclick="window._nav('admin-violation-queue')" class="bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5"><i class="fas fa-tasks"></i>Legal QA Queue</button>
               </div>
@@ -11883,6 +11997,7 @@ async function pgAdminConsole(el) {
     let clients = [];
     let searchVal = '';
     let filterStatus = '';
+    let showAddForm = false;
 
     if (initialPageData && initialPageData.searchClientId) {
       searchVal = initialPageData.searchClientId;
@@ -11955,9 +12070,12 @@ async function pgAdminConsole(el) {
           </div>
 
           <!-- Save Apply -->
-          <div class="border-t border-gray-850 pt-4 flex gap-3">
-            <button onclick="window._closeClientSlideOut()" class="w-1/2 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold py-2.5 rounded-xl transition">Cancel</button>
-            <button id="btn-save-slideout" onclick="window._saveClientSlideOutEditor('${c.id}')" class="w-1/2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl transition shadow-lg shadow-blue-500/15">Save Changes</button>
+          <div class="border-t border-gray-850 pt-4 flex flex-col gap-2">
+            <button type="button" onclick="window._startImpersonating('${c.id}', '${escapeHtml((c.first_name || '') + ' ' + (c.last_name || ''))}')" class="w-full bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold py-2.5 rounded-xl transition"><i class="fas fa-user-shield mr-1"></i>Preview Portal</button>
+            <div class="flex gap-3">
+              <button onclick="window._closeClientSlideOut()" class="w-1/2 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold py-2.5 rounded-xl transition">Cancel</button>
+              <button id="btn-save-slideout" onclick="window._saveClientSlideOutEditor('${c.id}')" class="w-1/2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl transition shadow-lg shadow-blue-500/15">Save Changes</button>
+            </div>
           </div>
         </div>
       `;
@@ -12009,11 +12127,31 @@ async function pgAdminConsole(el) {
     function renderGrid() {
       el.innerHTML = `
         <div class="fade-in space-y-6 relative overflow-hidden min-h-screen pb-12">
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between flex-wrap gap-3">
             <div>
               <h1 class="text-xl font-bold text-white">Client Management</h1>
-              <p class="text-sm text-gray-400">Fast CRM search filters and strategy drawers</p>
+              <p class="text-sm text-gray-400">Add your own client, then Preview Portal to walk every consumer tab and page</p>
             </div>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" onclick="window._previewOwnClientPortal()" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5"><i class="fas fa-user-shield"></i>Preview client portal</button>
+              <button type="button" onclick="window._toggleAdminAddClient()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5"><i class="fas fa-plus"></i>Add Client</button>
+            </div>
+          </div>
+          ${showAddForm ? `<div id="add-client-form" class="glass rounded-xl p-5 fade-in">
+            <h3 class="text-sm font-semibold text-white mb-4">New Client</h3>
+            <form id="admin-client-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div><label class="block text-xs text-gray-400 mb-1">First Name *</label><input type="text" name="firstName" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div>
+              <div><label class="block text-xs text-gray-400 mb-1">Last Name *</label><input type="text" name="lastName" required class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div>
+              <div><label class="block text-xs text-gray-400 mb-1">Email</label><input type="email" name="email" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div>
+              <div><label class="block text-xs text-gray-400 mb-1">Phone</label><input type="tel" name="phone" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"></div>
+              <div class="md:col-span-2 flex gap-2">
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium">Save Client</button>
+                <button type="button" onclick="window._toggleAdminAddClient()" class="bg-gray-700 hover:bg-gray-600 text-white px-5 py-2 rounded-lg text-sm">Cancel</button>
+              </div>
+            </form>
+          </div>` : ''}
+          <div class="rounded-xl border border-amber-500/20 bg-amber-950/15 p-4 text-xs text-amber-100/90">
+            <strong class="text-amber-300">Preview Portal</strong> opens the consumer shell for that client. Walk Dashboard → Get Started → My Credit → Report → Case → Confirm Facts → Disputes → Action Plan → Progress → Rights → Journey → Messages → Documents → Readiness → Boost Tools → AU Tradelines → Tutor → Letters → Legal &amp; Notary → Video → Academy → Billing → Consents → Privacy → Cancel Services → AI Mentors. Signatures stay blocked while you preview.
           </div>
 
           <!-- Filters Bar -->
@@ -12060,16 +12198,21 @@ async function pgAdminConsole(el) {
                       <td class="px-5 py-4">
                         <div class="text-xs font-mono font-bold text-green-400">${money(c.estimated_recovery || 0)}</div>
                       </td>
-                      <td class="px-5 py-4 text-right">
-                        <button onclick="window._nav('client-detail', { clientId: '${c.id}' })" class="bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition mr-1.5"><i class="fas fa-folder-open mr-1"></i>Open Workspace</button>
-                        <button onclick="window._openClientSlideOut('${c.id}')" class="bg-blue-600/10 hover:bg-blue-600 hover:text-white border border-blue-500/20 text-blue-400 text-[11px] font-bold px-3 py-1.5 rounded-lg transition">Edit Case</button>
+                      <td class="px-5 py-4 text-right whitespace-nowrap">
+                        <button type="button" onclick="event.stopPropagation(); window._startImpersonating('${c.id}', '${escapeHtml((c.first_name || '') + ' ' + (c.last_name || ''))}')" class="bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition mr-1.5"><i class="fas fa-user-shield mr-1"></i>Preview Portal</button>
+                        <button type="button" onclick="window._nav('client-detail', { clientId: '${c.id}' })" class="bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg transition mr-1.5"><i class="fas fa-folder-open mr-1"></i>Open Workspace</button>
+                        <button type="button" onclick="window._openClientSlideOut('${c.id}')" class="bg-blue-600/10 hover:bg-blue-600 hover:text-white border border-blue-500/20 text-blue-400 text-[11px] font-bold px-3 py-1.5 rounded-lg transition">Edit Case</button>
                       </td>
                     </tr>
                   `).join('') : `
                     <tr>
                       <td colspan="5" class="text-center py-12 text-gray-500 text-xs">
                         <i class="fas fa-users text-4xl text-gray-500/30 mb-2"></i>
-                        <p>No client records match the criteria.</p>
+                        ${(searchVal || filterStatus)
+                          ? `<p>No client records match the criteria.</p>`
+                          : `<p class="text-gray-300 font-semibold mb-1">No clients yet</p>
+                        <p class="mb-4 text-gray-400">Add your own client, then Preview Portal to walk every consumer tab and page.</p>
+                        <button type="button" onclick="window._toggleAdminAddClient()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Add First Client</button>`}
                       </td>
                     </tr>
                   `}
@@ -12082,7 +12225,29 @@ async function pgAdminConsole(el) {
           <div id="client-slideout-drawer" class="fixed top-0 right-0 h-screen w-80 bg-gray-950 border-l border-gray-850 z-[999] shadow-2xl transform translate-x-full transition duration-300"></div>
         </div>
       `;
+      const addForm = $('#admin-client-form');
+      if (addForm) addForm.onsubmit = window._submitAdminNewClient;
     }
+
+    window._toggleAdminAddClient = () => {
+      showAddForm = !showAddForm;
+      renderGrid();
+    };
+
+    window._submitAdminNewClient = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const b = {};
+      for (const [k, v] of fd.entries()) b[k] = v;
+      try {
+        await api('/clients', { method: 'POST', body: JSON.stringify(b) });
+        toast('Client created — Preview Portal walks every consumer tab', 'success');
+        showAddForm = false;
+        await loadData();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    };
 
     function getCaseStatusBadgeClass(status) {
       const maps = {

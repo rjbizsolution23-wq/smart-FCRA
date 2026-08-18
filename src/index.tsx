@@ -64,6 +64,7 @@ import {
   isSandboxDemoOrg,
   sandboxClientHideSql,
   DEMO_TOUR,
+  CLIENT_PORTAL_GUIDE,
   DEMO_PRODUCT_KNOWLEDGE,
   DEMO_SESSION_HOURS,
   routeDemoIntent,
@@ -1453,6 +1454,14 @@ app.get('/api/demo/tour', authMiddleware, async (c) => {
   if (demo?._missing) return c.json({ error: 'Migration 0023 required', code: 'MIGRATION_REQUIRED' }, 503);
   if (!demo) return c.json({ error: 'Interactive demo session required' }, 403);
   return c.json({ steps: DEMO_TOUR, product: 'Smart FCRA', brand: 'RJ Business Solutions' });
+});
+
+app.get('/api/portal/guide', authMiddleware, async (c) => {
+  return c.json({
+    pages: CLIENT_PORTAL_GUIDE,
+    count: CLIENT_PORTAL_GUIDE.length,
+    previewHint: 'Add a client, then Preview Portal. Use Next tab or the left nav to walk every consumer page. Signatures stay blocked in preview.',
+  });
 });
 
 app.get('/api/demo/session', authMiddleware, async (c) => {
@@ -11230,8 +11239,8 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/demo-experience.js?v=20260818-demo-mfsn"></script>
-  <script src="/static/app.js?v=20260818-demo-mfsn"></script>
+  <script src="/static/demo-experience.js?v=20260818-portal-walk"></script>
+  <script src="/static/app.js?v=20260818-portal-walk"></script>
 </body>
 </html>`;
 }
