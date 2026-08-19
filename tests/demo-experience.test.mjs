@@ -18,6 +18,7 @@ const {
   DEMO_PRODUCT_KNOWLEDGE,
   DEMO_CLIENT_NAME,
   CLIENT_PORTAL_GUIDE,
+  STAFF_CONSOLE_EXTENDED_GUIDE,
   isSandboxDemoOrg,
   isConsumerPortalPage,
   isSharedPortalPage,
@@ -33,7 +34,7 @@ const {
   DEMO_MAX_LIVE_PULLS,
 } = await import(pathToFileURL(path.join(root, 'src/engine/demo-experience.ts')).href);
 
-assert(DEMO_TOUR.length >= 10, 'tour covers the product');
+assert(DEMO_TOUR.length >= 50, 'tour covers the full product (50+ steps)');
 assert(DEMO_TOUR.every((s) => s.title && s.body && s.whyBuy && s.page), 'each tour step sells a screen');
 assert(!/letter templates/i.test(DEMO_PRODUCT_KNOWLEDGE), 'knowledge must not sell templates');
 assert(/GENERATED from selected violations/i.test(DEMO_PRODUCT_KNOWLEDGE), 'knowledge states generated letters');
@@ -97,6 +98,19 @@ assert(DEMO_TOUR.find((s) => s.id === 'upload')?.data?.clientId === 'cli_demo_00
 assert(DEMO_TOUR.find((s) => s.id === 'letters')?.data?.clientId === 'cli_demo_001', 'letter tour pins Demo Client');
 assert(DEMO_TOUR.find((s) => s.id === 'client')?.title === 'Sample client file', 'tour uses generic sample client');
 assert(!/Salisha/i.test(DEMO_TOUR.map((s) => s.body + s.title).join(' ')), 'tour copy has no named person');
+
+{
+  assert(STAFF_CONSOLE_EXTENDED_GUIDE.length >= 15, 'staff extended guide covers console pages');
+  assert(STAFF_CONSOLE_EXTENDED_GUIDE.every((g) => g.id && g.navLabel && g.title && g.body && g.whyBuy && g.page), 'each staff page has copy');
+  const staffPages = STAFF_CONSOLE_EXTENDED_GUIDE.map((g) => g.page);
+  assert(new Set(staffPages).size === staffPages.length, 'staff guide pages are unique');
+  const staffSteps = DEMO_TOUR.filter((s) => STAFF_CONSOLE_EXTENDED_GUIDE.some((g) => g.id === s.id));
+  assert(staffSteps.length === STAFF_CONSOLE_EXTENDED_GUIDE.length, 'tour walks every extended staff page');
+  const compliance = routeDemoIntent('show me compliance os and the three lane gate');
+  assert(compliance.matched && compliance.actions[0].page === 'compliance-os', 'compliance os intent');
+  const integration = routeDemoIntent('open the integration hub credential vault');
+  assert(integration.matched && integration.actions[0].page === 'integration-os', 'integration hub intent');
+}
 
 {
   assert(CLIENT_PORTAL_GUIDE.length >= 20, 'portal guide covers the consumer nav');

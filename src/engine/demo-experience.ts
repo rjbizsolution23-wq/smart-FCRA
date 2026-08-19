@@ -65,6 +65,149 @@ export type ClientPortalGuidePage = {
   whyBuy: string;
 };
 
+export type StaffConsoleGuidePage = {
+  id: string;
+  page: string;
+  navLabel: string;
+  title: string;
+  body: string;
+  whyBuy: string;
+  data?: Record<string, string>;
+};
+
+/** Staff-console pages beyond the core ingest → violations → letters → mail workflow. */
+export const STAFF_CONSOLE_EXTENDED_GUIDE: StaffConsoleGuidePage[] = [
+  {
+    id: 'staff-clients',
+    page: 'admin-clients',
+    navLabel: 'Clients',
+    title: 'Client roster',
+    body: 'Every consumer file in one CRM: intake status, portal access, assigned advisor, last activity, and quick jump into the client record. Add a client, send a portal invite, or open the bundled Demo Client sandbox without leaving the list.',
+    whyBuy: 'Operators stop living in three spreadsheets and a Gmail label.',
+  },
+  {
+    id: 'staff-violation-queue',
+    page: 'admin-violation-queue',
+    navLabel: 'Violation Queue',
+    title: 'Admin violation queue',
+    body: 'Cross-client view of engine findings waiting on staff QA. Filter by severity, statute, bureau, and round. Approve, defer, or send back before anything becomes a generated letter or litigation path.',
+    whyBuy: 'QA is a queue — not a Slack thread asking “did anyone review this?”',
+  },
+  {
+    id: 'staff-reports',
+    page: 'reports',
+    navLabel: 'Reports',
+    title: 'Credit reports library',
+    body: 'All imported bureau files for the org: tri-merge, single-bureau PDFs, MFSN JSON pulls, and re-import history. Open any report for account drill-down, score models, and violation linkage.',
+    whyBuy: 'The vault is searchable. Counsel can trace which file produced which finding.',
+  },
+  {
+    id: 'staff-compare',
+    page: 'report-comparison',
+    navLabel: 'Report Comparison',
+    title: 'Report comparison',
+    body: 'Side-by-side diff of two imports on the same consumer — score movement, tradeline adds/drops, balance changes, and inquiry shifts. Use after round two to show measured progress without inventing deletions.',
+    whyBuy: 'Progress reviews become evidence, not vibes.',
+    data: { clientId: DEMO_CLIENT_ID },
+  },
+  {
+    id: 'staff-search',
+    page: 'global-search',
+    navLabel: 'Global Search',
+    title: 'Global search',
+    body: 'One search box across clients, violations, documents, messages, and campaigns. Jump straight to the account, letter, or finding without clicking through five menus.',
+    whyBuy: 'Support and litigation desks find the needle in seconds.',
+  },
+  {
+    id: 'staff-compliance-os',
+    page: 'compliance-os',
+    navLabel: 'Compliance OS',
+    title: 'Compliance OS',
+    body: 'The compliance operating system: three-lane communication gate (marketing / transactional / consumer-rights), 45+ workflow templates, visual automation builder, copy QA scanner, campaign approval queue, consumer timeline, and per-org GHL/MFSN settings. Every outbound touch runs through permissible-purpose checks.',
+    whyBuy: 'Compliance is software — not a PDF policy nobody reads.',
+  },
+  {
+    id: 'staff-integration-os',
+    page: 'integration-os',
+    navLabel: 'Integration Hub',
+    title: 'Integration Hub',
+    body: 'Credential vault (AES-GCM encrypted secrets with masked preview), platform event bus with idempotency, identity matching queue, sync rules for GHL fields, dead-letter retry queue, and connection health for GoHighLevel, MyFreeScoreNow, Twilio, Stripe, and outbound webhooks.',
+    whyBuy: 'Integrations fail safely — with retries and an audit trail, not silent data loss.',
+  },
+  {
+    id: 'staff-compliance-hub',
+    page: 'compliance-hub',
+    navLabel: 'Compliance Hub',
+    title: 'Compliance hub',
+    body: 'Legacy compliance dashboard: consent logs, permissible-purpose attestations, CROA/TSR acknowledgements, and org-wide compliance posture. Pairs with Compliance OS for operators who want the classic rollup view.',
+    whyBuy: 'Examiners ask for logs — you export timestamps, not screenshots.',
+  },
+  {
+    id: 'staff-campaigns',
+    page: 'campaigns',
+    navLabel: 'Campaigns',
+    title: 'Campaigns',
+    body: 'Marketing and nurture campaigns with maker-checker approval. Draft → compliance review → scheduled send. Three-lane gate blocks marketing copy from overriding consumer-rights messages.',
+    whyBuy: 'Scale outreach without a compliance blow-up on blast day.',
+  },
+  {
+    id: 'staff-support',
+    page: 'support-center',
+    navLabel: 'Support Center',
+    title: 'Support center',
+    body: 'In-app support tickets tied to client files: intake questions, portal access, billing disputes, and technical issues. Staff replies stay on the case instead of a shared inbox.',
+    whyBuy: 'Support history travels with the consumer — not buried in email.',
+  },
+  {
+    id: 'staff-onboarding',
+    page: 'onboarding-wizard',
+    navLabel: 'Onboarding Wizard',
+    title: 'Onboarding wizard',
+    body: 'Step-by-step org setup: branding, letterhead, integrations, team invites, and first client import. New firms land in production without a three-week implementation call.',
+    whyBuy: 'Time-to-first-letter drops from weeks to an afternoon.',
+  },
+  {
+    id: 'staff-settings',
+    page: 'settings',
+    navLabel: 'Settings',
+    title: 'Organization settings',
+    body: 'Org profile, branding, letterhead fonts, integration credentials (routed through the vault), GHL location mapping, MFSN affiliate keys, Twilio/Stripe/Click2Mail toggles, and communication defaults. Secrets never echo back in plain text.',
+    whyBuy: 'One settings surface — not twelve vendor dashboards.',
+  },
+  {
+    id: 'staff-team',
+    page: 'team',
+    navLabel: 'Team',
+    title: 'Team & roles',
+    body: 'Invite advisors, assign roles (admin / advisor / read-only), enforce MFA, and seat limits by plan. Unlimited and Enterprise tiers add uncapped team seats.',
+    whyBuy: 'Grow the desk without sharing one login.',
+  },
+  {
+    id: 'staff-billing',
+    page: 'billing',
+    navLabel: 'Billing',
+    title: 'SaaS billing',
+    body: 'Stripe-powered org subscription: Professional ($497/mo), Unlimited ($2,500/mo), Enterprise ($9,997/mo). Invoices, plan upgrades, and entitlement gates for MFSN imports, mail clocks, and litigation packs.',
+    whyBuy: 'The software bills itself — you are not invoicing your own SaaS by hand.',
+  },
+  {
+    id: 'staff-product-map',
+    page: 'product-map',
+    navLabel: 'Product Map',
+    title: 'Product map',
+    body: 'Living map of every staff console page, client portal tab, API route, and integration touchpoint. Use it in sales demos to show scope — or internally when onboarding a new advisor.',
+    whyBuy: 'Nobody asks “does Smart FCRA do X?” twice.',
+  },
+  {
+    id: 'staff-legal',
+    page: 'legal',
+    navLabel: 'Legal',
+    title: 'Legal document library',
+    body: 'Staff-side legal templates, state SOL calculator, case-law hooks, and remote-notary configuration. Generated litigation packs on Enterprise include ~45 letter types composed from file facts.',
+    whyBuy: 'Litigation desks start from the file — not a Word folder from 2019.',
+  },
+];
+
 export const CLIENT_PORTAL_GUIDE: ClientPortalGuidePage[] = [
   {
     id: 'portal-home',
@@ -254,9 +397,9 @@ export const CLIENT_PORTAL_GUIDE: ClientPortalGuidePage[] = [
     id: 'portal-privacy',
     page: 'client-settings',
     navLabel: 'Privacy & Security',
-    title: 'Privacy and security',
-    body: 'MFA, password, and privacy requests from the consumer side. Data-subject rights are in-product.',
-    whyBuy: 'Security is a consumer feature, not only a staff setting.',
+    title: 'Privacy, security, and communication preferences',
+    body: 'MFA, password, privacy requests, and the communication preference center: email/SMS opt-in per lane (marketing, transactional, consumer-rights), journey check-in cadence, and data-subject rights — all from the consumer side. Preview cannot change live preferences.',
+    whyBuy: 'Security and channel consent are consumer features, not only staff settings.',
   },
   {
     id: 'portal-cancel',
@@ -346,6 +489,14 @@ export const DEMO_TOUR: DemoTourStep[] = [
     data: { clientId: DEMO_CLIENT_ID },
     whyBuy: 'Operators live in the client record. Everything else hangs off this file.',
   },
+  ...STAFF_CONSOLE_EXTENDED_GUIDE.map((g) => ({
+    id: g.id,
+    title: g.title,
+    body: g.body,
+    page: g.page,
+    data: g.data,
+    whyBuy: g.whyBuy,
+  })),
   ...CLIENT_PORTAL_GUIDE.map((g) => ({
     id: g.id,
     title: g.title,
@@ -375,7 +526,10 @@ WHAT IT DOES:
 - Letters are GENERATED from selected violations and file facts (bureau §611, furnisher §623, MOV, C&D, intent-to-sue, CFPB/AG). Never describe them as templates or blank forms.
 - Staff QA findings before mail. Metro 2 variance is REVIEW/OBSERVATION until a human owns it.
 - Click2Mail + FCRA §611 30-day statutory / 35-day operational clocks.
-- Client portal (walk every tab in Preview Portal): Dashboard, Get Started, My Credit, Report sandbox, My Credit Case, Confirm Facts, Disputes, Action Plan, Progress, Consumer Rights, Journey, Messages, Document vault, Readiness, Boost Tools, AU Tradelines, Tutor, Letters, Legal & Notary, Video, Academy, Billing, Consents, Privacy & Security, Cancel Services, AI Mentors.
+- Compliance OS: three-lane communication gate, 45+ workflows, visual automation builder, copy QA, campaign approval, consumer timeline, GHL/MFSN per-org settings.
+- Integration Hub: credential vault, event bus, identity matching, sync rules, DLQ retry queue, GHL/Twilio/Stripe/MFSN connections.
+- Staff console pages: Overview, Clients, Violation Queue, Reports, Report Comparison, Global Search, Upload, Violations, LVS, Letters, Documents, Mail, Compliance OS, Integration Hub, Compliance Hub, Campaigns, Support Center, Onboarding Wizard, Settings, Team, Billing, Product Map, Legal.
+- Client portal (walk every tab in Preview Portal): Dashboard, Get Started, My Credit, Report sandbox, My Credit Case, Confirm Facts, Disputes, Action Plan, Progress, Consumer Rights, Journey, Messages, Document vault, Readiness, Boost Tools, AU Tradelines, Tutor, Letters, Legal & Notary, Video, Academy, Billing, Consents, Privacy/Security/Communication Preferences, Cancel Services, AI Mentors.
 - Named score models only. No guaranteed deletions, score lifts, lending approval, or funding.
 - MFSN live pull: affiliate portal → Users → API User → paste that login into My Free Score API login → client membership email + MAPIK# token → fetch-3B-json. Partner Bearer ≠ member token. Demo live pull is capped at one report / one person per demo account.
 - Plans: Professional $497/mo (up to 100 clients + engine + generated letters + portal), Unlimited $2,500/mo (uncapped + MFSN + mail clocks + team seats), Enterprise $9,997/mo (full generated litigation pack ~45 letter types, case-law library, white-label, API).
@@ -398,7 +552,7 @@ const NAV: Array<{ keys: string[]; action: DemoAction; speak: string }> = [
   { keys: ['violation', 'detect', 'fcra issue', 'fdcpa', 'metro'], action: { type: 'navigate', page: 'violations' }, speak: 'Violation queue — each row is a finding with statute, evidence, and damages band. Staff QA before it becomes a demand.' },
   { keys: ['lvs', 'litigation score', 'damages', 'lawsuit', 'sue'], action: { type: 'navigate', page: 'full-analysis' }, speak: 'Litigation scoring ranks how trial-ready findings are. Estimates are educational for operators — counsel reviews before filing.' },
   { keys: ['letter', 'generate', '611', '623', 'dispute letter', 'demand'], action: { type: 'navigate', page: 'generate-doc', data: { clientId: DEMO_CLIENT_ID, clientName: DEMO_CLIENT_NAME } }, speak: 'Letter generation composes the document from selected violations and file facts — not a blank form.' },
-  { keys: ['document', 'pdf', 'vault'], action: { type: 'navigate', page: 'documents' }, speak: 'Document vault — generated PDFs for download, portal, or mail.' },
+  { keys: ['document', 'pdf', 'document vault'], action: { type: 'navigate', page: 'documents' }, speak: 'Document vault — generated PDFs for download, portal, or mail.' },
   { keys: ['mail', 'click2mail', 'clock', '611 clock', 'certified'], action: { type: 'navigate', page: 'mailing-campaigns' }, speak: 'Mailing campaigns. Approved letters can go through Click2Mail and start the FCRA investigation clock.' },
   { keys: ['salisha', 'demo client', 'sample client', 'client file', 'client detail'], action: { type: 'navigate', page: 'client-detail', data: { clientId: DEMO_CLIENT_ID } }, speak: 'Opening the sample Demo Client — the sandbox tri-bureau case. Add your own client when you run this for real.' },
   { keys: ['portal', 'consumer', 'what the client sees', 'preview portal', 'preview'], action: { type: 'impersonate', clientId: DEMO_CLIENT_ID, name: DEMO_CLIENT_NAME }, speak: 'Opening the consumer portal. We will walk every tab — Dashboard through Cancel Services. Attestations and cancel are blocked in preview.' },
@@ -413,7 +567,7 @@ const NAV: Array<{ keys: string[]; action: DemoAction; speak: string }> = [
   { keys: ['rights', 'learn', 'education', 'consumer rights'], action: { type: 'navigate', page: 'client-rights' }, speak: 'Consumer Rights — FCRA, CROA, TSR, FDCPA education in the portal.' },
   { keys: ['journey', 'check-in', 'morning ritual'], action: { type: 'navigate', page: 'client-journey' }, speak: 'Journey — daily check-in so the consumer has a reason to open the app.' },
   { keys: ['messages', 'chat', 'inbox'], action: { type: 'navigate', page: 'client-messages' }, speak: 'Messages — client and staff talk on the case, not a side SMS thread.' },
-  { keys: ['uploads', 'id upload', 'vault'], action: { type: 'navigate', page: 'client-uploads' }, speak: 'Document vault — ID, proof, and reports the consumer uploads.' },
+  { keys: ['uploads', 'id upload', 'client vault'], action: { type: 'navigate', page: 'client-uploads' }, speak: 'Document vault — ID, proof, and reports the consumer uploads.' },
   { keys: ['readiness', 'fundability', 'funding cockpit'], action: { type: 'navigate', page: 'client-fundability' }, speak: 'Readiness cockpit — deterministic fundability education, not a lending promise.' },
   { keys: ['boost', 'authorized user', 'au tool'], action: { type: 'navigate', page: 'client-tradelines' }, speak: 'Boost tools — educational AU matching at listed prices.' },
   { keys: ['tutor', 'alex rivera', 'coach'], action: { type: 'navigate', page: 'client-tutor' }, speak: 'Credit Tutor — coaching without score guarantees.' },
@@ -427,6 +581,22 @@ const NAV: Array<{ keys: string[]; action: DemoAction; speak: string }> = [
   { keys: ['cancel', 'croa cancel', 'cancel services'], action: { type: 'navigate', page: 'client-cancel' }, speak: 'In-portal CROA cancellation — examiners look for this tab.' },
   { keys: ['mentor', 'ai mentor'], action: { type: 'navigate', page: 'ai-studio' }, speak: 'AI mentors — strategy talk in the same shell. Not legal advice.' },
   { keys: ['billing', 'price', '497', 'plan', 'subscribe'], action: { type: 'navigate', page: 'billing' }, speak: 'Paid org billing. Demo is not a production tenant — Professional starts at $497/mo.' },
+  { keys: ['integration hub', 'integration os', 'credential vault', 'event bus', 'dead letter', 'dlq'], action: { type: 'navigate', page: 'integration-os' }, speak: 'Integration Hub — encrypted credential vault, event bus, identity matching, and retry queue.' },
+  { keys: ['compliance os', 'compliance operating', 'three lane', 'three-lane', 'workflow builder', 'copy qa'], action: { type: 'navigate', page: 'compliance-os' }, speak: 'Compliance OS — three-lane gate, workflows, automations, copy QA, and campaign approval.' },
+  { keys: ['compliance hub', 'consent log', 'permissible purpose log'], action: { type: 'navigate', page: 'compliance-hub' }, speak: 'Compliance hub — consent and permissible-purpose rollups for examiners.' },
+  { keys: ['campaign', 'nurture', 'blast', 'maker checker'], action: { type: 'navigate', page: 'campaigns' }, speak: 'Campaigns with maker-checker approval before anything sends.' },
+  { keys: ['support center', 'support ticket', 'help desk'], action: { type: 'navigate', page: 'support-center' }, speak: 'Support center — tickets tied to client files, not a shared inbox.' },
+  { keys: ['global search', 'search everything', 'find client'], action: { type: 'navigate', page: 'global-search' }, speak: 'Global search across clients, violations, documents, and messages.' },
+  { keys: ['report comparison', 'compare reports', 'before and after'], action: { type: 'navigate', page: 'report-comparison', data: { clientId: DEMO_CLIENT_ID } }, speak: 'Report comparison — side-by-side diff of two imports on the same consumer.' },
+  { keys: ['reports library', 'all reports', 'credit reports list'], action: { type: 'navigate', page: 'reports' }, speak: 'Reports library — every imported bureau file for the org.' },
+  { keys: ['client list', 'all clients', 'crm'], action: { type: 'navigate', page: 'admin-clients' }, speak: 'Client roster — every consumer file with intake status and portal access.' },
+  { keys: ['violation queue', 'qa queue', 'admin violations'], action: { type: 'navigate', page: 'admin-violation-queue' }, speak: 'Admin violation queue — cross-client findings waiting on staff QA.' },
+  { keys: ['settings', 'integrations', 'letterhead', 'branding'], action: { type: 'navigate', page: 'settings' }, speak: 'Organization settings — branding, integrations, and vault-backed credentials.' },
+  { keys: ['team', 'invite', 'seats', 'advisor'], action: { type: 'navigate', page: 'team' }, speak: 'Team and roles — invite advisors with MFA and seat limits by plan.' },
+  { keys: ['product map', 'feature map', 'what pages'], action: { type: 'navigate', page: 'product-map' }, speak: 'Product map — every staff page, portal tab, and integration touchpoint.' },
+  { keys: ['onboarding', 'setup wizard', 'get started firm'], action: { type: 'navigate', page: 'onboarding-wizard' }, speak: 'Onboarding wizard — branding, integrations, team, and first import in one flow.' },
+  { keys: ['legal library', 'sol calculator', 'litigation pack'], action: { type: 'navigate', page: 'legal' }, speak: 'Legal document library and state SOL calculator for litigation desks.' },
+  { keys: ['communication preference', 'opt out', 'sms opt'], action: { type: 'navigate', page: 'client-settings' }, speak: 'Communication preference center — per-lane email/SMS opt-in in the client portal.' },
   { keys: ['live report', 'mapik', 'pull my score'], action: { type: 'openLiveMfsn' }, speak: 'First the API User from the affiliate Users section, then this member’s email and MAPIK# token. Live pull is one report and one person on this demo account.' },
   { keys: ['myfreescorenow', 'mfsn', 'my score'], action: { type: 'navigate', page: 'upload-report', data: { clientId: DEMO_CLIENT_ID, clientName: DEMO_CLIENT_NAME, tab: 'mfsn' } }, speak: 'MyFreeScoreNow pull: affiliate portal → Users → API User → paste into API login → client email + MAPIK# → import runs the full process.' },
   { keys: ['tour', 'guide', 'walk me', 'show me around', 'tutorial'], action: { type: 'tour', step: 0 }, speak: 'Starting the guided tour of the whole product.' },
@@ -468,7 +638,7 @@ export function fallbackDemoReply(message: string): { reply: string; actions: De
     };
   }
   return {
-    reply: 'I am the Smart FCRA demo guide. I can walk the full tour including every client-portal tab (Dashboard through Cancel Services), open any screen, explain violations / generated letters / CROA, and help you pull one live MyFreeScoreNow report for one person. Say “preview portal” to start the consumer walkthrough. What do you want to see?',
+    reply: 'I am the Smart FCRA demo guide. I can walk the full tour — staff console (Compliance OS, Integration Hub, clients, violations, letters, mail) plus every client-portal tab (Dashboard through Cancel Services), open any screen, explain violations / generated letters / CROA, and help you pull one live MyFreeScoreNow report for one person. Say “preview portal” to start the consumer walkthrough. What do you want to see?',
     actions: [],
   };
 }

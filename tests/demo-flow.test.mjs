@@ -181,6 +181,9 @@ for (const step of DEMO_TOUR) {
 const extraPages = [
   'client-disputes', 'client-actions', 'client-progress', 'client-billing',
   'client-consents', 'ai-studio', 'settings', 'compliance-hub', 'mailing-campaigns',
+  'compliance-os', 'integration-os', 'support-center', 'campaigns', 'admin-clients',
+  'admin-violation-queue', 'global-search', 'reports', 'report-comparison', 'team',
+  'product-map', 'onboarding-wizard', 'legal',
 ];
 for (const p of extraPages) {
   assert(spa.includes(`case '${p}'`), `SPA implements ${p}`);
