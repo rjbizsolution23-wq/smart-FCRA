@@ -10,7 +10,7 @@ import {
   loadOrgGhlEnv,
 } from './integration-hub';
 import { storeIntegrationSecret, logVaultAccess } from './credential-vault';
-import { saveOrgIntegrations, parseOrgIntegrations, integrationsStatusView } from './org-integrations';
+import { saveOrgIntegrations, parseOrgIntegrations, integrationsStatusView, loadOrgTwilioCredentials } from './org-integrations';
 import { resolveOrQueueIdentity, linkExternalIdentity } from './identity-matching';
 import { publishPlatformEvent, PLATFORM_EVENT_TYPES } from './event-bus';
 import { processIntegrationJobQueue, countPendingIntegrationJobs, enqueueIntegrationJob } from './integration-dlq';
@@ -102,6 +102,29 @@ export function registerIntegrationOsRoutes(app: Hono<any>, opts: RegisterOpts) 
         });
       }
     }
+    if (provider === 'twilio') {
+      patch.twilio = {
+        enabled: body.enabled !== false,
+        phoneNumber: body.phoneNumber,
+      };
+      if (body.accountSid) {
+        await storeIntegrationSecret({
+          db: c.env.DB, orgId: user.org_id, provider: 'twilio', secretKey: 'account_sid',
+          plaintext: body.accountSid.trim(), encryptionKey: encKey, createdBy: user.id, id: generateId(),
+        });
+        patch.twilio.accountSid = '__vault__';
+      }
+      if (body.authToken) {
+        await storeIntegrationSecret({
+          db: c.env.DB, orgId: user.org_id, provider: 'twilio', secretKey: 'auth_token',
+          plaintext: body.authToken.trim(), encryptionKey: encKey, createdBy: user.id, id: generateId(),
+        });
+      }
+    }
+
+    if (!patch.ghl && !patch.mfsn && !patch.twilio && provider !== 'ghl' && provider !== 'mfsn' && provider !== 'twilio') {
+      return c.json({ error: `Unknown provider: ${provider}` }, 400);
+    }
 
     await saveOrgIntegrations(c.env.DB, user.org_id, patch);
     await upsertIntegrationConnection({
@@ -110,7 +133,7 @@ export function registerIntegrationOsRoutes(app: Hono<any>, opts: RegisterOpts) 
       provider,
       id: generateId(),
       patch: {
-        authType: body.authType || (provider === 'ghl' ? 'pit' : 'partner_api'),
+        authType: body.authType || (provider === 'ghl' ? 'pit' : provider === 'twilio' ? 'api_key' : 'partner_api'),
         status: 'connected',
         locationId: body.locationId,
         scopes: body.scopes,
@@ -144,6 +167,30 @@ export function registerIntegrationOsRoutes(app: Hono<any>, opts: RegisterOpts) 
         logId: generateId(),
       });
       return c.json(result, result.ok ? 200 : 502);
+    }
+    if (provider === 'twilio') {
+      const encKey = resolveOrgEncryptionKey(c.env.PII_ENCRYPTION_KEY, user.org_id);
+      const creds = await loadOrgTwilioCredentials(c.env.DB, user.org_id, c.env, encKey);
+      if (!creds) {
+        return c.json({ ok: false, error: 'Twilio not configured. Add Account SID, Auth Token, and From number in Settings.' }, 502);
+      }
+      try {
+        const auth = btoa(`${creds.accountSid}:${creds.authToken}`);
+        const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${creds.accountSid}.json`, {
+          headers: { Authorization: `Basic ${auth}` },
+        });
+        const data = await res.json() as any;
+        if (!res.ok) return c.json({ ok: false, error: data.message || 'Twilio auth failed' }, 502);
+        return c.json({
+          ok: true,
+          accountName: data.friendly_name,
+          phoneNumber: creds.phoneNumber,
+          source: creds.source,
+          status: data.status,
+        });
+      } catch (e: any) {
+        return c.json({ ok: false, error: e.message }, 502);
+      }
     }
     return c.json({ ok: false, error: 'Test not implemented for provider' }, 501);
   });

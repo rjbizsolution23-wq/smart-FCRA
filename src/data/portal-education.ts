@@ -150,6 +150,50 @@ export const EDUCATION_LIBRARY: Lesson[] = [
       { q: 'Marketing messages require:', choices: ['No consent', 'Separate opt-in per lane', 'Only verbal OK', 'Staff SMS'], answer: 1 },
     ],
   },
+  {
+    id: 'comms-01',
+    track: 'literacy',
+    level: 2,
+    title: 'Email, SMS & Communication Preferences',
+    summary: 'Three lanes: marketing, transactional, compliance.',
+    content: `Your firm sends case updates (transactional), educational newsletters only if you opted in (marketing), and contract/cancel notices on the compliance lane. SMS includes a STOP footer. You control preferences in Portal → Privacy & Security. Staff cannot blast marketing over a consumer-rights message — Smart FCRA enforces lane separation.`,
+    quiz: [
+      { q: 'Marketing SMS requires:', choices: ['No opt-in', 'Explicit marketing consent', 'Any phone on file', 'Staff discretion only'], answer: 1 },
+    ],
+  },
+  {
+    id: 'workflow-01',
+    track: 'credit',
+    level: 2,
+    title: 'How Your Automated Workflows Work',
+    summary: 'Welcome series, reminders, and compliance nudges.',
+    content: `After intake, your firm may run prebuilt workflows: welcome email, document reminders, investigation clock alerts, and education links. Each step respects your consent lane. Workflows use your firm's brand — not generic Smart FCRA copy. You can opt out of marketing while still receiving case-status updates.`,
+    quiz: [
+      { q: 'Case-status emails are usually:', choices: ['Marketing lane', 'Transactional lane', 'Spam', 'Optional only'], answer: 1 },
+    ],
+  },
+  {
+    id: 'campaign-01',
+    track: 'expert',
+    level: 3,
+    title: 'Compliant Campaigns (What Firms Send)',
+    summary: 'Maker-checker approval before any blast goes live.',
+    content: `Operators build campaigns from segments (inactive clients, onboarding, clock expiring). Copy QA blocks prohibited guarantees. A second reviewer approves before send. Email uses your letterhead shell; SMS uses your Twilio number with STOP language. This protects consumers and your firm during exams.`,
+    quiz: [
+      { q: 'Before a marketing blast sends, Smart FCRA requires:', choices: ['Nothing', 'Compliance approval + copy QA', 'Client verbal OK only', 'Auto-send'], answer: 1 },
+    ],
+  },
+  {
+    id: 'dispute-01',
+    track: 'credit',
+    level: 3,
+    title: 'Disputes in the Portal (Not Blank Forms)',
+    summary: 'Attest facts → staff QA → generated letters.',
+    content: `You confirm facts before disputes go out. Letters are generated from your file — account numbers, statutes, and round strategy — not downloaded Word templates. Metro 2 observations stay in REVIEW until staff owns them. Progress shows measured changes, not promised deletions.`,
+    quiz: [
+      { q: 'Dispute letters in Smart FCRA are:', choices: ['Blank PDF downloads', 'Generated from your file facts', 'Guaranteed deletions', 'Staff free-text only'], answer: 1 },
+    ],
+  },
 ];
 
 export const TRADELINE_CATALOG = [

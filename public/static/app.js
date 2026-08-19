@@ -6452,6 +6452,22 @@ Status: Discharged`;
           <div id="org-integrations-status" class="text-xs text-gray-400 mt-3">Loading status…</div>
         </div>
 
+        <div class="glass rounded-xl p-6 border border-rose-900/40" id="twilio-connect-panel">
+          <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-sms text-rose-400"></i> Twilio SMS &amp; Video (your credentials)</h2>
+          <p class="text-xs text-gray-500 mb-4">Connect your Twilio account to send branded SMS from your approved number. Platform Twilio is used only when you have not connected your own. Required for SMS campaigns and workflow texts.</p>
+          <form id="twilio-connect-form" class="grid md:grid-cols-2 gap-3 text-xs">
+            <input name="accountSid" id="twilio-account-sid" placeholder="Twilio Account SID (AC…)" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white md:col-span-2" autocomplete="off">
+            <input name="authToken" id="twilio-auth-token" type="password" placeholder="Auth Token (encrypted vault — leave blank to keep)" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white md:col-span-2" autocomplete="new-password">
+            <input name="phoneNumber" id="twilio-from-number" placeholder="From number E.164 (+1…)" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
+            <label class="flex items-center gap-2 text-gray-400"><input type="checkbox" name="twilioEnabled" id="twilio-enabled" checked> Twilio enabled for this org</label>
+            <div class="md:col-span-2 flex flex-wrap gap-2 mt-1">
+              <button type="submit" class="bg-rose-700 hover:bg-rose-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Connect Twilio</button>
+              <button type="button" id="btn-twilio-test" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-xs font-semibold">Test connection</button>
+            </div>
+          </form>
+          <div id="twilio-connect-status" class="text-xs text-gray-400 mt-3">Loading Twilio status…</div>
+        </div>
+
         <div class="glass rounded-xl p-6 border border-orange-900/40" id="ghl-mfsn-sync-panel">
           <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-cloud-upload-alt text-orange-400"></i> GoHighLevel + MyFreeScoreNow Sync</h2>
           <p class="text-xs text-gray-500 mb-4">Push every CRM client and every MFSN member into your GHL location with full custom fields, scores, offer codes, and tags.</p>
@@ -6513,7 +6529,11 @@ Status: Discharged`;
 
         <div class="glass rounded-xl p-6 border border-violet-900/40" id="platform-ai-panel">
           <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-robot text-violet-400"></i> AI — Cloudflare Workers AI + Bring Your Own Key</h2>
-          <p class="text-xs text-gray-500 mb-3">Platform includes Cloudflare Workers AI. Add your OpenAI / Groq / Gemini keys for premium models. AI credits meter usage across mentors, copy QA, and letter assist.</p>
+          <p class="text-xs text-gray-500 mb-3">Two options: (1) Use included Cloudflare Workers AI and buy credit packs below. (2) Paste your OpenAI/Groq/Gemini key — usage bills your provider directly, no platform credits charged.</p>
+          <div class="grid md:grid-cols-2 gap-2 mb-3 text-[10px]">
+            <div class="border border-violet-800/50 rounded-lg p-2 bg-violet-950/20"><strong class="text-violet-200">Platform AI</strong><br><span class="text-gray-400">Workers AI + credit packs · mentors, copy QA, letter assist</span></div>
+            <div class="border border-emerald-800/50 rounded-lg p-2 bg-emerald-950/20"><strong class="text-emerald-200">Bring Your Own Key</strong><br><span class="text-gray-400">Your API key in vault · unlimited at provider rates</span></div>
+          </div>
           <div id="platform-ai-credits" class="text-xs text-gray-400 mb-3">Loading credits…</div>
           <div id="platform-ai-credit-packs" class="flex flex-wrap gap-2 mb-3"></div>
           <div id="platform-ai-providers" class="grid md:grid-cols-2 gap-2 text-xs mb-3"></div>
@@ -6682,13 +6702,45 @@ Status: Discharged`;
         try {
           const d = await api('/settings/integrations');
           if (box) box.innerHTML = `<span class="text-emerald-400">GHL:</span> ${d.ghl?.orgConfigured ? 'org token set' : 'platform/env'} · loc ${escapeHtml(d.ghl?.locationId || '—')} ·
-            <span class="text-cyan-400 ml-2">MFSN:</span> ${d.mfsn?.orgConfigured ? escapeHtml(d.mfsn?.email || 'configured') : 'platform/env'} · affiliate ${escapeHtml(d.mfsn?.affiliateId || 'A8289')}`;
+            <span class="text-cyan-400 ml-2">MFSN:</span> ${d.mfsn?.orgConfigured ? escapeHtml(d.mfsn?.email || 'configured') : 'platform/env'} · affiliate ${escapeHtml(d.mfsn?.affiliateId || 'A8289')} ·
+            <span class="text-rose-400 ml-2">Twilio:</span> ${d.twilio?.orgConfigured ? escapeHtml(d.twilio?.phoneNumber || 'connected') : d.twilio?.platformConfigured ? 'platform fallback' : 'not configured'}`;
           if ($('#ghl-location-id') && d.ghl?.locationId) $('#ghl-location-id').value = d.ghl.locationId;
           if ($('#mfsn-affiliate-id')) $('#mfsn-affiliate-id').value = d.mfsn?.affiliateId || 'A8289';
           if ($('#mfsn-org-email') && d.mfsn?.email) $('#mfsn-org-email').value = d.mfsn.email;
+          if ($('#twilio-from-number') && d.twilio?.phoneNumber) $('#twilio-from-number').value = d.twilio.phoneNumber;
+          const twSt = $('#twilio-connect-status');
+          if (twSt) twSt.innerHTML = d.twilio?.orgConfigured
+            ? `<span class="text-emerald-400">Connected</span> · From ${escapeHtml(d.twilio.phoneNumber || '—')} · org credentials`
+            : d.twilio?.platformConfigured
+              ? '<span class="text-amber-300">Using platform Twilio</span> — connect your own above for your brand number'
+              : '<span class="text-rose-400">Not configured</span> — add credentials to enable SMS campaigns';
         } catch { if (box) box.textContent = 'Apply migration 0028 for per-org integrations.'; }
       };
       renderOrgIntegrations();
+      const twilioForm = $('#twilio-connect-form');
+      if (twilioForm) twilioForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          await api('/integration-os/connections/twilio', {
+            method: 'PUT',
+            body: JSON.stringify({
+              enabled: !!fd.get('twilioEnabled'),
+              accountSid: fd.get('accountSid') || undefined,
+              authToken: fd.get('authToken') || undefined,
+              phoneNumber: fd.get('phoneNumber') || undefined,
+            }),
+          });
+          toast('Twilio credentials saved to encrypted vault', 'success');
+          await renderOrgIntegrations();
+        } catch (err) { toast(err.message, 'error'); }
+      };
+      $('#btn-twilio-test')?.addEventListener('click', async () => {
+        try {
+          const r = await api('/integration-os/connections/twilio/test', { method: 'POST', body: '{}' });
+          toast(r.ok ? `Twilio OK — ${r.accountName || 'connected'}` : (r.error || 'Test failed'), r.ok ? 'success' : 'error');
+        } catch (err) { toast(err.message, 'error'); }
+      });
       const orgIntForm = $('#org-integrations-form');
       if (orgIntForm) orgIntForm.onsubmit = async (e) => {
         e.preventDefault();
@@ -6999,6 +7051,7 @@ Status: Discharged`;
             <input type="radio" name="aiProviderPick" value="${escapeHtml(p.id)}" ${p.enabled ? 'checked' : ''}>
             <span class="text-white font-semibold">${escapeHtml(p.name)}</span>
             <span class="text-gray-500">${p.configured ? p.apiKeyMasked : 'not set'}</span>
+            ${p.configured ? '<span class="text-emerald-500 text-[9px]">BYOK</span>' : ''}
           </label>`).join('');
         $('#btn-save-ai-provider')?.addEventListener('click', async () => {
           const pick = document.querySelector('input[name="aiProviderPick"]:checked')?.value;
@@ -12346,7 +12399,8 @@ async function pgAdminConsole(el) {
         <div class="fade-in space-y-6">
           <div class="relative overflow-hidden bg-gradient-to-r from-gray-900 via-blue-950 to-gray-900 border border-blue-500/20 rounded-2xl p-6 shadow-2xl">
             <h1 class="text-2xl font-bold text-white mb-1"><i class="fas fa-graduation-cap text-blue-400 mr-2"></i>Education Hub</h1>
-            <p class="text-sm text-gray-400">Financial literacy → credit expertise → fundability · plus Rick Jefferson systems courses</p>
+            <p class="text-sm text-gray-400">Financial literacy → credit expertise → fundability · compliance & workflows · Rick Jefferson systems courses</p>
+            ${(window._portalLessons||[]).length ? `<p class="text-xs text-cyan-300 mt-2">${(window._portalProgress||[]).filter(p=>p.status==='completed').length} / ${window._portalLessons.length} API lessons completed</p>` : ''}
           </div>
 
           ${(window._portalLessons||[]).length ? `
@@ -13372,6 +13426,7 @@ async function pgAdminConsole(el) {
       const zapier = extCatalog.zapier || {};
       const ghl = hub.ghl || {};
       const mfsn = hub.mfsn || {};
+      const twilio = hub.twilio || {};
       el.innerHTML = `
         <div class="fade-in space-y-6">
           <div>
@@ -13384,7 +13439,7 @@ async function pgAdminConsole(el) {
             <div class="glass rounded-xl p-4 border border-violet-900/30"><div class="text-[10px] text-gray-500 uppercase">Pending jobs</div><div class="text-2xl font-black text-violet-400">${jobs.pendingTotal || 0}</div></div>
             <div class="glass rounded-xl p-4 border border-emerald-900/30"><div class="text-[10px] text-gray-500 uppercase">Identity links</div><div class="text-2xl font-black text-emerald-400">${hub.externalIdentityLinks || 0}</div></div>
           </div>
-          <div class="grid lg:grid-cols-2 gap-4">
+          <div class="grid lg:grid-cols-3 gap-4">
             <div class="glass rounded-xl p-5 border border-gray-800">
               <h2 class="text-sm font-bold text-white mb-3"><i class="fab fa-hubspot text-orange-400 mr-2"></i>GoHighLevel</h2>
               <div class="text-xs space-y-2 text-gray-400">
@@ -13409,6 +13464,19 @@ async function pgAdminConsole(el) {
                 <div>Enrolled clients: <span class="text-white">${mfsn.enrolledClients || 0}</span></div>
                 <p class="text-[10px] text-amber-300/90 border border-amber-500/20 rounded-lg p-2 mt-2">${escapeHtml(mfsn.disclaimer || '')}</p>
                 <div class="text-[10px]">Supported: ${(mfsn.supportedMechanisms || []).join(' · ')}</div>
+              </div>
+            </div>
+            <div class="glass rounded-xl p-5 border border-gray-800">
+              <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-sms text-rose-400 mr-2"></i>Twilio SMS</h2>
+              <div class="text-xs text-gray-400 space-y-1">
+                <div>Status: <span class="${twilio.configured ? 'text-emerald-400' : 'text-amber-400'}">${twilio.configured ? 'Connected' : 'Not configured'}</span></div>
+                <div>Source: <span class="text-white">${escapeHtml(twilio.source || 'none')}</span></div>
+                <div>From: <span class="text-white font-mono">${escapeHtml(twilio.phoneNumber || '—')}</span></div>
+                <p class="text-[10px] text-gray-500 mt-2">Branded SMS with STOP footer. Required for SMS campaigns and workflow texts.</p>
+              </div>
+              <div class="flex flex-wrap gap-2 mt-3">
+                <button type="button" class="ih-twilio-test bg-rose-800 hover:bg-rose-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Test Twilio</button>
+                <button type="button" onclick="window._nav('settings')" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Connect in Settings</button>
               </div>
             </div>
           </div>
@@ -13464,6 +13532,12 @@ async function pgAdminConsole(el) {
           const r = await api('/integration-os/connections/ghl/test', { method: 'POST', body: '{}' });
           toast(r.ok ? 'GHL connection OK' : (r.error || 'Failed'), r.ok ? 'success' : 'error');
           await pgIntegrationHub(el);
+        } catch (err) { toast(err.message, 'error'); }
+      });
+      el.querySelector('.ih-twilio-test')?.addEventListener('click', async () => {
+        try {
+          const r = await api('/integration-os/connections/twilio/test', { method: 'POST', body: '{}' });
+          toast(r.ok ? `Twilio OK — ${r.phoneNumber || 'connected'}` : (r.error || 'Failed'), r.ok ? 'success' : 'error');
         } catch (err) { toast(err.message, 'error'); }
       });
       el.querySelector('#ih-zoom-config')?.addEventListener('click', async () => {
@@ -13743,7 +13817,12 @@ async function pgAdminConsole(el) {
                 <div class="font-semibold text-white">${escapeHtml(w.name)}</div>
                 <div class="text-gray-500">${escapeHtml(w.key)} · ${escapeHtml(w.lane)} · ${escapeHtml(w.category)}</div>
                 ${w.mandatory ? '<span class="text-[9px] text-amber-400">Mandatory compliance</span>' : ''}
+                <div class="flex flex-wrap gap-1 mt-2">
+                  <button type="button" class="wf-run-client bg-emerald-800 hover:bg-emerald-700 text-white px-2 py-0.5 rounded text-[9px] font-bold" data-key="${escapeHtml(w.key)}">Run on client</button>
+                  <button type="button" class="wf-view bg-gray-800 hover:bg-gray-700 text-gray-300 px-2 py-0.5 rounded text-[9px]" data-key="${escapeHtml(w.key)}">Preview</button>
+                </div>
               </div>`).join('')}</div>
+            <p class="text-[10px] text-gray-500 mt-2">New leads auto-start <strong class="text-white">new_lead</strong> + follow-up workflows. Use Run on client to start any library workflow on a specific file.</p>
           </div>
 
           <div class="glass rounded-xl p-5 border border-sky-900/30">
@@ -13796,11 +13875,30 @@ async function pgAdminConsole(el) {
 
           <div class="glass rounded-xl p-4 border border-emerald-900/30 text-xs text-gray-400">
             <strong class="text-emerald-300">Integrations:</strong> GHL ${overview.integrations?.ghl?.orgConfigured ? 'org token' : 'platform'} ·
-            MFSN ${overview.integrations?.mfsn?.orgConfigured ? 'org login' : 'platform'} —
-            configure in <button type="button" class="text-emerald-400 underline" onclick="window._nav('settings')">Settings → Your GHL &amp; MFSN credentials</button>
+            MFSN ${overview.integrations?.mfsn?.orgConfigured ? 'org login' : 'platform'} ·
+            Twilio ${overview.integrations?.twilio?.orgConfigured ? 'org number' : overview.integrations?.twilio?.platformConfigured ? 'platform' : 'not set'} —
+            configure in <button type="button" class="text-emerald-400 underline" onclick="window._nav('settings')">Settings → Integrations</button>
           </div>
         </div>`;
 
+      el.querySelectorAll('.wf-run-client').forEach((btn) => {
+        btn.onclick = async () => {
+          const clientId = prompt('Client ID to start workflow on (or open Demo Client from Clients list)');
+          if (!clientId) return;
+          try {
+            await api('/compliance-os/workflows/' + btn.dataset.key + '/start', { method: 'POST', body: JSON.stringify({ clientId }) });
+            toast('Workflow started — branded email/SMS will send per step', 'success');
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      });
+      el.querySelectorAll('.wf-view').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            const r = await api('/compliance-os/workflows/' + btn.dataset.key);
+            alert((r.workflow?.steps || []).map((s, i) => `${i + 1}. ${s.action} (${s.lane || 'transactional'})`).join('\n') || 'No steps');
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      });
       el.querySelectorAll('.nba-done').forEach((btn) => {
         btn.onclick = async () => {
           try {
@@ -13969,14 +14067,16 @@ async function pgAdminConsole(el) {
   async function pgCampaigns(el) {
     el.innerHTML = `<div class="flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-3xl text-amber-400"></i></div>`;
     try {
-      const [segmentsRes, campaignsRes, escalationsRes] = await Promise.all([
+      const [segmentsRes, campaignsRes, escalationsRes, startersRes] = await Promise.all([
         api('/campaigns/segments'),
         api('/campaigns').catch(() => ({ campaigns: [] })),
         api('/escalations?status=pending').catch(() => ({ escalations: [] })),
+        api('/campaigns/starters').catch(() => ({ starters: [] })),
       ]);
       const segments = segmentsRes.segments || [];
       const campaigns = campaignsRes.campaigns || [];
       const escalations = escalationsRes.escalations || [];
+      const starters = startersRes.starters || [];
 
       el.innerHTML = `
         <div class="fade-in space-y-6">
@@ -14016,6 +14116,10 @@ async function pgAdminConsole(el) {
               <form id="campaign-create-form" class="space-y-2 text-xs">
                 <input name="name" placeholder="Campaign name" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white" required>
                 <select name="segmentId" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">${segments.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.label)}</option>`).join('')}</select>
+                <select name="channel" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
+                  <option value="email">Email (branded HTML)</option>
+                  <option value="sms">SMS (requires Twilio in Settings)</option>
+                </select>
                 <input name="subject" placeholder="Email subject" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
                 <textarea id="campaign-body-template" name="bodyTemplate" rows="5" placeholder="Hi {first_name}, …" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white" required></textarea>
                 <div id="campaign-scan-result"></div>
@@ -14026,6 +14130,17 @@ async function pgAdminConsole(el) {
                 <p class="text-[10px] text-gray-500">Merge tags: {first_name}, {last_name}. Copy QA blocks prohibited outcome guarantees before approval.</p>
               </form>
             </div>
+          </div>
+
+          <div class="glass rounded-xl p-5 border border-amber-900/40">
+            <h2 class="text-sm font-bold text-white mb-2"><i class="fas fa-magic text-amber-400 mr-2"></i>Starter campaigns — one click to draft</h2>
+            <p class="text-xs text-gray-500 mb-3">Pre-built compliant copy with your brand at send time. Submit for compliance review, then Send.</p>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">${starters.map((s) => `
+              <div class="bg-gray-950/40 border border-gray-800 rounded-lg p-3 flex flex-col gap-2">
+                <div class="text-white font-semibold">${escapeHtml(s.name)}</div>
+                <div class="text-gray-500">${escapeHtml(s.channel || 'email')} · ${escapeHtml(s.segmentId)}</div>
+                <button type="button" class="starter-clone-btn bg-amber-700 hover:bg-amber-600 text-white px-2 py-1 rounded text-[10px] font-bold self-start" data-id="${escapeHtml(s.id)}">Use this template</button>
+              </div>`).join('')}</div>
           </div>
 
           <div class="glass rounded-xl p-5 border border-purple-500/20">
@@ -14079,6 +14194,7 @@ async function pgAdminConsole(el) {
             body: JSON.stringify({
               name: fd.get('name'),
               segmentId: fd.get('segmentId'),
+              channel: fd.get('channel') || 'email',
               subject: fd.get('subject'),
               bodyTemplate: fd.get('bodyTemplate'),
             }),
@@ -14087,6 +14203,27 @@ async function pgAdminConsole(el) {
           await pgCampaigns(el);
         } catch (err) { toast(err.message, 'error'); }
       };
+
+      el.querySelectorAll('.starter-clone-btn').forEach((btn) => {
+        btn.onclick = async () => {
+          const starter = starters.find((s) => s.id === btn.dataset.id);
+          if (!starter) return;
+          try {
+            await api('/campaigns', {
+              method: 'POST',
+              body: JSON.stringify({
+                name: starter.name,
+                segmentId: starter.segmentId,
+                channel: starter.channel || 'email',
+                subject: starter.subject,
+                bodyTemplate: starter.bodyTemplate,
+              }),
+            });
+            toast('Starter campaign saved as draft — submit for compliance review', 'success');
+            await pgCampaigns(el);
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      });
 
       el.querySelectorAll('.campaign-send-btn').forEach((btn) => {
         btn.onclick = async () => {

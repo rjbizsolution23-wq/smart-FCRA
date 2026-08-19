@@ -6,6 +6,7 @@ import type { GhlEnv } from './ghl-client';
 import type { MfsnEnv } from '../engine/mfsn-client';
 import { ghlConfigured as platformGhlConfigured } from './ghl-client';
 import { resolvePartnerMfsnCredentials } from '../engine/mfsn-client';
+import { loadIntegrationSecret } from './credential-vault';
 
 export type OrgIntegrations = {
   ghl?: {
@@ -80,6 +81,7 @@ export function maskSecret(value?: string | null): string | null {
 
 export function integrationsStatusView(orgSettings: any, platformEnv: any): Record<string, unknown> {
   const integ = parseOrgIntegrations(orgSettings);
+  const platformTwilio = !!(platformEnv.TWILIO_ACCOUNT_SID && platformEnv.TWILIO_AUTH_TOKEN && platformEnv.TWILIO_PHONE_NUMBER);
   return {
     ghl: {
       orgConfigured: !!(integ.ghl?.pitToken && integ.ghl?.locationId),
@@ -97,7 +99,55 @@ export function integrationsStatusView(orgSettings: any, platformEnv: any): Reco
       passwordMasked: maskSecret(integ.mfsn?.password),
       clientTokenMasked: maskSecret(integ.mfsn?.clientToken),
     },
+    twilio: {
+      orgConfigured: !!(integ.twilio?.accountSid && integ.twilio?.phoneNumber),
+      platformConfigured: platformTwilio,
+      enabled: integ.twilio?.enabled !== false,
+      phoneNumber: integ.twilio?.phoneNumber || platformEnv.TWILIO_PHONE_NUMBER || null,
+      accountSidMasked: maskSecret(integ.twilio?.accountSid === '__vault__' ? 'vault' : integ.twilio?.accountSid),
+      authTokenMasked: integ.twilio?.accountSid ? '********' : null,
+      source: integ.twilio?.accountSid ? 'org' : platformTwilio ? 'platform' : 'none',
+    },
   };
+}
+
+export type TwilioCredentials = {
+  accountSid: string;
+  authToken: string;
+  phoneNumber: string;
+  source: 'org' | 'platform';
+};
+
+/** Resolve Twilio credentials: org vault first, then platform env. */
+export async function loadOrgTwilioCredentials(
+  db: D1Database,
+  orgId: string,
+  platformEnv: { TWILIO_ACCOUNT_SID?: string; TWILIO_AUTH_TOKEN?: string; TWILIO_PHONE_NUMBER?: string },
+  encryptionKey: string,
+): Promise<TwilioCredentials | null> {
+  const org = await db.prepare('SELECT settings FROM organizations WHERE id = ?').bind(orgId).first() as any;
+  let settings: any = {};
+  try { settings = JSON.parse(org?.settings || '{}'); } catch { /* */ }
+  const integ = parseOrgIntegrations(settings).twilio || {};
+  if (integ.enabled !== false && (integ.accountSid === '__vault__' || integ.accountSid)) {
+    const sid = integ.accountSid === '__vault__'
+      ? await loadIntegrationSecret({ db, orgId, provider: 'twilio', secretKey: 'account_sid', encryptionKey }).catch(() => null)
+      : integ.accountSid;
+    const token = await loadIntegrationSecret({ db, orgId, provider: 'twilio', secretKey: 'auth_token', encryptionKey }).catch(() => null);
+    const from = integ.phoneNumber;
+    if (sid && token && from) {
+      return { accountSid: sid, authToken: token, phoneNumber: from, source: 'org' };
+    }
+  }
+  if (platformEnv.TWILIO_ACCOUNT_SID && platformEnv.TWILIO_AUTH_TOKEN && platformEnv.TWILIO_PHONE_NUMBER) {
+    return {
+      accountSid: platformEnv.TWILIO_ACCOUNT_SID,
+      authToken: platformEnv.TWILIO_AUTH_TOKEN,
+      phoneNumber: platformEnv.TWILIO_PHONE_NUMBER,
+      source: 'platform',
+    };
+  }
+  return null;
 }
 
 export async function saveOrgIntegrations(
@@ -116,6 +166,7 @@ export async function saveOrgIntegrations(
   };
   if (patch.ghl?.pitToken === '') delete merged.ghl?.pitToken;
   if (patch.mfsn?.password === '') delete merged.mfsn?.password;
+  if (patch.twilio?.authToken === '') delete merged.twilio?.authToken;
   settings.integrations = merged;
   await db.prepare(
     'UPDATE organizations SET settings = ?, updated_at = datetime(\'now\') WHERE id = ?',

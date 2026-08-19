@@ -11,8 +11,9 @@ import {
 } from './client-billing';
 import { queuePpdCharge, invoicePpdCharge, parsePpdSettings } from './ppd-billing';
 import { setOrgCustomDomain, resolveOrgByCustomDomain } from './custom-domain';
-import { BUILTIN_SEGMENTS, runCampaignDelivery } from './campaign-builder';
+import { BUILTIN_SEGMENTS, STARTER_CAMPAIGNS, runCampaignDelivery } from './campaign-builder';
 import { buildClientProgressSummary, progressReportPlainText, generateProgressReportPdf } from './progress-report';
+import { sendBrandedOrgEmail } from './comms-branding';
 import { sendAppEmail } from './email';
 import { portalBaseUrl } from './portal-services';
 
@@ -161,6 +162,14 @@ export function registerRoadmapRoutes(app: Hono<any>, opts: RegisterOpts) {
     return c.json({ segments: BUILTIN_SEGMENTS.map((s) => ({ id: s.id, label: s.label })) });
   });
 
+  app.get('/api/campaigns/starters', authMiddleware, async (c) => {
+    if (staffOnly(c.get('user'))) return c.json({ error: 'Staff only' }, 403);
+    return c.json({
+      starters: STARTER_CAMPAIGNS,
+      note: 'Clone a starter to create a draft. {{org_name}} becomes your firm name at send. SMS starters require Twilio in Settings.',
+    });
+  });
+
   app.get('/api/campaigns', authMiddleware, async (c) => {
     const user = c.get('user');
     const rows = await c.env.DB.prepare(
@@ -200,9 +209,6 @@ export function registerRoadmapRoutes(app: Hono<any>, opts: RegisterOpts) {
       env: c.env,
       orgId: user.org_id,
       campaignId: c.req.param('id'),
-      sendEmail: async ({ to, subject, body }) => {
-        await sendAppEmail(c.env, { to, subject, text: body });
-      },
     });
     return c.json({ ok: true, ...result });
   });

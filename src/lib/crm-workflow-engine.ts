@@ -7,6 +7,8 @@ import { getWorkflowDefinition, type WorkflowDefinition } from '../data/crm-camp
 import { transitionLifecycle, type LifecycleStage } from './lifecycle-engine';
 import { sendAppEmail } from './email';
 import { sendSms } from './alerts';
+import { sendBrandedOrgEmail, formatBrandedSms } from './comms-branding';
+import { loadOrgBrand } from './org-branding';
 
 export async function startWorkflowRun(opts: {
   db: D1Database;
@@ -182,7 +184,14 @@ export async function executeWorkflowStep(opts: {
       sent: false,
     });
     if (!gate.allowed) return { ok: false, detail: gate.reasons.join('; ') };
-    await sendAppEmail(opts.env, { to: email, subject, text: body });
+    await sendBrandedOrgEmail({
+      env: opts.env,
+      orgId: opts.run.org_id,
+      to: email,
+      subject,
+      bodyText: body,
+      title: subject,
+    });
     await opts.db.prepare('UPDATE communication_attempts SET sent = 1, provider_status = ? WHERE id = ?')
       .bind('sent', attemptId).run();
     return { ok: true, detail: 'email_sent' };
@@ -215,7 +224,13 @@ export async function executeWorkflowStep(opts: {
       sent: false,
     });
     if (!gate.allowed) return { ok: false, detail: gate.reasons.join('; ') };
-    const sms = await sendSms(opts.env, phone, body);
+    let brandName = ctx.org_name;
+    try {
+      const brand = await loadOrgBrand(opts.env, opts.run.org_id);
+      brandName = brand.name || brandName;
+    } catch { /* soft */ }
+    const smsBody = formatBrandedSms(body, brandName);
+    const sms = await sendSms(opts.env, phone, smsBody, { orgId: opts.run.org_id, skipBranding: true });
     await opts.db.prepare('UPDATE communication_attempts SET sent = ?, provider_status = ? WHERE id = ?')
       .bind(sms.sent ? 1 : 0, sms.sent ? 'sent' : sms.error || 'failed', attemptId).run();
     return { ok: sms.sent, detail: sms.sent ? 'sms_sent' : sms.error };

@@ -3,7 +3,7 @@
  */
 import { verifyGhlConnection, ghlConfigured } from './ghl-client';
 import { resolvePartnerMfsnCredentials } from '../engine/mfsn-client';
-import { mergeGhlEnv, mergeMfsnEnv, maskSecret } from './org-integrations';
+import { mergeGhlEnv, mergeMfsnEnv, maskSecret, loadOrgTwilioCredentials } from './org-integrations';
 import { loadIntegrationSecret, listVaultPreviews, logVaultAccess } from './credential-vault';
 import { countPendingIntegrationJobs } from './integration-dlq';
 import { SYSTEM_OF_RECORD, GHL_FIELD_SYNC_RULES } from './integration-sync-rules';
@@ -140,6 +140,17 @@ export async function integrationHubDashboard(opts: {
     `SELECT COUNT(*) as c FROM clients WHERE org_id = ? AND mfsn_member_email IS NOT NULL`,
   ).bind(opts.orgId).first() as any;
 
+  let twilioStatus: any = { configured: false, source: 'none' };
+  try {
+    const encKey = opts.encryptionKey || '';
+    if (encKey) {
+      const tw = await loadOrgTwilioCredentials(opts.db, opts.orgId, opts.platformEnv, encKey);
+      if (tw) twilioStatus = { configured: true, source: tw.source, phoneNumber: tw.phoneNumber };
+    } else if (opts.platformEnv.TWILIO_ACCOUNT_SID) {
+      twilioStatus = { configured: true, source: 'platform', phoneNumber: opts.platformEnv.TWILIO_PHONE_NUMBER };
+    }
+  } catch { /* soft */ }
+
   return {
     providers: INTEGRATION_PROVIDERS,
     connections: connections.results || [],
@@ -172,6 +183,14 @@ export async function integrationHubDashboard(opts: {
       clientTokenMasked: vaultPreviews.mfsn?.client_token || maskSecret(settings?.integrations?.mfsn?.clientToken),
       enrolledClients: Number(mfsnClients?.c || 0),
       connectionStatus: mfsnPartner ? 'partner_configured' : 'not_configured',
+    },
+    twilio: {
+      configured: twilioStatus.configured,
+      source: twilioStatus.source,
+      phoneNumber: twilioStatus.phoneNumber || settings?.integrations?.twilio?.phoneNumber || null,
+      connectRoute: '/api/integration-os/connections/twilio',
+      testRoute: '/api/integration-os/connections/twilio/test',
+      docs: 'Settings → Twilio SMS & Video — paste Account SID, Auth Token, and your approved From number.',
     },
     healthSummary: {
       actionRequired: pendingJobs + Number(identityQueue?.c || 0),

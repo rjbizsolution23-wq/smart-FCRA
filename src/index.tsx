@@ -4017,7 +4017,7 @@ app.post('/api/clients/:id/sms', authMiddleware, async (c) => {
   const phone = toE164Phone(body.phone || client.phone_e164 || client.phone);
   if (!phone) return c.json({ error: 'Client has no phone number on file' }, 400);
 
-  const sms = await sendSms(c.env, phone, message);
+  const sms = await sendSms(c.env, phone, message, { orgId: user.org_id });
   await c.env.DB.prepare(
     'INSERT INTO activity_log (id, org_id, client_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)'
   ).bind(

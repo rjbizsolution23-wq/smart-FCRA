@@ -37,7 +37,7 @@ assert(CONTRACT_TEMPLATE_TYPE_MAP.croa_service === 'croa', 'croa template map');
 assert(AI_PROVIDER_BYOK_MAP.groq === 'groq', 'byok map');
 
 const { EDUCATION_LIBRARY } = await import(pathToFileURL(path.join(root, 'src/data/portal-education.ts')).href);
-assert(EDUCATION_LIBRARY.length >= 12, 'academy has 12+ lessons');
+assert(EDUCATION_LIBRARY.length >= 16, 'academy has 16+ lessons');
 assert(EDUCATION_LIBRARY.some((l) => l.id === 'comp-01'), 'compliance lesson');
 
 console.log('platform-extensions tests passed', { lessons: EDUCATION_LIBRARY.length });
