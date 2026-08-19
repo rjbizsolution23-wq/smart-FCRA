@@ -158,7 +158,9 @@ import { registerSupportCrmRoutes, registerExternalIntegrationRoutes } from './l
 import { registerRoadmapRoutes, handleClientBillingWebhook } from './lib/roadmap-routes';
 import { registerComplianceOsRoutes } from './lib/compliance-os-routes';
 import { registerIntegrationOsRoutes } from './lib/integration-os-routes';
+import { registerPlatformExtensionRoutes } from './lib/platform-extension-routes';
 import { loadOrgGhlEnv } from './lib/integration-hub';
+import { encryptionReady, resolveOrgEncryptionKey } from './lib/platform-extensions';
 import { startWorkflowRun } from './lib/crm-workflow-engine';
 import { emitOrgWebhook } from './lib/outbound-webhooks';
 import { buildTradelineMatrix } from './lib/bureau-matrix';
@@ -219,13 +221,21 @@ import {
 import { evaluateIdentityTheftGate } from './engine/dispute-attestation';
 
 // Secure field-level cryptographic helpers mapped to Worker bindings
+function piiKeyForRequest(c: any): string {
+  const user = c.get('user');
+  return resolveOrgEncryptionKey(c.env.PII_ENCRYPTION_KEY, user?.org_id);
+}
+
 async function encryptPII(c: any, text: string): Promise<string> {
-  requireEncryptionKey(c.env.PII_ENCRYPTION_KEY);
-  return encryptText(text, c.env.PII_ENCRYPTION_KEY);
+  const key = piiKeyForRequest(c);
+  return encryptText(text, key);
 }
 
 async function decryptPII(c: any, text: string): Promise<string> {
-  return decryptTextSafe(text, c.env.PII_ENCRYPTION_KEY);
+  const key = c.env.PII_ENCRYPTION_KEY && c.env.PII_ENCRYPTION_KEY.length >= 32
+    ? c.env.PII_ENCRYPTION_KEY
+    : (isSandboxDemoOrg(c.get('user')?.org_id) ? resolveOrgEncryptionKey(undefined, c.get('user')?.org_id) : undefined);
+  return decryptTextSafe(text, key);
 }
 
 /** Persist bureau scores on report + client; keep EQ/EX/TU packs distinct. */
@@ -1549,7 +1559,7 @@ app.post('/api/public/demo/enter', async (c) => {
         lastName: row.last_name,
         phone: row.phone,
       }),
-      uploadReady: true,
+      uploadReady: encryptionReady(c.env.PII_ENCRYPTION_KEY, DEMO_ORG_ID),
     },
   });
 });
@@ -1607,7 +1617,7 @@ app.get('/api/demo/session', authMiddleware, async (c) => {
     reports,
     violations,
     livePullRemaining: livePullBlocked(demo) ? 0 : 1,
-    uploadReady: true,
+    uploadReady: encryptionReady(c.env.PII_ENCRYPTION_KEY, user.org_id),
     convertUrl,
     ai: {
       configured: providers.filter((p) => p.configured && p.free).length,
@@ -1636,7 +1646,7 @@ app.post('/api/demo/prepare', authMiddleware, async (c) => {
     portalEmail: ensured.email,
     caseLoaded: !!(sample && (sample.alreadyLoaded || sample.violationsFound || sample.reports || sample.totalViolations)),
     sampleCase: sample,
-    uploadReady: true,
+    uploadReady: encryptionReady(c.env.PII_ENCRYPTION_KEY, user.org_id),
     convertUrl: buildDemoConvertUrl({
       businessName: demo.business_name,
       email: demo.email,
@@ -11467,7 +11477,7 @@ function getAppHtml(mode: 'login' | 'app' = 'app'): string {
     }
   </script>
   <script src="/static/demo-experience.js?v=20260819-stripe-live"></script>
-  <script src="/static/app.js?v=20260819-demo-tour-51"></script>
+  <script src="/static/app.js?v=20260819-platform-max"></script>
 </body>
 </html>`;
 }
@@ -11484,5 +11494,6 @@ registerExternalIntegrationRoutes(app);
 registerRoadmapRoutes(app, { authMiddleware });
 registerComplianceOsRoutes(app, { authMiddleware });
 registerIntegrationOsRoutes(app, { authMiddleware });
+registerPlatformExtensionRoutes(app, { authMiddleware });
 
 export default app;

@@ -104,6 +104,52 @@ export const EDUCATION_LIBRARY: Lesson[] = [
       { q: 'Best sequence starts with:', choices: ['Apply everywhere', 'Fix inaccuracies then utilization', 'Buy AU tradelines blindly', 'Close oldest cards'], answer: 1 },
     ],
   },
+  {
+    id: 'lit-03',
+    track: 'literacy',
+    level: 3,
+    title: 'Debt Snowball vs Avalanche',
+    summary: 'Pick a payoff method that matches cash flow and psychology.',
+    content: `Snowball: pay smallest balance first for momentum. Avalanche: pay highest APR first for minimum interest. Both work if you stop adding new debt. Lenders care that revolving utilization drops — not which method you chose. Track minimums on everything; put extra toward your target account.`,
+    quiz: [
+      { q: 'Avalanche prioritizes:', choices: ['Smallest balance', 'Highest interest rate', 'Oldest account', 'Random order'], answer: 1 },
+      { q: 'Both methods require:', choices: ['Closing all cards', 'Paying all minimums on time', 'Skipping payments on small cards', 'New credit cards'], answer: 1 },
+    ],
+  },
+  {
+    id: 'cred-03',
+    track: 'credit',
+    level: 3,
+    title: 'Metro 2 & Furnisher Disputes (§623)',
+    summary: 'When the CRA reinvestigation fails, go to the source.',
+    content: `After a bureau investigation, you may dispute directly with the furnisher under FCRA §1681s-2. Metro 2 is the data format furnishers use — inconsistencies across bureaus can signal reporting errors. Document: account number, balance disputes, date opened, status codes. This lesson is educational — your advisor generates furnisher challenges from your file facts, not blank forms.`,
+    quiz: [
+      { q: 'Furnisher disputes follow:', choices: ['FDCPA only', 'FCRA §1681s-2', 'CROA §404', 'State usury law'], answer: 1 },
+    ],
+  },
+  {
+    id: 'fund-04',
+    track: 'fundability',
+    level: 3,
+    title: 'Business Credit Separation',
+    summary: 'Keep consumer cleanup separate from business fundability.',
+    content: `Personal credit repair and business credit are different lanes. EIN, business bank account, and vendor net-30 accounts build a business file — not piggybacking on consumer AU tradelines alone. Smart FCRA Readiness cockpit shows deterministic education; it does not promise lending approval.`,
+    quiz: [
+      { q: 'Business credit typically starts with:', choices: ['Personal AU only', 'EIN + business bank + vendor accounts', 'Closing all personal cards', 'Hard inquiries'], answer: 1 },
+    ],
+  },
+  {
+    id: 'comp-01',
+    track: 'expert',
+    level: 4,
+    title: 'CROA, TSR & Your Rights in the Portal',
+    summary: 'Why Cancel Services and consents are product features.',
+    content: `The Credit Repair Organizations Act requires clear contracts, cancellation rights, and bans advance fees for promised deletions. The Telemarketing Sales Rule adds cooling-off and disclosure requirements. Smart FCRA stores consents with timestamps, blocks marketing when consumer-rights lane is active, and exposes Cancel Services in the portal — not buried in email. You can revoke marketing SMS/email in Privacy & Security without losing case-status messages.`,
+    quiz: [
+      { q: 'CROA requires:', choices: ['Guaranteed deletions', 'Written contract + cancel rights', 'Upfront fees before work', 'No disclosures'], answer: 1 },
+      { q: 'Marketing messages require:', choices: ['No consent', 'Separate opt-in per lane', 'Only verbal OK', 'Staff SMS'], answer: 1 },
+    ],
+  },
 ];
 
 export const TRADELINE_CATALOG = [

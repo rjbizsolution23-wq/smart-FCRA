@@ -15,7 +15,10 @@ export const INTEGRATION_PROVIDERS = [
   { id: 'click2mail', name: 'Click2Mail', category: 'mailing', authTypes: ['api_key'] },
   { id: 'stripe', name: 'Stripe', category: 'billing', authTypes: ['api_key'] },
   { id: 'twilio', name: 'Twilio', category: 'telephony', authTypes: ['api_key'] },
-  { id: 'zapier', name: 'Zapier / Webhooks', category: 'automation', authTypes: ['webhook'] },
+  { id: 'zapier', name: 'Zapier / Webhooks', category: 'automation', authTypes: ['webhook', 'api_key'] },
+  { id: 'zoom', name: 'Zoom Meetings', category: 'video', authTypes: ['oauth_s2s'] },
+  { id: 'authorize_net', name: 'Authorize.net', category: 'payments', authTypes: ['api_login'] },
+  { id: 'nmi', name: 'NMI Gateway', category: 'payments', authTypes: ['security_key'] },
 ] as const;
 
 export async function upsertIntegrationConnection(opts: {

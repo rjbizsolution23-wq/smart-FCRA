@@ -17,6 +17,7 @@ import { processIntegrationJobQueue, countPendingIntegrationJobs, enqueueIntegra
 import { scanOutboundCopy } from './copy-qa';
 import { SYSTEM_OF_RECORD, GHL_FIELD_SYNC_RULES } from './integration-sync-rules';
 import { minimizationPayload } from './data-classification';
+import { resolveOrgEncryptionKey } from './platform-extensions';
 
 type RegisterOpts = { authMiddleware: any };
 
@@ -63,8 +64,8 @@ export function registerIntegrationOsRoutes(app: Hono<any>, opts: RegisterOpts) 
     if (err) return c.json({ error: err }, 403);
     const provider = c.req.param('provider');
     const body = await c.req.json().catch(() => ({}));
-    const encKey = c.env.PII_ENCRYPTION_KEY;
-    if (!encKey) return c.json({ error: 'PII_ENCRYPTION_KEY required for credential vault' }, 503);
+    const encKey = resolveOrgEncryptionKey(c.env.PII_ENCRYPTION_KEY, user.org_id);
+    if (!encKey && !c.env.PII_ENCRYPTION_KEY) return c.json({ error: 'PII_ENCRYPTION_KEY required for credential vault' }, 503);
 
     const patch: any = {};
     if (provider === 'ghl') {

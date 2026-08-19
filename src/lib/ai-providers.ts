@@ -162,17 +162,22 @@ async function chatHuggingFace(token: string, messages: ChatMessage[]): Promise<
   throw lastErr || new Error('Hugging Face inference failed');
 }
 
-/** Free-only cascade with NVIDIA first. */
-export async function generateAiText(env: AiEnv, messages: ChatMessage[]): Promise<AiResult> {
+/** Free-only cascade with NVIDIA first. Optional org BYOK keys override platform env. */
+export async function generateAiText(
+  env: AiEnv,
+  messages: ChatMessage[],
+  orgOverrides?: Partial<AiEnv>,
+): Promise<AiResult> {
+  const merged = orgOverrides ? { ...env, ...orgOverrides } : env;
   const errors: string[] = [];
-  const onlyFree = freeOnly(env);
+  const onlyFree = freeOnly(merged);
 
-  if (env.NVIDIA_API_KEY) {
+  if (merged.NVIDIA_API_KEY) {
     for (const model of NVIDIA_FREE_MODELS) {
       try {
         const text = await chatOpenAICompat(
           'https://integrate.api.nvidia.com/v1/chat/completions',
-          env.NVIDIA_API_KEY,
+          merged.NVIDIA_API_KEY,
           model,
           messages
         );
@@ -183,10 +188,10 @@ export async function generateAiText(env: AiEnv, messages: ChatMessage[]): Promi
     }
   }
 
-  if (env.GROQ_API_KEY) {
+  if (merged.GROQ_API_KEY) {
     for (const model of GROQ_FREE_MODELS) {
       try {
-        const text = await chatOpenAICompat('https://api.groq.com/openai/v1/chat/completions', env.GROQ_API_KEY, model, messages);
+        const text = await chatOpenAICompat('https://api.groq.com/openai/v1/chat/completions', merged.GROQ_API_KEY, model, messages);
         return { text, provider: 'groq', model };
       } catch (e: any) {
         errors.push(`groq/${model}: ${e.message}`);
@@ -194,12 +199,12 @@ export async function generateAiText(env: AiEnv, messages: ChatMessage[]): Promi
     }
   }
 
-  if (env.OPENROUTER_API_KEY) {
+  if (merged.OPENROUTER_API_KEY) {
     for (const model of OPENROUTER_FREE_MODELS) {
       try {
         const text = await chatOpenAICompat(
           'https://openrouter.ai/api/v1/chat/completions',
-          env.OPENROUTER_API_KEY,
+          merged.OPENROUTER_API_KEY,
           model,
           messages,
           { 'HTTP-Referer': 'https://rjbusinesssolutions.org', 'X-Title': 'Smart FCRA · RJ Business Solutions' }
@@ -211,7 +216,7 @@ export async function generateAiText(env: AiEnv, messages: ChatMessage[]): Promi
     }
   }
 
-  const geminiKey = env.GEMINI_API_KEY || env.GOOGLE_API_KEY;
+  const geminiKey = merged.GEMINI_API_KEY || merged.GOOGLE_API_KEY;
   if (geminiKey) {
     try {
       const text = await chatGemini(geminiKey, messages);
@@ -221,28 +226,28 @@ export async function generateAiText(env: AiEnv, messages: ChatMessage[]): Promi
     }
   }
 
-  if (env.TOGETHER_AI_API_KEY) {
+  if (merged.TOGETHER_AI_API_KEY) {
     try {
       const model = 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo';
-      const text = await chatOpenAICompat('https://api.together.xyz/v1/chat/completions', env.TOGETHER_AI_API_KEY, model, messages);
+      const text = await chatOpenAICompat('https://api.together.xyz/v1/chat/completions', merged.TOGETHER_AI_API_KEY, model, messages);
       return { text, provider: 'together', model };
     } catch (e: any) {
       errors.push(`together: ${e.message}`);
     }
   }
 
-  if (env.AI) {
+  if (merged.AI) {
     try {
-      const text = await chatWorkersAi(env.AI, messages);
+      const text = await chatWorkersAi(merged.AI, messages);
       return { text, provider: 'cloudflare-workers-ai', model: 'llama-3.1-8b' };
     } catch (e: any) {
       errors.push(`workers-ai: ${e.message}`);
     }
   }
 
-  if (env.HUGGINGFACE_TOKEN) {
+  if (merged.HUGGINGFACE_TOKEN) {
     try {
-      const text = await chatHuggingFace(env.HUGGINGFACE_TOKEN, messages);
+      const text = await chatHuggingFace(merged.HUGGINGFACE_TOKEN, messages);
       return { text, provider: 'huggingface', model: 'llama-3.1-8b-instruct' };
     } catch (e: any) {
       errors.push(`huggingface: ${e.message}`);
@@ -250,18 +255,18 @@ export async function generateAiText(env: AiEnv, messages: ChatMessage[]): Promi
   }
 
   // DeepSeek / OpenAI only if free-only disabled
-  if (!onlyFree && env.DEEPSEEK_API_KEY) {
+  if (!onlyFree && merged.DEEPSEEK_API_KEY) {
     try {
-      const text = await chatOpenAICompat('https://api.deepseek.com/chat/completions', env.DEEPSEEK_API_KEY, 'deepseek-chat', messages);
+      const text = await chatOpenAICompat('https://api.deepseek.com/chat/completions', merged.DEEPSEEK_API_KEY, 'deepseek-chat', messages);
       return { text, provider: 'deepseek', model: 'deepseek-chat' };
     } catch (e: any) {
       errors.push(`deepseek: ${e.message}`);
     }
   }
 
-  if (!onlyFree && env.OPENAI_API_KEY) {
+  if (!onlyFree && merged.OPENAI_API_KEY) {
     try {
-      const text = await chatOpenAICompat('https://api.openai.com/v1/chat/completions', env.OPENAI_API_KEY, 'gpt-4o-mini', messages);
+      const text = await chatOpenAICompat('https://api.openai.com/v1/chat/completions', merged.OPENAI_API_KEY, 'gpt-4o-mini', messages);
       return { text, provider: 'openai', model: 'gpt-4o-mini' };
     } catch (e: any) {
       errors.push(`openai: ${e.message}`);

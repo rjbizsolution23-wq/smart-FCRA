@@ -131,7 +131,7 @@ export const STAFF_CONSOLE_EXTENDED_GUIDE: StaffConsoleGuidePage[] = [
     page: 'integration-os',
     navLabel: 'Integration Hub',
     title: 'Integration Hub',
-    body: 'Credential vault (AES-GCM encrypted secrets with masked preview), platform event bus with idempotency, identity matching queue, sync rules for GHL fields, dead-letter retry queue, and connection health for GoHighLevel, MyFreeScoreNow, Twilio, Stripe, and outbound webhooks.',
+    body: 'Credential vault, event bus, identity matching, DLQ retry, Zapier/webhooks, Zoom meetings, Authorize.net/NMI gateways, BYOK AI + Cloudflare Workers AI credits, GHL, MFSN, Twilio, Stripe. Every connection encrypted — integrations fail safely with retries, not silent data loss.',
     whyBuy: 'Integrations fail safely — with retries and an audit trail, not silent data loss.',
   },
   {

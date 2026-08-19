@@ -6511,6 +6511,37 @@ Status: Discharged`;
           </form>
         </div>
 
+        <div class="glass rounded-xl p-6 border border-violet-900/40" id="platform-ai-panel">
+          <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-robot text-violet-400"></i> AI — Cloudflare Workers AI + Bring Your Own Key</h2>
+          <p class="text-xs text-gray-500 mb-3">Platform includes Cloudflare Workers AI. Add your OpenAI / Groq / Gemini keys for premium models. AI credits meter usage across mentors, copy QA, and letter assist.</p>
+          <div id="platform-ai-credits" class="text-xs text-gray-400 mb-3">Loading credits…</div>
+          <div id="platform-ai-providers" class="grid md:grid-cols-2 gap-2 text-xs mb-3"></div>
+          <button type="button" id="btn-save-ai-provider" class="bg-violet-700 hover:bg-violet-600 text-white px-3 py-2 rounded-lg text-xs font-semibold">Save AI provider key</button>
+        </div>
+
+        <div class="glass rounded-xl p-6 border border-emerald-900/40" id="platform-gateways-panel">
+          <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-credit-card text-emerald-400"></i> Client billing gateways</h2>
+          <p class="text-xs text-gray-500 mb-3">Bill your clients via Authorize.net, NMI, or Stripe Connect — in addition to platform Stripe checkout.</p>
+          <div id="platform-gateways-list" class="space-y-3 text-xs"></div>
+        </div>
+
+        <div class="glass rounded-xl p-6 border border-amber-900/40" id="platform-contracts-panel">
+          <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-file-signature text-amber-400"></i> Custom contracts &amp; POA templates</h2>
+          <p class="text-xs text-gray-500 mb-3">Upload your firm CROA, LPOA, or representation agreements. Variables: {{client_name}}, {{org_name}}, {{date}}. Active template overrides system default for your org.</p>
+          <form id="org-contract-form" class="space-y-2">
+            <select name="templateType" class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white w-full">
+              <option value="croa">CROA Service Agreement</option>
+              <option value="lpoa">Limited Power of Attorney</option>
+              <option value="rep_auth">Authorized Representative</option>
+              <option value="custom">Custom agreement</option>
+            </select>
+            <input name="name" placeholder="Template name" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white">
+            <textarea name="bodyText" rows="8" placeholder="Paste your contract text with {{client_name}} merge fields…" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white font-mono"></textarea>
+            <button type="submit" class="bg-amber-700 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Save org template</button>
+          </form>
+          <div id="org-contract-list" class="mt-3 text-xs text-gray-500"></div>
+        </div>
+
         <div class="glass rounded-xl p-6 border border-sky-900/40" id="custom-domain-panel">
           <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-globe text-sky-400"></i> White-label custom domain</h2>
           <p class="text-xs text-gray-500 mb-3">Point CNAME to <code class="text-sky-300">smart-fcra-v2.pages.dev</code> then verify.</p>
@@ -6940,6 +6971,79 @@ Status: Discharged`;
         try {
           await api('/settings/ppd', { method: 'PUT', body: JSON.stringify({ enabled: $('#ppd-enabled')?.checked, amountCents: Number($('#ppd-amount')?.value || 0) }) });
           toast('PPD settings saved', 'success');
+        } catch (err) { toast(err.message, 'error'); }
+      };
+      try {
+        const ai = await api('/platform-extensions/ai/providers');
+        const cr = ai.credits || {};
+        const credEl = $('#platform-ai-credits');
+        if (credEl) credEl.innerHTML = `<strong class="text-white">${(cr.balance || 0).toLocaleString()}</strong> AI credits remaining`;
+        const provEl = $('#platform-ai-providers');
+        if (provEl) provEl.innerHTML = (ai.providers || []).map((p) => `
+          <label class="flex items-center gap-2 border border-gray-800 rounded-lg p-2 cursor-pointer">
+            <input type="radio" name="aiProviderPick" value="${escapeHtml(p.id)}" ${p.enabled ? 'checked' : ''}>
+            <span class="text-white font-semibold">${escapeHtml(p.name)}</span>
+            <span class="text-gray-500">${p.configured ? p.apiKeyMasked : 'not set'}</span>
+          </label>`).join('');
+        $('#btn-save-ai-provider')?.addEventListener('click', async () => {
+          const pick = document.querySelector('input[name="aiProviderPick"]:checked')?.value;
+          const apiKey = prompt('Paste API key (encrypted vault — never shown again)');
+          if (!pick || !apiKey) return;
+          try {
+            await api('/platform-extensions/ai/providers/' + pick, { method: 'PUT', body: JSON.stringify({ apiKey, enabled: true }) });
+            toast('AI provider saved', 'success');
+            await pgSettings(el);
+          } catch (err) { toast(err.message, 'error'); }
+        });
+      } catch { /* migration 0031 */ }
+      try {
+        const gw = await api('/platform-extensions/payment-gateways');
+        const gwEl = $('#platform-gateways-list');
+        if (gwEl) {
+          gwEl.innerHTML = (gw.gateways || []).filter((g) => g.id !== 'stripe').map((g) => `
+            <div class="border border-gray-800 rounded-lg p-3">
+              <div class="font-semibold text-white">${escapeHtml(g.name)}</div>
+              <div class="text-gray-500 mb-2">${escapeHtml(g.description || '')}</div>
+              <button type="button" class="gw-config-btn mt-2 bg-emerald-800 hover:bg-emerald-700 text-white px-2 py-1 rounded text-[10px] font-bold" data-gw="${escapeHtml(g.id)}">Configure</button>
+            </div>`).join('');
+          el.querySelectorAll('.gw-config-btn').forEach((btn) => {
+            btn.onclick = async () => {
+              const id = btn.dataset.gw;
+              if (id === 'authorize_net') {
+                const loginId = prompt('Authorize.net API Login ID');
+                const transactionKey = prompt('Authorize.net Transaction Key');
+                if (!loginId || !transactionKey) return;
+                await api('/platform-extensions/payment-gateways/authorize_net', { method: 'PUT', body: JSON.stringify({ loginId, transactionKey }) });
+              } else if (id === 'nmi') {
+                const securityKey = prompt('NMI Security Key');
+                if (!securityKey) return;
+                await api('/platform-extensions/payment-gateways/nmi', { method: 'PUT', body: JSON.stringify({ securityKey }) });
+              } else if (id === 'stripe_connect') {
+                const accountId = prompt('Stripe Connect account ID (acct_…)');
+                if (!accountId) return;
+                await api('/platform-extensions/payment-gateways/stripe_connect', { method: 'PUT', body: JSON.stringify({ accountId }) });
+              }
+              toast('Gateway saved', 'success');
+              await pgSettings(el);
+            };
+          });
+        }
+      } catch { /* soft */ }
+      try {
+        const ct = await api('/platform-extensions/contracts/templates');
+        const listEl = $('#org-contract-list');
+        if (listEl) listEl.innerHTML = (ct.templates || []).length
+          ? (ct.templates || []).map((t) => `<div class="py-1 border-t border-gray-800">${escapeHtml(t.template_type)} v${t.version} · ${escapeHtml(t.name)}</div>`).join('')
+          : 'System CROA/LPOA defaults apply until you save a custom template.';
+      } catch { /* soft */ }
+      const contractForm = $('#org-contract-form');
+      if (contractForm) contractForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          await api('/platform-extensions/contracts/templates', { method: 'POST', body: JSON.stringify({ templateType: fd.get('templateType'), name: fd.get('name'), bodyText: fd.get('bodyText') }) });
+          toast('Contract template saved', 'success');
+          await pgSettings(el);
         } catch (err) { toast(err.message, 'error'); }
       };
       try {
@@ -13242,12 +13346,15 @@ async function pgAdminConsole(el) {
   async function pgIntegrationHub(el) {
     el.innerHTML = `<div class="flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-3xl text-cyan-400"></i></div>`;
     try {
-      const [hub, jobs, identityQ, events] = await Promise.all([
+      const [hub, jobs, identityQ, events, extCatalog, zoomSt] = await Promise.all([
         api('/integration-os/hub'),
         api('/integration-os/jobs?status=pending').catch(() => ({ jobs: [], pendingTotal: 0 })),
         api('/integration-os/identity-queue').catch(() => ({ queue: [] })),
         api('/integration-os/events').catch(() => ({ events: [] })),
+        api('/platform-extensions/catalog').catch(() => ({})),
+        api('/platform-extensions/zoom/status').catch(() => ({})),
       ]);
+      const zapier = extCatalog.zapier || {};
       const ghl = hub.ghl || {};
       const mfsn = hub.mfsn || {};
       el.innerHTML = `
@@ -13290,6 +13397,36 @@ async function pgAdminConsole(el) {
               </div>
             </div>
           </div>
+          <div class="grid lg:grid-cols-3 gap-4">
+            <div class="glass rounded-xl p-5 border border-gray-800">
+              <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-bolt text-yellow-400 mr-2"></i>Zapier / Webhooks</h2>
+              <div class="text-xs text-gray-400 space-y-1">
+                <div>REST hooks + org API keys</div>
+                <div class="text-[10px] text-gray-500">Events: ${(zapier.events || []).slice(0, 4).join(', ')}…</div>
+                <button type="button" onclick="window._nav('settings')" class="mt-2 bg-yellow-700/80 hover:bg-yellow-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">API keys in Settings</button>
+              </div>
+            </div>
+            <div class="glass rounded-xl p-5 border border-gray-800">
+              <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-video text-blue-400 mr-2"></i>Zoom Meetings</h2>
+              <div class="text-xs text-gray-400 space-y-1">
+                <div>Status: <span class="${zoomSt.configured ? 'text-emerald-400' : 'text-amber-400'}">${escapeHtml(zoomSt.status || 'disconnected')}</span></div>
+                <div class="text-[10px]">Server-to-Server OAuth · waiting room · compliance disclaimer</div>
+                <button type="button" id="ih-zoom-config" class="mt-2 bg-blue-700 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Configure Zoom</button>
+              </div>
+            </div>
+            <div class="glass rounded-xl p-5 border border-gray-800">
+              <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-wallet text-emerald-400 mr-2"></i>Payment Gateways</h2>
+              <div class="text-xs text-gray-400 space-y-1">
+                <div>Authorize.net · NMI · Stripe Connect</div>
+                <div class="text-[10px]">Tenant-owned merchant IDs for client invoices</div>
+                <button type="button" onclick="window._nav('settings')" class="mt-2 bg-emerald-800 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Gateways in Settings</button>
+              </div>
+            </div>
+          </div>
+          <div class="glass rounded-xl p-5 border border-violet-900/30">
+            <h2 class="text-sm font-bold text-white mb-2"><i class="fas fa-robot text-violet-400 mr-2"></i>AI Stack</h2>
+            <p class="text-xs text-gray-400">${escapeHtml(extCatalog.cloudflareAi?.description || 'Cloudflare Workers AI included. BYOK in Settings.')}</p>
+          </div>
           <div class="glass rounded-xl p-5 border border-gray-800">
             <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-fingerprint text-violet-400 mr-2"></i>Identity Resolution Queue (${(identityQ.queue || []).length})</h2>
             <div class="space-y-2 max-h-40 overflow-y-auto text-xs">${(identityQ.queue || []).length ? identityQ.queue.map((q) => `
@@ -13311,6 +13448,17 @@ async function pgAdminConsole(el) {
         try {
           const r = await api('/integration-os/connections/ghl/test', { method: 'POST', body: '{}' });
           toast(r.ok ? 'GHL connection OK' : (r.error || 'Failed'), r.ok ? 'success' : 'error');
+          await pgIntegrationHub(el);
+        } catch (err) { toast(err.message, 'error'); }
+      });
+      el.querySelector('#ih-zoom-config')?.addEventListener('click', async () => {
+        const clientId = prompt('Zoom Server-to-Server OAuth Client ID');
+        const clientSecret = prompt('Zoom Client Secret');
+        const accountId = prompt('Zoom Account ID');
+        if (!clientId || !clientSecret) return;
+        try {
+          await api('/platform-extensions/zoom/credentials', { method: 'PUT', body: JSON.stringify({ clientId, clientSecret, accountId }) });
+          toast('Zoom credentials saved', 'success');
           await pgIntegrationHub(el);
         } catch (err) { toast(err.message, 'error'); }
       });
