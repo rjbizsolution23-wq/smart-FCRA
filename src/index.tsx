@@ -153,7 +153,9 @@ import { inspectUpload, decodeBase64Bytes, sanitizeFileName } from './lib/upload
 import { vaultOriginalFromBody } from './lib/report-vault';
 import { persistInvestigationClock, closeInvestigationClock, FCRA_611_OPERATIONAL_DAYS } from './lib/investigation-clocks';
 import { recordServiceCompleted, assertCoveredChargeAllowed, writeBillingLedger } from './lib/service-ledger';
-import { sendLetterViaClick2Mail } from './lib/click2mail';
+import { sendLetterViaClick2Mail, resolveMailClass } from './lib/click2mail';
+import { registerSupportCrmRoutes, registerExternalIntegrationRoutes } from './lib/support-crm-routes';
+import { emitOrgWebhook } from './lib/outbound-webhooks';
 import {
   ensureStripeCatalog,
   ensureStripeCatalogCached,
@@ -6277,13 +6279,24 @@ app.get('/api/admin/overview-stats', authMiddleware, async (c) => {
   }
   const spark = sparklinePath(monthlyRevenues.map((p) => p.value));
 
-  // Litigation outcomes ratios
-  const outcomes = [
-    { name: 'Settled Out of Court', value: 65, color: '#0A66FF' },
-    { name: 'Won in Court', value: 22, color: '#10B981' },
-    { name: 'Dismissed', value: 8, color: '#EF4444' },
-    { name: 'Pending Trial', value: 5, color: '#F59E0B' }
-  ];
+  // Case pipeline distribution from live client case_status (no fabricated litigation stats)
+  const caseStatusRows = await c.env.DB.prepare(
+    `SELECT COALESCE(case_status, 'ONBOARDING') as case_status, COUNT(*) as count FROM clients WHERE org_id = ?${hideDemo.sql} GROUP BY case_status`,
+  ).bind(user.org_id, ...hideDemo.binds).all().catch(() => ({ results: [] }));
+  const statusColors: Record<string, string> = {
+    ONBOARDING: '#64748b',
+    DISPUTING: '#0ea5e9',
+    LITIGATION: '#f59e0b',
+    FILED: '#8b5cf6',
+    DISCOVERY: '#a855f7',
+    NEGOTIATIONS: '#10b981',
+    SETTLED: '#22c55e',
+  };
+  const outcomes = ((caseStatusRows as any)?.results || []).map((r: any) => ({
+    name: String(r.case_status || 'Unknown').replace(/_/g, ' '),
+    value: Number(r.count || 0),
+    color: statusColors[r.case_status] || '#94a3b8',
+  }));
 
   // Urgent action items board
   const urgentItems: any[] = [];
@@ -7655,6 +7668,9 @@ app.put('/api/settings/org', authMiddleware, async (c) => {
   if (typeof body.repAgreementAttached === 'boolean') {
     settings.rep_agreement_attached = body.repAgreementAttached;
     settings.letterhead = { ...(settings.letterhead || {}), repAgreementAttached: body.repAgreementAttached };
+  }
+  if (body.defaultMailClass) {
+    settings.default_mail_class = String(body.defaultMailClass).toUpperCase();
   }
   // Re-normalize after branding/advocate flags so flat keys stay in sync
   settings = mergeLetterheadIntoSettings(settings, settings.letterhead || {}, displayName);
@@ -9460,10 +9476,14 @@ app.get('/api/documents/:id/pdf', authMiddleware, async (c) => {
 app.post('/api/documents/:id/send', authMiddleware, async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
-  const { recipientName, recipientAddress, recipientCity, recipientState, recipientZip } = await c.req.json();
+  const { recipientName, recipientAddress, recipientCity, recipientState, recipientZip, mailClass: bodyMailClass, fromAddressId } = await c.req.json();
 
   const doc = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
   if (!doc) return c.json({ error: 'Document not found' }, 404);
+
+  const orgRow = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+  const orgSettings = typeof orgRow?.settings === 'string' ? JSON.parse(orgRow.settings || '{}') : (orgRow?.settings || {});
+  const mailClass = resolveMailClass({ bodyMailClass, orgDefault: orgSettings.default_mail_class });
 
   let mailing;
   try {
@@ -9477,7 +9497,8 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
         state: recipientState || '',
         zip: recipientZip || '',
       },
-      mailClass: 'FIRST_CLASS',
+      mailClass,
+      fromAddressId,
     });
   } catch (err: any) {
     return c.json({ error: err.message || 'Mail send failed' }, err.status || 502);
@@ -9511,7 +9532,19 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
     deliverableId: id,
   });
 
-  await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, doc.client_id, id, user.id, 'document_mailed', `Mailed "${doc.title}" to ${recipientName || doc.recipient_name || 'recipient'} · FCRA 611 clock ${clock.statutoryTarget}`).run();
+  await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, doc.client_id, id, user.id, 'document_mailed', `Mailed "${doc.title}" to ${recipientName || doc.recipient_name || 'recipient'} · ${mailing.mailClass} · FCRA 611 clock ${clock.statutoryTarget}`).run();
+
+  emitOrgWebhook(c.env.DB, {
+    orgId: user.org_id,
+    eventType: 'letter.sent',
+    payload: {
+      documentId: id,
+      clientId: doc.client_id,
+      mailingId: mailing.mailingId,
+      mailClass: mailing.mailClass,
+      title: doc.title,
+    },
+  }).catch(() => null);
 
   try {
     const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(doc.client_id, user.org_id).first() as any;
@@ -9538,6 +9571,7 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
   return c.json({
     success: true,
     mailingId: mailing.mailingId,
+    mailClass: mailing.mailClass,
     investigationClock: clock,
     message: 'Document mailed. FCRA § 611 30-day investigation clock started (35-day operational due date includes mail transit).',
   });
@@ -11353,7 +11387,7 @@ function getAppHtml(mode: 'login' | 'app' = 'app'): string {
     }
   </script>
   <script src="/static/demo-experience.js?v=20260819-stripe-live"></script>
-  <script src="/static/app.js?v=20260819-stripe-live"></script>
+  <script src="/static/app.js?v=20260819-crm-compliance"></script>
 </body>
 </html>`;
 }
@@ -11364,5 +11398,8 @@ registerClientIntelligenceRoutes(app, {
   isPortalAnalysisUnlocked,
   decryptPII,
 });
+
+registerSupportCrmRoutes(app, { authMiddleware });
+registerExternalIntegrationRoutes(app);
 
 export default app;

@@ -1379,6 +1379,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'violations', icon: 'fa-exclamation-triangle', label: 'Violations' },
         { id: 'documents', icon: 'fa-file-contract', label: 'Documents' },
         { id: 'compliance-hub', icon: 'fa-shield-alt', label: 'Compliance Hub' },
+        { id: 'support-center', icon: 'fa-headset', label: 'Support Center' },
         { id: 'mailing-campaigns', icon: 'fa-mail-bulk', label: 'Mailing Campaigns' },
         { id: 'tradelines', icon: 'fa-layer-group', label: 'Tradelines' },
         { id: 'team', icon: 'fa-user-friends', label: 'Team' },
@@ -1539,6 +1540,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'violations': await pgViolations(el); break;
         case 'documents': await pgDocuments(el); break;
         case 'compliance-hub': await pgComplianceHub(el); break;
+        case 'support-center': await pgSupportCenter(el); break;
         case 'mailing-campaigns': await pgMailingCampaigns(el); break;
         case 'founder-os': await pgFounderOS(el); break;
         case 'sales-tools': await pgSalesTools(el); break;
@@ -5844,13 +5846,14 @@ Status: Discharged`;
       toast('Client address incomplete — please fill address in client profile first','error');
       return;
     }
-    if (!confirm(`Mail "${decodeURIComponent(id)}"?\n\nTo: ${recipientName}\n${recipientAddress}\n${recipientCity}, ${recipientState} ${recipientZip}\n\nThis will send via Click2Mail.`)) return;
+    const mailClass = (prompt('USPS mail class: STANDARD, FIRST_CLASS, or CERTIFIED', 'FIRST_CLASS') || 'FIRST_CLASS').trim().toUpperCase();
+    if (!confirm(`Mail document?\n\nTo: ${recipientName}\n${recipientAddress}\n${recipientCity}, ${recipientState} ${recipientZip}\n\nClass: ${mailClass}\n\nSent via Click2Mail with FCRA §611 clock.`)) return;
     try {
       const data = await api(`/documents/${id}/send`, {
         method: 'POST',
-        body: JSON.stringify({ recipientName, recipientAddress, recipientCity, recipientState, recipientZip }),
+        body: JSON.stringify({ recipientName, recipientAddress, recipientCity, recipientState, recipientZip, mailClass }),
       });
-      toast(`Mailed successfully! Mailing ID: ${data.mailingId}`, 'success');
+      toast(`Mailed (${data.mailClass || mailClass})! Mailing ID: ${data.mailingId}`, 'success');
     } catch (err) { toast(err.message, 'error'); }
   };
 
@@ -6354,6 +6357,36 @@ Status: Discharged`;
           <pre id="ghl-sync-log" class="mt-4 hidden text-[10px] text-gray-400 bg-gray-950/60 border border-gray-800 rounded-lg p-3 max-h-40 overflow-auto whitespace-pre-wrap"></pre>
         </div>
 
+        <div class="glass rounded-xl p-6 border border-violet-900/40" id="integrations-panel">
+          <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-plug text-violet-400"></i> Click2Mail, Zapier &amp; Webhooks</h2>
+          <p class="text-xs text-gray-500 mb-4">Default mail class, sender addresses, API keys for Zapier/Make, and outbound event webhooks.</p>
+          <form id="mail-default-form" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <div><label class="block text-xs text-gray-400 mb-1">Default mail class</label>
+              <select name="defaultMailClass" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white">
+                <option value="STANDARD" ${(settings.default_mail_class || '') === 'STANDARD' ? 'selected' : ''}>Standard</option>
+                <option value="FIRST_CLASS" ${!settings.default_mail_class || settings.default_mail_class === 'FIRST_CLASS' ? 'selected' : ''}>First Class</option>
+                <option value="CERTIFIED" ${settings.default_mail_class === 'CERTIFIED' ? 'selected' : ''}>Certified (tracking)</option>
+              </select>
+            </div>
+            <div class="md:col-span-2 flex items-end"><button type="submit" class="bg-violet-700 hover:bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Save mail default</button></div>
+          </form>
+          <div id="c2m-addresses-box" class="text-xs text-gray-400 mb-4">Loading Click2Mail sender addresses…</div>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="bg-gray-950/40 border border-gray-800 rounded-xl p-4">
+              <h3 class="text-xs font-bold text-white uppercase tracking-wider mb-2">API Keys (Zapier)</h3>
+              <div id="api-keys-list" class="text-xs text-gray-400 mb-3">Loading…</div>
+              <button type="button" id="btn-create-api-key" class="bg-gray-800 hover:bg-gray-700 text-white text-xs px-3 py-2 rounded-lg font-semibold">Create API Key</button>
+            </div>
+            <div class="bg-gray-950/40 border border-gray-800 rounded-xl p-4">
+              <h3 class="text-xs font-bold text-white uppercase tracking-wider mb-2">Outbound Webhooks</h3>
+              <div id="webhooks-list" class="text-xs text-gray-400 mb-3">Loading…</div>
+              <button type="button" id="btn-create-webhook" class="bg-gray-800 hover:bg-gray-700 text-white text-xs px-3 py-2 rounded-lg font-semibold">Add Webhook</button>
+              <button type="button" id="btn-test-webhook" class="ml-2 bg-violet-900 hover:bg-violet-800 text-white text-xs px-3 py-2 rounded-lg font-semibold">Test Ping</button>
+            </div>
+          </div>
+          <p class="text-[10px] text-gray-600 mt-3">Zapier: use REST hook URL from Add Webhook, or POST /api/v1/webhooks/zapier/subscribe with Bearer API key. Events: client.created, report.imported, letter.sent, ticket.created, complaint.created.</p>
+        </div>
+
         <div class="glass rounded-xl p-6 border border-gray-700">
           <h2 class="text-sm font-semibold text-white mb-4 flex items-center gap-2"><i class="fas fa-key text-amber-400"></i> Change Password</h2>
           <form id="staff-pwd-form" class="flex flex-wrap gap-3 items-end">
@@ -6584,6 +6617,73 @@ Status: Discharged`;
           await api('/auth/mfa/disable', { method: 'POST', body: JSON.stringify({ code: fd.get('code') }) });
           toast('MFA disabled', 'success');
           await pgSettings(el);
+        } catch (err) { toast(err.message, 'error'); }
+      };
+
+      const mailDefaultForm = $('#mail-default-form');
+      if (mailDefaultForm) mailDefaultForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          await api('/settings/org', { method: 'PUT', body: JSON.stringify({ defaultMailClass: fd.get('defaultMailClass') }) });
+          toast('Default mail class saved', 'success');
+        } catch (err) { toast(err.message, 'error'); }
+      };
+      const c2mAddrBox = $('#c2m-addresses-box');
+      if (c2mAddrBox) {
+        api('/integrations/click2mail/addresses').then((d) => {
+          if (!d.configured) { c2mAddrBox.textContent = 'Click2Mail not configured on this deployment.'; return; }
+          const addrs = d.addresses || [];
+          c2mAddrBox.innerHTML = addrs.length
+            ? `<span class="text-gray-500">Sender addresses:</span> ${addrs.map((a) => `<span class="text-white font-mono ml-1">#${a.id}</span> ${escapeHtml(a.address1 || a.name || '')}`).join(' · ')}`
+            : (d.error ? `Click2Mail error: ${escapeHtml(d.error)}` : 'No sender addresses returned.');
+        }).catch(() => { c2mAddrBox.textContent = 'Could not load Click2Mail addresses.'; });
+      }
+      const renderApiKeys = async () => {
+        const box = $('#api-keys-list');
+        if (!box) return;
+        try {
+          const d = await api('/integrations/api-keys');
+          const keys = d.keys || [];
+          box.innerHTML = keys.length ? keys.map((k) => `<div class="py-1 border-b border-gray-800/60"><span class="text-white">${escapeHtml(k.name)}</span> <span class="font-mono text-gray-500">${escapeHtml(k.key_prefix)}…</span> ${k.revoked_at ? '<span class="text-rose-400">revoked</span>' : '<span class="text-emerald-400">active</span>'}</div>`).join('') : 'No API keys yet.';
+        } catch { box.textContent = 'Migration 0026 required or staff access needed.'; }
+      };
+      const renderWebhooks = async () => {
+        const box = $('#webhooks-list');
+        if (!box) return;
+        try {
+          const d = await api('/integrations/webhooks');
+          const hooks = d.webhooks || [];
+          box.innerHTML = hooks.length ? hooks.map((w) => `<div class="py-1 border-b border-gray-800/60"><span class="text-white">${escapeHtml(w.label)}</span> <span class="text-gray-500 truncate">${escapeHtml(w.url)}</span> ${w.active ? '' : '<span class="text-amber-400"> off</span>'}</div>`).join('') : 'No webhooks yet.';
+        } catch { box.textContent = 'Could not load webhooks.'; }
+      };
+      renderApiKeys();
+      renderWebhooks();
+      const btnCreateKey = $('#btn-create-api-key');
+      if (btnCreateKey) btnCreateKey.onclick = async () => {
+        const name = prompt('API key name (e.g. Zapier production)', 'Zapier') || 'Integration';
+        try {
+          const d = await api('/integrations/api-keys', { method: 'POST', body: JSON.stringify({ name, scopes: ['read', 'write', 'webhooks'] }) });
+          alert(`Save this key now — it will not be shown again:\n\n${d.key}`);
+          await renderApiKeys();
+        } catch (err) { toast(err.message, 'error'); }
+      };
+      const btnCreateWebhook = $('#btn-create-webhook');
+      if (btnCreateWebhook) btnCreateWebhook.onclick = async () => {
+        const label = prompt('Webhook label', 'Zapier') || 'Webhook';
+        const url = prompt('Target URL (HTTPS)', '');
+        if (!url) return;
+        try {
+          const d = await api('/integrations/webhooks', { method: 'POST', body: JSON.stringify({ label, url, events: ['client.created', 'letter.sent', 'report.imported', 'ticket.created'] }) });
+          alert(`Webhook secret (for signature verification):\n\n${d.secret}`);
+          await renderWebhooks();
+        } catch (err) { toast(err.message, 'error'); }
+      };
+      const btnTestWebhook = $('#btn-test-webhook');
+      if (btnTestWebhook) btnTestWebhook.onclick = async () => {
+        try {
+          const d = await api('/integrations/webhooks/test', { method: 'POST', body: '{}' });
+          toast(`Test sent: ${d.delivered} delivered, ${d.failed} failed`, d.failed ? 'error' : 'success');
         } catch (err) { toast(err.message, 'error'); }
       };
     } catch (err) {
@@ -12821,6 +12921,128 @@ async function pgAdminConsole(el) {
         </div>
       </div>
     `;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // SUPPORT CENTER — CRM compliance playbook + tickets
+  // ═══════════════════════════════════════════════════════════════
+  async function pgSupportCenter(el) {
+    el.innerHTML = `<div class="flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-3xl text-violet-400"></i></div>`;
+    try {
+      const [playbook, ticketsRes, complaintsRes] = await Promise.all([
+        api('/support/playbook'),
+        api('/support/tickets').catch(() => ({ tickets: [] })),
+        api('/support/complaints').catch(() => ({ complaints: [] })),
+      ]);
+      const tickets = ticketsRes.tickets || [];
+      const complaints = complaintsRes.complaints || [];
+      const scenarios = playbook.scenarios || [];
+
+      el.innerHTML = `
+        <div class="fade-in space-y-6">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 class="text-xl font-bold text-white flex items-center gap-2"><i class="fas fa-headset text-violet-400"></i> Support Center</h1>
+              <p class="text-sm text-gray-400 mt-1">Customer Service &amp; CRM Compliance Playbook v${escapeHtml(playbook.version || '1.0')} — never promise outcomes.</p>
+            </div>
+            <a href="/static/brand/docs/CUSTOMER_SERVICE_COMPLIANCE_PLAYBOOK.md" target="_blank" rel="noopener" class="text-xs text-violet-300 hover:text-violet-200 font-semibold"><i class="fas fa-book mr-1"></i>Full playbook</a>
+          </div>
+
+          <div class="glass rounded-xl p-4 border border-amber-500/30 bg-amber-950/10">
+            <div class="text-xs font-bold text-amber-300 uppercase tracking-wider mb-1">Golden Rule</div>
+            <p class="text-sm text-amber-100/90">${escapeHtml(playbook.goldenRule || '')}</p>
+          </div>
+
+          <div class="grid lg:grid-cols-3 gap-4">
+            <div class="lg:col-span-2 glass rounded-xl p-5 border border-gray-800">
+              <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-comments text-sky-400 mr-2"></i>Approved Scripts</h2>
+              <input id="support-script-search" type="search" placeholder="Search scenarios…" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white mb-3">
+              <div id="support-scripts-list" class="space-y-2 max-h-96 overflow-y-auto">${scenarios.map((s) => `
+                <details class="bg-gray-950/40 border border-gray-800 rounded-lg p-3">
+                  <summary class="text-sm font-semibold text-white cursor-pointer">${escapeHtml(s.title)}</summary>
+                  ${s.customerQuestion ? `<p class="text-xs text-gray-500 mt-2 italic">Customer: "${escapeHtml(s.customerQuestion)}"</p>` : ''}
+                  <p class="text-xs text-gray-300 mt-2 leading-relaxed">${escapeHtml(s.approvedResponse)}</p>
+                  ${s.disposition ? `<span class="inline-block mt-2 text-[10px] px-2 py-0.5 rounded bg-violet-900/40 text-violet-300">${escapeHtml(s.disposition)}</span>` : ''}
+                </details>`).join('')}</div>
+            </div>
+            <div class="glass rounded-xl p-5 border border-gray-800 space-y-4">
+              <h2 class="text-sm font-bold text-white"><i class="fas fa-ticket-alt text-emerald-400 mr-2"></i>New Ticket</h2>
+              <form id="support-ticket-form" class="space-y-2 text-xs">
+                <input name="subject" placeholder="Subject" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
+                <select name="disposition" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">${(playbook.dispositions || []).map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('')}</select>
+                <textarea name="factsText" rows="2" placeholder="FACTS (verbatim consumer statement)" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white"></textarea>
+                <textarea name="actionText" rows="2" placeholder="ACTION taken" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white"></textarea>
+                <textarea name="nextStepText" rows="2" placeholder="NEXT STEP" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white"></textarea>
+                <label class="flex items-center gap-2 text-gray-400"><input type="checkbox" name="verifiedIdentity"> Identity verified</label>
+                <button type="submit" class="w-full bg-violet-600 hover:bg-violet-500 text-white py-2 rounded-lg font-semibold">Log Ticket</button>
+              </form>
+              <div class="text-[10px] text-gray-500">Note standard: ${escapeHtml(playbook.noteTemplate || 'FACTS → ACTION → RESULT → NEXT STEP')}</div>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="glass rounded-xl p-5 border border-gray-800">
+              <h2 class="text-sm font-bold text-white mb-3">Open Tickets (${tickets.filter((t) => t.status !== 'resolved').length})</h2>
+              <div class="space-y-2 max-h-64 overflow-y-auto text-xs">${tickets.length ? tickets.slice(0, 30).map((t) => `
+                <div class="border border-gray-800 rounded-lg p-2">
+                  <div class="font-mono text-violet-300">${escapeHtml(t.ticket_number)}</div>
+                  <div class="text-white">${escapeHtml(t.subject || t.disposition || 'Support')}</div>
+                  <div class="text-gray-500">${escapeHtml(t.status)} · L${t.escalation_level || 1}</div>
+                </div>`).join('') : '<p class="text-gray-500">No tickets yet.</p>'}</div>
+            </div>
+            <div class="glass rounded-xl p-5 border border-gray-800">
+              <h2 class="text-sm font-bold text-white mb-3">Complaints (${complaints.length})</h2>
+              <div class="space-y-2 max-h-64 overflow-y-auto text-xs">${complaints.length ? complaints.slice(0, 20).map((c) => `
+                <div class="border border-gray-800 rounded-lg p-2">
+                  <div class="font-mono text-rose-300">${escapeHtml(c.complaint_number)}</div>
+                  <div class="text-white">${escapeHtml(c.classification)}</div>
+                  <div class="text-gray-500">${escapeHtml(c.status)} · ${escapeHtml((c.allegation_summary || '').slice(0, 80))}</div>
+                </div>`).join('') : '<p class="text-gray-500">No formal complaints logged.</p>'}</div>
+            </div>
+          </div>
+
+          <div class="glass rounded-xl p-5 border border-gray-800">
+            <h2 class="text-sm font-bold text-white mb-2">Prohibited → Approved Phrases</h2>
+            <div class="grid md:grid-cols-2 gap-2 text-xs">${(playbook.prohibitedPhrases || []).map((p) => `
+              <div class="bg-gray-950/50 rounded p-2 border border-gray-800">
+                <div class="text-rose-400 line-through">${escapeHtml(p.never)}</div>
+                <div class="text-emerald-300 mt-1">${escapeHtml(p.use)}</div>
+              </div>`).join('')}</div>
+          </div>
+        </div>`;
+
+      const search = $('#support-script-search');
+      const list = $('#support-scripts-list');
+      if (search && list) search.oninput = () => {
+        const q = search.value.toLowerCase();
+        list.querySelectorAll('details').forEach((el) => {
+          el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
+        });
+      };
+      const ticketForm = $('#support-ticket-form');
+      if (ticketForm) ticketForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          await api('/support/tickets', {
+            method: 'POST',
+            body: JSON.stringify({
+              subject: fd.get('subject'),
+              disposition: fd.get('disposition'),
+              factsText: fd.get('factsText'),
+              actionText: fd.get('actionText'),
+              nextStepText: fd.get('nextStepText'),
+              verifiedIdentity: !!fd.get('verifiedIdentity'),
+              channel: 'phone',
+            }),
+          });
+          toast('Ticket logged', 'success');
+          await pgSupportCenter(el);
+        } catch (err) { toast(err.message, 'error'); }
+      };
+    } catch (err) {
+      el.innerHTML = `<div class="glass p-8 rounded-xl border border-red-500/30 text-center text-sm text-gray-300">${escapeHtml(err.message)}</div>`;
+    }
   }
 
   async function pgMailingCampaigns(el) {

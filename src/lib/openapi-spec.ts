@@ -165,6 +165,16 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
   { method: 'post', path: '/api/ron/sessions/{id}/identity', summary: 'Submit RON identity checklist', tags: ['RON'], security: true },
   { method: 'post', path: '/api/ron/sessions/{id}/complete', summary: 'Complete/seal RON session', tags: ['RON'], security: true },
   { method: 'post', path: '/api/webhooks/ron', summary: 'RON vendor webhook', tags: ['RON'] },
+  // Support CRM & integrations
+  { method: 'get', path: '/api/support/playbook', summary: 'Customer service compliance playbook (structured)', tags: ['Support'], security: true },
+  { method: 'get', path: '/api/support/tickets', summary: 'List support tickets', tags: ['Support'], security: true },
+  { method: 'post', path: '/api/support/tickets', summary: 'Create support ticket with FACTS/ACTION/RESULT notes', tags: ['Support'], security: true },
+  { method: 'get', path: '/api/integrations/click2mail/addresses', summary: 'Click2Mail sender addresses', tags: ['Integrations'], security: true },
+  { method: 'get', path: '/api/integrations/api-keys', summary: 'List org API keys (Zapier)', tags: ['Integrations'], security: true },
+  { method: 'post', path: '/api/integrations/api-keys', summary: 'Create org API key', tags: ['Integrations'], security: true },
+  { method: 'get', path: '/api/integrations/webhooks', summary: 'List outbound webhook endpoints', tags: ['Integrations'], security: true },
+  { method: 'post', path: '/api/v1/webhooks/zapier/subscribe', summary: 'Zapier REST hook subscribe (API key auth)', tags: ['Integrations'] },
+  { method: 'get', path: '/api/v1/clients', summary: 'External API: list clients (API key auth)', tags: ['Integrations'] },
   // Privacy
   { method: 'post', path: '/api/privacy/export', summary: 'GDPR/CCPA data export', tags: ['Privacy'], security: true },
   { method: 'post', path: '/api/privacy/delete-request', summary: 'Request account deletion', tags: ['Privacy'], security: true },
