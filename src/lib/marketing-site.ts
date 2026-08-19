@@ -88,7 +88,7 @@ const PAGES: Record<MarketingPageId, PageMeta> = {
     path: '/',
     title: 'Smart FCRA Credit Repair Software | FCRA CRM, Generated Dispute Letters & Client Portal',
     description:
-      'Smart FCRA by RJ Business Solutions is FCRA compliance and credit repair software for U.S. operators: 15-category violation engine, generated § 611 / § 623 letters, Metro 2 review, CROA client portal, and Click2Mail clocks. Built in Tijeras, New Mexico. Not templates. No deletion guarantees.',
+      'Smart FCRA by RJ Business Solutions is FCRA compliance and credit repair software for U.S. operators: Credit Compliance Intelligence™ across 15 categories, generated § 611 / § 623 letters, Metro 2 review, CROA client portal, and Click2Mail clocks. Built in Tijeras, New Mexico. Not templates. No deletion guarantees.',
     robots: 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
   },
   demo: {
@@ -102,14 +102,14 @@ const PAGES: Record<MarketingPageId, PageMeta> = {
     path: '/pricing',
     title: 'Credit Repair Software Pricing | Smart FCRA Professional, Unlimited & Enterprise',
     description:
-      'Smart FCRA SaaS pricing for credit repair firms: Professional $497/mo, Unlimited $2,500/mo, Enterprise $9,997/mo. Violation engine, generated dispute letters, client portal, MFSN imports, and white-label options. Live Stripe checkout.',
+      'Smart FCRA SaaS pricing for credit repair firms: Professional $497/mo, Unlimited $2,500/mo, Enterprise $9,997/mo. Compliance findings engine, generated dispute letters, client portal, MFSN imports, and white-label options. Live Stripe checkout.',
     robots: 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
   },
   login: {
     path: '/login',
     title: 'Sign in to Smart FCRA | Credit Repair Operations Software',
     description:
-      'Sign in to Smart FCRA by RJ Business Solutions — credit repair CRM, FCRA violation engine, generated dispute letters, and client portal for U.S. operators.',
+      'Sign in to Smart FCRA by RJ Business Solutions — credit repair CRM, Credit Compliance Intelligence™, generated dispute letters, and client portal for U.S. operators.',
     robots: 'index, follow',
   },
 };
@@ -157,7 +157,7 @@ export function jsonLdForPage(page: MarketingPageId): Record<string, unknown>[] 
     description: PAGES.home.description,
     keywords: MARKETING_KEYWORDS,
     featureList: [
-      'FCRA FDCPA ECOA Metro 2 violation detection',
+      'FCRA FDCPA ECOA Metro 2 compliance findings',
       'Generated dispute and demand letters from file facts',
       'CROA-aware consumer client portal',
       'Click2Mail FCRA § 611 investigation clocks',
@@ -289,14 +289,14 @@ export function siteFooterHtml(): string {
       <div class="sf-footer-brand">
         <img src="${escapeAttr(MARKETING_ORG.logo)}" width="48" height="48" alt="RJ Business Solutions" />
         <h2>Smart FCRA</h2>
-        <p>Credit repair operations software by ${MARKETING_ORG.company}. FCRA / FDCPA / ECOA / Metro 2 detection, generated dispute letters, and a CROA-aware client portal for U.S. firms.</p>
+        <p>Credit repair operations software by ${MARKETING_ORG.company}. FCRA / FDCPA / ECOA / Metro 2 compliance intelligence, generated dispute letters, and a CROA-aware client portal for U.S. firms.</p>
         <p class="sf-nap">${MARKETING_ORG.street}<br>${MARKETING_ORG.city}, ${MARKETING_ORG.region} ${MARKETING_ORG.postal}<br>${MARKETING_ORG.countryName}</p>
         <p><a href="mailto:${MARKETING_ORG.email}">${MARKETING_ORG.email}</a></p>
       </div>
       <div>
         <h3>Product</h3>
         <ul>
-          <li><a href="/#violations">FCRA violation engine</a></li>
+          <li><a href="/#violations">Credit Compliance Intelligence™</a></li>
           <li><a href="/#portal">Credit repair client portal</a></li>
           <li><a href="/pricing">Software pricing</a></li>
           <li><a href="/demo">Interactive demo</a></li>

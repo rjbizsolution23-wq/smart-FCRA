@@ -39,6 +39,8 @@ export type OpsJobName =
   | 'kb_health'
   | 'weekly_owner_report'
   | 'monthly_compliance_snapshot'
+  | 'monthly_progress_reports'
+  | 'client_billing_dunning'
   | 'backup_snapshot'
   | 'tradeline_inventory_refresh';
 
@@ -52,10 +54,11 @@ export const OPS_PACKS: Record<string, OpsJobName[]> = {
     'bureau_followup',
     'privacy_sla',
     'email_health',
+    'client_billing_dunning',
     'tradeline_inventory_refresh',
   ],
   weekly: ['fundability_refresh', 'newsletter_weekly', 'weekly_owner_report', 'kb_health', 'backup_snapshot'],
-  monthly: ['monthly_compliance_snapshot', 'housekeeping'],
+  monthly: ['monthly_compliance_snapshot', 'monthly_progress_reports', 'housekeeping'],
 };
 
 function rid(): string {
@@ -988,6 +991,38 @@ async function jobTradelineInventoryRefresh(env: OpsEnv) {
   };
 }
 
+async function jobMonthlyProgressReports(env: OpsEnv) {
+  const { runMonthlyProgressReports } = await import('./progress-report');
+  const { sendAppEmail } = await import('./email');
+  return runMonthlyProgressReports({
+    db: env.DB,
+    sendEmail: async ({ email, subject, body }) => {
+      await sendAppEmail(env as any, { to: email, subject, text: body });
+    },
+  });
+}
+
+async function jobClientBillingDunning(env: OpsEnv) {
+  const { sendAppEmail } = await import('./email');
+  const pastDue = await env.DB.prepare(
+    `SELECT c.id, c.org_id, c.email, c.first_name, c.dunning_stage, c.payment_status
+     FROM clients c WHERE c.dunning_stage > 0 AND c.payment_status IN ('past_due','suspended') AND c.notify_email = 1 LIMIT 200`,
+  ).all();
+  let sent = 0;
+  for (const row of ((pastDue as any)?.results || []) as any[]) {
+    if (!row.email || String(row.email).includes('@smartfcra.local')) continue;
+    try {
+      await sendAppEmail(env as any, {
+        to: row.email,
+        subject: 'Payment reminder — action needed on your account',
+        text: `Hi ${row.first_name || 'there'},\n\nOur records show a past-due balance on your credit services account. Please sign in to update your payment method: ${portalBaseUrl(env as any)}/\n\nIf you have questions, contact your service provider. We do not guarantee specific credit outcomes.`,
+      });
+      sent += 1;
+    } catch { /* soft */ }
+  }
+  return { sent, total: ((pastDue as any)?.results || []).length };
+}
+
 const JOB_MAP: Record<OpsJobName, JobFn> = {
   housekeeping: jobHousekeeping,
   email_health: jobEmailHealth,
@@ -1003,6 +1038,8 @@ const JOB_MAP: Record<OpsJobName, JobFn> = {
   kb_health: jobKbHealth,
   weekly_owner_report: jobWeeklyOwnerReport,
   monthly_compliance_snapshot: jobMonthlyComplianceSnapshot,
+  monthly_progress_reports: jobMonthlyProgressReports,
+  client_billing_dunning: jobClientBillingDunning,
   backup_snapshot: jobBackupSnapshot,
   tradeline_inventory_refresh: jobTradelineInventoryRefresh,
 };

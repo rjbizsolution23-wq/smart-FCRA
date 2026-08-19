@@ -155,7 +155,12 @@ import { persistInvestigationClock, closeInvestigationClock, FCRA_611_OPERATIONA
 import { recordServiceCompleted, assertCoveredChargeAllowed, writeBillingLedger } from './lib/service-ledger';
 import { sendLetterViaClick2Mail, resolveMailClass } from './lib/click2mail';
 import { registerSupportCrmRoutes, registerExternalIntegrationRoutes } from './lib/support-crm-routes';
+import { registerRoadmapRoutes, handleClientBillingWebhook } from './lib/roadmap-routes';
 import { emitOrgWebhook } from './lib/outbound-webhooks';
+import { buildTradelineMatrix } from './lib/bureau-matrix';
+import { buildEscalationRecommendation, persistEscalation } from './lib/escalation-engine';
+import { queuePpdCharge } from './lib/ppd-billing';
+import { resolveOrgByCustomDomain } from './lib/custom-domain';
 import {
   ensureStripeCatalog,
   ensureStripeCatalogCached,
@@ -274,6 +279,20 @@ async function persistBureauScores(
       bureau: opts.bureau,
       parsed: opts.parsed,
     });
+    const orgRow = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(opts.orgId).first() as any;
+    let orgSettings = {};
+    try { orgSettings = JSON.parse(orgRow?.settings || '{}'); } catch { /* */ }
+    const deletedEvents = await c.env.DB.prepare(
+      `SELECT id, account_key FROM credit_events WHERE client_id = ? AND org_id = ? AND taxonomy = 'DELETED'
+       AND created_at >= datetime('now', '-2 minutes')`,
+    ).bind(opts.clientId, opts.orgId).all();
+    for (const ev of ((deletedEvents as any)?.results || []) as any[]) {
+      queuePpdCharge({
+        db: c.env.DB, env: c.env, orgId: opts.orgId, clientId: opts.clientId,
+        creditEventId: ev.id, accountKey: ev.account_key || 'account',
+        orgSettings, generateId,
+      }).catch(() => null);
+    }
   } catch (e) {
     console.warn('[credit-twin] snapshot skipped', e);
   }
@@ -683,13 +702,19 @@ type Bindings = {
   MOONSHOT_KIMI_API_KEY?: string;
   NVIDIA_API_KEY?: string;
 };
-type Variables = { user?: any; org?: any; session?: any };
+type Variables = { user?: any; org?: any; session?: any; tenantHostOrg?: any };
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 app.use('*', async (c, next) => {
+  const host = c.req.header('host')?.split(':')[0];
+  try {
+    const tenantOrg = await resolveOrgByCustomDomain(c.env.DB, host);
+    if (tenantOrg) c.set('tenantHostOrg', tenantOrg);
+  } catch { /* soft */ }
+
   const method = c.req.method;
-  if ((method === 'GET' || method === 'HEAD') && !c.req.path.startsWith('/api/')) {
+  if ((method === 'GET' || method === 'HEAD') && !c.req.path.startsWith('/api/') && !c.get('tenantHostOrg')) {
     const dest = canonicalRedirectUrl(c.req.url, c.req.header('host'));
     if (dest) return c.redirect(dest, 301);
   }
@@ -3269,6 +3294,7 @@ app.get('/api/clients/:id/bureau-comparison', authMiddleware, async (c) => {
     },
     bureaus,
     triBureauComplete: bureaus.filter((b) => b.reportId).length >= 3,
+    matrix: buildTradelineMatrix(bureaus),
   });
 });
 
@@ -4793,6 +4819,26 @@ app.post('/api/client-portal/uploads', authMiddleware, async (c) => {
             await c.env.DB.prepare(
               `UPDATE violations SET status = 'resolved', updated_at = datetime('now') WHERE client_id = ? AND org_id = ? AND status != 'resolved'`
             ).bind(client.id, user.org_id).run().catch(() => {});
+          } else if (replyIntel.overallOutcome === 'verified') {
+            const rec = buildEscalationRecommendation({
+              triggerType: 'bureau_verified',
+              replyOutcome: 'verified',
+              roundNumber: 1,
+            });
+            const escId = generateId();
+            await persistEscalation({
+              db: c.env.DB,
+              id: escId,
+              orgId: user.org_id,
+              clientId: client.id,
+              documentId: openDoc.id,
+              rec,
+            }).catch(() => null);
+            emitOrgWebhook(c.env.DB, {
+              orgId: user.org_id,
+              eventType: 'finding.created',
+              payload: { type: 'escalation', escalationId: escId, action: rec.recommendedAction },
+            }).catch(() => null);
           }
           await closeInvestigationClock(c.env.DB, { documentId: openDoc.id, orgId: user.org_id });
           await c.env.DB.prepare(
@@ -7408,6 +7454,10 @@ app.post('/api/billing/webhook', async (c) => {
   switch (event.type) {
     case 'checkout.session.completed': {
       const sessionObj: any = event.data.object;
+      if (sessionObj?.metadata?.type === 'client_subscription') {
+        await handleClientBillingWebhook({ db: c.env.DB, event, generateId });
+        break;
+      }
       if (sessionObj?.metadata?.type === 'analysis_unlock' && sessionObj?.metadata?.clientId) {
         try {
           await c.env.DB.prepare(
@@ -7527,6 +7577,11 @@ app.post('/api/billing/webhook', async (c) => {
     case 'invoice.payment_succeeded': {
       const subId = session.subscription as string;
       if (!subId) break;
+      const clientSub = await c.env.DB.prepare('SELECT id FROM clients WHERE stripe_subscription_id = ?').bind(subId).first();
+      if (clientSub) {
+        await handleClientBillingWebhook({ db: c.env.DB, event: { ...event, type: 'invoice.paid' } as any, generateId });
+        break;
+      }
       const stripeClient = getStripe(c.env);
       try {
         const subscription = await stripeClient.subscriptions.retrieve(subId);
@@ -7540,6 +7595,11 @@ app.post('/api/billing/webhook', async (c) => {
     case 'invoice.payment_failed': {
       const subId = session.subscription as string;
       if (!subId) break;
+      const clientSub = await c.env.DB.prepare('SELECT id FROM clients WHERE stripe_subscription_id = ?').bind(subId).first();
+      if (clientSub) {
+        await handleClientBillingWebhook({ db: c.env.DB, event, generateId });
+        break;
+      }
       await c.env.DB.prepare('UPDATE organizations SET plan = \'free\' WHERE stripe_subscription_id = ?').bind(subId).run();
       break;
     }
@@ -11387,7 +11447,7 @@ function getAppHtml(mode: 'login' | 'app' = 'app'): string {
     }
   </script>
   <script src="/static/demo-experience.js?v=20260819-stripe-live"></script>
-  <script src="/static/app.js?v=20260819-crm-compliance"></script>
+  <script src="/static/app.js?v=20260819-roadmap-parity"></script>
 </body>
 </html>`;
 }
@@ -11401,5 +11461,6 @@ registerClientIntelligenceRoutes(app, {
 
 registerSupportCrmRoutes(app, { authMiddleware });
 registerExternalIntegrationRoutes(app);
+registerRoadmapRoutes(app, { authMiddleware });
 
 export default app;

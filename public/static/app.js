@@ -1380,6 +1380,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'documents', icon: 'fa-file-contract', label: 'Documents' },
         { id: 'compliance-hub', icon: 'fa-shield-alt', label: 'Compliance Hub' },
         { id: 'support-center', icon: 'fa-headset', label: 'Support Center' },
+        { id: 'campaigns', icon: 'fa-bullhorn', label: 'Campaigns' },
         { id: 'mailing-campaigns', icon: 'fa-mail-bulk', label: 'Mailing Campaigns' },
         { id: 'tradelines', icon: 'fa-layer-group', label: 'Tradelines' },
         { id: 'team', icon: 'fa-user-friends', label: 'Team' },
@@ -1541,6 +1542,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'documents': await pgDocuments(el); break;
         case 'compliance-hub': await pgComplianceHub(el); break;
         case 'support-center': await pgSupportCenter(el); break;
+        case 'campaigns': await pgCampaigns(el); break;
         case 'mailing-campaigns': await pgMailingCampaigns(el); break;
         case 'founder-os': await pgFounderOS(el); break;
         case 'sales-tools': await pgSalesTools(el); break;
@@ -2245,6 +2247,24 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
               </div>`;
             }).join('')}
           </div>
+          ${(comp.matrix || []).length ? `
+          <div class="glass rounded-xl border border-purple-500/20 p-4 overflow-x-auto">
+            <h4 class="text-xs font-bold text-purple-300 uppercase tracking-wider mb-3">Tradeline match matrix</h4>
+            <table class="w-full text-[10px] text-left border-collapse min-w-[720px]">
+              <thead><tr class="text-gray-500 border-b border-gray-800">
+                <th class="py-2 pr-2">Account</th><th class="py-2">Equifax</th><th class="py-2">Experian</th><th class="py-2">TransUnion</th><th class="py-2">Match</th>
+              </tr></thead>
+              <tbody>${comp.matrix.slice(0, 40).map((row) => `
+                <tr class="border-b border-gray-800/60 text-gray-300">
+                  <td class="py-2 pr-2 font-semibold text-white">${escapeHtml(row.label)}</td>
+                  <td class="py-2">${row.equifax ? `${money(row.equifax.currentBalance || 0)} · ${escapeHtml(row.equifax.accountStatus || '')}` : '—'}</td>
+                  <td class="py-2">${row.experian ? `${money(row.experian.currentBalance || 0)} · ${escapeHtml(row.experian.accountStatus || '')}` : '—'}</td>
+                  <td class="py-2">${row.transunion ? `${money(row.transunion.currentBalance || 0)} · ${escapeHtml(row.transunion.accountStatus || '')}` : '—'}</td>
+                  <td class="py-2"><span class="px-1.5 py-0.5 rounded ${row.matchConfidence === 'HIGH' ? 'bg-green-900/40 text-green-400' : row.matchConfidence === 'POSSIBLE' ? 'bg-amber-900/40 text-amber-300' : 'bg-gray-800 text-gray-400'}">${escapeHtml(row.matchConfidence)}</span></td>
+                </tr>`).join('')}</tbody>
+            </table>
+            <p class="text-[10px] text-gray-500 mt-2">Variances flagged for review — not automatic legal conclusions.</p>
+          </div>` : ''}
         </div>`;
     } catch (err) {
       el.innerHTML = `<div class="text-red-400 text-sm p-4">${escapeHtml(err.message)}</div>`;
@@ -2416,7 +2436,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 
     const description = isAutopilot 
       ? `Zero-friction onboarding. Drop raw credit report PDFs (Equifax, Experian, TransUnion) or paste raw text. The system will automatically extract demographics, resolve or register client files, run complete litigation scans, and redirect you directly to their workspace.` 
-      : `Import via MyFreeScoreNow, SmartCredit, or upload raw text / AnnualCreditReport.com PDFs. The system will parse, detect ALL violations, and calculate litigation value.`;
+      : `Import via MyFreeScoreNow, SmartCredit, or upload raw text / AnnualCreditReport.com PDFs. The system will parse, surface potential compliance issues for review, and summarize evidence-backed findings.`;
 
     const mfsnClass = (isAutopilot && data.tab !== 'mfsn')
       ? 'px-4 py-2 font-semibold text-gray-400 border-b-2 border-transparent hover:text-white mr-2 transition'
@@ -3137,7 +3157,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 
           <!-- ALL CONSOLIDATED VIOLATIONS -->
           ${combinedViolations.length?`<div class="glass rounded-xl p-5">
-            <h3 class="text-sm font-bold text-white mb-3"><i class="fas fa-exclamation-triangle mr-2 text-red-400"></i>All Consolidated Violations Detected (${combinedViolations.length})</h3>
+            <h3 class="text-sm font-bold text-white mb-3"><i class="fas fa-exclamation-triangle mr-2 text-red-400"></i>Consolidated Compliance Findings (${combinedViolations.length})</h3>
             ${renderConsolidatedViolationsList(combinedViolations)}
           </div>`:''}
 
@@ -4172,7 +4192,7 @@ async function pgOnboardingWizard(el, data) {
   function renderProcessSteps(activeStep) {
     const steps = [
       { id: 'parsing', icon: 'fa-file-alt', label: 'Parsing Report', desc: 'Extracting accounts, inquiries, public records' },
-      { id: 'detecting', icon: 'fa-search', label: 'Detecting Violations', desc: 'Scanning 15+ violation categories across FCRA/FDCPA/ECOA' },
+      { id: 'detecting', icon: 'fa-search', label: 'Analyzing File', desc: 'Scanning 15+ compliance categories across FCRA/FDCPA/ECOA' },
       { id: 'scoring', icon: 'fa-calculator', label: 'Calculating Litigation Value', desc: 'Computing damages, settlement ranges, litigation score' },
       { id: 'complete', icon: 'fa-check-circle', label: 'Analysis Complete', desc: 'Full results ready' },
     ];
@@ -4241,7 +4261,7 @@ async function pgOnboardingWizard(el, data) {
 
       <!-- ALL VIOLATIONS -->
       ${result.violations.length?`<div class="glass rounded-xl p-5">
-        <h3 class="text-sm font-bold text-white mb-3"><i class="fas fa-exclamation-triangle mr-2 text-red-400"></i>All Violations Detected (${result.violations.length})</h3>
+        <h3 class="text-sm font-bold text-white mb-3"><i class="fas fa-exclamation-triangle mr-2 text-red-400"></i>Compliance Findings for Review (${result.violations.length})</h3>
         ${renderViolationsList(result.violations)}
       </div>`:''}
 
@@ -6387,6 +6407,32 @@ Status: Discharged`;
           <p class="text-[10px] text-gray-600 mt-3">Zapier: use REST hook URL from Add Webhook, or POST /api/v1/webhooks/zapier/subscribe with Bearer API key. Events: client.created, report.imported, letter.sent, ticket.created, complaint.created.</p>
         </div>
 
+        <div class="glass rounded-xl p-6 border border-emerald-900/40" id="client-billing-panel">
+          <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-file-invoice-dollar text-emerald-400"></i> Client Billing (CRO services)</h2>
+          <p class="text-xs text-gray-500 mb-3">Recurring client subscriptions and pay-per-delete — separate from your Smart FCRA SaaS bill.</p>
+          <div id="client-billing-plans-list" class="text-xs text-gray-400 mb-3">Loading plans…</div>
+          <form id="new-billing-plan-form" class="flex flex-wrap gap-2 items-end mb-4">
+            <input name="name" placeholder="Plan name" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white">
+            <input name="amountCents" type="number" placeholder="Amount cents" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white w-32">
+            <button type="submit" class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs px-3 py-2 rounded-lg font-semibold">Add Plan</button>
+          </form>
+          <form id="ppd-settings-form" class="grid md:grid-cols-3 gap-3 text-xs">
+            <label class="flex items-center gap-2 text-gray-300"><input type="checkbox" name="enabled" id="ppd-enabled"> Pay-per-delete billing</label>
+            <input name="amountCents" id="ppd-amount" type="number" placeholder="PPD amount (cents)" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
+            <button type="submit" class="bg-emerald-800 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg font-semibold">Save PPD</button>
+          </form>
+        </div>
+
+        <div class="glass rounded-xl p-6 border border-sky-900/40" id="custom-domain-panel">
+          <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-globe text-sky-400"></i> White-label custom domain</h2>
+          <p class="text-xs text-gray-500 mb-3">Point CNAME to <code class="text-sky-300">smart-fcra-v2.pages.dev</code> then verify.</p>
+          <form id="custom-domain-form" class="flex flex-wrap gap-2 items-end">
+            <input name="domain" id="custom-domain-input" placeholder="portal.yourfirm.com" class="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white flex-1 min-w-[200px]">
+            <label class="flex items-center gap-2 text-xs text-gray-400"><input type="checkbox" name="verified" id="custom-domain-verified"> Verified</label>
+            <button type="submit" class="bg-sky-700 hover:bg-sky-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Save domain</button>
+          </form>
+        </div>
+
         <div class="glass rounded-xl p-6 border border-gray-700">
           <h2 class="text-sm font-semibold text-white mb-4 flex items-center gap-2"><i class="fas fa-key text-amber-400"></i> Change Password</h2>
           <form id="staff-pwd-form" class="flex flex-wrap gap-3 items-end">
@@ -6684,6 +6730,55 @@ Status: Discharged`;
         try {
           const d = await api('/integrations/webhooks/test', { method: 'POST', body: '{}' });
           toast(`Test sent: ${d.delivered} delivered, ${d.failed} failed`, d.failed ? 'error' : 'success');
+        } catch (err) { toast(err.message, 'error'); }
+      };
+
+      const plansList = $('#client-billing-plans-list');
+      const loadBillingPlans = async () => {
+        if (!plansList) return;
+        try {
+          const d = await api('/client-billing/plans');
+          plansList.innerHTML = (d.plans || []).length
+            ? (d.plans || []).map((p) => `<div class="py-1">${escapeHtml(p.name)} — $${(p.amount_cents / 100).toFixed(2)}/${escapeHtml(p.interval)}</div>`).join('')
+            : 'No client billing plans yet.';
+        } catch { plansList.textContent = 'Apply migration 0027 for client billing.'; }
+      };
+      loadBillingPlans();
+      const planForm = $('#new-billing-plan-form');
+      if (planForm) planForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          await api('/client-billing/plans', { method: 'POST', body: JSON.stringify({ name: fd.get('name'), amountCents: Number(fd.get('amountCents')) }) });
+          toast('Plan created', 'success');
+          await loadBillingPlans();
+        } catch (err) { toast(err.message, 'error'); }
+      };
+      try {
+        const ppd = await api('/settings/ppd');
+        if ($('#ppd-enabled')) $('#ppd-enabled').checked = !!ppd.ppd?.enabled;
+        if ($('#ppd-amount')) $('#ppd-amount').value = ppd.ppd?.amountCents || '';
+      } catch { /* soft */ }
+      const ppdForm = $('#ppd-settings-form');
+      if (ppdForm) ppdForm.onsubmit = async (e) => {
+        e.preventDefault();
+        try {
+          await api('/settings/ppd', { method: 'PUT', body: JSON.stringify({ enabled: $('#ppd-enabled')?.checked, amountCents: Number($('#ppd-amount')?.value || 0) }) });
+          toast('PPD settings saved', 'success');
+        } catch (err) { toast(err.message, 'error'); }
+      };
+      try {
+        const dom = await api('/settings/custom-domain');
+        if ($('#custom-domain-input')) $('#custom-domain-input').value = dom.domain || '';
+        if ($('#custom-domain-verified')) $('#custom-domain-verified').checked = !!dom.verified;
+      } catch { /* soft */ }
+      const domForm = $('#custom-domain-form');
+      if (domForm) domForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          await api('/settings/custom-domain', { method: 'PUT', body: JSON.stringify({ domain: fd.get('domain'), verified: !!fd.get('verified') }) });
+          toast('Custom domain saved', 'success');
         } catch (err) { toast(err.message, 'error'); }
       };
     } catch (err) {
@@ -10480,10 +10575,13 @@ async function pgAdminConsole(el) {
         </div>` : ''}
         ${bureau ? `<div class="glass rounded-xl p-4 overflow-x-auto">
           <h2 class="text-sm font-bold text-white mb-2">Cross-bureau comparison</h2>
-          <table class="w-full text-xs text-left">
+          <table class="w-full text-xs text-left mb-4">
             <thead><tr class="text-gray-500"><th class="py-2">Bureau</th><th>Score</th><th>Accounts</th><th>Collections</th><th>Inquiries</th></tr></thead>
             <tbody>${(bureau.bureaus||[]).map((b) => `<tr class="border-t border-gray-800 text-gray-200"><td class="py-2">${escapeHtml(b.bureau)}</td><td class="font-mono">${b.score ?? '—'}</td><td>${b.accountCount}</td><td>${b.collectionCount}</td><td>${b.inquiryCount}</td></tr>`).join('')}</tbody>
           </table>
+          ${(bureau.matrix||[]).length ? `<h3 class="text-xs font-bold text-purple-300 mb-2">Matched tradelines</h3>
+          <table class="w-full text-[10px]"><thead><tr class="text-gray-500"><th>Account</th><th>EQ</th><th>EX</th><th>TU</th></tr></thead>
+          <tbody>${bureau.matrix.slice(0,15).map((r) => `<tr class="border-t border-gray-800"><td class="py-1 text-white">${escapeHtml(r.label)}</td><td>${r.equifax?.currentBalance ?? '—'}</td><td>${r.experian?.currentBalance ?? '—'}</td><td>${r.transunion?.currentBalance ?? '—'}</td></tr>`).join('')}</tbody></table>` : ''}
         </div>` : ''}
         <div class="glass rounded-xl p-4">
           <h2 class="text-sm font-bold text-white mb-2">Credit event ledger</h2>
@@ -13042,6 +13140,124 @@ async function pgAdminConsole(el) {
       };
     } catch (err) {
       el.innerHTML = `<div class="glass p-8 rounded-xl border border-red-500/30 text-center text-sm text-gray-300">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function pgCampaigns(el) {
+    el.innerHTML = `<div class="flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-3xl text-amber-400"></i></div>`;
+    try {
+      const [segmentsRes, campaignsRes, escalationsRes] = await Promise.all([
+        api('/campaigns/segments'),
+        api('/campaigns').catch(() => ({ campaigns: [] })),
+        api('/escalations?status=pending').catch(() => ({ escalations: [] })),
+      ]);
+      const segments = segmentsRes.segments || [];
+      const campaigns = campaignsRes.campaigns || [];
+      const escalations = escalationsRes.escalations || [];
+
+      el.innerHTML = `
+        <div class="fade-in space-y-6">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 class="text-xl font-bold text-white flex items-center gap-2"><i class="fas fa-bullhorn text-amber-400"></i> Campaign Builder</h1>
+              <p class="text-sm text-gray-400 mt-1">Your CRM knows the client. Smart FCRA knows the file — segment audiences and send compliant email broadcasts.</p>
+            </div>
+          </div>
+
+          <div class="grid lg:grid-cols-3 gap-4">
+            <div class="lg:col-span-2 glass rounded-xl p-5 border border-gray-800">
+              <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-paper-plane text-sky-400 mr-2"></i>Campaigns (${campaigns.length})</h2>
+              <div class="space-y-2 max-h-80 overflow-y-auto text-xs">${campaigns.length ? campaigns.map((c) => {
+                let stats = {};
+                try { stats = JSON.parse(c.stats_json || '{}'); } catch { /* */ }
+                let seg = {};
+                try { seg = JSON.parse(c.segment_json || '{}'); } catch { /* */ }
+                return `<div class="border border-gray-800 rounded-lg p-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div class="text-white font-semibold">${escapeHtml(c.name)}</div>
+                    <div class="text-gray-500">${escapeHtml(c.status)} · ${escapeHtml(seg.id || 'segment')} · ${escapeHtml(c.channel || 'email')}</div>
+                    ${c.sent_at ? `<div class="text-emerald-400 mt-1">Sent ${escapeHtml(shortDate(c.sent_at))} — ${stats.sent || 0} delivered, ${stats.failed || 0} failed</div>` : ''}
+                  </div>
+                  ${c.status === 'draft' ? `<button type="button" class="campaign-send-btn bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg font-semibold" data-id="${escapeHtml(c.id)}">Send now</button>` : ''}
+                </div>`;
+              }).join('') : '<p class="text-gray-500">No campaigns yet — create one below.</p>'}</div>
+            </div>
+            <div class="glass rounded-xl p-5 border border-gray-800">
+              <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-plus-circle text-emerald-400 mr-2"></i>New campaign</h2>
+              <form id="campaign-create-form" class="space-y-2 text-xs">
+                <input name="name" placeholder="Campaign name" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white" required>
+                <select name="segmentId" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">${segments.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.label)}</option>`).join('')}</select>
+                <input name="subject" placeholder="Email subject" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
+                <textarea name="bodyTemplate" rows="5" placeholder="Hi {first_name}, …" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white" required></textarea>
+                <p class="text-[10px] text-gray-500">Merge tags: {first_name}, {last_name}. No outcome guarantees — educational tone only.</p>
+                <button type="submit" class="w-full bg-amber-600 hover:bg-amber-500 text-white py-2 rounded-lg font-semibold">Save draft</button>
+              </form>
+            </div>
+          </div>
+
+          <div class="glass rounded-xl p-5 border border-purple-500/20">
+            <h2 class="text-sm font-bold text-white mb-2"><i class="fas fa-layer-group text-purple-400 mr-2"></i>Built-in segments</h2>
+            <div class="grid md:grid-cols-2 gap-2 text-xs">${segments.map((s) => `
+              <div class="bg-gray-950/40 border border-gray-800 rounded-lg p-3">
+                <div class="text-white font-semibold">${escapeHtml(s.label)}</div>
+                <div class="text-gray-500 font-mono text-[10px] mt-1">${escapeHtml(s.id)}</div>
+              </div>`).join('')}</div>
+          </div>
+
+          <div class="glass rounded-xl p-5 border border-rose-500/20">
+            <h2 class="text-sm font-bold text-white mb-2"><i class="fas fa-level-up-alt text-rose-400 mr-2"></i>Pending escalations (${escalations.length})</h2>
+            <div class="space-y-2 max-h-48 overflow-y-auto text-xs">${escalations.length ? escalations.slice(0, 20).map((e) => `
+              <div class="border border-gray-800 rounded-lg p-2 flex flex-wrap justify-between gap-2">
+                <div>
+                  <div class="text-white">${escapeHtml(e.recommended_action || 'Review escalation')}</div>
+                  <div class="text-gray-500">${escapeHtml(e.trigger_type)} · ${escapeHtml(shortDate(e.created_at))}</div>
+                </div>
+                <button type="button" class="escalation-resolve-btn text-emerald-400 hover:text-emerald-300 font-semibold" data-id="${escapeHtml(e.id)}">Resolve</button>
+              </div>`).join('') : '<p class="text-gray-500">No pending escalations — round-2 queue fills when bureau replies are marked verified.</p>'}</div>
+          </div>
+        </div>`;
+
+      const createForm = $('#campaign-create-form');
+      if (createForm) createForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          await api('/campaigns', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: fd.get('name'),
+              segmentId: fd.get('segmentId'),
+              subject: fd.get('subject'),
+              bodyTemplate: fd.get('bodyTemplate'),
+            }),
+          });
+          toast('Campaign draft saved', 'success');
+          await pgCampaigns(el);
+        } catch (err) { toast(err.message, 'error'); }
+      };
+
+      el.querySelectorAll('.campaign-send-btn').forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm('Send this campaign to the selected segment now?')) return;
+          try {
+            const r = await api(`/campaigns/${btn.dataset.id}/send`, { method: 'POST' });
+            toast(`Sent: ${r.sent || 0}, failed: ${r.failed || 0}`, 'success');
+            await pgCampaigns(el);
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      });
+
+      el.querySelectorAll('.escalation-resolve-btn').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            await api(`/escalations/${btn.dataset.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'resolved' }) });
+            toast('Escalation resolved', 'success');
+            await pgCampaigns(el);
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      });
+    } catch (err) {
+      el.innerHTML = `<div class="glass p-8 rounded-xl border border-red-500/30 text-center"><h3 class="text-lg font-bold text-white mb-1">Failed to load Campaigns</h3><p class="text-sm text-gray-400">${escapeHtml(err.message)}</p><button onclick="window._nav('campaigns')" class="mt-4 bg-amber-600 text-white px-4 py-2 rounded-lg text-sm">Retry</button></div>`;
     }
   }
 
