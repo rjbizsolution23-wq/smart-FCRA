@@ -11,6 +11,12 @@ import {
   documentRequiresNotarization,
 } from '../data/legal-contracts';
 import { writeSecurityAudit } from './security-compliance';
+import {
+  getActiveOrgContractTemplate,
+  renderOrgTemplate,
+  contractTemplateVars,
+  CONTRACT_TEMPLATE_TYPE_MAP,
+} from './platform-extensions';
 
 export type ContractEnv = {
   DB: any;
@@ -155,7 +161,19 @@ export async function createLegalContract(
 ) {
   const party = await partyFromClient(env, opts.orgId, opts.client);
   if (opts.governingState) party.clientState = opts.governingState;
-  const rendered = renderContract(opts.contractType, party);
+  let rendered = renderContract(opts.contractType, party);
+  const tplType = CONTRACT_TEMPLATE_TYPE_MAP[opts.contractType];
+  if (tplType && env.DB) {
+    const orgTpl = await getActiveOrgContractTemplate(env.DB, opts.orgId, tplType);
+    if (orgTpl?.body_text) {
+      const content = renderOrgTemplate(String(orgTpl.body_text), contractTemplateVars(party));
+      rendered = {
+        content,
+        templateVersion: `org-${tplType}-v${orgTpl.version}`,
+        requiresNotarization: documentRequiresNotarization(opts.contractType),
+      };
+    }
+  }
   const contentHash = await sha256Hex(rendered.content);
   const contractId = id();
 

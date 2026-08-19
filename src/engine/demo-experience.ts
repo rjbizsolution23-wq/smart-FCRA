@@ -171,8 +171,8 @@ export const STAFF_CONSOLE_EXTENDED_GUIDE: StaffConsoleGuidePage[] = [
     page: 'settings',
     navLabel: 'Settings',
     title: 'Organization settings',
-    body: 'Org profile, branding, letterhead fonts, integration credentials (routed through the vault), GHL location mapping, MFSN affiliate keys, Twilio/Stripe/Click2Mail toggles, and communication defaults. Secrets never echo back in plain text.',
-    whyBuy: 'One settings surface — not twelve vendor dashboards.',
+    body: 'Org profile, branding, letterhead fonts, BYOK AI keys (OpenAI, Groq, Gemini, etc.), AI credit packs, payment gateways (Authorize.net, NMI, Stripe Connect), custom CROA/LPOA contract templates, Zapier API keys, Zoom S2S OAuth, GHL/MFSN/Twilio/Click2Mail — all routed through the encrypted vault. Secrets never echo back in plain text.',
+    whyBuy: 'One settings surface — bring your AI, your merchant gateway, and your contracts without twelve vendor dashboards.',
   },
   {
     id: 'staff-team',
@@ -374,7 +374,7 @@ export const CLIENT_PORTAL_GUIDE: ClientPortalGuidePage[] = [
     page: 'client-knowledge',
     navLabel: 'Academy',
     title: 'Academy',
-    body: 'Lessons on credit, disputes, and rights. Complements the Rights hub and Tutor so education is productized.',
+    body: 'Twelve-plus completed lessons on credit, disputes, FCRA/FDCPA rights, compliance, funding readiness, and tradelines — each with objectives, key takeaways, and action steps. Complements the Rights hub and Tutor so education is productized, not a blank LMS shell.',
     whyBuy: 'Curriculum you do not have to rebuild in Kajabi.',
   },
   {
@@ -527,7 +527,9 @@ WHAT IT DOES:
 - Staff QA findings before mail. Metro 2 variance is REVIEW/OBSERVATION until a human owns it.
 - Click2Mail + FCRA §611 30-day statutory / 35-day operational clocks.
 - Compliance OS: three-lane communication gate, 45+ workflows, visual automation builder, copy QA, campaign approval, consumer timeline, GHL/MFSN per-org settings.
-- Integration Hub: credential vault, event bus, identity matching, sync rules, DLQ retry queue, GHL/Twilio/Stripe/MFSN connections.
+- Integration Hub: credential vault, event bus, identity matching, sync rules, DLQ retry queue, GHL/Twilio/Stripe/MFSN connections, Zapier REST hooks, Zoom meetings, Authorize.net/NMI gateways.
+- Platform AI: Cloudflare Workers AI included; orgs can bring-your-own-key (OpenAI, Groq, Gemini, etc.) or buy AI credit packs for platform usage.
+- Custom contracts: orgs upload CROA, LPOA, representation auth, and E-SIGN templates with {{client_name}} variables — issued one-to-one per consumer, not lazy blank forms.
 - Staff console pages: Overview, Clients, Violation Queue, Reports, Report Comparison, Global Search, Upload, Violations, LVS, Letters, Documents, Mail, Compliance OS, Integration Hub, Compliance Hub, Campaigns, Support Center, Onboarding Wizard, Settings, Team, Billing, Product Map, Legal.
 - Client portal (walk every tab in Preview Portal): Dashboard, Get Started, My Credit, Report sandbox, My Credit Case, Confirm Facts, Disputes, Action Plan, Progress, Consumer Rights, Journey, Messages, Document vault, Readiness, Boost Tools, AU Tradelines, Tutor, Letters, Legal & Notary, Video, Academy, Billing, Consents, Privacy/Security/Communication Preferences, Cancel Services, AI Mentors.
 - Named score models only. No guaranteed deletions, score lifts, lending approval, or funding.
@@ -581,7 +583,12 @@ const NAV: Array<{ keys: string[]; action: DemoAction; speak: string }> = [
   { keys: ['cancel', 'croa cancel', 'cancel services'], action: { type: 'navigate', page: 'client-cancel' }, speak: 'In-portal CROA cancellation — examiners look for this tab.' },
   { keys: ['mentor', 'ai mentor'], action: { type: 'navigate', page: 'ai-studio' }, speak: 'AI mentors — strategy talk in the same shell. Not legal advice.' },
   { keys: ['billing', 'price', '497', 'plan', 'subscribe'], action: { type: 'navigate', page: 'billing' }, speak: 'Paid org billing. Demo is not a production tenant — Professional starts at $497/mo.' },
-  { keys: ['integration hub', 'integration os', 'credential vault', 'event bus', 'dead letter', 'dlq'], action: { type: 'navigate', page: 'integration-os' }, speak: 'Integration Hub — encrypted credential vault, event bus, identity matching, and retry queue.' },
+  { keys: ['integration hub', 'integration os', 'credential vault', 'event bus', 'dead letter', 'dlq'], action: { type: 'navigate', page: 'integration-os' }, speak: 'Integration Hub — encrypted vault, Zapier, Zoom, Authorize.net/NMI, BYOK AI, event bus, and retry queue.' },
+  { keys: ['zapier', 'make.com', 'rest hook', 'webhook subscribe'], action: { type: 'navigate', page: 'settings' }, speak: 'Zapier lives in Settings → Click2Mail, Zapier & Webhooks. Create an API key, then subscribe to client.created, report.imported, letter.sent, and more.' },
+  { keys: ['zoom', 'zoom meeting', 'video call staff'], action: { type: 'navigate', page: 'integration-os' }, speak: 'Zoom Server-to-Server OAuth in Integration Hub — schedule client meetings without leaking the file into personal Zoom chat.' },
+  { keys: ['byok', 'bring your own ai', 'openai key', 'ai credits', 'ai provider'], action: { type: 'navigate', page: 'settings' }, speak: 'Settings → AI & Integrations: paste your OpenAI/Groq/Gemini key or buy platform AI credit packs. Cloudflare Workers AI is included.' },
+  { keys: ['authorize.net', 'authorize net', 'nmi', 'payment gateway', 'merchant gateway'], action: { type: 'navigate', page: 'settings' }, speak: 'Settings → Payment gateways — Authorize.net, NMI, or Stripe Connect so you bill clients on your merchant account.' },
+  { keys: ['custom contract', 'croa template', 'power of attorney template', 'lpoa upload'], action: { type: 'navigate', page: 'settings' }, speak: 'Settings → Custom contracts — upload your CROA, LPOA, and representation templates. Each client gets a one-to-one generated pack.' },
   { keys: ['compliance os', 'compliance operating', 'three lane', 'three-lane', 'workflow builder', 'copy qa'], action: { type: 'navigate', page: 'compliance-os' }, speak: 'Compliance OS — three-lane gate, workflows, automations, copy QA, and campaign approval.' },
   { keys: ['compliance hub', 'consent log', 'permissible purpose log'], action: { type: 'navigate', page: 'compliance-hub' }, speak: 'Compliance hub — consent and permissible-purpose rollups for examiners.' },
   { keys: ['campaign', 'nurture', 'blast', 'maker checker'], action: { type: 'navigate', page: 'campaigns' }, speak: 'Campaigns with maker-checker approval before anything sends.' },

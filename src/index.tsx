@@ -4,7 +4,7 @@ import { serveStatic } from 'hono/cloudflare-pages';
 import Stripe from 'stripe';
 import { generateId, hashPassword, verifyPassword, needsPasswordRehash, createSessionToken, generateEmailToken, generateMFASecret, verifyTOTP } from './lib/auth';
 import { encryptText, decryptText, decryptTextSafe, requireEncryptionKey } from './lib/crypto';
-import { generateAiText, listConfiguredProviders, generateFreeImage } from './lib/ai-providers';
+import { listConfiguredProviders, generateFreeImage } from './lib/ai-providers';
 import { sendAppEmail } from './lib/email';
 import { MENTORS, buildMentorContext, KNOWLEDGE_CORPUS_META, retrieveCaseLawKnowledge, type MentorId } from './lib/mentors';
 import { estimateViolationScoreLift } from './data/fundability-engine';
@@ -160,7 +160,7 @@ import { registerComplianceOsRoutes } from './lib/compliance-os-routes';
 import { registerIntegrationOsRoutes } from './lib/integration-os-routes';
 import { registerPlatformExtensionRoutes } from './lib/platform-extension-routes';
 import { loadOrgGhlEnv } from './lib/integration-hub';
-import { encryptionReady, resolveOrgEncryptionKey } from './lib/platform-extensions';
+import { encryptionReady, resolveOrgEncryptionKey, generateOrgAiText, addOrgAiCredits } from './lib/platform-extensions';
 import { startWorkflowRun } from './lib/crm-workflow-engine';
 import { emitOrgWebhook } from './lib/outbound-webhooks';
 import { buildTradelineMatrix } from './lib/bureau-matrix';
@@ -1716,7 +1716,12 @@ app.post('/api/demo/agent/chat', authMiddleware, async (c) => {
   let reply = '';
   let actions = routed.actions;
   try {
-    const result = await generateAiText(c.env, [
+    const result = await generateOrgAiText({
+      env: c.env,
+      orgId: user.org_id,
+      userId: user.id,
+      feature: 'demo_agent',
+      messages: [
       {
         role: 'system',
         content: `${DEMO_PRODUCT_KNOWLEDGE}
@@ -1730,7 +1735,8 @@ Valid action types: navigate (page + optional data), impersonate, exitImpersonat
 Keep reply under 180 words. No legal advice. No internals.`,
       },
       { role: 'user', content: message },
-    ]);
+    ],
+    });
     const parsed = parseAgentActions(result.text);
     reply = parsed.reply || routed.speak;
     if (parsed.actions.length) actions = parsed.actions;
@@ -4908,10 +4914,16 @@ app.post('/api/client-portal/uploads', authMiddleware, async (c) => {
   if (category === 'bank_statement' && contentText.length > 40) {
     try {
       const { mentor, knowledgeBlock } = buildMentorContext('personal-finance-tutor', contentText.slice(0, 4000));
-      const ai = await generateAiText(c.env, [
+      const ai = await generateOrgAiText({
+        env: c.env,
+        orgId: user.org_id,
+        userId: user.id,
+        feature: 'bank_analysis',
+        messages: [
         { role: 'system', content: `${mentor.systemPrompt}\nAnalyze this bank statement excerpt. Summarize income, expenses, cash-flow health, and 3 budget actions. Never invent exact balances not present. Deterministic underwriting JSON follows — treat it as ground truth for numbers.\nUnderwriting: ${JSON.stringify(underwriting || {}).slice(0, 2000)}\n${knowledgeBlock}` },
         { role: 'user', content: contentText.slice(0, 12000) },
-      ]);
+      ],
+      });
       analysis = { summary: ai.text, provider: ai.provider, model: ai.model, underwriting };
       try {
         await c.env.DB.prepare(
@@ -5149,10 +5161,16 @@ app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
   let provider = 'fallback';
   let model = 'tutor-growth-local';
   try {
-    const result = await generateAiText(c.env, [
+    const result = await generateOrgAiText({
+      env: c.env,
+      orgId: user.org_id,
+      userId: user.id,
+      feature: 'tutor_chat',
+      messages: [
       { role: 'system', content: `${mentor.systemPrompt}\n\n${knowledgeBlock}\n\n${growthBlock}\n\nClient context:\n${context}` },
       { role: 'user', content: message },
-    ]);
+    ],
+    });
     reply = result.text || '';
     provider = result.provider || provider;
     model = result.model || model;
@@ -7552,6 +7570,29 @@ app.post('/api/billing/webhook', async (c) => {
         } catch (e) { console.warn('[tradeline webhook]', e); }
         break;
       }
+      if (sessionObj?.metadata?.type === 'ai_credit_pack' && sessionObj?.metadata?.orgId && sessionObj?.metadata?.packId) {
+        try {
+          const packCredits = Number(sessionObj.metadata.credits || 0);
+          if (packCredits > 0) {
+            await addOrgAiCredits(c.env.DB, sessionObj.metadata.orgId, packCredits);
+            await c.env.DB.prepare(
+              'INSERT INTO activity_log (id, org_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?)',
+            ).bind(
+              generateId(),
+              sessionObj.metadata.orgId,
+              null,
+              'ai_credits_purchased',
+              `AI credit pack ${sessionObj.metadata.packId} — ${packCredits} credits`,
+              JSON.stringify({
+                packId: sessionObj.metadata.packId,
+                credits: packCredits,
+                paymentIntent: sessionObj.payment_intent || sessionObj.id,
+              }),
+            ).run().catch(() => {});
+          }
+        } catch (e) { console.warn('[ai credit webhook]', e); }
+        break;
+      }
 
       const orgIdHint = session.client_reference_id || session.metadata?.orgId || null;
       const stripeCustomerId = session.customer as string;
@@ -9284,10 +9325,16 @@ CRITICAL:
 2. Rewrite all other prose. Professional, firm, assertive tone.
 3. Return ONLY the rewritten plain-text letter — no markdown, no preamble.`;
 
-    const result = await generateAiText(c.env, [
+    const result = await generateOrgAiText({
+      env: c.env,
+      orgId: user.org_id,
+      userId: user.id,
+      feature: 'document_rewrite',
+      messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: `Here is the dispute letter to rewrite:\n\n${doc.content}` },
-    ]);
+    ],
+    });
 
     await c.env.DB.prepare('UPDATE documents SET content = ?, updated_at = datetime("now") WHERE id = ? AND org_id = ?')
       .bind(result.text, id, user.org_id).run();
@@ -9345,10 +9392,16 @@ app.post('/api/ai/mentors/:id/chat', authMiddleware, async (c) => {
     : `\n\nNo DB knowledge hits. Use only the curated mentor knowledge block. Never invent case names or holdings.`;
 
   try {
-    const result = await generateAiText(c.env, [
+    const result = await generateOrgAiText({
+      env: c.env,
+      orgId: user.org_id,
+      userId: user.id,
+      feature: 'mentor_chat',
+      messages: [
       { role: 'system', content: `${mentor.systemPrompt}\n\n${knowledgeBlock}${ragBlock}` },
       { role: 'user', content: message },
-    ]);
+    ],
+    });
     await c.env.DB.prepare(
       'INSERT INTO activity_log (id, org_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?)'
     ).bind(
@@ -9382,10 +9435,16 @@ app.post('/api/ai/chat', authMiddleware, async (c) => {
   const { mentor, knowledgeBlock } = buildMentorContext(mentorId, message);
 
   try {
-    const result = await generateAiText(c.env, [
+    const result = await generateOrgAiText({
+      env: c.env,
+      orgId: user.org_id,
+      userId: user.id,
+      feature: 'ai_chat',
+      messages: [
       { role: 'system', content: `${mentor.systemPrompt}\nCompany: ${c.env.COMPANY_NAME || 'RJ Business Solutions'}.\n\n${knowledgeBlock}` },
       { role: 'user', content: message },
-    ]);
+    ],
+    });
     await c.env.DB.prepare(
       'INSERT INTO activity_log (id, org_id, user_id, action, description, metadata) VALUES (?, ?, ?, ?, ?, ?)'
     ).bind(

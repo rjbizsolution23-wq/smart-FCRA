@@ -2,6 +2,7 @@
  * Platform extension API routes — BYOK AI, credits, gateways, Zoom, contracts.
  */
 import type { Hono } from 'hono';
+import Stripe from 'stripe';
 import { generateId } from './auth';
 import {
   BYOK_AI_PROVIDERS,
@@ -101,14 +102,50 @@ export function registerPlatformExtensionRoutes(app: Hono<any>, opts: RegisterOp
     const body = await c.req.json().catch(() => ({}));
     const pack = AI_CREDIT_PACKS.find((p) => p.id === body.packId);
     if (!pack) return c.json({ error: 'Invalid credit pack' }, 400);
-    // Stripe checkout for credit packs — same platform billing; webhook adds credits
-    return c.json({
-      ok: true,
-      message: 'AI credit purchase initiated. Complete Stripe checkout to add credits.',
-      pack,
-      checkoutHint: 'POST /api/billing/checkout with metadata ai_credit_pack',
-      manualGrant: false,
-    });
+
+    if (!c.env.STRIPE_API_KEY) {
+      return c.json({
+        error: 'Stripe is not configured for AI credit purchases in this environment',
+        pack,
+        manualHint: 'Contact platform owner to grant credits',
+      }, 503);
+    }
+
+    const stripe = new Stripe(c.env.STRIPE_API_KEY, { httpClient: Stripe.createFetchHttpClient() });
+    const appUrl = String(c.env.FRONTEND_URL || 'https://smartfcra.com').replace(/\/$/, '');
+    const org = await c.env.DB.prepare('SELECT stripe_customer_id FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+
+    try {
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        mode: 'payment',
+        line_items: [{
+          price_data: {
+            currency: 'usd',
+            unit_amount: pack.amountCents,
+            product_data: {
+              name: pack.label,
+              metadata: { type: 'ai_credit_pack', packId: pack.id },
+            },
+          },
+          quantity: 1,
+        }],
+        success_url: `${appUrl}/app?page=settings&aiCredits=success&pack=${pack.id}`,
+        cancel_url: `${appUrl}/app?page=settings&aiCredits=cancelled`,
+        client_reference_id: user.org_id,
+        customer: org?.stripe_customer_id || undefined,
+        customer_email: org?.stripe_customer_id ? undefined : user.email,
+        metadata: {
+          type: 'ai_credit_pack',
+          packId: pack.id,
+          orgId: user.org_id,
+          credits: String(pack.credits),
+        },
+      });
+      return c.json({ ok: true, url: session.url, pack });
+    } catch (e: any) {
+      return c.json({ error: e.message || 'Stripe checkout failed', pack }, 500);
+    }
   });
 
   // ── Payment gateways ────────────────────────────────────

@@ -385,3 +385,127 @@ export function renderOrgTemplate(body: string, vars: Record<string, string>): s
   }
   return out;
 }
+
+/** Map AI result provider slug → BYOK provider id for credit exemption. */
+export const AI_PROVIDER_BYOK_MAP: Record<string, string> = {
+  groq: 'groq',
+  nvidia: 'nvidia',
+  'openrouter-free': 'openrouter',
+  'gemini-free': 'gemini',
+  together: 'together',
+  openai: 'openai',
+};
+
+export async function buildOrgAiOverrides(
+  db: D1Database,
+  orgId: string,
+  encryptionKey: string,
+): Promise<{ overrides: Record<string, string>; byokActive: Set<string> }> {
+  const overrides: Record<string, string> = {};
+  const byokActive = new Set<string>();
+  const pairs: Array<[string, string]> = [
+    ['openai', 'OPENAI_API_KEY'],
+    ['groq', 'GROQ_API_KEY'],
+    ['gemini', 'GEMINI_API_KEY'],
+    ['openrouter', 'OPENROUTER_API_KEY'],
+    ['together', 'TOGETHER_AI_API_KEY'],
+    ['nvidia', 'NVIDIA_API_KEY'],
+  ];
+  for (const [providerId, envKey] of pairs) {
+    const key = await loadOrgAiKey(db, orgId, providerId, encryptionKey);
+    if (key) {
+      overrides[envKey] = key;
+      byokActive.add(providerId);
+    }
+  }
+  return { overrides, byokActive };
+}
+
+export type OrgAiEnv = {
+  DB?: D1Database;
+  PII_ENCRYPTION_KEY?: string;
+  AI?: unknown;
+  [key: string]: unknown;
+};
+
+/** Org-scoped AI: BYOK keys first, platform cascade second, credits on platform usage. */
+export async function generateOrgAiText(opts: {
+  env: OrgAiEnv;
+  orgId: string;
+  userId?: string;
+  feature: string;
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+  skipCreditCharge?: boolean;
+}): Promise<{ text: string; provider: string; model: string; creditsCharged?: number; creditsBalance?: number }> {
+  const { generateAiText } = await import('./ai-providers');
+  if (!opts.env.DB) {
+    return generateAiText(opts.env as any, opts.messages);
+  }
+
+  const encKey = resolveOrgEncryptionKey(opts.env.PII_ENCRYPTION_KEY, opts.orgId);
+  const { overrides, byokActive } = await buildOrgAiOverrides(opts.env.DB, opts.orgId, encKey);
+  const result = await generateAiText(
+    opts.env as any,
+    opts.messages,
+    Object.keys(overrides).length ? overrides : undefined,
+  );
+
+  if (opts.skipCreditCharge) return result;
+
+  const byokId = AI_PROVIDER_BYOK_MAP[result.provider];
+  if (byokId && byokActive.has(byokId)) {
+    return { ...result, creditsCharged: 0 };
+  }
+
+  const charge = await chargeAiCredits({
+    db: opts.env.DB,
+    orgId: opts.orgId,
+    userId: opts.userId,
+    provider: result.provider,
+    model: result.model,
+    feature: opts.feature,
+  });
+  if (!charge.ok) {
+    throw new Error(charge.error || 'Insufficient AI credits');
+  }
+  return { ...result, creditsCharged: 1, creditsBalance: charge.balance };
+}
+
+export function contractTemplateVars(party: {
+  clientName: string;
+  clientAddress: string;
+  clientCity: string;
+  clientState: string;
+  clientZip: string;
+  clientEmail: string;
+  clientPhone: string;
+  orgName: string;
+  orgAddress: string;
+  orgEmail: string;
+  planName: string;
+  monthlyFee: string;
+  effectiveDate: string;
+}): Record<string, string> {
+  return {
+    client_name: party.clientName,
+    client_address: party.clientAddress,
+    client_city: party.clientCity,
+    client_state: party.clientState,
+    client_zip: party.clientZip,
+    client_email: party.clientEmail,
+    client_phone: party.clientPhone,
+    org_name: party.orgName,
+    org_address: party.orgAddress,
+    org_email: party.orgEmail,
+    plan_name: party.planName,
+    monthly_fee: party.monthlyFee,
+    date: party.effectiveDate,
+  };
+}
+
+export const CONTRACT_TEMPLATE_TYPE_MAP: Record<string, string> = {
+  croa_service: 'croa',
+  limited_poa: 'lpoa',
+  representation_auth: 'rep_auth',
+  esign_consent: 'esign',
+};

@@ -32,6 +32,10 @@ assert(PAYMENT_GATEWAYS.some((g) => g.id === 'nmi'), 'nmi');
 assert(AI_CREDIT_PACKS.length >= 3, 'credit packs');
 assert(renderOrgTemplate('Hello {{client_name}}', { client_name: 'Demo' }) === 'Hello Demo', 'template vars');
 
+const { CONTRACT_TEMPLATE_TYPE_MAP, AI_PROVIDER_BYOK_MAP } = await import(pathToFileURL(path.join(root, 'src/lib/platform-extensions.ts')).href);
+assert(CONTRACT_TEMPLATE_TYPE_MAP.croa_service === 'croa', 'croa template map');
+assert(AI_PROVIDER_BYOK_MAP.groq === 'groq', 'byok map');
+
 const { EDUCATION_LIBRARY } = await import(pathToFileURL(path.join(root, 'src/data/portal-education.ts')).href);
 assert(EDUCATION_LIBRARY.length >= 12, 'academy has 12+ lessons');
 assert(EDUCATION_LIBRARY.some((l) => l.id === 'comp-01'), 'compliance lesson');

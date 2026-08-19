@@ -6515,6 +6515,7 @@ Status: Discharged`;
           <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-robot text-violet-400"></i> AI — Cloudflare Workers AI + Bring Your Own Key</h2>
           <p class="text-xs text-gray-500 mb-3">Platform includes Cloudflare Workers AI. Add your OpenAI / Groq / Gemini keys for premium models. AI credits meter usage across mentors, copy QA, and letter assist.</p>
           <div id="platform-ai-credits" class="text-xs text-gray-400 mb-3">Loading credits…</div>
+          <div id="platform-ai-credit-packs" class="flex flex-wrap gap-2 mb-3"></div>
           <div id="platform-ai-providers" class="grid md:grid-cols-2 gap-2 text-xs mb-3"></div>
           <button type="button" id="btn-save-ai-provider" class="bg-violet-700 hover:bg-violet-600 text-white px-3 py-2 rounded-lg text-xs font-semibold">Save AI provider key</button>
         </div>
@@ -6977,7 +6978,21 @@ Status: Discharged`;
         const ai = await api('/platform-extensions/ai/providers');
         const cr = ai.credits || {};
         const credEl = $('#platform-ai-credits');
-        if (credEl) credEl.innerHTML = `<strong class="text-white">${(cr.balance || 0).toLocaleString()}</strong> AI credits remaining`;
+        if (credEl) credEl.innerHTML = `<strong class="text-white">${(cr.balance || 0).toLocaleString()}</strong> AI credits remaining · platform Workers AI + BYOK`;
+        const packsEl = $('#platform-ai-credit-packs');
+        if (packsEl) {
+          const packs = [{ id: 'starter', label: '5K · $49' }, { id: 'growth', label: '25K · $199' }, { id: 'scale', label: '100K · $699' }];
+          packsEl.innerHTML = packs.map((p) => `<button type="button" class="ai-credit-pack-btn bg-violet-900/60 hover:bg-violet-800 text-violet-200 px-3 py-1.5 rounded-lg text-[10px] font-bold border border-violet-800" data-pack="${p.id}">Buy ${escapeHtml(p.label)}</button>`).join('');
+          packsEl.querySelectorAll('.ai-credit-pack-btn').forEach((btn) => {
+            btn.onclick = async () => {
+              try {
+                const r = await api('/platform-extensions/ai/credits/purchase', { method: 'POST', body: JSON.stringify({ packId: btn.dataset.pack }) });
+                if (r.url) window.location.href = r.url;
+                else toast(r.error || 'Checkout unavailable', 'error');
+              } catch (err) { toast(err.message, 'error'); }
+            };
+          });
+        }
         const provEl = $('#platform-ai-providers');
         if (provEl) provEl.innerHTML = (ai.providers || []).map((p) => `
           <label class="flex items-center gap-2 border border-gray-800 rounded-lg p-2 cursor-pointer">
