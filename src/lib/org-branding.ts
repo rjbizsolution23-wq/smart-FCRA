@@ -231,47 +231,43 @@ export async function loadOrgBrand(env: BrandEnv, orgId?: string | null): Promis
   }
 
   const { letterhead } = normalizeOrgLetterhead(settings, orgName);
+  // Tenant orgs must never inherit the platform owner's home address / personal name.
+  const platformFallback = !orgId;
 
   const name =
     letterhead.firmName ||
     settings.brand_name ||
     settings.company_name ||
     orgName ||
-    env.COMPANY_NAME ||
-    DEFAULTS.name;
+    (platformFallback ? env.COMPANY_NAME || DEFAULTS.name : 'Smart FCRA');
 
   const owner =
     letterhead.attorneyName ||
     settings.owner_name ||
     settings.owner ||
-    env.COMPANY_OWNER ||
-    DEFAULTS.owner;
+    (platformFallback ? env.COMPANY_OWNER || DEFAULTS.owner : '');
 
   const address =
     formatAddressLine(letterhead) ||
     settings.business_address ||
     settings.address ||
-    env.COMPANY_ADDRESS ||
-    DEFAULTS.address;
+    (platformFallback ? env.COMPANY_ADDRESS || DEFAULTS.address : '');
 
   const website =
     settings.website ||
-    env.COMPANY_WEBSITE ||
-    DEFAULTS.website;
+    (platformFallback ? env.COMPANY_WEBSITE || DEFAULTS.website : '');
 
   const supportEmail =
     letterhead.email ||
     settings.business_email ||
     settings.support_email ||
-    env.COMPANY_EMAIL ||
-    DEFAULTS.supportEmail;
+    (platformFallback ? env.COMPANY_EMAIL || DEFAULTS.supportEmail : '');
 
   const logoUrl =
     letterhead.logoUrl ||
     settings.letterhead_logo_url ||
     settings.logo_url ||
-    env.COMPANY_LOGO ||
-    DEFAULTS.logoUrl;
+    (platformFallback ? env.COMPANY_LOGO || DEFAULTS.logoUrl : '');
 
   return {
     orgId: orgId || undefined,

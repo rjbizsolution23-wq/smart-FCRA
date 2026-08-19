@@ -52,9 +52,8 @@ assert(COMPLIANCE_CONTROLS.some((c) => c.id === 'fcra-611'), 'FCRA 611 control l
 assert(COMPLIANCE_CONTROLS.some((c) => c.id === 'croa'), 'CROA control listed');
 assert(COMPLIANCE_CONTROLS.some((c) => c.id === 'ccpa'), 'CCPA control listed');
 assert(COMPLIANCE_CONTROLS.some((c) => c.id === 'esign'), 'ESIGN control listed');
-assert(brandLeadsVisibleTo('super_admin') === 'all', 'super_admin sees all leads');
-assert(brandLeadsVisibleTo('admin') === 'org', 'tenant admin is org-scoped');
-assert(brandLeadsVisibleTo('staff') === 'org', 'staff is org-scoped');
+assert(brandLeadsVisibleTo(true) === 'all', 'platform owner sees all leads');
+assert(brandLeadsVisibleTo(false) === 'none', 'tenant admin cannot list brand leads');
 assert(sessionsListScope({ demo_session_id: 'demo_1' }).mode === 'demo', 'demo session scope');
 assert(sessionsListScope({}).mode === 'staff', 'staff session scope');
 

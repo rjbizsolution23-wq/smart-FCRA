@@ -193,8 +193,9 @@ const R2_KEY_QUERIES: { sql: string; column: string }[] = [
   { sql: `SELECT recording_r2_key AS k FROM video_conference_sessions WHERE client_id = ? AND org_id = ? AND recording_r2_key IS NOT NULL`, column: 'k' },
 ];
 
-export function brandLeadsVisibleTo(role: string): 'all' | 'org' {
-  return role === 'super_admin' ? 'all' : 'org';
+/** Brand / demo lead inbox is platform-owner only — never tenant-admin scoped. */
+export function brandLeadsVisibleTo(isPlatformOwner: boolean): 'all' | 'none' {
+  return isPlatformOwner ? 'all' : 'none';
 }
 
 export function sessionsListScope(session: { demo_session_id?: string | null }) {

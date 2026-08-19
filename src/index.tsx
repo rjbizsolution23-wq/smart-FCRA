@@ -44,6 +44,8 @@ import {
   resolveMfsnCredentials,
   resolvePartnerMfsnCredentials,
   resolvePublicSignupMfsnCredentials,
+  hasPartnerApiLogin,
+  explainMfsnPullError,
 } from './engine/mfsn-client';
 import { mapSmartCreditToInternal } from './engine/smartcredit-mapper';
 import { LenderMatchingEngine } from './data/funding/institutional-matching';
@@ -58,7 +60,13 @@ import {
   DEMO_STAFF_EMAIL,
   DEMO_CLIENT_ID,
   DEMO_CLIENT_NAME,
+  DEMO_CLIENT_EMAIL,
+  DEMO_CLIENT_FIRST_NAME,
+  DEMO_CLIENT_LAST_NAME,
+  isSandboxDemoOrg,
+  sandboxClientHideSql,
   DEMO_TOUR,
+  CLIENT_PORTAL_GUIDE,
   DEMO_PRODUCT_KNOWLEDGE,
   DEMO_SESSION_HOURS,
   routeDemoIntent,
@@ -100,6 +108,7 @@ import {
 import {
   MFSN_AFFILIATE_PORTAL_URL,
   MFSN_API_DOCS_URL,
+  MFSN_PULL_GUIDE_STEPS,
   MFSN_OPERATOR_ACCOUNTS,
   MFSN_OPENAPI_URL,
   isWhitelistedMfsnOperatorEmail,
@@ -125,10 +134,10 @@ import {
   filterTradelines,
   summarizeInventory,
   submitTradelineOrder,
-  TRADELINE_MARKUP_RATE,
   TRADELINE_BRAND,
   TRADELINE_OPS_EMAIL_DEFAULT,
   TRADELINE_FROM_EMAIL_DEFAULT,
+  toPublicTradeline,
   type EnrichedTradeline,
 } from './lib/tradelinemaster-client';
 import { syncTradelineInventory, loadCachedTradelines, sendTradelineOrderEmails } from './lib/tradeline-sync';
@@ -145,6 +154,35 @@ import { vaultOriginalFromBody } from './lib/report-vault';
 import { persistInvestigationClock, closeInvestigationClock, FCRA_611_OPERATIONAL_DAYS } from './lib/investigation-clocks';
 import { recordServiceCompleted, assertCoveredChargeAllowed, writeBillingLedger } from './lib/service-ledger';
 import { sendLetterViaClick2Mail } from './lib/click2mail';
+import {
+  ensureStripeCatalog,
+  ensureStripeCatalogCached,
+  isSaaSPlanId,
+  planIdFromStripePrice,
+  productionStripeBlockReason,
+  publicPlansFromCatalog,
+  resolveCheckoutPriceId,
+  resolveFrontendUrl,
+  staticPublicPlans,
+  stripePublishableMode,
+  stripeSecretMode,
+} from './lib/stripe-catalog';
+import { CANONICAL_ORIGIN, canonicalRedirectUrl } from './lib/public-origin';
+import { shouldApplyActingOrg } from './lib/acting-org';
+import {
+  isPlatformOwnerUser,
+  withPlatformOwnerFlag,
+  sessionIdFromRequest,
+  isPrivateBrandHubPath,
+  sanitizeTenantInviteRole,
+  sanitizePlatformCreatedRole,
+  PLATFORM_OWNER_ONLY_ERROR,
+} from './lib/platform-owner';
+import {
+  claimPendingSaasEntitlement,
+  fulfillSaasCheckout,
+  planIdFromCheckoutSession,
+} from './lib/saas-entitlement';
 import {
   D1_BACKUP_TABLES,
   brandLeadsVisibleTo,
@@ -606,6 +644,8 @@ type Bindings = {
   MAILING_WEBHOOK_SECRET?: string;
   PLATFORM_BOOTSTRAP_EMAIL?: string;
   PLATFORM_BOOTSTRAP_PASSWORD?: string;
+  /** Comma-separated extra platform-owner emails (never rely on super_admin role alone). */
+  PLATFORM_OWNER_EMAILS?: string;
   /** When "true"/"1", staff (admin/super_admin) must enable MFA before any protected API (except MFA/auth safe paths). */
   STAFF_MFA_REQUIRED_ALL?: string;
   /** Shared secret for scheduled daily journey motivation dispatch (GitHub Actions / cron). */
@@ -635,6 +675,15 @@ type Bindings = {
 type Variables = { user?: any; org?: any; session?: any };
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+app.use('*', async (c, next) => {
+  const method = c.req.method;
+  if ((method === 'GET' || method === 'HEAD') && !c.req.path.startsWith('/api/')) {
+    const dest = canonicalRedirectUrl(c.req.url, c.req.header('host'));
+    if (dest) return c.redirect(dest, 301);
+  }
+  return next();
+});
 
 // Stripe initialization helper
 const getStripe = (env: Bindings) => {
@@ -697,6 +746,7 @@ app.use('/api/auth/register', rateLimiter);
 app.use('/api/public/mfsn-signup', rateLimiter);
 app.use('/api/public/lead/*', rateLimiter);
 app.use('/api/public/demo/*', rateLimiter);
+app.use('/api/public/plans', rateLimiter);
 app.use('/api/demo/agent/chat', rateLimiter);
 app.use('/api/demo/mfsn-live', rateLimiter);
 app.use('/api/demo/prepare', rateLimiter);
@@ -778,6 +828,30 @@ app.get('/manifest.webmanifest', (c) => {
   });
 });
 
+/** Brand hub (ops, founder docs, meet-rick, etc.) is owner-only. Public lead forms stay public. */
+app.use('/static/*', async (c, next) => {
+  if (!isPrivateBrandHubPath(c.req.path)) return next();
+  const sessionId = sessionIdFromRequest({
+    authorization: c.req.header('Authorization'),
+    cookie: c.req.header('Cookie'),
+    queryToken: c.req.query('token'),
+  });
+  if (!sessionId || !c.env.DB) {
+    return c.html(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sign in</title></head><body style="font-family:system-ui;background:#0f172a;color:#e2e8f0;padding:3rem;text-align:center"><p>This brand library is private.</p><p><a href="/login" style="color:#38bdf8">Sign in</a></p></body></html>`,
+      401,
+    );
+  }
+  const session = await lookupActiveSession(c.env.DB, sessionId);
+  if (!session || !isPlatformOwnerUser({ email: session.user_email }, c.env)) {
+    return c.html(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Not available</title></head><body style="font-family:system-ui;background:#0f172a;color:#e2e8f0;padding:3rem;text-align:center"><p>This brand library is reserved for the platform owner. Other tenant accounts cannot open it.</p><p><a href="/app" style="color:#38bdf8">Back to Smart FCRA</a></p></body></html>`,
+      403,
+    );
+  }
+  return next();
+});
+
 // Serve other static assets in local development and production
 app.use('/static/*', serveStatic());
 app.use('/content/*', serveStatic());
@@ -854,8 +928,22 @@ async function authMiddleware(c: any, next: any) {
     }
   }
 
-  const org = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(session.org_id).first();
-  if (org) {
+  const homeOrgId = session.org_id;
+  const actingHeader = String(c.req.header('X-Acting-Org-Id') || c.req.header('x-acting-org-id') || '').trim();
+  let effectiveOrgId = homeOrgId;
+  const ownerSession = isPlatformOwnerUser({ email: session.user_email }, c.env);
+  if (
+    ownerSession &&
+    actingHeader &&
+    actingHeader !== homeOrgId &&
+    shouldApplyActingOrg(c.req.path)
+  ) {
+    const target = await c.env.DB.prepare('SELECT id FROM organizations WHERE id = ?').bind(actingHeader).first();
+    if (target?.id) effectiveOrgId = String(target.id);
+  }
+
+  const org = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(effectiveOrgId).first();
+  if (org && !(ownerSession && effectiveOrgId !== homeOrgId)) {
     try {
       const settings = JSON.parse(org.settings || '{}');
       if (settings.suspended) {
@@ -890,7 +978,15 @@ async function authMiddleware(c: any, next: any) {
     else await touch;
   } catch { /* ignore */ }
 
-  c.set('user', { id: session.user_id, name: session.user_name, email: session.user_email, role: session.user_role, org_id: session.org_id });
+  c.set('user', withPlatformOwnerFlag({
+    id: session.user_id,
+    name: session.user_name,
+    email: session.user_email,
+    role: session.user_role,
+    org_id: effectiveOrgId,
+    home_org_id: homeOrgId,
+    acting_org_id: effectiveOrgId !== homeOrgId ? effectiveOrgId : null,
+  }, c.env));
   c.set('session', session);
   return next();
 }
@@ -904,8 +1000,8 @@ async function verifyOrgPlanLimits(c: any, resourceType: 'client' | 'report' | '
     return { allowed: false, message: 'Unauthorized' };
   }
 
-  // Master bypass check: Rick Jefferson has unlimited access for free
-  if (user.role === 'super_admin' || user.email === 'rjbizsolution23@gmail.com') {
+  // Master bypass: platform owner only (not every super_admin / tenant operator)
+  if (isPlatformOwnerUser(user, c.env)) {
     return { allowed: true };
   }
 
@@ -922,7 +1018,10 @@ async function verifyOrgPlanLimits(c: any, resourceType: 'client' | 'report' | '
 
   if (resourceType === 'client') {
     if (plan === 'professional' || plan === 'pro') {
-      const clientCountRes = await c.env.DB.prepare('SELECT COUNT(*) as total FROM clients WHERE org_id = ?').bind(user.org_id).first();
+      const hideDemo = sandboxClientHideSql(user.org_id, 'id', 'email');
+      const clientCountRes = await c.env.DB.prepare(
+        `SELECT COUNT(*) as total FROM clients WHERE org_id = ?${hideDemo.sql}`
+      ).bind(user.org_id, ...hideDemo.binds).first();
       const clientCount = clientCountRes?.total || 0;
       if (clientCount >= 100) {
         return {
@@ -987,7 +1086,7 @@ app.get('/api/health', async (c) => {
 
 // Partner API documentation (OpenAPI + Swagger UI)
 app.get('/api/openapi.json', (c) => {
-  const base = c.env.FRONTEND_URL || c.env.APP_BASE_URL || new URL(c.req.url).origin;
+  const base = resolveFrontendUrl(c.env, c.req.url);
   return c.json(buildOpenApiSpec(base.replace(/\/$/, '')));
 });
 
@@ -1019,6 +1118,62 @@ const BRAND_FORM_IDS = new Set([
 
 /** Public RJ brand lead capture (interactive forms). */
 app.get('/api/public/turnstile', (c) => c.json(turnstilePublicConfig(c.env)));
+
+/** Live SaaS plan catalog for the sales site — creates Stripe products/prices if missing. */
+app.get('/api/public/plans', async (c) => {
+  const base = {
+    subscribeFlow: 'register-then-checkout',
+    currency: 'usd',
+    interval: 'month',
+  };
+  const blocked = productionStripeBlockReason(c.env);
+  if (blocked) {
+    return c.json({
+      ...base,
+      live: false,
+      mode: stripeSecretMode(c.env.STRIPE_API_KEY),
+      chargesReal: false,
+      productionBlocked: true,
+      error: blocked,
+      plans: staticPublicPlans(),
+    });
+  }
+  if (!stripeConfigured(c.env) || !c.env.STRIPE_API_KEY) {
+    return c.json({
+      ...base,
+      live: false,
+      mode: 'unconfigured',
+      chargesReal: false,
+      plans: staticPublicPlans(),
+    });
+  }
+  try {
+    const stripe = getStripe(c.env);
+    const catalog = await ensureStripeCatalogCached(stripe, {
+      frontendUrl: resolveFrontendUrl(c.env, c.req.url),
+      secretKey: c.env.STRIPE_API_KEY,
+    });
+    const chargesReal = catalog.mode === 'live';
+    return c.json({
+      ...base,
+      live: chargesReal,
+      mode: catalog.mode,
+      chargesReal,
+      plans: publicPlansFromCatalog(catalog),
+    });
+  } catch (err: any) {
+    console.warn('[public/plans] catalog ensure failed', err?.message || err);
+    const mode = stripeSecretMode(c.env.STRIPE_API_KEY);
+    return c.json({
+      ...base,
+      live: false,
+      mode,
+      chargesReal: false,
+      plans: staticPublicPlans(),
+      error: 'Catalog unavailable',
+    });
+  }
+});
 
 app.post('/api/public/lead/:formId', async (c) => {
   const formId = String(c.req.param('formId') || '').trim().toLowerCase();
@@ -1323,7 +1478,7 @@ app.post('/api/public/demo/enter', async (c) => {
 
   return c.json({
     token: sessionToken,
-    user: { id: host.user.id, name: host.user.name || 'Demo Host', email: host.user.email, role: host.user.role || 'admin', org_id: host.orgId, isDemo: true },
+    user: withPlatformOwnerFlag({ id: host.user.id, name: host.user.name || 'Demo Host', email: host.user.email, role: host.user.role || 'admin', org_id: host.orgId, isDemo: true }, c.env),
     org: { id: host.orgId, name: 'Smart FCRA Demo', plan: 'professional' },
     demo: {
       id: row.id,
@@ -1355,6 +1510,14 @@ app.get('/api/demo/tour', authMiddleware, async (c) => {
   if (demo?._missing) return c.json({ error: 'Migration 0023 required', code: 'MIGRATION_REQUIRED' }, 503);
   if (!demo) return c.json({ error: 'Interactive demo session required' }, 403);
   return c.json({ steps: DEMO_TOUR, product: 'Smart FCRA', brand: 'RJ Business Solutions' });
+});
+
+app.get('/api/portal/guide', authMiddleware, async (c) => {
+  return c.json({
+    pages: CLIENT_PORTAL_GUIDE,
+    count: CLIENT_PORTAL_GUIDE.length,
+    previewHint: 'Add a client, then Preview Portal. Use Next tab or the left nav to walk every consumer page. Signatures stay blocked in preview.',
+  });
 });
 
 app.get('/api/demo/session', authMiddleware, async (c) => {
@@ -1432,7 +1595,7 @@ app.post('/api/demo/prepare', authMiddleware, async (c) => {
       lastName: demo.last_name,
       phone: demo.phone,
     }),
-    message: 'Interactive demo sandbox ready — Salisha sample case, upload, and generated letters are on this org.',
+    message: 'Interactive demo sandbox ready — sample Demo Client case, upload, and generated letters are on this org. Add your own client to see the live process.',
   });
 });
 
@@ -1573,7 +1736,7 @@ app.post('/api/demo/mfsn-live', authMiddleware, async (c) => {
 
   const creds = resolvePublicSignupMfsnCredentials(c.env, memberToken);
   if (!creds) {
-    return c.json({ error: 'Live MFSN is not configured on this deployment (partner credentials missing). Use the Salisha sandbox case instead.' }, 503);
+    return c.json({ error: 'Live MFSN is not configured on this deployment (partner credentials missing). Use the sample Demo Client case instead, or add your own client after signup.' }, 503);
   }
 
   const clientId = 'cli_demo_live_' + demo.id.slice(0, 16);
@@ -1626,28 +1789,21 @@ app.post('/api/demo/mfsn-live', authMiddleware, async (c) => {
       message: 'Live file imported. This account cannot pull another demo report. Open Violations to see findings generated from this file.',
     });
   } catch (e: any) {
-    const msg = e instanceof MFSNError ? e.message : (e?.message || 'Live pull failed');
+    const msg = e instanceof MFSNError ? explainMfsnPullError(e) : (e?.message || 'Live pull failed');
     return c.json({ error: msg }, 502);
   }
 });
 
 app.get('/api/brand/leads', authMiddleware, async (c) => {
   const user = c.get('user');
-  if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+  if (!isPlatformOwnerUser(user, c.env)) return c.json({ error: PLATFORM_OWNER_ONLY_ERROR }, 403);
   try {
     const publicOrg = resolvePublicSignupOrgId(c.env);
-    const rows = brandLeadsVisibleTo(user.role) === 'all'
-      ? await c.env.DB.prepare(
-          `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, source_ip, created_at
-           FROM brand_leads ORDER BY created_at DESC LIMIT 200`,
-        ).all()
-      : await c.env.DB.prepare(
-          `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, source_ip, created_at
-           FROM brand_leads
-           WHERE org_id = ?
-           ORDER BY created_at DESC LIMIT 200`,
-        ).bind(user.org_id).all();
-    return c.json({ ok: true, leads: rows.results || [], publicOrgId: publicOrg, scope: brandLeadsVisibleTo(user.role) });
+    const rows = await c.env.DB.prepare(
+      `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, source_ip, created_at
+       FROM brand_leads ORDER BY created_at DESC LIMIT 200`,
+    ).all();
+    return c.json({ ok: true, leads: rows.results || [], publicOrgId: publicOrg, scope: brandLeadsVisibleTo(true) });
   } catch (e: any) {
     if (String(e?.message || '').includes('no such table')) {
       return c.json({ ok: true, leads: [], warning: 'Migration 0020 required' });
@@ -1656,7 +1812,95 @@ app.get('/api/brand/leads', authMiddleware, async (c) => {
   }
 });
 
+const DEMO_LEAD_FORMS = ['saas-demo', 'interactive-demo', 'smart-fcra-demo'];
+
+/** Inbox: interactive CRO demos, landing request-a-demo leads, and new SaaS orgs. Platform owner only. */
+app.get('/api/admin/demo/signups', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (!isPlatformOwnerUser(user, c.env)) {
+    return c.json({ error: PLATFORM_OWNER_ONLY_ERROR }, 403);
+  }
+  const all = true;
+  const leadPlaceholders = DEMO_LEAD_FORMS.map(() => '?').join(',');
+
+  let demos: any[] = [];
+  try {
+    const demoSql = all
+      ? `SELECT id, email, phone, business_name, business_address, first_name, last_name, status, mfsn_pulls, mfsn_member_email, live_client_id, org_id, lead_id, tour_step, created_at, expires_at, last_seen_at, source_ip
+         FROM demo_sessions ORDER BY created_at DESC LIMIT 300`
+      : `SELECT id, email, phone, business_name, business_address, first_name, last_name, status, mfsn_pulls, mfsn_member_email, live_client_id, org_id, lead_id, tour_step, created_at, expires_at, last_seen_at, source_ip
+         FROM demo_sessions WHERE org_id = ? ORDER BY created_at DESC LIMIT 300`;
+    const demoRows = all
+      ? await c.env.DB.prepare(demoSql).all()
+      : await c.env.DB.prepare(demoSql).bind(user.org_id).all();
+    demos = demoRows?.results || [];
+  } catch (e: any) {
+    if (!String(e?.message || '').includes('no such table')) throw e;
+  }
+
+  let requestDemos: any[] = [];
+  try {
+    const leadSql = all
+      ? `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, source_ip, created_at
+         FROM brand_leads WHERE form_id IN (${leadPlaceholders}) ORDER BY created_at DESC LIMIT 300`
+      : `SELECT id, form_id, email, phone, first_name, last_name, status, ghl_contact_id, org_id, source_ip, created_at
+         FROM brand_leads WHERE form_id IN (${leadPlaceholders}) AND org_id = ? ORDER BY created_at DESC LIMIT 300`;
+    const leadRows = all
+      ? await c.env.DB.prepare(leadSql).bind(...DEMO_LEAD_FORMS).all()
+      : await c.env.DB.prepare(leadSql).bind(...DEMO_LEAD_FORMS, user.org_id).all();
+    requestDemos = leadRows?.results || [];
+  } catch (e: any) {
+    if (!String(e?.message || '').includes('no such table')) throw e;
+  }
+
+  let saasSignups: any[] = [];
+  if (all) {
+    try {
+      const orgRows = await c.env.DB.prepare(
+        `SELECT o.id, o.name, o.slug, o.plan, o.created_at, o.stripe_subscription_id, o.stripe_customer_id,
+                (SELECT email FROM users WHERE org_id = o.id ORDER BY created_at ASC LIMIT 1) AS email,
+                (SELECT name FROM users WHERE org_id = o.id ORDER BY created_at ASC LIMIT 1) AS contact_name,
+                (SELECT is_active FROM users WHERE org_id = o.id ORDER BY created_at ASC LIMIT 1) AS is_active
+         FROM organizations o
+         WHERE o.id != 'org_platform_master' AND o.id != 'org_demo_001'
+         ORDER BY o.created_at DESC
+         LIMIT 150`,
+      ).all();
+      saasSignups = orgRows?.results || [];
+    } catch { /* optional */ }
+  }
+
+  let payments: any[] = [];
+  if (all) {
+    try {
+      const payRows = await c.env.DB.prepare(
+        `SELECT id, email, plan, status, stripe_subscription_id, stripe_session_id, org_id, created_at, applied_at
+         FROM saas_entitlements ORDER BY created_at DESC LIMIT 200`,
+      ).all();
+      payments = payRows?.results || [];
+    } catch { /* migration 0025 */ }
+  }
+
+  return c.json({
+    ok: true,
+    scope: all ? 'all' : 'org',
+    demos,
+    requestDemos,
+    saasSignups,
+    payments,
+    counts: {
+      demos: demos.length,
+      requestDemos: requestDemos.length,
+      saasSignups: saasSignups.length,
+      payments: payments.length,
+      paid: saasSignups.filter((o: any) => o.plan && o.plan !== 'free').length,
+      pendingPayments: payments.filter((p: any) => p.status === 'pending').length,
+    },
+  });
+});
+
 app.get('/api/brand/catalog', authMiddleware, async (c) => {
+  if (!isPlatformOwnerUser(c.get('user'), c.env)) return c.json({ error: PLATFORM_OWNER_ONLY_ERROR }, 403);
   return c.json({
     ok: true,
     hubUrl: '/static/brand/',
@@ -1670,6 +1914,7 @@ app.get('/api/brand/catalog', authMiddleware, async (c) => {
       { id: 'partnership', title: 'Partnership Application', url: '/forms/partnership' },
       { id: 'podcast-guest', title: 'Podcast Guest', url: '/forms/podcast-guest' },
       { id: 'saas-demo', title: 'Smart FCRA SaaS Demo', url: '/#demo' },
+      { id: 'interactive-demo', title: 'CRO Interactive Demo', url: '/demo' },
     ],
     brand: {
       name: 'RJ Business Solutions',
@@ -1689,13 +1934,28 @@ app.get('/api/brand/catalog', authMiddleware, async (c) => {
 app.get('/', (c) => c.html(marketingLandingHtml));
 app.get('/pricing', (c) => c.redirect('/#pricing', 302));
 app.get('/demo', (c) => c.html(marketingDemoHtml));
+app.get('/robots.txt', (c) => {
+  const body = `User-agent: *\nAllow: /\nSitemap: ${CANONICAL_ORIGIN}/sitemap.xml\n`;
+  return c.text(body, 200, { 'Content-Type': 'text/plain; charset=utf-8' });
+});
+app.get('/sitemap.xml', (c) => {
+  const urls = ['/', '/pricing', '/demo', '/login', '/app'];
+  const body =
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+    urls
+      .map((path) => `  <url><loc>${CANONICAL_ORIGIN}${path}</loc></url>`)
+      .join('\n') +
+    `\n</urlset>\n`;
+  return c.text(body, 200, { 'Content-Type': 'application/xml; charset=utf-8' });
+});
 app.get('/login', (c) => c.html(getAppHtml()));
 app.get('/app', (c) => c.html(getAppHtml()));
 
-/** Friendly short URLs into the brand library */
-app.get('/brand', (c) => c.redirect('/static/brand/', 302));
-app.get('/brand/', (c) => c.redirect('/static/brand/', 302));
-app.get('/forms', (c) => c.redirect('/static/brand/#forms', 302));
+/** Friendly short URLs into the brand library — owner SPA only (static hub is gated). */
+app.get('/brand', (c) => c.redirect('/login', 302));
+app.get('/brand/', (c) => c.redirect('/login', 302));
+app.get('/forms', (c) => c.redirect('/forms/credit-qualify', 302));
 app.get('/forms/:slug', (c) => {
   const slug = c.req.param('slug');
   const map: Record<string, string> = {
@@ -1711,7 +1971,7 @@ app.get('/forms/:slug', (c) => {
     'podcast-guest': 'podcast-guest.html',
   };
   const file = map[slug];
-  if (!file) return c.redirect('/static/brand/', 302);
+  if (!file) return c.redirect('/', 302);
   return c.redirect(`/static/brand/forms/${file}`, 302);
 });
 
@@ -2122,11 +2382,13 @@ app.get('/api/mfsn/operator-access', authMiddleware, async (c) => {
     configuredEmail: configuredEmail || null,
     configuredEmailWhitelisted: isWhitelistedMfsnOperatorEmail(configuredEmail),
     partnerConfigured: !!resolvePartnerMfsnCredentials(c.env),
+    partnerApiLoginConfigured: hasPartnerApiLogin(c.env),
     operators: MFSN_OPERATOR_ACCOUNTS,
     affiliatePortalUrl: String(c.env.MFSN_AFFILIATE_PORTAL_URL || MFSN_AFFILIATE_PORTAL_URL),
     apiDocsUrl: String(c.env.MFSN_API_DOCS_URL || MFSN_API_DOCS_URL),
     openApiUrl: MFSN_OPENAPI_URL,
     agentRunbook: '/docs/agents/mfsn-partner/AGENT_ACCESS.md',
+    pullGuide: MFSN_PULL_GUIDE_STEPS,
   });
 });
 
@@ -2171,6 +2433,22 @@ app.post('/api/auth/register', async (c) => {
     return c.json({ error: `Internal error (db insert): ${e.message}` }, 500);
   }
 
+  const paid = await claimPendingSaasEntitlement(c.env.DB, { email, orgId }).catch(() => ({ applied: false, plan: null as any }));
+  if (paid.applied) {
+    const token = createSessionToken();
+    const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const ip = c.req.header('CF-Connecting-IP') || 'unknown';
+    const ua = c.req.header('User-Agent') || 'unknown';
+    await insertSessionRow(c.env.DB, { id: token, userId, orgId, expires, ip, ua });
+    return c.json({
+      token,
+      user: withPlatformOwnerFlag({ id: userId, name, email, role: 'admin', org_id: orgId }, c.env),
+      org: { id: orgId, name: orgName, plan: paid.plan },
+      paid: true,
+      message: 'Payment matched. Your organization is unlocked.',
+    });
+  }
+
   if (
     ((c.env.CLOUDFLARE_EMAIL_API_TOKEN || c.env.CLOUDFLARE_API_TOKEN) && c.env.CLOUDFLARE_ACCOUNT_ID) ||
     c.env.RESEND_API_KEY ||
@@ -2181,7 +2459,7 @@ app.post('/api/auth/register', async (c) => {
     await c.env.DB.prepare(
       'INSERT INTO email_verification_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
     ).bind(generateId(), userId, verifyToken, expires).run();
-    const base = c.env.FRONTEND_URL || c.env.APP_BASE_URL || 'https://smart-fcra-v2.pages.dev';
+    const base = resolveFrontendUrl(c.env, c.req.url);
     const verifyUrl = `${base}/?verifyEmail=${verifyToken}`;
     try {
       const brand = await loadOrgBrand(c.env, orgId);
@@ -2207,7 +2485,7 @@ app.post('/api/auth/register', async (c) => {
     return c.json({
       requiresVerification: true,
       message: 'Account created. Check your email to verify before signing in.',
-      user: { id: userId, name, email, role: 'admin', org_id: orgId },
+      user: withPlatformOwnerFlag({ id: userId, name, email, role: 'admin', org_id: orgId }, c.env),
       org: { id: orgId, name: orgName, plan: 'free' },
     });
   }
@@ -2215,7 +2493,7 @@ app.post('/api/auth/register', async (c) => {
   return c.json({
     requiresVerification: true,
     message: 'Account created but email verification is required. Contact support to activate — outbound email is not configured on this deployment.',
-    user: { id: userId, name, email, role: 'admin', org_id: orgId },
+    user: withPlatformOwnerFlag({ id: userId, name, email, role: 'admin', org_id: orgId }, c.env),
     org: { id: orgId, name: orgName, plan: 'free' },
   }, 201);
 });
@@ -2282,10 +2560,19 @@ app.post('/api/auth/login', async (c) => {
     }
 
     if (user.is_active !== 1) {
-      return c.json({
-        error: 'Email not verified. Check your inbox for the activation link, or contact support.',
-        code: 'EMAIL_NOT_VERIFIED',
-      }, 403);
+      const paid = await claimPendingSaasEntitlement(c.env.DB, { email: user.email, orgId: user.org_id }).catch(() => ({ applied: false, plan: null as any }));
+      if (paid.applied) {
+        user.is_active = 1;
+        user.org_plan = paid.plan;
+      } else {
+        return c.json({
+          error: 'Email not verified. Check your inbox for the activation link, or contact support.',
+          code: 'EMAIL_NOT_VERIFIED',
+        }, 403);
+      }
+    } else {
+      const paid = await claimPendingSaasEntitlement(c.env.DB, { email: user.email, orgId: user.org_id }).catch(() => ({ applied: false, plan: null as any }));
+      if (paid.applied) user.org_plan = paid.plan;
     }
 
     if (needsPasswordRehash(user.password_hash)) {
@@ -2328,7 +2615,7 @@ app.post('/api/auth/login', async (c) => {
 
   return c.json({
     token,
-    user: { id: user.id, name: user.name, email: user.email, role: user.role, org_id: user.org_id },
+    user: withPlatformOwnerFlag({ id: user.id, name: user.name, email: user.email, role: user.role, org_id: user.org_id }, c.env),
     org: { id: user.org_id, name: user.org_name, plan: user.org_plan },
   });
 });
@@ -2367,7 +2654,7 @@ app.post('/api/auth/mfa/challenge', async (c) => {
 
   return c.json({
     token,
-    user: { id: user.id, name: user.name, email: user.email, role: user.role, org_id: user.org_id },
+    user: withPlatformOwnerFlag({ id: user.id, name: user.name, email: user.email, role: user.role, org_id: user.org_id }, c.env),
     org: { id: user.org_id, name: user.org_name, plan: user.org_plan },
   });
 });
@@ -2488,7 +2775,7 @@ app.get('/api/security/audit-log', authMiddleware, async (c) => {
   if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
   const limit = Math.min(200, Math.max(1, Number(c.req.query('limit') || 100)));
   try {
-    const rows = user.role === 'super_admin' && c.req.query('all') === '1'
+    const rows = isPlatformOwnerUser(user, c.env) && c.req.query('all') === '1'
       ? await c.env.DB.prepare(
           `SELECT id, org_id, actor_user_id, actor_role, action, resource_type, resource_id, ip_address, success, created_at FROM security_audit_log ORDER BY created_at DESC LIMIT ?`,
         ).bind(limit).all()
@@ -2647,7 +2934,7 @@ app.post('/api/auth/forgot-password', async (c) => {
     'INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
   ).bind(generateId(), user.id, token, expires).run();
 
-  const base = c.env.FRONTEND_URL || c.env.APP_BASE_URL || 'https://smart-fcra-v2.pages.dev';
+  const base = resolveFrontendUrl(c.env, c.req.url);
   const resetUrl = `${base}/?resetToken=${token}`;
   try {
     const brand = await loadOrgBrand(c.env, null);
@@ -2704,18 +2991,21 @@ app.post('/api/auth/reset-password', async (c) => {
 app.get('/api/dashboard', authMiddleware, async (c) => {
   const user = c.get('user');
   const oid = user.org_id;
+  const hideClients = sandboxClientHideSql(oid, 'id', 'email');
+  const hideJoin = sandboxClientHideSql(oid, 'c.id', 'c.email');
+  const hideV = sandboxClientHideSql(oid, 'client_id');
 
   const [clients, reports, violations, docs] = await Promise.all([
-    c.env.DB.prepare('SELECT COUNT(*) as count FROM clients WHERE org_id = ?').bind(oid).first(),
-    c.env.DB.prepare('SELECT COUNT(*) as count FROM credit_reports WHERE org_id = ?').bind(oid).first(),
-    c.env.DB.prepare('SELECT COUNT(*) as count, severity FROM violations WHERE org_id = ? GROUP BY severity').bind(oid).all(),
-    c.env.DB.prepare('SELECT COUNT(*) as count FROM documents WHERE org_id = ?').bind(oid).first(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM clients WHERE org_id = ?${hideClients.sql}`).bind(oid, ...hideClients.binds).first(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM credit_reports WHERE org_id = ?${hideV.sql}`).bind(oid, ...hideV.binds).first(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count, severity FROM violations WHERE org_id = ?${hideV.sql} GROUP BY severity`).bind(oid, ...hideV.binds).all(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM documents WHERE org_id = ?${hideV.sql}`).bind(oid, ...hideV.binds).first(),
   ]);
 
-  const totalDamages = await c.env.DB.prepare('SELECT SUM(total_damages_min) as min_total, SUM(total_damages_max) as max_total FROM violations WHERE org_id = ?').bind(oid).first() as any;
+  const totalDamages = await c.env.DB.prepare(`SELECT SUM(total_damages_min) as min_total, SUM(total_damages_max) as max_total FROM violations WHERE org_id = ?${hideV.sql}`).bind(oid, ...hideV.binds).first() as any;
   const recentActivity = await c.env.DB.prepare('SELECT * FROM activity_log WHERE org_id = ? ORDER BY created_at DESC LIMIT 10').bind(oid).all();
-  const recentViolations = await c.env.DB.prepare('SELECT v.*, c.first_name, c.last_name FROM violations v JOIN clients c ON v.client_id = c.id WHERE v.org_id = ? ORDER BY v.created_at DESC LIMIT 5').bind(oid).all();
-  const byCategory = await c.env.DB.prepare('SELECT category, COUNT(*) as count FROM violations WHERE org_id = ? GROUP BY category').bind(oid).all();
+  const recentViolations = await c.env.DB.prepare(`SELECT v.*, c.first_name, c.last_name FROM violations v JOIN clients c ON v.client_id = c.id WHERE v.org_id = ?${hideJoin.sql} ORDER BY v.created_at DESC LIMIT 5`).bind(oid, ...hideJoin.binds).all();
+  const byCategory = await c.env.DB.prepare(`SELECT category, COUNT(*) as count FROM violations WHERE org_id = ?${hideV.sql} GROUP BY category`).bind(oid, ...hideV.binds).all();
 
   const stats = {
     totalClients: (clients as any)?.count || 0,
@@ -2746,6 +3036,9 @@ app.get('/api/clients', authMiddleware, async (c) => {
   
   let query = 'SELECT c.*, (SELECT COUNT(*) FROM credit_reports WHERE client_id = c.id) as report_count, (SELECT COUNT(*) FROM violations WHERE client_id = c.id) as violation_count, (SELECT SUM(total_damages_min) FROM violations WHERE client_id = c.id) as damages_min, (SELECT SUM(total_damages_max) FROM violations WHERE client_id = c.id) as damages_max FROM clients c WHERE c.org_id = ?';
   const params: any[] = [user.org_id];
+  const hideDemo = sandboxClientHideSql(user.org_id, 'c.id', 'c.email');
+  query += hideDemo.sql;
+  params.push(...hideDemo.binds);
 
   if (search) { query += ' AND (c.first_name LIKE ? OR c.last_name LIKE ? OR c.email LIKE ?)'; params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
   if (status) { query += ' AND c.status = ?'; params.push(status); }
@@ -2797,6 +3090,9 @@ app.post('/api/clients', authMiddleware, async (c) => {
 app.get('/api/clients/:id', authMiddleware, async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
+  if (!isSandboxDemoOrg(user.org_id) && user.role !== 'client' && id === DEMO_CLIENT_ID) {
+    return c.json({ error: 'Not found' }, 404);
+  }
   const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(id, user.org_id).first();
   if (!client) return c.json({ error: 'Not found' }, 404);
 
@@ -3056,7 +3352,7 @@ app.get('/api/client-portal/dashboard', authMiddleware, async (c) => {
       ? 'Your credit report is in our system. Pay to unlock analysis, FCRA violations, and dispute letters — or wait for your advisor to confirm payment.'
       : null,
     unlockPriceCents: Number(c.env.ANALYSIS_UNLOCK_PRICE_CENTS || 29700),
-    unlockCheckoutEnabled: stripeConfigured(c.env),
+    unlockCheckoutEnabled: stripeConfigured(c.env) && !productionStripeBlockReason(c.env),
     scoreProjection: gateAnalysis ? { avgScore: null, lifts: [] } : { avgScore, lifts: scoreLifts },
   });
 });
@@ -3584,6 +3880,8 @@ app.post('/api/client-portal/unlock/checkout', authMiddleware, async (c) => {
   if (!stripeConfigured(c.env)) {
     return c.json({ error: 'Card checkout is not configured yet. Your advisor will unlock analysis after payment is received.', stripeConfigured: false }, 503);
   }
+  const blocked = productionStripeBlockReason(c.env);
+  if (blocked) return c.json({ error: blocked, code: 'STRIPE_LIVE_REQUIRED', stripeConfigured: true }, 503);
   const gate = await assertCoveredChargeAllowed({
     db: c.env.DB,
     orgId: user.org_id,
@@ -3910,6 +4208,7 @@ app.get('/api/integrations/mfsn/status', authMiddleware, async (c) => {
     ok: !!login.ok,
     email: login.email || null,
     partnerConfigured: !!resolvePartnerMfsnCredentials(c.env),
+    partnerApiLoginConfigured: hasPartnerApiLogin(c.env),
     activeMemberCount: activeCount,
     error: login.error || null,
     ghlConfigured: ghlConfigured(c.env),
@@ -3917,7 +4216,7 @@ app.get('/api/integrations/mfsn/status', authMiddleware, async (c) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// TRADELINEMASTER — RJ Business Solutions marketplace (12.5% markup)
+// TRADELINEMASTER — RJ Business Solutions marketplace (retail prices)
 // ═══════════════════════════════════════════════════════════════
 
 function parseTradelineFilters(q: Record<string, string | undefined>) {
@@ -3976,7 +4275,6 @@ app.get('/api/tradelines/status', authMiddleware, async (c) => {
     ok: configured && (apiOk || !!cached.tradelines.length),
     configured,
     brand: TRADELINE_BRAND,
-    markupRate: Number(c.env.TRADELINE_MARKUP_RATE || TRADELINE_MARKUP_RATE),
     opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT,
     fromEmail: c.env.TRADELINE_FROM_EMAIL || TRADELINE_FROM_EMAIL_DEFAULT,
     balance: user.role === 'client' ? undefined : balance,
@@ -3991,7 +4289,6 @@ app.get('/api/tradelines/meta', authMiddleware, async (c) => {
   return c.json({
     ok: true,
     brand: TRADELINE_BRAND,
-    markupRate: Number(c.env.TRADELINE_MARKUP_RATE || TRADELINE_MARKUP_RATE),
     opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT,
     citizenship: CITIZENSHIP_STATUSES,
     genders: GENDER_OPTIONS,
@@ -4016,7 +4313,6 @@ app.get('/api/tradelines/inventory', authMiddleware, async (c) => {
     minSpots: c.req.query('minSpots') || undefined,
     q: c.req.query('q') || c.req.query('search') || undefined,
   });
-  const staff = c.get('user').role !== 'client';
   let rows = filterTradelines(inv.tradelines, filters);
   const sort = c.req.query('sort') || 'statement';
   if (sort === 'price') rows = rows.slice().sort((a, b) => a.retailPrice - b.retailPrice);
@@ -4027,16 +4323,11 @@ app.get('/api/tradelines/inventory', authMiddleware, async (c) => {
   const page = Math.max(1, Number(c.req.query('page') || 1));
   const pageSize = Math.min(100, Math.max(10, Number(c.req.query('pageSize') || c.req.query('entries') || 25)));
   const start = (page - 1) * pageSize;
-  const pageRows = rows.slice(start, start + pageSize).map((t) => ({
-    ...t,
-    wholesalePrice: staff ? t.wholesalePrice : undefined,
-    markupAmount: staff ? t.markupAmount : undefined,
-  }));
+  const pageRows = rows.slice(start, start + pageSize).map((t) => toPublicTradeline(t));
 
   return c.json({
     ok: true,
     brand: TRADELINE_BRAND,
-    markupRate: Number(c.env.TRADELINE_MARKUP_RATE || TRADELINE_MARKUP_RATE),
     opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT,
     summary: summarizeInventory(inv.tradelines),
     filteredCount: rows.length,
@@ -4060,7 +4351,6 @@ app.post('/api/tradelines/refresh', authMiddleware, async (c) => {
 app.get('/api/tradelines/item/:id', authMiddleware, async (c) => {
   const id = Number(c.req.param('id'));
   if (!Number.isFinite(id)) return c.json({ error: 'Invalid id' }, 400);
-  const staff = c.get('user').role !== 'client';
   let tradeline: EnrichedTradeline | undefined;
   if (tradelineMasterConfigured(c.env)) {
     const live = await fetchTradelineById(c.env, id);
@@ -4073,11 +4363,7 @@ app.get('/api/tradelines/item/:id', authMiddleware, async (c) => {
   if (!tradeline) return c.json({ error: 'Tradeline not found' }, 404);
   return c.json({
     ok: true,
-    tradeline: {
-      ...tradeline,
-      wholesalePrice: staff ? tradeline.wholesalePrice : undefined,
-      markupAmount: staff ? tradeline.markupAmount : undefined,
-    },
+    tradeline: toPublicTradeline(tradeline),
     education: listTradelineEducation().slice(0, 3),
   });
 });
@@ -4123,7 +4409,6 @@ app.get('/api/tradelines/match/:clientId', authMiddleware, async (c) => {
   } catch { /* soft */ }
 
   const matched = matchTradelinesForClient(profile, inv.tradelines, Number(c.req.query('limit') || 12));
-  const staff = user.role !== 'client';
   return c.json({
     ok: true,
     clientId: client.id,
@@ -4131,11 +4416,7 @@ app.get('/api/tradelines/match/:clientId', authMiddleware, async (c) => {
     ...matched,
     matches: matched.matches.map((m) => ({
       ...m,
-      tradeline: {
-        ...m.tradeline,
-        wholesalePrice: staff ? m.tradeline.wholesalePrice : undefined,
-        markupAmount: staff ? m.tradeline.markupAmount : undefined,
-      },
+      tradeline: toPublicTradeline(m.tradeline),
     })),
     opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT,
   });
@@ -4163,7 +4444,15 @@ app.post('/api/tradelines/match', authMiddleware, async (c) => {
     hasThinFile: !!body.hasThinFile,
   };
   const matched = matchTradelinesForClient(profile, inv.tradelines, Number(body.limit || 12));
-  return c.json({ ok: true, ...matched, opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT });
+  return c.json({
+    ok: true,
+    ...matched,
+    matches: matched.matches.map((m) => ({
+      ...m,
+      tradeline: toPublicTradeline(m.tradeline),
+    })),
+    opsEmail: c.env.TRADELINE_OPS_EMAIL || TRADELINE_OPS_EMAIL_DEFAULT,
+  });
 });
 
 app.get('/api/tradelines/orders', authMiddleware, async (c) => {
@@ -4179,7 +4468,7 @@ app.get('/api/tradelines/orders', authMiddleware, async (c) => {
       ).bind(user.org_id, client.id).all();
     } else {
       rows = await c.env.DB.prepare(
-        `SELECT id, client_id, tradeline_id, lender, credit_limit, wholesale_price, retail_price, status, tlm_order_id, tlm_message, created_at, updated_at
+        `SELECT id, client_id, tradeline_id, lender, credit_limit, retail_price, status, tlm_order_id, tlm_message, created_at, updated_at
          FROM tradeline_master_orders WHERE org_id = ? ORDER BY created_at DESC LIMIT 200`,
       ).bind(user.org_id).all();
     }
@@ -4348,7 +4637,6 @@ app.post('/api/tradelines/order', authMiddleware, async (c) => {
     tlmStatus,
     tlmMessage,
     retailPrice: tradeline.retailPrice,
-    wholesalePrice: user.role === 'client' ? undefined : tradeline.wholesalePrice,
     tradeline: {
       id: tradeline.id,
       lender: tradeline.lender,
@@ -5459,6 +5747,8 @@ app.post('/api/client-portal/tradelines/checkout', authMiddleware, async (c) => 
   const product = TRADELINE_CATALOG.find((p) => p.id === body.productId);
   if (!product) return c.json({ error: 'Unknown boost product' }, 400);
   if (!c.env.STRIPE_API_KEY) return c.json({ error: 'Stripe is not configured' }, 503);
+  const blocked = productionStripeBlockReason(c.env);
+  if (blocked) return c.json({ error: blocked, code: 'STRIPE_LIVE_REQUIRED' }, 503);
 
   const amountCents = Math.round(Number(product.monthlyFee || 0) * 100);
   if (amountCents <= 0) {
@@ -5928,9 +6218,10 @@ app.get('/api/search', authMiddleware, async (c) => {
   const q = String(c.req.query('q') || '').trim();
   if (q.length < 2) return c.json({ clients: [], violations: [], documents: [] });
   const like = `%${q}%`;
+  const hideDemo = sandboxClientHideSql(user.org_id, 'id', 'email');
   const clients = await c.env.DB.prepare(
-    `SELECT id, first_name, last_name, email, phone, case_status FROM clients WHERE org_id = ? AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR phone LIKE ?) ORDER BY created_at DESC LIMIT 20`
-  ).bind(user.org_id, like, like, like, like).all();
+    `SELECT id, first_name, last_name, email, phone, case_status FROM clients WHERE org_id = ? AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR phone LIKE ?)${hideDemo.sql} ORDER BY created_at DESC LIMIT 20`
+  ).bind(user.org_id, like, like, like, like, ...hideDemo.binds).all();
   const violations = await c.env.DB.prepare(
     `SELECT v.id, v.account_name, v.statute, v.severity, v.client_id, v.category, cr.bureau
      FROM violations v
@@ -5949,8 +6240,9 @@ app.get('/api/admin/overview-stats', authMiddleware, async (c) => {
   if (user.role === 'client') return c.json({ error: 'Unauthorized administrative action' }, 403);
 
   // Core metrics
-  const totalClients = await c.env.DB.prepare('SELECT COUNT(*) as val FROM clients WHERE org_id = ?').bind(user.org_id).first() as any;
-  const activeLit = await c.env.DB.prepare('SELECT COUNT(*) as val FROM clients WHERE org_id = ? AND case_status IN ("LITIGATION", "FILED", "DISCOVERY", "NEGOTIATIONS")').bind(user.org_id).first() as any;
+  const hideDemo = sandboxClientHideSql(user.org_id, 'id', 'email');
+  const totalClients = await c.env.DB.prepare(`SELECT COUNT(*) as val FROM clients WHERE org_id = ?${hideDemo.sql}`).bind(user.org_id, ...hideDemo.binds).first() as any;
+  const activeLit = await c.env.DB.prepare(`SELECT COUNT(*) as val FROM clients WHERE org_id = ? AND case_status IN ("LITIGATION", "FILED", "DISCOVERY", "NEGOTIATIONS")${hideDemo.sql}`).bind(user.org_id, ...hideDemo.binds).first() as any;
   const pendingQA = await c.env.DB.prepare('SELECT COUNT(*) as val FROM violations WHERE org_id = ? AND status = "pending_qa"').bind(user.org_id).first() as any;
   const totalRecovery = await c.env.DB.prepare('SELECT SUM(estimated_recovery) as val FROM clients WHERE org_id = ?').bind(user.org_id).first() as any;
 
@@ -5998,7 +6290,7 @@ app.get('/api/admin/overview-stats', authMiddleware, async (c) => {
   const urgentItems: any[] = [];
   
   // 1. Missing compliance disclosures
-  const missingConsents = await c.env.DB.prepare('SELECT id, first_name, last_name, created_at FROM clients WHERE org_id = ? AND (permissible_purpose_consent = 0 OR croa_contract_agreed = 0 OR tsr_advance_fee_waived = 0) LIMIT 5').bind(user.org_id).all();
+  const missingConsents = await c.env.DB.prepare(`SELECT id, first_name, last_name, created_at FROM clients WHERE org_id = ? AND (permissible_purpose_consent = 0 OR croa_contract_agreed = 0 OR tsr_advance_fee_waived = 0)${hideDemo.sql} LIMIT 5`).bind(user.org_id, ...hideDemo.binds).all();
   if (missingConsents?.results) {
     for (const mc of missingConsents.results as any[]) {
       urgentItems.push({
@@ -6986,47 +7278,33 @@ app.post('/api/billing/checkout', authMiddleware, async (c) => {
   const user = c.get('user');
   const { planId } = await c.req.json();
   if (!planId) return c.json({ error: 'Plan ID required' }, 400);
-  if (!stripeConfigured(c.env)) return c.json({ error: 'Stripe is not configured for this environment' }, 503);
+  if (!isSaaSPlanId(planId)) return c.json({ error: 'Invalid plan' }, 400);
+  if (!stripeConfigured(c.env) || !c.env.STRIPE_API_KEY) {
+    return c.json({ error: 'Stripe is not configured for this environment' }, 503);
+  }
+  const blocked = productionStripeBlockReason(c.env);
+  if (blocked) return c.json({ error: blocked, code: 'STRIPE_LIVE_REQUIRED' }, 503);
 
   const stripe = getStripe(c.env);
   const org = await c.env.DB.prepare('SELECT * FROM organizations WHERE id = ?').bind(user.org_id).first();
-
-  const planPrices: Record<string, { amount: number; name: string; interval: 'month' }> = {
-    'professional': { amount: 49700, name: 'Basic Plan', interval: 'month' },
-    'unlimited': { amount: 250000, name: 'Unlimited Plan', interval: 'month' },
-    'enterprise': { amount: 999700, name: 'Enterprise Plan', interval: 'month' }
-  };
-
-  const plan = planPrices[planId as string];
-  if (!plan) return c.json({ error: 'Invalid plan' }, 400);
-
-  const priceIdMap: Record<string, string | undefined> = {
-    professional: c.env.STRIPE_PROFESSIONAL_PRICE_ID,
-    unlimited: c.env.STRIPE_UNLIMITED_PRICE_ID,
-    enterprise: c.env.STRIPE_ENTERPRISE_PRICE_ID,
-  };
+  const appUrl = resolveFrontendUrl(c.env, c.req.url);
 
   let session;
   try {
-    const configuredPriceId = priceIdMap[planId as string];
-    const lineItems = configuredPriceId
-      ? [{ price: configuredPriceId, quantity: 1 }]
-      : [{
-          price_data: {
-            currency: 'usd',
-            product_data: { name: plan.name, metadata: { planId } },
-            unit_amount: plan.amount,
-            recurring: { interval: plan.interval as 'month' },
-          },
-          quantity: 1,
-        }];
+    const resolved = await resolveCheckoutPriceId(stripe, {
+      STRIPE_API_KEY: c.env.STRIPE_API_KEY,
+      STRIPE_PROFESSIONAL_PRICE_ID: c.env.STRIPE_PROFESSIONAL_PRICE_ID,
+      STRIPE_UNLIMITED_PRICE_ID: c.env.STRIPE_UNLIMITED_PRICE_ID,
+      STRIPE_ENTERPRISE_PRICE_ID: c.env.STRIPE_ENTERPRISE_PRICE_ID,
+      FRONTEND_URL: appUrl,
+    }, planId);
 
     session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      line_items: lineItems,
+      line_items: [{ price: resolved.priceId, quantity: 1 }],
       mode: 'subscription',
-      success_url: `${c.env.FRONTEND_URL || 'http://localhost:3000'}/?checkout=success`,
-      cancel_url: `${c.env.FRONTEND_URL || 'http://localhost:3000'}/?page=billing&checkout=cancelled`,
+      success_url: `${appUrl}/app?checkout=success&plan=${planId}`,
+      cancel_url: `${appUrl}/app?page=billing&checkout=cancelled`,
       client_reference_id: user.org_id,
       metadata: { planId, orgId: user.org_id },
       subscription_data: { metadata: { planId, orgId: user.org_id } },
@@ -7045,12 +7323,14 @@ app.post('/api/billing/checkout', authMiddleware, async (c) => {
 app.post('/api/billing/portal', authMiddleware, async (c) => {
   const user = c.get('user');
   if (!stripeConfigured(c.env)) return c.json({ error: 'Stripe is not configured' }, 503);
+  const blocked = productionStripeBlockReason(c.env);
+  if (blocked) return c.json({ error: blocked, code: 'STRIPE_LIVE_REQUIRED' }, 503);
   const stripe = getStripe(c.env);
   const org = await c.env.DB.prepare('SELECT stripe_customer_id FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
   if (!org?.stripe_customer_id) return c.json({ error: 'Subscribe first' }, 400);
   const session = await stripe.billingPortal.sessions.create({
     customer: org.stripe_customer_id,
-    return_url: `${c.env.FRONTEND_URL || c.req.url.split('/api')[0]}/?page=billing`,
+    return_url: `${resolveFrontendUrl(c.env, c.req.url)}/app`,
   });
   return c.json({ url: session.url });
 });
@@ -7074,6 +7354,8 @@ app.post('/api/billing/cancel', authMiddleware, async (c) => {
   const user = c.get('user');
   if (user.role !== 'super_admin' && user.role !== 'admin') return c.json({ error: 'Admin only' }, 403);
   if (!stripeConfigured(c.env)) return c.json({ error: 'Stripe is not configured' }, 503);
+  const blocked = productionStripeBlockReason(c.env);
+  if (blocked) return c.json({ error: blocked, code: 'STRIPE_LIVE_REQUIRED' }, 503);
   const org = await c.env.DB.prepare('SELECT stripe_subscription_id FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
   if (!org?.stripe_subscription_id) return c.json({ error: 'No active subscription' }, 400);
   const stripe = getStripe(c.env);
@@ -7179,22 +7461,31 @@ app.post('/api/billing/webhook', async (c) => {
         break;
       }
 
-      const orgId = session.client_reference_id;
+      const orgIdHint = session.client_reference_id || session.metadata?.orgId || null;
       const stripeCustomerId = session.customer as string;
       const stripeSubId = session.subscription as string;
-      if (!orgId || !stripeSubId) break;
+      if (!stripeSubId) break;
 
-      const stripe = getStripe(c.env);
-      const subscription = await stripe.subscriptions.retrieve(stripeSubId);
+      const stripeClient = getStripe(c.env);
+      const subscription = await stripeClient.subscriptions.retrieve(stripeSubId);
       const priceId = subscription.items.data[0]?.price.id;
-      const metaPlan = session.metadata?.planId || subscription.metadata?.planId;
-      const plan = metaPlan || (priceId === c.env.STRIPE_UNLIMITED_PRICE_ID ? 'unlimited'
-        : priceId === c.env.STRIPE_ENTERPRISE_PRICE_ID ? 'enterprise'
-        : priceId === c.env.STRIPE_PROFESSIONAL_PRICE_ID ? 'professional' : 'professional');
+      const email = String(session.customer_details?.email || session.customer_email || session.metadata?.email || '').trim();
+      const metaPlan = planIdFromCheckoutSession(session)
+        || planIdFromCheckoutSession(subscription)
+        || (isSaaSPlanId(session.metadata?.planId) ? session.metadata.planId : null);
+      const mapped = metaPlan
+        || (await planIdFromStripePrice(stripeClient, c.env, priceId))
+        || 'professional';
 
-      await c.env.DB.prepare(
-        'UPDATE organizations SET plan = ?, stripe_customer_id = ?, stripe_subscription_id = ? WHERE id = ?'
-      ).bind(plan, stripeCustomerId, stripeSubId, orgId).run();
+      await fulfillSaasCheckout(c.env.DB, {
+        generateId,
+        orgIdHint,
+        email,
+        plan: mapped,
+        stripeCustomerId,
+        stripeSubscriptionId: stripeSubId,
+        stripeSessionId: session.id,
+      });
       break;
     }
 
@@ -7206,15 +7497,13 @@ app.post('/api/billing/webhook', async (c) => {
 
     case 'customer.subscription.updated': {
       const subId = session.id as string;
-      const stripe = getStripe(c.env);
+      const stripeClient = getStripe(c.env);
       try {
-        const subscription = await stripe.subscriptions.retrieve(subId);
+        const subscription = await stripeClient.subscriptions.retrieve(subId);
         const priceId = subscription.items.data[0]?.price.id;
         const status = subscription.status;
         if (status === 'active' || status === 'trialing') {
-          const plan = priceId === c.env.STRIPE_UNLIMITED_PRICE_ID ? 'unlimited'
-            : priceId === c.env.STRIPE_ENTERPRISE_PRICE_ID ? 'enterprise'
-            : priceId === c.env.STRIPE_PROFESSIONAL_PRICE_ID ? 'professional' : 'professional';
+          const plan = (await planIdFromStripePrice(stripeClient, c.env, priceId)) || 'professional';
           await c.env.DB.prepare('UPDATE organizations SET plan = ? WHERE stripe_subscription_id = ?').bind(plan, subId).run();
         } else if (status === 'past_due') {
           await c.env.DB.prepare('UPDATE organizations SET plan = \'free\' WHERE stripe_subscription_id = ?').bind(subId).run();
@@ -7226,13 +7515,11 @@ app.post('/api/billing/webhook', async (c) => {
     case 'invoice.payment_succeeded': {
       const subId = session.subscription as string;
       if (!subId) break;
-      const stripe = getStripe(c.env);
+      const stripeClient = getStripe(c.env);
       try {
-        const subscription = await stripe.subscriptions.retrieve(subId);
+        const subscription = await stripeClient.subscriptions.retrieve(subId);
         const priceId = subscription.items.data[0]?.price.id;
-        const plan = priceId === c.env.STRIPE_UNLIMITED_PRICE_ID ? 'unlimited'
-          : priceId === c.env.STRIPE_ENTERPRISE_PRICE_ID ? 'enterprise'
-          : priceId === c.env.STRIPE_PROFESSIONAL_PRICE_ID ? 'professional' : 'professional';
+        const plan = (await planIdFromStripePrice(stripeClient, c.env, priceId)) || 'professional';
         await c.env.DB.prepare('UPDATE organizations SET plan = ? WHERE stripe_subscription_id = ?').bind(plan, subId).run();
       } catch {}
       break;
@@ -7394,7 +7681,11 @@ app.get('/api/settings/integrations', authMiddleware, async (c) => {
       status: click2mailOn ? 'connected' : 'not_configured',
       label: click2mailOn ? 'CONNECTED' : 'NOT CONFIGURED',
     },
-    stripe: { configured: stripeConfigured(c.env) },
+    stripe: {
+      configured: stripeConfigured(c.env),
+      mode: stripeSecretMode(c.env.STRIPE_API_KEY),
+      chargesReal: stripeSecretMode(c.env.STRIPE_API_KEY) === 'live' && !productionStripeBlockReason(c.env),
+    },
     twilioSms: { configured: !!(c.env.TWILIO_ACCOUNT_SID && c.env.TWILIO_AUTH_TOKEN && c.env.TWILIO_PHONE_NUMBER) },
     twilioVideo: { configured: videoConfigured(c.env) },
     ghl: { configured: ghlConfigured(c.env) },
@@ -7417,7 +7708,15 @@ app.get('/api/health/ready', async (c) => {
     db: false,
     encryptionKey: !!(c.env.PII_ENCRYPTION_KEY && c.env.PII_ENCRYPTION_KEY.length >= 32),
     stripe: !!c.env.STRIPE_API_KEY,
+    stripeMode: stripeSecretMode(c.env.STRIPE_API_KEY),
+    stripeLive: stripeSecretMode(c.env.STRIPE_API_KEY) === 'live',
     stripePublishable: !!c.env.STRIPE_PUBLISHABLE_KEY,
+    stripePublishableMode: stripePublishableMode(c.env.STRIPE_PUBLISHABLE_KEY),
+    stripePriceIds: !!(c.env.STRIPE_PROFESSIONAL_PRICE_ID && c.env.STRIPE_UNLIMITED_PRICE_ID && c.env.STRIPE_ENTERPRISE_PRICE_ID),
+    stripeWebhook: !!c.env.STRIPE_WEBHOOK_SECRET,
+    chargesReal: stripeSecretMode(c.env.STRIPE_API_KEY) === 'live' && !productionStripeBlockReason(c.env),
+    productionBlocked: !!productionStripeBlockReason(c.env),
+    productionBillingReady: !productionStripeBlockReason(c.env) && stripeSecretMode(c.env.STRIPE_API_KEY) === 'live',
     cloudflareEmail: !!(c.env.CLOUDFLARE_EMAIL_API_TOKEN && c.env.CLOUDFLARE_ACCOUNT_ID),
     resend: !!c.env.RESEND_API_KEY,
     sendgrid: !!c.env.SENDGRID_API_KEY,
@@ -8054,16 +8353,32 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
   if (!planCheck.allowed) return c.json({ error: planCheck.message }, 403);
 
   const body = await c.req.json();
-  const { clientId, clientEmail } = body;
+  let { clientId, clientEmail } = body;
+
+  if (!clientId || clientId === 'autopilot') {
+    return c.json({ error: 'Add your own client first, then import their MyFreeScoreNow file.' }, 400);
+  }
+
+  if (!clientEmail) {
+    try {
+      const row = await c.env.DB.prepare('SELECT email, mfsn_member_email FROM clients WHERE id = ? AND org_id = ?')
+        .bind(clientId, user.org_id).first() as any;
+      clientEmail = row?.mfsn_member_email || row?.email || '';
+    } catch {
+      const row = await c.env.DB.prepare('SELECT email FROM clients WHERE id = ? AND org_id = ?')
+        .bind(clientId, user.org_id).first() as any;
+      clientEmail = row?.email || '';
+    }
+  }
 
   if (!clientId || !clientEmail) {
-    return c.json({ error: 'Client ID and client email are required' }, 400);
+    return c.json({ error: 'Client ID and the member’s MyFreeScoreNow email are required' }, 400);
   }
 
   const creds = resolveMfsnCredentials(body, c.env);
   if (!creds) {
     return c.json({
-      error: 'MFSN credentials required (username/password/secretWord in body, or MFSN_EMAIL / MFSN_PASSWORD / MFSN_CLIENT_TOKEN secrets)',
+      error: 'Need an API User email/password (affiliate portal → Users → API User, then paste into My Free Score API login) plus this client’s MAPIK# token.',
     }, 400);
   }
 
@@ -8218,7 +8533,8 @@ app.post('/api/reports/import-mfsn', authMiddleware, async (c) => {
   } catch (err: any) {
     console.error('MFSN Import Error:', err);
     if (err instanceof MFSNError) {
-      return c.json({ error: err.message, code: err.code }, err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode as any : 500);
+      const status = err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode as any : 500;
+      return c.json({ error: explainMfsnPullError(err), code: err.code }, status);
     }
     return c.json({ error: `Connection Error: ${err.message}` }, 500);
   }
@@ -8261,11 +8577,11 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
         bureau: 'Equifax',
         reportDate: new Date().toLocaleDateString(),
         personalInfo: {
-          names: [ 'Rick Jefferson', 'Rick A Jefferson' ],
-          addresses: [ '1342 NM 333, Tijeras, NM 87059' ],
-          employers: [ 'RJ Business Solutions' ],
-          ssns: [ '***-**-9999' ],
-          dobs: [ '05/21/1985' ]
+          names: [ 'Demo Client' ],
+          addresses: [ '100 Demo Street, Austin, TX 78701' ],
+          employers: [ 'Demo Employer' ],
+          ssns: [ '***-**-0000' ],
+          dobs: [ '01/01/1990' ]
         },
         accounts: [
           {
@@ -8318,11 +8634,11 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
         bureau: 'Experian',
         reportDate: new Date().toLocaleDateString(),
         personalInfo: {
-          names: [ 'Rick Jefferson' ],
-          addresses: [ '1342 NM 333, Tijeras, NM 87059' ],
-          employers: [ 'RJ Business Solutions' ],
-          ssns: [ '***-**-9999' ],
-          dobs: [ '05/21/1985' ]
+          names: [ 'Demo Client' ],
+          addresses: [ '100 Demo Street, Austin, TX 78701' ],
+          employers: [ 'Demo Employer' ],
+          ssns: [ '***-**-0000' ],
+          dobs: [ '01/01/1990' ]
         },
         accounts: [
           {
@@ -8375,11 +8691,11 @@ app.post('/api/reports/import-smartcredit', authMiddleware, async (c) => {
         bureau: 'TransUnion',
         reportDate: new Date().toLocaleDateString(),
         personalInfo: {
-          names: [ 'Rick Jefferson' ],
-          addresses: [ '1342 NM 333, Tijeras, NM 87059' ],
-          employers: [ 'RJ Business Solutions' ],
-          ssns: [ '***-**-9999' ],
-          dobs: [ '05/21/1985' ]
+          names: [ 'Demo Client' ],
+          addresses: [ '100 Demo Street, Austin, TX 78701' ],
+          employers: [ 'Demo Employer' ],
+          ssns: [ '***-**-0000' ],
+          dobs: [ '01/01/1990' ]
         },
         accounts: [
           {
@@ -9022,21 +9338,23 @@ app.get('/api/billing/publishable-key', authMiddleware, async (c) => {
 });
 
 app.get('/api/billing/mode', authMiddleware, async (c) => {
-  const key = c.env.STRIPE_API_KEY || '';
-  let mode: 'test' | 'live' | 'unconfigured' = 'unconfigured';
-  if (key.startsWith('sk_test_')) mode = 'test';
-  else if (key.startsWith('sk_live_')) mode = 'live';
-  return c.json({ mode, testMode: mode === 'test' });
+  const mode = stripeSecretMode(c.env.STRIPE_API_KEY);
+  const blocked = productionStripeBlockReason(c.env);
+  return c.json({
+    mode,
+    testMode: mode === 'test',
+    chargesReal: mode === 'live' && !blocked,
+    publishableMode: stripePublishableMode(c.env.STRIPE_PUBLISHABLE_KEY),
+    productionBlocked: !!blocked,
+    error: blocked || undefined,
+  });
 });
 
 app.get('/api/company', async (c) => {
   return c.json({
-    name: c.env.COMPANY_NAME || 'RJ Business Solutions',
-    owner: c.env.COMPANY_OWNER || 'Rick Jefferson',
-    address: c.env.COMPANY_ADDRESS || '',
-    website: c.env.COMPANY_WEBSITE || 'https://rjbusinesssolutions.org',
+    name: 'Smart FCRA',
+    website: c.env.COMPANY_WEBSITE || 'https://smartfcra.com',
     email: c.env.COMPANY_EMAIL || 'support@rjbusinesssolutions.org',
-    logo: c.env.COMPANY_LOGO || '',
   });
 });
 
@@ -9045,6 +9363,7 @@ app.get('/api/company', async (c) => {
 // FOUNDER OS SUITE INTEGRATION ENDPOINTS
 // ═══════════════════════════════════════════════════════════════
 app.get('/api/founder-templates', authMiddleware, async (c) => {
+  if (!isPlatformOwnerUser(c.get('user'), c.env)) return c.json({ error: PLATFORM_OWNER_ONLY_ERROR }, 403);
   const templates = Object.entries(FOUNDER_TEMPLATES).map(([key, val]) => ({
     id: key,
     name: val.name,
@@ -9055,6 +9374,7 @@ app.get('/api/founder-templates', authMiddleware, async (c) => {
 });
 
 app.post('/api/documents/preview-founder', authMiddleware, async (c) => {
+  if (!isPlatformOwnerUser(c.get('user'), c.env)) return c.json({ error: PLATFORM_OWNER_ONLY_ERROR }, 403);
   const { templateId, fields } = await c.req.json();
   const template = FOUNDER_TEMPLATES[templateId];
   if (!template) {
@@ -9066,6 +9386,7 @@ app.post('/api/documents/preview-founder', authMiddleware, async (c) => {
 
 app.post('/api/documents/generate-founder', authMiddleware, async (c) => {
   const user = c.get('user');
+  if (!isPlatformOwnerUser(user, c.env)) return c.json({ error: PLATFORM_OWNER_ONLY_ERROR }, 403);
   const { clientId, templateId, fields } = await c.req.json();
 
   const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first() as any;
@@ -9113,10 +9434,10 @@ app.get('/api/documents/:id/pdf', authMiddleware, async (c) => {
     : firmLh.repAgreementAttached;
 
   const customLetterhead = {
-    orgName: firmLh.firmName || org?.name || 'RJ Business Solutions',
+    orgName: firmLh.firmName || org?.name || 'Your Firm',
     logoBase64: firmLh.logoBase64 || undefined,
     headerText: firmLh.firmName || firmLh.headerText || doc.title,
-    customSubtext: firmLh.customSubtext || `${firmLh.firmName || org?.name || 'RJ Business Solutions'} • Smart FCRA dispute document`,
+    customSubtext: firmLh.customSubtext || `${firmLh.firmName || org?.name || 'Your Firm'} • Smart FCRA dispute document`,
     isHiredAdvocate,
     repAgreementAttached
   };
@@ -9238,7 +9559,9 @@ app.post('/api/team/invite', authMiddleware, async (c) => {
   const planCheck = await verifyOrgPlanLimits(c, 'user');
   if (!planCheck.allowed) return c.json({ error: planCheck.message }, 403);
   
-  const { name, email, password, role } = await c.req.json();
+  const { name, email, password, role: rawRole } = await c.req.json();
+  const role = sanitizeTenantInviteRole(rawRole);
+  if (!role) return c.json({ error: 'Invalid role. Tenant invites are member or admin only.' }, 400);
   const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
   if (existing) return c.json({ error: 'Email already exists' }, 409);
 
@@ -9730,11 +10053,44 @@ app.get('/api/compliance/overview', authMiddleware, async (c) => {
 
 const adminGateMiddleware = async (c: any, next: any) => {
   const user = c.get('user');
-  if (!user || user.role !== 'super_admin') {
-    return c.json({ error: 'Forbidden: Platform super_admin access only' }, 403);
+  if (!isPlatformOwnerUser(user, c.env)) {
+    return c.json({ error: PLATFORM_OWNER_ONLY_ERROR }, 403);
   }
   return next();
 };
+
+app.post('/api/admin/stripe/ensure-catalog', authMiddleware, adminGateMiddleware, async (c) => {
+  if (!stripeConfigured(c.env) || !c.env.STRIPE_API_KEY) {
+    return c.json({ error: 'Stripe is not configured' }, 503);
+  }
+  const blocked = productionStripeBlockReason(c.env);
+  if (blocked) return c.json({ error: blocked, code: 'STRIPE_LIVE_REQUIRED' }, 503);
+  const stripe = getStripe(c.env);
+  const catalog = await ensureStripeCatalog(stripe, {
+    frontendUrl: resolveFrontendUrl(c.env, c.req.url),
+    secretKey: c.env.STRIPE_API_KEY,
+  });
+  return c.json({
+    ok: true,
+    mode: catalog.mode,
+    plans: catalog.plans.map((p) => ({
+      id: p.id,
+      name: p.name,
+      amountCents: p.amountCents,
+      productId: p.productId,
+      priceId: p.priceId,
+      paymentLinkUrl: p.paymentLinkUrl,
+      createdProduct: p.createdProduct,
+      createdPrice: p.createdPrice,
+      createdPaymentLink: p.createdPaymentLink,
+    })),
+    optionalSecrets: {
+      STRIPE_PROFESSIONAL_PRICE_ID: catalog.plans.find((p) => p.id === 'professional')?.priceId || null,
+      STRIPE_UNLIMITED_PRICE_ID: catalog.plans.find((p) => p.id === 'unlimited')?.priceId || null,
+      STRIPE_ENTERPRISE_PRICE_ID: catalog.plans.find((p) => p.id === 'enterprise')?.priceId || null,
+    },
+  });
+});
 
 app.post('/api/admin/knowledge/seed', authMiddleware, adminGateMiddleware, async (c) => {
   const user = c.get('user');
@@ -9901,7 +10257,6 @@ app.post('/api/admin/backup/trigger', authMiddleware, adminGateMiddleware, async
   });
 });
 
-const DEMO_CLIENT_EMAIL = 'salisha.mcdowell@example.com';
 const DEMO_PORTAL_PASSWORD = 'demo123456';
 
 async function loadDemoSampleCase(
@@ -9958,7 +10313,7 @@ async function loadDemoSampleCase(
   return { ...batch, violationsFound: demoViolationCount, alreadyLoaded: false, reports: bureauReports.length };
 }
 
-/** Ensure Salisha demo client + portal login + sample tri-bureau case exist. */
+/** Ensure the sandbox Demo Client + portal login + sample tri-bureau case exist (interactive demo org only). */
 async function ensureDemoClientAndPortal(
   c: any,
   orgId: string,
@@ -9981,14 +10336,18 @@ async function ensureDemoClientAndPortal(
          status, notes, tags, permissible_purpose_consent, croa_contract_agreed, tsr_advance_fee_waived,
          consent_timestamp, eq_score, ex_score, tu_score, estimated_monthly_income, estimated_monthly_debt,
          created_at, updated_at
-       ) VALUES (?, ?, 'Salisha', 'McDowell', ?, '(414) 430-4277', '1342 NM 333', 'Tijeras', 'NM', '87059',
-         'active', 'Demo client for sales walkthroughs', '["Premium","Lead","Demo"]', 1, 1, 1,
+       ) VALUES (?, ?, ?, ?, ?, '(555) 010-0100', '1342 NM 333', 'Tijeras', 'NM', '87059',
+         'active', 'Sandbox sample case for the interactive demo — add your own clients on a paid org', '["Demo"]', 1, 1, 1,
          datetime('now'), 642, 635, 648, 6200, 1650, datetime('now'), datetime('now'))`
-    ).bind(DEMO_CLIENT_ID, orgId, DEMO_CLIENT_EMAIL).run();
+    ).bind(DEMO_CLIENT_ID, orgId, DEMO_CLIENT_FIRST_NAME, DEMO_CLIENT_LAST_NAME, DEMO_CLIENT_EMAIL).run();
     client = await c.env.DB.prepare(`SELECT * FROM clients WHERE id = ?`).bind(DEMO_CLIENT_ID).first() as any;
   } else {
     await c.env.DB.prepare(
       `UPDATE clients SET
+         first_name = ?,
+         last_name = ?,
+         notes = 'Sandbox sample case for the interactive demo — add your own clients on a paid org',
+         tags = '["Demo"]',
          eq_score = COALESCE(eq_score, 642),
          ex_score = COALESCE(ex_score, 635),
          tu_score = COALESCE(tu_score, 648),
@@ -9996,13 +10355,14 @@ async function ensureDemoClientAndPortal(
          estimated_monthly_debt = COALESCE(estimated_monthly_debt, 1650),
          updated_at = datetime('now')
        WHERE id = ?`
-    ).bind(client.id).run();
+    ).bind(DEMO_CLIENT_FIRST_NAME, DEMO_CLIENT_LAST_NAME, client.id).run();
     await c.env.DB.prepare(
       `UPDATE clients SET permissible_purpose_consent = 1, croa_contract_agreed = 1, tsr_advance_fee_waived = 1, updated_at = datetime('now') WHERE id = ?`
     ).bind(client.id).run().catch(() => {});
   }
 
   const email = (client.email || DEMO_CLIENT_EMAIL).trim();
+  const displayName = `${DEMO_CLIENT_FIRST_NAME} ${DEMO_CLIENT_LAST_NAME}`;
   const passwordHash = await hashPassword(DEMO_PORTAL_PASSWORD);
   const existingUser = await c.env.DB.prepare(
     `SELECT id FROM users WHERE lower(email) = lower(?) AND org_id = ?`
@@ -10011,11 +10371,11 @@ async function ensureDemoClientAndPortal(
     await c.env.DB.prepare(
       `INSERT INTO users (id, org_id, email, name, password_hash, role, is_active, must_change_password)
        VALUES (?, ?, ?, ?, ?, 'client', 1, 0)`
-    ).bind(generateId(), orgId, email, `${client.first_name} ${client.last_name}`, passwordHash).run();
+    ).bind(generateId(), orgId, email, displayName, passwordHash).run();
   } else {
     await c.env.DB.prepare(
       `UPDATE users SET password_hash = ?, name = ?, role = 'client', is_active = 1, must_change_password = 0 WHERE id = ?`
-    ).bind(passwordHash, `${client.first_name} ${client.last_name}`, existingUser.id).run();
+    ).bind(passwordHash, displayName, existingUser.id).run();
   }
 
   let sampleCase: any = null;
@@ -10033,16 +10393,17 @@ async function ensureDemoClientAndPortal(
   return { clientId: client.id as string, email, portalPassword: DEMO_PORTAL_PASSWORD, sampleCase };
 }
 
-// One-click sales demo prep: Salisha client + portal login + optional sample case
+// One-click sandbox prep: Demo Client + portal login + sample case on the interactive demo org only
 app.post('/api/admin/demo/prepare', authMiddleware, adminGateMiddleware, async (c) => {
   const user = c.get('user');
   const body = await c.req.json().catch(() => ({}));
   const loadCase = body.loadCase !== false;
+  const host = await ensureDemoHost(c);
 
-  const ensured = await ensureDemoClientAndPortal(c, user.org_id, {
+  const ensured = await ensureDemoClientAndPortal(c, host.orgId, {
     loadCase,
     forceReload: !!body.forceReload,
-    actingUser: { id: user.id, org_id: user.org_id },
+    actingUser: { id: user.id, org_id: host.orgId },
   });
   const caseResult = ensured.sampleCase || null;
 
@@ -10066,7 +10427,7 @@ app.post('/api/admin/demo/prepare', authMiddleware, adminGateMiddleware, async (
     ok: true,
     sandbox: true,
     clientId: ensured.clientId,
-    clientName: 'Salisha McDowell',
+    clientName: DEMO_CLIENT_NAME,
     portalEmail: ensured.email,
     portalPassword: ensured.portalPassword,
     staffEmail: 'demo@example.com',
@@ -10075,12 +10436,11 @@ app.post('/api/admin/demo/prepare', authMiddleware, adminGateMiddleware, async (
     caseResult,
     fundingPreview,
     walkthrough: [
-      'Sign in as staff (demo@example.com) or use one-click Admin Demo',
-      'Open Clients → Salisha McDowell → Preview Portal',
-      'Show Cockpit, Fundability (Funding Cockpit), Violations, Documents',
-      'Optional: sign out and login as client portal with the portal credentials below',
+      'Launch the interactive demo at /demo — sample data lives only on the sandbox org',
+      'Add your own client in Client Management to run the full process on this company',
+      'Optional: Preview Portal on the sample Demo Client inside the interactive demo',
     ],
-    message: 'Demo walkthrough ready — staff + client portal credentials reset for this sandbox.',
+    message: 'Sandbox Demo Client is ready on the interactive demo org. Paid CRMs should add their own clients.',
   });
 });
 
@@ -10090,9 +10450,12 @@ app.post('/api/admin/demo/load-case', authMiddleware, adminGateMiddleware, async
   const body = await c.req.json().catch(() => ({}));
   let clientId = body.clientId as string | undefined;
   let isNewClient = false;
+  let actingOrgId = user.org_id;
 
   if (!clientId) {
-    const ensured = await ensureDemoClientAndPortal(c, user.org_id);
+    const host = await ensureDemoHost(c);
+    actingOrgId = host.orgId;
+    const ensured = await ensureDemoClientAndPortal(c, host.orgId);
     clientId = ensured.clientId;
   } else {
     const existing = await c.env.DB.prepare('SELECT id FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first();
@@ -10124,6 +10487,7 @@ app.post('/api/admin/demo/load-case', authMiddleware, adminGateMiddleware, async
     fileNamePrefix: 'demo-mfsn',
     activityAction: 'demo_case_loaded',
     activityDescription: `Loaded tri-bureau demo case (${bureauReports.length} bureaus, ${demoViolationCount} violations)`,
+    actingUser: { id: user.id, org_id: actingOrgId },
   });
 
   return c.json({
@@ -10167,8 +10531,56 @@ app.get('/api/admin/db-stats', authMiddleware, adminGateMiddleware, async (c) =>
 // 2. GET /api/admin/organizations
 app.get('/api/admin/organizations', authMiddleware, adminGateMiddleware, async (c) => {
   try {
-    const orgs = await c.env.DB.prepare('SELECT * FROM organizations ORDER BY created_at DESC').all();
+    let orgs;
+    try {
+      orgs = await c.env.DB.prepare(`
+        SELECT o.*,
+          (SELECT COUNT(*) FROM users u WHERE u.org_id = o.id) AS user_count,
+          (SELECT COUNT(*) FROM clients c WHERE c.org_id = o.id) AS client_count
+        FROM organizations o
+        ORDER BY o.created_at DESC
+      `).all();
+    } catch {
+      orgs = await c.env.DB.prepare('SELECT * FROM organizations ORDER BY created_at DESC').all();
+    }
     return c.json({ organizations: orgs?.results || [] });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+app.get('/api/admin/organizations/:id/summary', authMiddleware, adminGateMiddleware, async (c) => {
+  try {
+    const id = c.req.param('id');
+    const org = await c.env.DB.prepare('SELECT * FROM organizations WHERE id = ?').bind(id).first() as any;
+    if (!org) return c.json({ error: 'Organization not found' }, 404);
+    const users = await c.env.DB.prepare(
+      'SELECT id, name, email, role, is_active, last_login, created_at FROM users WHERE org_id = ? ORDER BY created_at DESC',
+    ).bind(id).all();
+    const clients = await c.env.DB.prepare(
+      'SELECT id, first_name, last_name, email, phone, status, created_at FROM clients WHERE org_id = ? ORDER BY created_at DESC LIMIT 200',
+    ).bind(id).all();
+    let payments: any[] = [];
+    try {
+      const pay = await c.env.DB.prepare(
+        'SELECT id, email, plan, status, stripe_customer_id, stripe_subscription_id, stripe_session_id, created_at, applied_at FROM saas_entitlements WHERE org_id = ? ORDER BY created_at DESC LIMIT 50',
+      ).bind(id).all();
+      payments = pay?.results || [];
+    } catch {
+      payments = [];
+    }
+    const reports = await c.env.DB.prepare('SELECT COUNT(*) as count FROM credit_reports WHERE org_id = ?').bind(id).first('count');
+    return c.json({
+      organization: org,
+      users: users?.results || [],
+      clients: clients?.results || [],
+      payments,
+      counts: {
+        users: (users?.results || []).length,
+        clients: (clients?.results || []).length,
+        reports: reports || 0,
+      },
+    });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
@@ -10242,9 +10654,13 @@ app.get('/api/admin/users', authMiddleware, adminGateMiddleware, async (c) => {
 // 5.5. POST /api/admin/users
 app.post('/api/admin/users', authMiddleware, adminGateMiddleware, async (c) => {
   try {
-    const { name, email, password, role, org_id } = await c.req.json();
-    if (!name || !email || !password || !role || !org_id) {
+    const { name, email, password, role: rawRole, org_id } = await c.req.json();
+    if (!name || !email || !password || !rawRole || !org_id) {
       return c.json({ error: 'All fields are required (name, email, password, role, org_id)' }, 400);
+    }
+    const role = sanitizePlatformCreatedRole(rawRole, email, c.env);
+    if (!role) {
+      return c.json({ error: 'That role cannot be assigned to this account' }, 403);
     }
 
     const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
@@ -10475,6 +10891,11 @@ app.post('/api/marketing/campaign/trigger', authMiddleware, async (c) => {
       return c.json({ error: 'Client not found' }, 404);
     }
 
+    const campaignBrand = await loadOrgBrand(c.env, user.org_id);
+    const campaignFirm = campaignBrand.name || 'Your firm';
+    const campaignFooter = [campaignFirm, campaignBrand.address].filter(Boolean).join(' | ');
+    const campaignLogo = campaignBrand.logoUrl || '';
+
     // 2. Query violations count and estimate damages
     const violationSummary = await c.env.DB.prepare(
       'SELECT COUNT(*) as count, SUM(total_damages_max) as total_damages FROM violations WHERE client_id = ? AND org_id = ?'
@@ -10495,7 +10916,7 @@ app.post('/api/marketing/campaign/trigger', authMiddleware, async (c) => {
             Worth a 15-minute call to see if it fits your workflow?<br><br>
             Best,<br>
             ${user.name}<br>
-            RJ Business Solutions`
+            ${campaignFirm}`
         },
         2: {
           subject: `Re: Quick question about ${client.first_name}'s credit report`,
@@ -10544,13 +10965,13 @@ app.post('/api/marketing/campaign/trigger', authMiddleware, async (c) => {
           html: `
               <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff;">
                 <div style="text-align: center; margin-bottom: 20px;">
-                  <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt="RJ Business Solutions" style="max-height: 50px; border-radius: 8px;">
+                  ${campaignLogo ? `<img src="${campaignLogo}" alt="${campaignFirm}" style="max-height: 50px; border-radius: 8px;">` : ''}
                 </div>
                 <div style="color: #1e293b; line-height: 1.6; font-size: 14px;">
                   ${template.body}
                 </div>
                 <div style="margin-top: 30px; border-t: 1px solid #e2e8f0; padding-top: 15px; font-size: 11px; color: #64748b; text-align: center;">
-                  RJ Business Solutions | 1342 NM 333, Tijeras, New Mexico 87059
+                  ${campaignFooter || campaignFirm}
                 </div>
               </div>
             `,
@@ -10927,8 +11348,8 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/demo-experience.js?v=20260818-demo-complete"></script>
-  <script src="/static/app.js?v=20260818-demo-complete"></script>
+  <script src="/static/demo-experience.js?v=20260819-stripe-live"></script>
+  <script src="/static/app.js?v=20260819-stripe-live"></script>
 </body>
 </html>`;
 }

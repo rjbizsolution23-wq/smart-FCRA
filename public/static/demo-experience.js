@@ -1,7 +1,7 @@
 /* Smart FCRA interactive demo overlay — tour + text/voice agent. */
 (function () {
   'use strict';
-  const DEMO_CLIENT = { id: 'cli_demo_001', name: 'Salisha McDowell' };
+  const DEMO_CLIENT = { id: 'cli_demo_001', name: 'Demo Client' };
 
   let api = null;
   let toast = () => {};
@@ -38,14 +38,23 @@
     speaking = false;
   }
 
+  function isDedicatedPortalPage(page) {
+    const p = String(page || '');
+    return p.startsWith('client-') && p !== 'client-detail';
+  }
+  function isSharedPortalPage(page) {
+    const p = String(page || '');
+    return p === 'tradelines' || p === 'ai-studio';
+  }
+
   async function runActions(actions) {
     if (!Array.isArray(actions)) return;
     for (const a of actions) {
       if (!a || !a.type) continue;
       if (a.type === 'navigate') {
-        if (['client-cockpit', 'client-report', 'client-rights', 'client-tutor', 'client-cancel', 'client-credit', 'client-case', 'client-actions'].includes(a.page)) {
+        if (isDedicatedPortalPage(a.page)) {
           if (!getState().impersonateClientId) startImpersonating(DEMO_CLIENT.id, DEMO_CLIENT.name);
-        } else if (getState().impersonateClientId && !String(a.page).startsWith('client-')) {
+        } else if (!isSharedPortalPage(a.page) && getState().impersonateClientId) {
           stopImpersonating();
         }
         navigate(a.page, a.data || undefined);
@@ -102,7 +111,7 @@
     renderTourCard();
     const actions = [];
     if (s.impersonate) actions.push({ type: 'impersonate', clientId: DEMO_CLIENT.id, name: DEMO_CLIENT.name });
-    else if (getState().impersonateClientId && !String(s.page).startsWith('client-')) actions.push({ type: 'exitImpersonate' });
+    else if (getState().impersonateClientId && !isDedicatedPortalPage(s.page) && !isSharedPortalPage(s.page)) actions.push({ type: 'exitImpersonate' });
     actions.push({ type: 'navigate', page: s.page, data: s.data });
     runActions(actions);
     api('/demo/session', { method: 'PATCH', body: JSON.stringify({ tourStep: step }) }).catch(() => {});
@@ -149,13 +158,20 @@
   }
 
   function openLiveMfsn() {
-    const html = `<div class="bg-gray-900 border border-gray-700 rounded-2xl p-5 max-w-md w-full text-left">
-      <h3 class="text-white font-display text-lg mb-1">One live MyFreeScoreNow report</h3>
-      <p class="text-xs text-gray-400 mb-3">One person, one pull, this demo account only. Partner credentials stay on the server. You supply the member email and MAPIK# token.</p>
+    const html = `<div class="bg-gray-900 border border-gray-700 rounded-2xl p-5 max-w-lg w-full text-left max-h-[90vh] overflow-y-auto">
+      <h3 class="text-white font-display text-lg mb-1">Live MyFreeScoreNow pull</h3>
+      <p class="text-xs text-gray-400 mb-3">One person, one pull, this demo account only. Do it in this order — API User first, then the member.</p>
+      <ol class="text-[11px] text-gray-300 space-y-2 mb-4 list-decimal pl-4">
+        <li><strong class="text-white">Affiliate portal</strong> — <a class="text-cyan-400 underline" href="https://myfreescorenow.com/login" target="_blank" rel="noopener">myfreescorenow.com/login</a></li>
+        <li><strong class="text-white">Users → API User → create it</strong> — copy that email and password. That is the partner login (Bearer), not the consumer.</li>
+        <li><strong class="text-white">My Free Score API login</strong> — on Import, paste the API User. This demo may already have partner secrets; then skip to the member fields.</li>
+        <li><strong class="text-white">Client email + MAPIK# token</strong> — this member under affiliate A8289. Each member has their own token. Official API: login / fetch-3B-json / logout.</li>
+        <li><strong class="text-white">Pull starts the full process</strong> — vault, parse, named scores, violations, client file, then Preview Portal.</li>
+      </ol>
       <label class="block text-xs text-gray-400 mb-1">Member email</label>
       <input id="sf-mfsn-email" type="email" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm mb-2" />
       <label class="block text-xs text-gray-400 mb-1">Member token (MAPIK#)</label>
-      <input id="sf-mfsn-token" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm mb-3" />
+      <input id="sf-mfsn-token" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm mb-3" placeholder="MAPIK#…" />
       <div class="flex gap-2">
         <button data-modal-close class="flex-1 bg-gray-800 text-gray-200 rounded-lg py-2 text-sm">Cancel</button>
         <button id="sf-mfsn-go" class="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-semibold">Pull once</button>
@@ -224,6 +240,7 @@
         <span>Interactive demo for <strong>${esc(session.businessName || 'your firm')}</strong> · tour + agent · one live MFSN report max</span>
         <span>
           <button type="button" class="sf-ghost" id="sf-show-tour">Tour</button>
+          <button type="button" class="sf-ghost" id="sf-portal">Client portal</button>
           <button type="button" class="sf-ghost" id="sf-live">Live report</button>
           <button type="button" id="sf-convert">Start your organization</button>
         </span>
@@ -249,13 +266,17 @@
       document.getElementById('sf-demo-tour').classList.remove('sf-hidden');
       renderTourCard();
     };
+    document.getElementById('sf-portal').onclick = () => {
+      const idx = tour.findIndex((s) => s.impersonate);
+      goTour(idx >= 0 ? idx : 0);
+    };
     document.getElementById('sf-live').onclick = () => openLiveMfsn();
     document.getElementById('sf-convert').onclick = () => convertToSignup();
     document.getElementById('sf-fab').onclick = () => {
       const pane = document.getElementById('sf-demo-agent');
       pane.classList.toggle('sf-hidden');
       if (!pane.classList.contains('sf-hidden') && !document.querySelector('#sf-demo-log .sf-msg')) {
-        addMsg('agent', 'Ask me anything about Smart FCRA. I can open violations, generated letters, the client portal, tutors, CROA cancel, or help you pull one live MyFreeScoreNow report. I will not disclose engine internals or promise lawsuit outcomes.');
+        addMsg('agent', 'Ask me anything about Smart FCRA. I can open violations, generated letters, Preview Portal and walk every consumer tab and page, tutors, CROA cancel, or help you pull one live MyFreeScoreNow report. I will not disclose engine internals or promise lawsuit outcomes.');
       }
     };
     document.getElementById('sf-agent-close').onclick = () => document.getElementById('sf-demo-agent').classList.add('sf-hidden');

@@ -31,6 +31,8 @@ FREE_AI_ONLY=true
 # TRADELINE_OPS_EMAIL=tradelines@smartfcra.com
 # TRADELINE_FROM_EMAIL=welcome@tradelines.smartfcra.com
 # CLOUDFLARE_EMAIL_API_TOKEN=cfut_xxxxxxxx
+# Production (Cloudflare Pages): STRIPE_API_KEY=sk_live_... STRIPE_PUBLISHABLE_KEY=pk_live_... STRIPE_WEBHOOK_SECRET=whsec_...
+# Never put sk_test_ on ENVIRONMENT=production — checkout is blocked until live keys are set.
 # STRIPE_API_KEY=
 # ANALYSIS_UNLOCK_PRICE_CENTS=29700
 # TURNSTILE_SITE_KEY=

@@ -64,11 +64,11 @@ export const TRADELINE_EDUCATION: TradelineLesson[] = [
     id: 'tl-process',
     title: 'RJ Business Solutions purchase process',
     summary: 'Browse → match → submit client info → pay via tradelines@smartfcra.com → we place the order.',
-    body: `1) Browse live inventory (prices include a 12.5% RJ service markup). 2) Use Smart Match against the client’s credit profile. 3) Complete the client + credit-portal credential form. 4) Email confirmation goes to tradelines@smartfcra.com with payment instructions. 5) After funds clear, staff submits the TradelineMaster order and tracks status.`,
+    body: `1) Browse live inventory at the listed prices. 2) Use Smart Match against the client’s credit profile. 3) Complete the client + credit-portal credential form. 4) Email confirmation goes to tradelines@smartfcra.com with payment instructions. 5) After funds clear, staff submits the TradelineMaster order and tracks status.`,
     bullets: [
       'Payment & questions: tradelines@smartfcra.com',
       'From address for notices: welcome@tradelines.smartfcra.com',
-      'Ledger balance at TradelineMaster must cover wholesale cost to auto-place',
+      'Staff place the order after payment clears',
       'Keep ID / agreement docs ready if requested',
     ],
   },

@@ -56,6 +56,11 @@ const mockEnv = {
   assert(spec.paths['/api/cron/daily-motivation'], 'daily motivation cron documented');
   assert(spec.paths['/api/compliance/data-inventory'], 'data inventory documented');
   assert(spec.paths['/api/security/audit-log'], 'security audit log documented');
+  assert(spec.paths['/api/public/plans'], 'public plans documented');
+  assert(spec.paths['/api/admin/stripe/ensure-catalog'], 'ensure-catalog documented');
+  assert(spec.paths['/api/admin/organizations/{id}/summary'], 'tenant summary documented');
+  assert(spec.paths['/api/brand/catalog'], 'brand catalog documented');
+  assert(spec.paths['/api/founder-templates'], 'founder templates documented');
 }
 
 // Daily motivation cron rejects missing secret
@@ -115,6 +120,62 @@ const mockEnv = {
   assert(body.enabled === false, 'turnstile disabled without keys');
 }
 
+// Public SaaS plans (no Stripe key → static catalog, no secrets)
+{
+  const res = await app.request('/api/public/plans', {}, mockEnv);
+  assert(res.status === 200, 'GET /api/public/plans returns 200');
+  const body = await res.json();
+  assert(body.live === false, 'plans not live without Stripe');
+  assert(body.mode === 'unconfigured', 'unconfigured mode');
+  assert(body.chargesReal === false, 'no real charges without Stripe');
+  assert(Array.isArray(body.plans) && body.plans.length === 3, 'three public plans');
+  assert(body.plans[0].id === 'professional' && body.plans[0].amountCents === 49700, 'professional amount');
+  assert(body.plans.every((p) => p.subscribeUrl.includes('/login?mode=register')), 'register subscribe urls');
+  assert(body.plans.every((p) => !p.priceId && !String(JSON.stringify(body)).includes('sk_')), 'no stripe secrets');
+}
+
+// Production + test Stripe key must not advertise live checkout
+{
+  const prodTest = { ...mockEnv, ENVIRONMENT: 'production', STRIPE_API_KEY: 'sk_test_placeholder', STRIPE_PUBLISHABLE_KEY: 'pk_test_placeholder' };
+  const res = await app.request('/api/public/plans', {}, prodTest);
+  assert(res.status === 200, 'GET /api/public/plans production+test returns 200');
+  const body = await res.json();
+  assert(body.live === false, 'production test keys are not live');
+  assert(body.chargesReal === false, 'production test keys cannot charge');
+  assert(body.productionBlocked === true, 'productionBlocked flag');
+  assert(body.mode === 'test', 'mode remains test');
+  assert(String(body.error || '').includes('sk_live_'), 'error tells operator to set sk_live_');
+}
+
+// Demo signups inbox requires auth
+{
+  const res = await app.request('/api/admin/demo/signups', {}, mockEnv);
+  assert(res.status === 401, 'GET /api/admin/demo/signups without token returns 401');
+}
+
+{
+  const res = await app.request('/api/brand/leads', {}, mockEnv);
+  assert(res.status === 401, 'GET /api/brand/leads without token returns 401');
+}
+
+{
+  const res = await app.request('/api/founder-templates', {}, mockEnv);
+  assert(res.status === 401, 'GET /api/founder-templates without token returns 401');
+}
+
+{
+  const res = await app.request('/api/company', {}, mockEnv);
+  assert(res.status === 200, 'GET /api/company is public');
+  const body = await res.json();
+  assert(!JSON.stringify(body).includes('Rick Jefferson'), 'public company payload has no owner name');
+  assert(!JSON.stringify(body).includes('Tijeras'), 'public company payload has no HQ address');
+}
+
+{
+  const res = await app.request('/api/admin/organizations/org_x/summary', {}, mockEnv);
+  assert(res.status === 401, 'GET /api/admin/organizations/:id/summary without token returns 401');
+}
+
 // PWA shell
 {
   const man = await app.request('/manifest.webmanifest', {}, mockEnv);
@@ -126,6 +187,32 @@ const mockEnv = {
   assert(sw.status === 200, 'GET /sw.js returns 200');
   const swText = await sw.text();
   assert(swText.includes('smart-fcra-shell'), 'service worker cache name');
+}
+
+// Canonical domain: www / pages.dev HTML 301 to smartfcra.com; APIs stay put
+{
+  const www = await app.request('https://www.smartfcra.com/demo', { headers: { host: 'www.smartfcra.com' } }, mockEnv);
+  assert(www.status === 301, 'www HTML redirects');
+  assert(www.headers.get('location') === 'https://smartfcra.com/demo', 'www location');
+  const pages = await app.request('https://smart-fcra-v2.pages.dev/login', { headers: { host: 'smart-fcra-v2.pages.dev' } }, mockEnv);
+  assert(pages.status === 301, 'pages.dev HTML redirects');
+  assert(pages.headers.get('location') === 'https://smartfcra.com/login', 'pages.dev location');
+  const api = await app.request('https://smart-fcra-v2.pages.dev/api/health', { headers: { host: 'smart-fcra-v2.pages.dev' } }, mockEnv);
+  assert(api.status === 200, 'pages.dev API is not redirected');
+  const apex = await app.request('https://smartfcra.com/', { headers: { host: 'smartfcra.com' } }, mockEnv);
+  assert(apex.status === 200, 'apex landing is not redirected');
+}
+
+{
+  const robots = await app.request('/robots.txt', {}, mockEnv);
+  assert(robots.status === 200, 'GET /robots.txt');
+  const robotsText = await robots.text();
+  assert(robotsText.includes('https://smartfcra.com/sitemap.xml'), 'robots sitemap');
+  const sitemap = await app.request('/sitemap.xml', {}, mockEnv);
+  assert(sitemap.status === 200, 'GET /sitemap.xml');
+  const xml = await sitemap.text();
+  assert(xml.includes('https://smartfcra.com/login'), 'sitemap login');
+  assert(xml.includes('https://smartfcra.com/demo'), 'sitemap demo');
 }
 
 console.log('PASS: API route integration tests');

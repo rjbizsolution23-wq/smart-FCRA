@@ -316,14 +316,38 @@ export function resolvePartnerMfsnCredentials(env: MfsnEnv): MFSNClientConfig | 
  * Body can override partner fields for advanced use; public signup must use resolvePartnerMfsnCredentials.
  */
 export function resolveMfsnCredentials(
-  body: { username?: string; password?: string; secretWord?: string; clientToken?: string },
+  body: { username?: string; password?: string; secretWord?: string; clientToken?: string; memberToken?: string },
   env: MfsnEnv,
 ): MFSNClientConfig | null {
   const email = (body.username || env.MFSN_EMAIL || '').trim();
   const password = (body.password || env.MFSN_PASSWORD || '').trim();
-  const clientToken = (body.secretWord || body.clientToken || env.MFSN_CLIENT_TOKEN || '').trim();
+  const clientToken = (body.secretWord || body.clientToken || body.memberToken || env.MFSN_CLIENT_TOKEN || '').trim();
   if (!email || !password || !clientToken) return null;
   return { apiUrl: env.MFSN_API_URL, email, password, clientToken };
+}
+
+/** Partner API User (email + password) without a default member token. */
+export function hasPartnerApiLogin(env: MfsnEnv): boolean {
+  return !!(String(env.MFSN_EMAIL || '').trim() && String(env.MFSN_PASSWORD || '').trim());
+}
+
+export function explainMfsnPullError(err: MFSNError): string {
+  if (err.code === 'LOGIN_FAILED' || err.statusCode === 401) {
+    return 'API User login failed. In the MyFreeScoreNow affiliate portal open Users, click API User, create it, then paste that email and password into My Free Score API login.';
+  }
+  if (err.code === 'USER_NOT_FOUND') {
+    return 'That member email is not under this affiliate. Enroll the client on an A8289 offer, then pull with their membership email and MAPIK# token.';
+  }
+  if (err.code === 'TOKEN_INVALID' || /token/i.test(err.message)) {
+    return 'Client token was rejected. Use this member’s MAPIK# token (not the API User password). Each member has their own token.';
+  }
+  if (err.code === 'USER_SUSPENDED') {
+    return 'That MyFreeScoreNow member is suspended. Fix the membership in the affiliate portal, then retry the pull.';
+  }
+  if (err.code === 'CONFIG_MISSING') {
+    return 'Need an API User email/password (affiliate Users → API User) plus this client’s email and MAPIK# token.';
+  }
+  return err.message;
 }
 
 /**

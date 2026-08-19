@@ -22,7 +22,7 @@ function createDemoDb() {
   }];
   const clients = [{
     id: 'cli_demo_001', org_id: 'org_demo_001', email: 'salisha.mcdowell@example.com',
-    first_name: 'Salisha', last_name: 'McDowell',
+    first_name: 'Demo', last_name: 'Client',
   }];
   const demoSessions = [];
   const sessions = [];
@@ -142,7 +142,7 @@ function createDemoDb() {
   };
 }
 
-const { DEMO_TOUR } = await import(pathToFileURL(path.join(root, 'src/engine/demo-experience.ts')).href);
+const { DEMO_TOUR, CLIENT_PORTAL_GUIDE } = await import(pathToFileURL(path.join(root, 'src/engine/demo-experience.ts')).href);
 const appModule = await import(pathToFileURL(path.join(root, 'src/index.tsx')).href);
 const app = appModule.default;
 
@@ -159,6 +159,20 @@ assert(loginHtml.includes("params.get('from') === 'demo'"), 'register prefill fr
 assert(overlay.includes('/demo/prepare'), 'overlay prepares sample case without super_admin');
 assert(overlay.includes('Start your organization'), 'overlay convert CTA');
 assert(overlay.includes('/demo/convert'), 'overlay posts convert handoff');
+assert(overlay.includes('id="sf-portal"'), 'overlay jumps into the client portal tour');
+assert(spa.includes('mfsn-api-user-guide'), 'SPA shows MFSN API User walkthrough');
+assert(spa.includes('Users → API User') || spa.includes('Users section'), 'SPA tells staff to open Users → API User');
+assert(overlay.includes('Users → API User'), 'demo live modal walks API User setup');
+assert(overlay.includes('myfreescorenow.com/login'), 'overlay links affiliate portal');
+assert(spa.includes('_portalWalkStep'), 'SPA can step Next/Previous through portal tabs');
+assert(spa.includes('OWNER_ONLY_PAGES'), 'SPA gates owner-only pages');
+assert(spa.includes('function isPlatformOwner'), 'SPA checks platformOwner flag, not super_admin');
+assert(spa.includes('Not available on this account'), 'non-owners see forbidden state');
+assert(spa.includes("syncSessionCookie"), 'SPA sets session cookie for private brand hub');
+assert(spa.includes("id: 'client-report'"), 'SPA sidebar includes Report');
+for (const g of CLIENT_PORTAL_GUIDE) {
+  assert(spa.includes(`page: '${g.page}'`), `SPA walkthrough lists ${g.page}`);
+}
 
 for (const step of DEMO_TOUR) {
   assert(spa.includes(`case '${step.page}'`), `SPA implements tour page ${step.page}`);
@@ -255,6 +269,23 @@ const auth = { Authorization: `Bearer ${sessionToken}` };
   const body = await res.json();
   assert(res.status === 200, 'tour 200');
   assert(Array.isArray(body.steps) && body.steps.length === DEMO_TOUR.length, 'full tour returned');
+}
+
+{
+  const res = await app.request('/api/portal/guide', { headers: auth }, env);
+  const body = await res.json();
+  assert(res.status === 200, 'portal guide 200');
+  assert(Array.isArray(body.pages) && body.pages.length === CLIENT_PORTAL_GUIDE.length, 'portal guide pages');
+  assert(/Preview Portal/i.test(body.previewHint || ''), 'guide tells staff to preview');
+}
+
+{
+  const res = await app.request('/api/mfsn/operator-access', { headers: auth }, env);
+  const body = await res.json();
+  assert(res.status === 200, 'mfsn operator access 200');
+  assert(Array.isArray(body.pullGuide) && body.pullGuide.length === 5, 'pull guide has five steps');
+  assert(/API User/i.test(body.pullGuide[1].title), 'step 2 is API User');
+  assert(String(body.affiliatePortalUrl || '').includes('myfreescorenow.com'), 'affiliate portal url');
 }
 
 {
@@ -363,6 +394,18 @@ const auth = { Authorization: `Bearer ${sessionToken}` };
   assert(body.checks, 'readiness checks present');
   assert(body.checks.db === true, 'db check true on mock');
   assert('stripe' in body.checks && 'mfsn' in body.checks && 'click2mail' in body.checks && 'ghl' in body.checks, 'integration flags listed');
+  assert('stripeMode' in body.checks && 'chargesReal' in body.checks, 'stripe live flags listed');
+  assert(body.checks.productionBillingReady === false, 'mock env is not live billing');
+}
+
+{
+  const prodTest = { ...env, ENVIRONMENT: 'production', STRIPE_API_KEY: 'sk_test_placeholder', STRIPE_PUBLISHABLE_KEY: 'pk_test_placeholder' };
+  const res = await app.request('/api/health/ready', {}, prodTest);
+  const body = await res.json();
+  assert(body.checks.stripeMode === 'test', 'health reports test secret');
+  assert(body.checks.chargesReal === false, 'health does not claim real charges');
+  assert(body.checks.productionBlocked === true, 'health flags production blocked');
+  assert(body.checks.productionBillingReady === false, 'production + test keys is not billing-ready');
 }
 
 console.log('demo-flow tests passed', { tourSteps: DEMO_TOUR.length, spaPages: extraPages.length + DEMO_TOUR.length });

@@ -19,6 +19,8 @@ const {
   resolveMfsnCredentials,
   resolvePartnerMfsnCredentials,
   resolvePublicSignupMfsnCredentials,
+  hasPartnerApiLogin,
+  explainMfsnPullError,
   MFSNError,
 } = await import(
   pathToFileURL(path.join(root, 'src/engine/mfsn-client.ts')).href
@@ -42,7 +44,7 @@ const { MASTER_BUSINESS_VENDORS } = await import(
 
 // ── Secrets must never be hardcoded in client source ──
 const mfsnSrc = readFileSync(path.join(root, 'src/engine/mfsn-client.ts'), 'utf8');
-assert(!mfsnSrc.includes('MAPIK#'), 'mfsn-client must not embed client token');
+assert(!/MAPIK#[A-Za-z0-9]{8,}/.test(mfsnSrc), 'mfsn-client must not embed a live client token');
 assert(!/Nadia\d/.test(mfsnSrc), 'mfsn-client must not embed password defaults');
 assert(!mfsnSrc.includes('rickjefferson@'), 'mfsn-client must not embed email defaults');
 
@@ -66,6 +68,20 @@ const bodyWins = resolveMfsnCredentials(
 );
 assert(bodyWins?.email === 'body@x.com', 'body overrides email');
 assert(bodyWins?.clientToken === 'bodytok', 'secretWord maps to clientToken');
+
+assert(hasPartnerApiLogin({ MFSN_EMAIL: 'a@b.com', MFSN_PASSWORD: 'x' }) === true, 'api user login without default token');
+assert(hasPartnerApiLogin({ MFSN_EMAIL: 'a@b.com' }) === false, 'password required');
+const memberPlusPartner = resolveMfsnCredentials(
+  { memberToken: 'MAPIK#member' },
+  { MFSN_EMAIL: 'api@x.com', MFSN_PASSWORD: 'apipass' },
+);
+assert(memberPlusPartner?.email === 'api@x.com' && memberPlusPartner?.clientToken === 'MAPIK#member', 'API User from env + member MAPIK#');
+{
+  const loginFail = new MFSNError(401, 'LOGIN_FAILED', 'Invalid credentials');
+  assert(/API User/i.test(explainMfsnPullError(loginFail)), 'login fail explains API User');
+  const tokFail = new MFSNError(400, 'TOKEN_INVALID', 'Invalid client token');
+  assert(/MAPIK#/i.test(explainMfsnPullError(tokFail)), 'token fail explains member token');
+}
 
 const partnerOnly = resolvePartnerMfsnCredentials({
   MFSN_EMAIL: 'partner@x.com',

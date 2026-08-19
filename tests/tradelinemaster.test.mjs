@@ -17,6 +17,7 @@ const {
   applyMarkup,
   enrichTradeline,
   filterTradelines,
+  toPublicTradeline,
   TRADELINE_MARKUP_RATE,
   accountAgeParts,
 } = await import(pathToFileURL(path.join(root, 'src/lib/tradelinemaster-client.ts')).href);
@@ -42,6 +43,9 @@ const enriched = enrichTradeline({
   PostingDate: '2026-08-25T00:00:00',
 });
 assert(enriched.retailPrice === 450, 'enriched retail');
+assert(!('wholesalePrice' in toPublicTradeline(enriched)), 'public payload hides wholesale');
+assert(!('markupRate' in toPublicTradeline(enriched)), 'public payload hides markup rate');
+assert(toPublicTradeline(enriched).retailPrice === 450, 'public still has retail');
 assert(enriched.lender === 'BARCLAYS', 'lender');
 assert(enriched.statementDay === 10, 'statement day');
 assert(enriched.postingWindowLabel.includes('Aug'), 'posting window');
@@ -62,5 +66,9 @@ const matched = matchTradelinesForClient(
 assert(matched.matches.length === 1, 'match count');
 assert(matched.matches[0].tier === 'best' || matched.matches[0].matchScore > 40, 'match score');
 assert(matched.agentBrief.includes('tradelines@smartfcra.com'), 'ops email in brief');
+
+const { listTradelineEducation } = await import(pathToFileURL(path.join(root, 'src/data/tradeline-education.ts')).href);
+const eduText = listTradelineEducation().map((l) => `${l.body} ${l.summary} ${(l.bullets||[]).join(' ')}`).join(' ');
+assert(!/12\.5/.test(eduText), 'education does not advertise a fee percent');
 
 console.log('tradelinemaster tests passed');

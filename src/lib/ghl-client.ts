@@ -87,7 +87,7 @@ function authHeaders(env: GhlEnv): Record<string, string> {
     Version: '2021-07-28',
     Accept: 'application/json',
     'Content-Type': 'application/json',
-    'User-Agent': 'Mozilla/5.0 (compatible; SmartFCRA/2.0; +https://smart-fcra-v2.pages.dev)',
+    'User-Agent': 'Mozilla/5.0 (compatible; SmartFCRA/2.0; +https://smartfcra.com)',
   };
 }
 
