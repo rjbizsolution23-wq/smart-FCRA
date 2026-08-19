@@ -22,6 +22,10 @@ const {
   subscribePathForPlan,
   resolveFrontendUrl,
   formatPlanAmount,
+  stripeSecretMode,
+  stripePublishableMode,
+  isProductionRuntime,
+  productionStripeBlockReason,
 } = await import(pathToFileURL(path.join(root, 'src/lib/stripe-catalog.ts')).href);
 
 assert(STRIPE_CATALOG.length === 3, 'three plans');
@@ -63,6 +67,29 @@ const publicLive = publicPlansFromCatalog({
 });
 assert(publicLive.every((p) => p.live && p.priceId && p.productId && p.paymentLink), 'live payload has ids');
 assert(publicLive.every((p) => p.subscribeUrl.startsWith('/login?mode=register')), 'checkout still via register');
+
+const publicTest = publicPlansFromCatalog({ mode: 'test', plans: publicLive.map((p, i) => ({
+  ...STRIPE_CATALOG[i],
+  productId: p.productId,
+  priceId: p.priceId,
+  paymentLinkUrl: p.paymentLink,
+  paymentLinkId: `plink_${p.id}`,
+  createdProduct: false,
+  createdPrice: false,
+  createdPaymentLink: false,
+})) });
+assert(publicTest.every((p) => p.live === false), 'test catalog is not advertised as live');
+
+assert(stripeSecretMode('sk_live_abc') === 'live', 'live secret');
+assert(stripeSecretMode('sk_test_abc') === 'test', 'test secret');
+assert(stripePublishableMode('pk_live_x') === 'live', 'live pk');
+assert(stripePublishableMode('pk_test_x') === 'test', 'test pk');
+assert(isProductionRuntime({ ENVIRONMENT: 'production' }), 'prod runtime');
+assert(!isProductionRuntime({ ENVIRONMENT: 'development' }), 'dev runtime');
+assert(productionStripeBlockReason({ ENVIRONMENT: 'production', STRIPE_API_KEY: 'sk_test_x' }), 'prod blocks test secret');
+assert(!productionStripeBlockReason({ ENVIRONMENT: 'production', STRIPE_API_KEY: 'sk_live_x', STRIPE_PUBLISHABLE_KEY: 'pk_live_x' }), 'prod allows live pair');
+assert(productionStripeBlockReason({ ENVIRONMENT: 'production', STRIPE_API_KEY: 'sk_live_x', STRIPE_PUBLISHABLE_KEY: 'pk_test_x' }), 'prod blocks mismatched pk_test');
+assert(!productionStripeBlockReason({ ENVIRONMENT: 'development', STRIPE_API_KEY: 'sk_test_x' }), 'dev allows test');
 
 assert(resolveFrontendUrl({ FRONTEND_URL: 'https://smartfcra.com/' }) === 'https://smartfcra.com', 'strip slash');
 assert(resolveFrontendUrl({ FRONTEND_URL: 'https://smart-fcra-v2.pages.dev/' }) === 'https://smartfcra.com', 'pages.dev env');

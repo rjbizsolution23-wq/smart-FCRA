@@ -605,6 +605,7 @@
       const applyLivePlans = (payload) => {
         const loggedIn = (() => { try { return !!localStorage.getItem('fcra_token'); } catch (_) { return false; } })();
         const plans = Array.isArray(payload && payload.plans) ? payload.plans : [];
+        const chargesReal = !!(payload && payload.chargesReal);
         plans.forEach((p) => {
           const btn = document.getElementById('cta-' + p.id);
           const pay = document.getElementById('pay-' + p.id);
@@ -620,7 +621,7 @@
             if (loggedIn) {
               pay.setAttribute('href', '/app?plan=' + encodeURIComponent(p.id));
               pay.textContent = 'Open checkout';
-            } else if (p.paymentLink) {
+            } else if (chargesReal && p.paymentLink) {
               pay.setAttribute('href', p.paymentLink);
               pay.setAttribute('rel', 'noopener');
             } else if (p.subscribeUrl) {
@@ -629,10 +630,13 @@
           }
         });
         const badge = document.getElementById('pricing-live-badge');
-        if (badge && payload && payload.live) {
-          badge.hidden = false;
-          if (payload.mode === 'test' || payload.chargesReal === false) {
-            badge.textContent = 'Stripe test checkout is on (no real charges). Create your organization, then you are sent to the matching Professional, Unlimited, or Enterprise subscription.';
+        if (badge) {
+          if (chargesReal) {
+            badge.hidden = false;
+            badge.textContent = 'Live Stripe checkout is on. Create your organization, then pay Professional, Unlimited, or Enterprise — cards are charged.';
+          } else if (payload && (payload.productionBlocked || payload.mode === 'test')) {
+            badge.hidden = false;
+            badge.textContent = 'Checkout is not live yet. Production needs Cloudflare Pages secrets STRIPE_API_KEY=sk_live_… and STRIPE_PUBLISHABLE_KEY=pk_live_…';
           }
         }
       };

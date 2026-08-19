@@ -394,6 +394,18 @@ const auth = { Authorization: `Bearer ${sessionToken}` };
   assert(body.checks, 'readiness checks present');
   assert(body.checks.db === true, 'db check true on mock');
   assert('stripe' in body.checks && 'mfsn' in body.checks && 'click2mail' in body.checks && 'ghl' in body.checks, 'integration flags listed');
+  assert('stripeMode' in body.checks && 'chargesReal' in body.checks, 'stripe live flags listed');
+  assert(body.checks.productionBillingReady === false, 'mock env is not live billing');
+}
+
+{
+  const prodTest = { ...env, ENVIRONMENT: 'production', STRIPE_API_KEY: 'sk_test_placeholder', STRIPE_PUBLISHABLE_KEY: 'pk_test_placeholder' };
+  const res = await app.request('/api/health/ready', {}, prodTest);
+  const body = await res.json();
+  assert(body.checks.stripeMode === 'test', 'health reports test secret');
+  assert(body.checks.chargesReal === false, 'health does not claim real charges');
+  assert(body.checks.productionBlocked === true, 'health flags production blocked');
+  assert(body.checks.productionBillingReady === false, 'production + test keys is not billing-ready');
 }
 
 console.log('demo-flow tests passed', { tourSteps: DEMO_TOUR.length, spaPages: extraPages.length + DEMO_TOUR.length });

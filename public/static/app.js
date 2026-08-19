@@ -6730,6 +6730,8 @@ Status: Discharged`;
     let mode = 'unconfigured';
     let invoices = [];
     let catalogPlans = fallbackPlans;
+    let productionBlocked = false;
+    let billingError = '';
     try {
       const [modeRes, invRes, planRes] = await Promise.all([
         api('/billing/mode').catch(() => ({ mode: 'unconfigured' })),
@@ -6737,6 +6739,12 @@ Status: Discharged`;
         fetch('/api/public/plans').then((r) => r.json()).catch(() => null),
       ]);
       mode = modeRes.mode || 'unconfigured';
+      productionBlocked = !!modeRes.productionBlocked;
+      billingError = modeRes.error || '';
+      state.billingMode = mode;
+      state.billingChargesReal = !!modeRes.chargesReal;
+      state.billingProductionBlocked = productionBlocked;
+      state.billingError = billingError;
       invoices = invRes.invoices || [];
       if (planRes && Array.isArray(planRes.plans) && planRes.plans.length) {
         catalogPlans = planRes.plans.map((p) => {
@@ -6755,11 +6763,13 @@ Status: Discharged`;
       }
     } catch (_) {}
 
-    const modeBanner = mode === 'test'
+    const modeBanner = productionBlocked
+      ? `<div class="mb-4 px-4 py-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-100 text-xs"><i class="fas fa-lock mr-1.5"></i><strong>Live Stripe required</strong> — ${escapeHtml(billingError || 'Production cannot take real payments until Cloudflare Pages has sk_live_ / pk_live_ keys.')}</div>`
+      : mode === 'test'
       ? `<div class="mb-4 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs"><i class="fas fa-flask mr-1.5"></i><strong>Stripe Test Mode</strong> — no real charges. Use test card 4242 4242 4242 4242.</div>`
       : mode === 'live'
-        ? `<div class="mb-4 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-xs"><i class="fas fa-check-circle mr-1.5"></i>Stripe Live Mode — production billing active.</div>`
-        : `<div class="mb-4 px-4 py-3 rounded-xl bg-gray-800/60 border border-gray-700 text-gray-400 text-xs"><i class="fas fa-plug mr-1.5"></i>Stripe not configured — set STRIPE_API_KEY in Cloudflare.</div>`;
+        ? `<div class="mb-4 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-xs"><i class="fas fa-check-circle mr-1.5"></i>Stripe Live Mode — production billing is on. Cards are charged.</div>`
+        : `<div class="mb-4 px-4 py-3 rounded-xl bg-gray-800/60 border border-gray-700 text-gray-400 text-xs"><i class="fas fa-plug mr-1.5"></i>Stripe not configured — set STRIPE_API_KEY (sk_live_) in Cloudflare.</div>`;
 
     el.innerHTML = `<div class="fade-in">
       <div class="flex items-center justify-between mb-6 flex-wrap gap-3"><div><h1 class="text-xl font-bold text-white">Billing & Subscription</h1><p class="text-sm text-gray-400">Manage your organization\'s plan, invoices, and Stripe portal</p></div>
@@ -6802,9 +6812,9 @@ Status: Discharged`;
               ${p.features.map(f => `<li class="flex items-start gap-2 text-[11px] text-gray-300"><i class="fas fa-check text-${p.color}-500 mt-0.5"></i> <span>${f}</span></li>`).join('')}
             </ul>
             <div class="space-y-2">
-              <button onclick="window._checkout('${p.id}')" class="w-full py-2 rounded-lg text-sm font-semibold ${state.org?.plan === p.id ? 'bg-gray-700 text-white' : 'bg-' + p.color + '-600 hover:bg-' + p.color + '-700 text-white'} transition">${state.org?.plan === p.id ? 'Current Plan' : 'Pay now (Checkout)'}</button>
-              ${p.paymentLink ? `<a href="${escapeHtml(p.paymentLink)}" target="_blank" rel="noopener" class="block w-full py-2 rounded-lg text-center text-xs font-semibold border border-gray-600 text-gray-200 hover:bg-gray-800">Pay with Stripe</a>
-              <button type="button" onclick="window._copyText('${escapeHtml(p.paymentLink)}','${p.name} payment link')" class="w-full py-1.5 rounded-lg text-[11px] text-gray-400 hover:text-white">Copy payment link</button>` : `<p class="text-[10px] text-gray-500 text-center">Payment link not ready — use Checkout.</p>`}
+              <button onclick="window._checkout('${p.id}')" ${productionBlocked ? 'disabled' : ''} class="w-full py-2 rounded-lg text-sm font-semibold ${productionBlocked ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : state.org?.plan === p.id ? 'bg-gray-700 text-white' : 'bg-' + p.color + '-600 hover:bg-' + p.color + '-700 text-white'} transition">${productionBlocked ? 'Checkout locked' : state.org?.plan === p.id ? 'Current Plan' : 'Pay now (Checkout)'}</button>
+              ${!productionBlocked && p.paymentLink ? `<a href="${escapeHtml(p.paymentLink)}" target="_blank" rel="noopener" class="block w-full py-2 rounded-lg text-center text-xs font-semibold border border-gray-600 text-gray-200 hover:bg-gray-800">Pay with Stripe</a>
+              <button type="button" onclick="window._copyText('${escapeHtml(p.paymentLink)}','${p.name} payment link')" class="w-full py-1.5 rounded-lg text-[11px] text-gray-400 hover:text-white">Copy payment link</button>` : `<p class="text-[10px] text-gray-500 text-center">${productionBlocked ? 'Live Stripe keys required before checkout.' : 'Payment link not ready — use Checkout.'}</p>`}
             </div>
           </div>
         `).join('')}
@@ -6833,6 +6843,10 @@ Status: Discharged`;
   // CHECKOUT
   // ═══════════════════════════════════════════════════════════════
   window._checkout = async (planId) => {
+    if (state.billingProductionBlocked) {
+      toast(state.billingError || 'Production needs live Stripe keys (sk_live_ / pk_live_) in Cloudflare Pages.', 'error');
+      return;
+    }
     const btn = $(`[onclick="window._checkout('${planId}')"]`);
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Redirecting...'; }
     try {

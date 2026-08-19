@@ -159,10 +159,13 @@ import {
   ensureStripeCatalogCached,
   isSaaSPlanId,
   planIdFromStripePrice,
+  productionStripeBlockReason,
   publicPlansFromCatalog,
   resolveCheckoutPriceId,
   resolveFrontendUrl,
   staticPublicPlans,
+  stripePublishableMode,
+  stripeSecretMode,
 } from './lib/stripe-catalog';
 import { CANONICAL_ORIGIN, canonicalRedirectUrl } from './lib/public-origin';
 import { shouldApplyActingOrg } from './lib/acting-org';
@@ -1123,6 +1126,18 @@ app.get('/api/public/plans', async (c) => {
     currency: 'usd',
     interval: 'month',
   };
+  const blocked = productionStripeBlockReason(c.env);
+  if (blocked) {
+    return c.json({
+      ...base,
+      live: false,
+      mode: stripeSecretMode(c.env.STRIPE_API_KEY),
+      chargesReal: false,
+      productionBlocked: true,
+      error: blocked,
+      plans: staticPublicPlans(),
+    });
+  }
   if (!stripeConfigured(c.env) || !c.env.STRIPE_API_KEY) {
     return c.json({
       ...base,
@@ -1138,19 +1153,21 @@ app.get('/api/public/plans', async (c) => {
       frontendUrl: resolveFrontendUrl(c.env, c.req.url),
       secretKey: c.env.STRIPE_API_KEY,
     });
+    const chargesReal = catalog.mode === 'live';
     return c.json({
       ...base,
-      live: true,
+      live: chargesReal,
       mode: catalog.mode,
-      chargesReal: catalog.mode === 'live',
+      chargesReal,
       plans: publicPlansFromCatalog(catalog),
     });
   } catch (err: any) {
     console.warn('[public/plans] catalog ensure failed', err?.message || err);
+    const mode = stripeSecretMode(c.env.STRIPE_API_KEY);
     return c.json({
       ...base,
       live: false,
-      mode: c.env.STRIPE_API_KEY.startsWith('sk_live_') ? 'live' : 'test',
+      mode,
       chargesReal: false,
       plans: staticPublicPlans(),
       error: 'Catalog unavailable',
@@ -3335,7 +3352,7 @@ app.get('/api/client-portal/dashboard', authMiddleware, async (c) => {
       ? 'Your credit report is in our system. Pay to unlock analysis, FCRA violations, and dispute letters — or wait for your advisor to confirm payment.'
       : null,
     unlockPriceCents: Number(c.env.ANALYSIS_UNLOCK_PRICE_CENTS || 29700),
-    unlockCheckoutEnabled: stripeConfigured(c.env),
+    unlockCheckoutEnabled: stripeConfigured(c.env) && !productionStripeBlockReason(c.env),
     scoreProjection: gateAnalysis ? { avgScore: null, lifts: [] } : { avgScore, lifts: scoreLifts },
   });
 });
@@ -3863,6 +3880,8 @@ app.post('/api/client-portal/unlock/checkout', authMiddleware, async (c) => {
   if (!stripeConfigured(c.env)) {
     return c.json({ error: 'Card checkout is not configured yet. Your advisor will unlock analysis after payment is received.', stripeConfigured: false }, 503);
   }
+  const blocked = productionStripeBlockReason(c.env);
+  if (blocked) return c.json({ error: blocked, code: 'STRIPE_LIVE_REQUIRED', stripeConfigured: true }, 503);
   const gate = await assertCoveredChargeAllowed({
     db: c.env.DB,
     orgId: user.org_id,
@@ -5728,6 +5747,8 @@ app.post('/api/client-portal/tradelines/checkout', authMiddleware, async (c) => 
   const product = TRADELINE_CATALOG.find((p) => p.id === body.productId);
   if (!product) return c.json({ error: 'Unknown boost product' }, 400);
   if (!c.env.STRIPE_API_KEY) return c.json({ error: 'Stripe is not configured' }, 503);
+  const blocked = productionStripeBlockReason(c.env);
+  if (blocked) return c.json({ error: blocked, code: 'STRIPE_LIVE_REQUIRED' }, 503);
 
   const amountCents = Math.round(Number(product.monthlyFee || 0) * 100);
   if (amountCents <= 0) {
@@ -7261,6 +7282,8 @@ app.post('/api/billing/checkout', authMiddleware, async (c) => {
   if (!stripeConfigured(c.env) || !c.env.STRIPE_API_KEY) {
     return c.json({ error: 'Stripe is not configured for this environment' }, 503);
   }
+  const blocked = productionStripeBlockReason(c.env);
+  if (blocked) return c.json({ error: blocked, code: 'STRIPE_LIVE_REQUIRED' }, 503);
 
   const stripe = getStripe(c.env);
   const org = await c.env.DB.prepare('SELECT * FROM organizations WHERE id = ?').bind(user.org_id).first();
@@ -7300,6 +7323,8 @@ app.post('/api/billing/checkout', authMiddleware, async (c) => {
 app.post('/api/billing/portal', authMiddleware, async (c) => {
   const user = c.get('user');
   if (!stripeConfigured(c.env)) return c.json({ error: 'Stripe is not configured' }, 503);
+  const blocked = productionStripeBlockReason(c.env);
+  if (blocked) return c.json({ error: blocked, code: 'STRIPE_LIVE_REQUIRED' }, 503);
   const stripe = getStripe(c.env);
   const org = await c.env.DB.prepare('SELECT stripe_customer_id FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
   if (!org?.stripe_customer_id) return c.json({ error: 'Subscribe first' }, 400);
@@ -7329,6 +7354,8 @@ app.post('/api/billing/cancel', authMiddleware, async (c) => {
   const user = c.get('user');
   if (user.role !== 'super_admin' && user.role !== 'admin') return c.json({ error: 'Admin only' }, 403);
   if (!stripeConfigured(c.env)) return c.json({ error: 'Stripe is not configured' }, 503);
+  const blocked = productionStripeBlockReason(c.env);
+  if (blocked) return c.json({ error: blocked, code: 'STRIPE_LIVE_REQUIRED' }, 503);
   const org = await c.env.DB.prepare('SELECT stripe_subscription_id FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
   if (!org?.stripe_subscription_id) return c.json({ error: 'No active subscription' }, 400);
   const stripe = getStripe(c.env);
@@ -7654,7 +7681,11 @@ app.get('/api/settings/integrations', authMiddleware, async (c) => {
       status: click2mailOn ? 'connected' : 'not_configured',
       label: click2mailOn ? 'CONNECTED' : 'NOT CONFIGURED',
     },
-    stripe: { configured: stripeConfigured(c.env) },
+    stripe: {
+      configured: stripeConfigured(c.env),
+      mode: stripeSecretMode(c.env.STRIPE_API_KEY),
+      chargesReal: stripeSecretMode(c.env.STRIPE_API_KEY) === 'live' && !productionStripeBlockReason(c.env),
+    },
     twilioSms: { configured: !!(c.env.TWILIO_ACCOUNT_SID && c.env.TWILIO_AUTH_TOKEN && c.env.TWILIO_PHONE_NUMBER) },
     twilioVideo: { configured: videoConfigured(c.env) },
     ghl: { configured: ghlConfigured(c.env) },
@@ -7677,8 +7708,15 @@ app.get('/api/health/ready', async (c) => {
     db: false,
     encryptionKey: !!(c.env.PII_ENCRYPTION_KEY && c.env.PII_ENCRYPTION_KEY.length >= 32),
     stripe: !!c.env.STRIPE_API_KEY,
+    stripeMode: stripeSecretMode(c.env.STRIPE_API_KEY),
+    stripeLive: stripeSecretMode(c.env.STRIPE_API_KEY) === 'live',
     stripePublishable: !!c.env.STRIPE_PUBLISHABLE_KEY,
+    stripePublishableMode: stripePublishableMode(c.env.STRIPE_PUBLISHABLE_KEY),
     stripePriceIds: !!(c.env.STRIPE_PROFESSIONAL_PRICE_ID && c.env.STRIPE_UNLIMITED_PRICE_ID && c.env.STRIPE_ENTERPRISE_PRICE_ID),
+    stripeWebhook: !!c.env.STRIPE_WEBHOOK_SECRET,
+    chargesReal: stripeSecretMode(c.env.STRIPE_API_KEY) === 'live' && !productionStripeBlockReason(c.env),
+    productionBlocked: !!productionStripeBlockReason(c.env),
+    productionBillingReady: !productionStripeBlockReason(c.env) && stripeSecretMode(c.env.STRIPE_API_KEY) === 'live',
     cloudflareEmail: !!(c.env.CLOUDFLARE_EMAIL_API_TOKEN && c.env.CLOUDFLARE_ACCOUNT_ID),
     resend: !!c.env.RESEND_API_KEY,
     sendgrid: !!c.env.SENDGRID_API_KEY,
@@ -9300,11 +9338,16 @@ app.get('/api/billing/publishable-key', authMiddleware, async (c) => {
 });
 
 app.get('/api/billing/mode', authMiddleware, async (c) => {
-  const key = c.env.STRIPE_API_KEY || '';
-  let mode: 'test' | 'live' | 'unconfigured' = 'unconfigured';
-  if (key.startsWith('sk_test_')) mode = 'test';
-  else if (key.startsWith('sk_live_')) mode = 'live';
-  return c.json({ mode, testMode: mode === 'test' });
+  const mode = stripeSecretMode(c.env.STRIPE_API_KEY);
+  const blocked = productionStripeBlockReason(c.env);
+  return c.json({
+    mode,
+    testMode: mode === 'test',
+    chargesReal: mode === 'live' && !blocked,
+    publishableMode: stripePublishableMode(c.env.STRIPE_PUBLISHABLE_KEY),
+    productionBlocked: !!blocked,
+    error: blocked || undefined,
+  });
 });
 
 app.get('/api/company', async (c) => {
@@ -10020,6 +10063,8 @@ app.post('/api/admin/stripe/ensure-catalog', authMiddleware, adminGateMiddleware
   if (!stripeConfigured(c.env) || !c.env.STRIPE_API_KEY) {
     return c.json({ error: 'Stripe is not configured' }, 503);
   }
+  const blocked = productionStripeBlockReason(c.env);
+  if (blocked) return c.json({ error: blocked, code: 'STRIPE_LIVE_REQUIRED' }, 503);
   const stripe = getStripe(c.env);
   const catalog = await ensureStripeCatalog(stripe, {
     frontendUrl: resolveFrontendUrl(c.env, c.req.url),
@@ -11303,8 +11348,8 @@ function getAppHtml(): string {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     }
   </script>
-  <script src="/static/demo-experience.js?v=20260818-owner-only"></script>
-  <script src="/static/app.js?v=20260818-owner-only"></script>
+  <script src="/static/demo-experience.js?v=20260819-stripe-live"></script>
+  <script src="/static/app.js?v=20260819-stripe-live"></script>
 </body>
 </html>`;
 }

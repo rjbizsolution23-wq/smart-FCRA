@@ -125,7 +125,7 @@ export function publicPlansFromCatalog(catalog: EnsuredCatalog): PublicPlanView[
     interval: p.interval,
     seats: p.seats,
     subscribeUrl: subscribePathForPlan(p.id),
-    live: true,
+    live: catalog.mode === 'live',
     priceId: p.priceId,
     productId: p.productId,
     paymentLink: p.paymentLinkUrl,
@@ -134,6 +134,42 @@ export function publicPlansFromCatalog(catalog: EnsuredCatalog): PublicPlanView[
 
 export function clearStripeCatalogCache(): void {
   catalogMemo = null;
+}
+
+export function stripeSecretMode(secretKey?: string | null): 'live' | 'test' | 'unconfigured' {
+  const k = String(secretKey || '');
+  if (k.startsWith('sk_live_')) return 'live';
+  if (k.startsWith('sk_test_')) return 'test';
+  return 'unconfigured';
+}
+
+export function stripePublishableMode(publishableKey?: string | null): 'live' | 'test' | 'unconfigured' {
+  const k = String(publishableKey || '');
+  if (k.startsWith('pk_live_')) return 'live';
+  if (k.startsWith('pk_test_')) return 'test';
+  return 'unconfigured';
+}
+
+export function isProductionRuntime(env?: { ENVIRONMENT?: string } | null): boolean {
+  return String(env?.ENVIRONMENT || '').toLowerCase() === 'production';
+}
+
+/** Production must charge real cards. Test keys stay allowed in development/preview. */
+export function productionStripeBlockReason(env?: {
+  ENVIRONMENT?: string;
+  STRIPE_API_KEY?: string;
+  STRIPE_PUBLISHABLE_KEY?: string;
+} | null): string | null {
+  if (!isProductionRuntime(env)) return null;
+  const secret = stripeSecretMode(env?.STRIPE_API_KEY);
+  if (secret !== 'live') {
+    return 'Production billing requires a live Stripe secret (sk_live_...) in Cloudflare Pages. Test keys (sk_test_) cannot take real payments.';
+  }
+  const pub = stripePublishableMode(env?.STRIPE_PUBLISHABLE_KEY);
+  if (pub === 'test') {
+    return 'STRIPE_PUBLISHABLE_KEY is still pk_test_. Set the matching pk_live_ key in Cloudflare Pages.';
+  }
+  return null;
 }
 
 function stripeMode(secretKey: string): 'live' | 'test' {
@@ -309,7 +345,14 @@ export async function resolveCheckoutPriceId(
   if (!spec) throw new Error('Unknown plan');
   const envId = envPriceIdForPlan(env, planId);
   if (envId) {
-    return { priceId: envId, productName: spec.productName, amountCents: spec.amountCents };
+    try {
+      const price = await stripe.prices.retrieve(envId);
+      if (price?.id && price.active !== false) {
+        return { priceId: envId, productName: spec.productName, amountCents: spec.amountCents };
+      }
+    } catch {
+      /* Stale test price IDs after switching to sk_live_ — rebuild from catalog */
+    }
   }
   const catalog = await ensureStripeCatalogCached(stripe, {
     frontendUrl: env.FRONTEND_URL,

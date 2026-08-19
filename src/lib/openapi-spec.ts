@@ -116,7 +116,7 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
   { method: 'get', path: '/api/admin/ops/runs', summary: 'Admin: recent scheduled job runs + ops alerts', tags: ['Admin'], security: true },
   { method: 'post', path: '/api/admin/journey/dispatch-daily', summary: 'Admin: dispatch daily motivations now', tags: ['Admin'], security: true },
   // Billing
-  { method: 'get', path: '/api/public/plans', summary: 'Public SaaS plan catalog + live Stripe subscribe URLs', tags: ['Billing'] },
+  { method: 'get', path: '/api/public/plans', summary: 'Public SaaS plan catalog. Live checkout only when STRIPE_API_KEY is sk_live_ in production.', tags: ['Billing'] },
   { method: 'post', path: '/api/admin/stripe/ensure-catalog', summary: 'Create or reuse live Stripe products, prices, and payment links', tags: ['Admin'], security: true },
   { method: 'post', path: '/api/billing/checkout', summary: 'Stripe checkout session', tags: ['Billing'], security: true },
   { method: 'post', path: '/api/billing/portal', summary: 'Stripe customer portal', tags: ['Billing'], security: true },

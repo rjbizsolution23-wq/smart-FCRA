@@ -134,6 +134,19 @@ const mockEnv = {
   assert(body.plans.every((p) => !p.priceId && !String(JSON.stringify(body)).includes('sk_')), 'no stripe secrets');
 }
 
+// Production + test Stripe key must not advertise live checkout
+{
+  const prodTest = { ...mockEnv, ENVIRONMENT: 'production', STRIPE_API_KEY: 'sk_test_placeholder', STRIPE_PUBLISHABLE_KEY: 'pk_test_placeholder' };
+  const res = await app.request('/api/public/plans', {}, prodTest);
+  assert(res.status === 200, 'GET /api/public/plans production+test returns 200');
+  const body = await res.json();
+  assert(body.live === false, 'production test keys are not live');
+  assert(body.chargesReal === false, 'production test keys cannot charge');
+  assert(body.productionBlocked === true, 'productionBlocked flag');
+  assert(body.mode === 'test', 'mode remains test');
+  assert(String(body.error || '').includes('sk_live_'), 'error tells operator to set sk_live_');
+}
+
 // Demo signups inbox requires auth
 {
   const res = await app.request('/api/admin/demo/signups', {}, mockEnv);
