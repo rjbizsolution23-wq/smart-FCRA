@@ -807,6 +807,17 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
             mfaBanner.classList.remove('hidden');
           }
         }
+        if (!state.demoSession && window.SmartFcraGuide) {
+          window.SmartFcraGuide.mount({
+            api,
+            toast,
+            getState: () => state,
+            navigate,
+            startImpersonating: window._startImpersonating,
+            stopImpersonating: window._stopImpersonating,
+          });
+          window.SmartFcraGuide.boot().catch(() => {});
+        }
       })();
     }
   }
@@ -1363,6 +1374,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'client-consents', icon: 'fa-check-double', label: 'Consents' },
         { id: 'client-settings', icon: 'fa-user-shield', label: 'Privacy & Security' },
         { id: 'client-cancel', icon: 'fa-ban', label: 'Cancel Services' },
+        { id: 'platform-guide', icon: 'fa-life-ring', label: 'Help & Guide' },
         { id: 'ai-studio', icon: 'fa-robot', label: t('nav.aiMentors') },
       ];
       if (state.impersonateClientId) {
@@ -1382,6 +1394,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'compliance-os', icon: 'fa-shield-virus', label: 'Compliance OS' },
         { id: 'integration-os', icon: 'fa-plug', label: 'Integration Hub' },
         { id: 'support-center', icon: 'fa-headset', label: 'Support Center' },
+        { id: 'platform-guide', icon: 'fa-life-ring', label: 'Help & Guide' },
         { id: 'campaigns', icon: 'fa-bullhorn', label: 'Campaigns' },
         { id: 'mailing-campaigns', icon: 'fa-mail-bulk', label: 'Mailing Campaigns' },
         { id: 'tradelines', icon: 'fa-layer-group', label: 'Tradelines' },
@@ -1546,6 +1559,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'compliance-os': await pgComplianceOs(el); break;
         case 'integration-os': await pgIntegrationHub(el); break;
         case 'support-center': await pgSupportCenter(el); break;
+        case 'platform-guide': await pgPlatformGuide(el); break;
         case 'campaigns': await pgCampaigns(el); break;
         case 'mailing-campaigns': await pgMailingCampaigns(el); break;
         case 'founder-os': await pgFounderOS(el); break;
@@ -6340,6 +6354,152 @@ Status: Discharged`;
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // PLATFORM GUIDE — mission, tour, ask, feedback
+  // ═══════════════════════════════════════════════════════════════
+  async function pgPlatformGuide(el) {
+    try {
+      const [tourRes, progRes] = await Promise.all([
+        api('/platform-guide/tour'),
+        api('/platform-guide/progress'),
+      ]);
+      const mission = tourRes.mission || progRes.mission || '';
+      const prog = progRes.progress || {};
+      const categories = tourRes.feedbackCategories || [];
+      const stepCount = tourRes.stepCount || (tourRes.steps || []).length;
+      const aiFree = !!progRes.aiFreeOverride;
+      const isStaff = state.user?.role !== 'client' && !state.impersonateClientId;
+
+      el.innerHTML = `<div class="fade-in space-y-6 max-w-4xl">
+        <div>
+          <h1 class="text-2xl font-bold text-white flex items-center gap-2"><i class="fas fa-life-ring text-sky-400"></i> Help & Guide</h1>
+          <p class="text-sm text-gray-400 mt-1">Your always-on Smart FCRA reference — full guided tour, AI answers, and feedback we actually read.</p>
+        </div>
+
+        <div class="glass rounded-2xl p-6 border border-sky-800/40 bg-gradient-to-br from-sky-950/30 to-gray-950/20">
+          <div class="text-[10px] uppercase tracking-wider font-bold text-sky-300 mb-2">Our mission</div>
+          <p class="text-sm text-gray-200 leading-relaxed whitespace-pre-line">${escapeHtml(mission)}</p>
+          <p class="text-xs text-gray-400 mt-3">Smart FCRA exists so credit repair organizations, advocacy teams, and operators can do excellent, compliant work — even when your team is still learning the statutes and integrations. We want to be the most compliant, go-to platform for the industry. Tell us what to build next.</p>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="glass rounded-xl p-5 border border-blue-800/40">
+            <h2 class="text-sm font-bold text-white mb-2 flex items-center gap-2"><i class="fas fa-route text-blue-400"></i> Guided platform tour</h2>
+            <p class="text-xs text-gray-400 mb-3">${stepCount} steps covering ${isStaff ? 'every staff area — violations, letters, Compliance OS, integrations, campaigns, client portal preview, and more' : 'your client portal — credit file, disputes, rights, messages, academy, and billing'}.</p>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" id="pg-start-tour" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-lg">${prog.tour_completed ? 'Restart tour' : prog.tour_step > 0 ? 'Resume tour' : 'Start tour'}</button>
+              <button type="button" id="pg-open-ask" class="bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold px-4 py-2 rounded-lg">Ask a question</button>
+            </div>
+            <p class="text-[10px] text-gray-500 mt-2">${prog.tour_completed ? 'Tour completed — restart anytime.' : prog.tour_step > 0 ? `Paused at step ${Number(prog.tour_step) + 1} of ${stepCount}.` : 'First login? We recommend starting the tour.'}</p>
+          </div>
+          <div class="glass rounded-xl p-5 border border-violet-800/40">
+            <h2 class="text-sm font-bold text-white mb-2 flex items-center gap-2"><i class="fas fa-robot text-violet-400"></i> Ask the platform guide</h2>
+            <p class="text-xs text-gray-400 mb-3">Type any question — where to click, how a workflow works, what an integration does.${aiFree ? ' <span class="text-emerald-400 font-semibold">Free platform AI is active for your organization.</span>' : ''}</p>
+            <form id="pg-ask-form" class="flex gap-2">
+              <input id="pg-ask-input" class="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="How do I run a Compliance OS workflow?" />
+              <button type="submit" class="bg-violet-700 hover:bg-violet-600 text-white text-xs font-bold px-4 py-2 rounded-lg">Ask</button>
+            </form>
+            <div id="pg-ask-reply" class="hidden mt-3 text-xs text-gray-300 bg-gray-950/60 border border-gray-800 rounded-lg p-3"></div>
+          </div>
+        </div>
+
+        <div class="glass rounded-xl p-6 border border-emerald-800/40">
+          <h2 class="text-sm font-bold text-white mb-1 flex items-center gap-2"><i class="fas fa-lightbulb text-emerald-400"></i> Share feedback — we read every submission</h2>
+          <p class="text-xs text-gray-400 mb-4">Improvements, new integrations (Zapier, gateways, AI providers), workflows, education, compliance features — tell us what operators need.</p>
+          <form id="pg-feedback-form" class="space-y-3">
+            <div class="grid md:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs text-gray-400 mb-1">Category</label>
+                <select name="category" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white">
+                  ${categories.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.label)}</option>`).join('')}
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-400 mb-1">Subject (optional)</label>
+                <input name="subject" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="e.g. Add HubSpot integration" />
+              </div>
+            </div>
+            <div id="pg-integration-row" class="hidden">
+              <label class="block text-xs text-gray-400 mb-1">Integration name</label>
+              <input name="integrationRequest" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="Which product or API?" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Your idea or request</label>
+              <textarea name="body" required rows="4" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="Describe what you need and how it would help your team…"></textarea>
+            </div>
+            <button type="submit" class="bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-semibold px-5 py-2 rounded-lg">Send to Smart FCRA</button>
+          </form>
+          <div id="pg-feedback-result" class="hidden mt-3 text-xs text-emerald-200 bg-emerald-950/40 border border-emerald-800/40 rounded-lg p-3"></div>
+        </div>
+
+        ${isStaff ? `<div class="glass rounded-xl p-5 border border-gray-800">
+          <h2 class="text-sm font-bold text-white mb-2">Quick links</h2>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <button type="button" onclick="window._nav('compliance-os')" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg">Compliance OS</button>
+            <button type="button" onclick="window._nav('integration-os')" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg">Integration Hub</button>
+            <button type="button" onclick="window._nav('campaigns')" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg">Campaigns</button>
+            <button type="button" onclick="window._nav('settings')" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg">Settings & AI</button>
+            ${isPlatformOwner(state.user) ? '<button type="button" onclick="window._nav(\'product-map\')" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg">Product Map</button>' : ''}
+          </div>
+        </div>` : ''}
+      </div>`;
+
+      $('#pg-start-tour')?.addEventListener('click', () => {
+        if (window.SmartFcraGuide) {
+          if (prog.tour_step > 0 && !prog.tour_completed) window.SmartFcraGuide.resumeTour();
+          else window.SmartFcraGuide.startTour(0);
+        } else toast('Guide loading — refresh and try again', 'info');
+      });
+      $('#pg-open-ask')?.addEventListener('click', () => window.SmartFcraGuide?.openAsk());
+      const catSel = document.querySelector('#pg-feedback-form select[name="category"]');
+      const intRow = $('#pg-integration-row');
+      if (catSel && intRow) {
+        catSel.onchange = () => { intRow.classList.toggle('hidden', catSel.value !== 'integration'); };
+        catSel.dispatchEvent(new Event('change'));
+      }
+      $('#pg-ask-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = $('#pg-ask-input')?.value?.trim();
+        if (!msg) return;
+        const replyEl = $('#pg-ask-reply');
+        if (replyEl) { replyEl.classList.remove('hidden'); replyEl.textContent = 'Thinking…'; }
+        try {
+          const d = await api('/platform-guide/ask', { method: 'POST', body: JSON.stringify({ message: msg }) });
+          if (replyEl) replyEl.textContent = d.reply || 'No reply';
+        } catch (err) {
+          if (replyEl) replyEl.textContent = err.message || 'Could not reach guide';
+        }
+      });
+      $('#pg-feedback-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          const d = await api('/platform-guide/feedback', {
+            method: 'POST',
+            body: JSON.stringify({
+              category: fd.get('category'),
+              subject: fd.get('subject'),
+              body: fd.get('body'),
+              integrationRequest: fd.get('integrationRequest') || undefined,
+            }),
+          });
+          const resEl = $('#pg-feedback-result');
+          if (resEl) {
+            resEl.classList.remove('hidden');
+            resEl.textContent = d.message || 'Thank you — we received your feedback.';
+          }
+          e.target.reset();
+          if (catSel) catSel.dispatchEvent(new Event('change'));
+          toast('Feedback sent — thank you!', 'success');
+        } catch (err) {
+          toast(err.message, 'error');
+        }
+      });
+    } catch (err) {
+      el.innerHTML = `<div class="text-red-400 p-4"><i class="fas fa-exclamation-triangle mr-2"></i>${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // SETTINGS — letterhead, MFA, org branding
   // ═══════════════════════════════════════════════════════════════
   async function pgSettings(el) {
@@ -7030,7 +7190,11 @@ Status: Discharged`;
         const ai = await api('/platform-extensions/ai/providers');
         const cr = ai.credits || {};
         const credEl = $('#platform-ai-credits');
-        if (credEl) credEl.innerHTML = `<strong class="text-white">${(cr.balance || 0).toLocaleString()}</strong> AI credits remaining · platform Workers AI + BYOK`;
+        if (credEl) {
+          const freeBadge = cr.freeAiOverride ? '<span class="ml-2 px-2 py-0.5 rounded bg-emerald-900/50 text-emerald-300 text-[10px] font-bold uppercase border border-emerald-700/40">Free platform AI</span>' : '';
+          credEl.innerHTML = `<strong class="text-white">${(cr.balance || 0).toLocaleString()}</strong> AI credits remaining · platform Workers AI + BYOK${freeBadge}`;
+          if (cr.freeAiOverride) credEl.innerHTML += '<p class="text-[10px] text-emerald-400/90 mt-1">Platform owner granted free AI — Workers AI + cascade without credit charges. BYOK still bills your provider.</p>';
+        }
         const packsEl = $('#platform-ai-credit-packs');
         if (packsEl) {
           const packs = [{ id: 'starter', label: '5K · $49' }, { id: 'growth', label: '25K · $199' }, { id: 'scale', label: '100K · $699' }];
@@ -8188,6 +8352,9 @@ async function pgAdminConsole(el) {
             <button class="px-4 py-2.5 text-xs font-semibold border-b-2 transition ${activeTab === 'privacy' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}" onclick="window._adminTab('privacy')">
               <i class="fas fa-user-secret mr-1.5"></i>Privacy Queue (${(privacyData.requests || []).length})
             </button>
+            <button class="px-4 py-2.5 text-xs font-semibold border-b-2 transition ${activeTab === 'feedback' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}" onclick="window._adminTab('feedback')">
+              <i class="fas fa-lightbulb mr-1.5"></i>User Feedback
+            </button>
             <button class="px-4 py-2.5 text-xs font-semibold border-b-2 transition ${activeTab === 'ops' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}" onclick="window._adminTab('ops')">
               <i class="fas fa-server mr-1.5"></i>Ops & Sandbox
             </button>
@@ -8339,6 +8506,7 @@ async function pgAdminConsole(el) {
                           <button onclick="window._adminViewOrg('${o.id}')" class="bg-sky-600 hover:bg-sky-500 text-white px-2.5 py-1.5 rounded text-[10px] font-bold transition">Open</button>
                           <button onclick="window._workInTenant('${o.id}', '${escapeHtml(o.name).replace(/'/g, '')}')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1.5 rounded text-[10px] font-bold transition">Work in tenant</button>
                           <button onclick="window._adminEditOrg('${o.id}')" class="bg-gray-800 hover:bg-gray-700 text-white px-2.5 py-1.5 rounded text-[10px] font-bold transition">Edit</button>
+                          <button onclick="window._adminToggleFreeAi('${o.id}')" class="bg-violet-900/60 hover:bg-violet-800 text-violet-200 px-2.5 py-1.5 rounded text-[10px] font-bold transition border border-violet-700/40" title="Grant/revoke free platform AI">Free AI</button>
                           <button onclick="window._adminToggleOrgSuspension('${o.id}')" class="${
                             isSuspended ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white'
                           } px-2.5 py-1.5 rounded text-[10px] font-bold transition">${isSuspended ? 'Unsuspend' : 'Suspend'}</button>
@@ -8874,6 +9042,40 @@ async function pgAdminConsole(el) {
         });
       }
 
+      else if (activeTab === 'feedback') {
+        target.innerHTML = '<div class="glass rounded-xl border border-gray-800 p-6 text-sm text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Loading user feedback…</div>';
+        api('/platform-guide/feedback').then((d) => {
+          const rows = d.feedback || [];
+          target.innerHTML = `
+            <div class="glass rounded-xl border border-gray-800 overflow-hidden">
+              <div class="p-4 border-b border-gray-800 bg-gray-900/40 flex justify-between items-center gap-3">
+                <div>
+                  <h3 class="text-sm font-bold text-white"><i class="fas fa-lightbulb text-emerald-400 mr-1.5"></i>Platform feedback from users</h3>
+                  <p class="text-[11px] text-gray-500 mt-0.5">Improvements, integration requests, and workflow ideas submitted from Help & Guide.</p>
+                </div>
+                <span class="text-xs text-gray-400">${rows.length} submission(s)</span>
+              </div>
+              <div class="overflow-x-auto max-h-[70vh]">
+                <table class="w-full text-left text-xs">
+                  <thead><tr class="border-b border-gray-800 text-gray-400"><th class="p-3">When</th><th class="p-3">Org</th><th class="p-3">User</th><th class="p-3">Category</th><th class="p-3">Subject / body</th><th class="p-3">Integration</th></tr></thead>
+                  <tbody class="divide-y divide-gray-800/60 text-gray-300">
+                    ${rows.length ? rows.map((r) => `<tr class="hover:bg-gray-800/20 align-top">
+                      <td class="p-3 whitespace-nowrap text-[10px] text-gray-500">${escapeHtml((r.created_at || '').slice(0, 16))}</td>
+                      <td class="p-3 font-mono text-[10px]">${escapeHtml(r.org_id || '')}</td>
+                      <td class="p-3">${escapeHtml(r.user_email || '—')}</td>
+                      <td class="p-3"><span class="px-2 py-0.5 rounded bg-gray-800 text-[10px] uppercase">${escapeHtml(r.category || '')}</span></td>
+                      <td class="p-3 max-w-md"><div class="font-semibold text-white">${escapeHtml(r.subject || '—')}</div><div class="text-gray-400 mt-1 whitespace-pre-wrap">${escapeHtml((r.body || '').slice(0, 400))}${(r.body || '').length > 400 ? '…' : ''}</div></td>
+                      <td class="p-3 text-violet-300">${escapeHtml(r.integration_request || '—')}</td>
+                    </tr>`).join('') : '<tr><td colspan="6" class="p-8 text-center text-gray-500">No feedback yet — users submit from Help & Guide in the app.</td></tr>'}
+                  </tbody>
+                </table>
+              </div>
+            </div>`;
+        }).catch((err) => {
+          target.innerHTML = `<div class="glass rounded-xl border border-red-500/30 p-4 text-sm text-red-300">${escapeHtml(err.message)}</div>`;
+        });
+      }
+
       else if (activeTab === 'ops') {
         target.innerHTML = `
           <div class="grid md:grid-cols-2 gap-6">
@@ -9141,6 +9343,27 @@ async function pgAdminConsole(el) {
       }
     };
 
+    window._adminToggleFreeAi = async (orgId) => {
+      const o = orgsData.organizations.find((org) => org.id === orgId);
+      const name = o?.name || orgId;
+      let current = false;
+      try {
+        const d = await api('/admin/organizations/' + encodeURIComponent(orgId) + '/summary');
+        current = !!d.aiFreeOverride;
+      } catch (_) {}
+      const next = !current;
+      if (!confirm(`${next ? 'Grant' : 'Revoke'} FREE platform AI for "${name}"?\n\nWhen ON: Workers AI + cascade without charging org AI credits.\nBYOK still bills the org's provider.\n\nCurrent: ${current ? 'ON' : 'OFF'} → ${next ? 'ON' : 'OFF'}`)) return;
+      try {
+        const res = await api(`/admin/organizations/${orgId}/ai-free-override`, {
+          method: 'PUT',
+          body: JSON.stringify({ enabled: next }),
+        });
+        toast(res.message || (next ? 'Free AI granted' : 'Free AI revoked'), 'success');
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    };
+
     window._adminViewOrg = async (orgId) => {
       const panel = document.getElementById('tenant-detail-panel');
       if (!panel) return;
@@ -9160,10 +9383,11 @@ async function pgAdminConsole(el) {
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 class="text-lg font-bold text-white">${escapeHtml(o.name || '')}</h3>
-                <p class="text-[11px] text-gray-500 font-mono">${escapeHtml(o.id)} · plan ${escapeHtml(o.plan || 'free')} · ${d.counts?.users || 0} users · ${d.counts?.clients || 0} clients · ${d.counts?.reports || 0} reports</p>
+                <p class="text-[11px] text-gray-500 font-mono">${escapeHtml(o.id)} · plan ${escapeHtml(o.plan || 'free')} · ${d.counts?.users || 0} users · ${d.counts?.clients || 0} clients · ${d.counts?.reports || 0} reports${d.aiFreeOverride ? ' · Free platform AI' : ''}</p>
               </div>
               <div class="flex flex-wrap gap-2">
                 <button type="button" onclick="window._workInTenant('${escapeHtml(o.id)}', '${escapeHtml(o.name || '').replace(/'/g, '')}')" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 py-2 rounded-lg">Work in this software</button>
+                <button type="button" onclick="window._adminToggleFreeAi('${escapeHtml(o.id)}')" class="bg-violet-800 hover:bg-violet-700 text-white text-xs font-bold px-3 py-2 rounded-lg">${d.aiFreeOverride ? 'Revoke free AI' : 'Grant free AI'}</button>
                 <button type="button" onclick="window._nav('billing')" class="bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded-lg">Open Billing</button>
               </div>
             </div>

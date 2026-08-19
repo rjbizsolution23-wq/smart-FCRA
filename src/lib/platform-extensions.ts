@@ -127,20 +127,33 @@ export async function loadOrgAiKey(
 
 export async function getOrgAiCredits(db: D1Database, orgId: string) {
   const row = await db.prepare(
-    'SELECT balance, lifetime_purchased, lifetime_used FROM org_ai_credits WHERE org_id = ?',
+    'SELECT balance, lifetime_purchased, lifetime_used, free_ai_override FROM org_ai_credits WHERE org_id = ?',
   ).bind(orgId).first() as any;
   if (!row) {
     await db.prepare(
       'INSERT OR IGNORE INTO org_ai_credits (org_id, balance) VALUES (?, 500)',
     ).bind(orgId).run();
-    return { balance: 500, lifetimePurchased: 0, lifetimeUsed: 0, platformIncluded: true };
+    return { balance: 500, lifetimePurchased: 0, lifetimeUsed: 0, platformIncluded: true, freeAiOverride: false };
   }
   return {
     balance: Number(row.balance || 0),
     lifetimePurchased: Number(row.lifetime_purchased || 0),
     lifetimeUsed: Number(row.lifetime_used || 0),
     platformIncluded: orgId === DEMO_ORG_ID,
+    freeAiOverride: !!row.free_ai_override,
   };
+}
+
+export async function getOrgAiFreeOverride(db: D1Database, orgId: string): Promise<boolean> {
+  const credits = await getOrgAiCredits(db, orgId);
+  return !!credits.freeAiOverride;
+}
+
+export async function setOrgAiFreeOverride(db: D1Database, orgId: string, enabled: boolean) {
+  await db.prepare(
+    `INSERT INTO org_ai_credits (org_id, balance, free_ai_override) VALUES (?, 500, ?)
+     ON CONFLICT(org_id) DO UPDATE SET free_ai_override = excluded.free_ai_override, updated_at = datetime('now')`,
+  ).bind(orgId, enabled ? 1 : 0).run();
 }
 
 export async function chargeAiCredits(opts: {
@@ -151,7 +164,11 @@ export async function chargeAiCredits(opts: {
   model: string;
   feature: string;
   credits?: number;
-}): Promise<{ ok: boolean; balance: number; error?: string }> {
+}): Promise<{ ok: boolean; balance: number; error?: string; freeOverride?: boolean }> {
+  if (await getOrgAiFreeOverride(opts.db, opts.orgId)) {
+    const credits = await getOrgAiCredits(opts.db, opts.orgId);
+    return { ok: true, balance: credits.balance, freeOverride: true };
+  }
   const cost = opts.credits ?? 1;
   const credits = await getOrgAiCredits(opts.db, opts.orgId);
   if (credits.balance < cost) {
@@ -451,6 +468,10 @@ export async function generateOrgAiText(opts: {
   );
 
   if (opts.skipCreditCharge) return result;
+
+  if (await getOrgAiFreeOverride(opts.env.DB, opts.orgId)) {
+    return { ...result, creditsCharged: 0, freeOverride: true };
+  }
 
   const byokId = AI_PROVIDER_BYOK_MAP[result.provider];
   if (byokId && byokActive.has(byokId)) {

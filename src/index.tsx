@@ -146,7 +146,7 @@ import { CITIZENSHIP_STATUSES, GENDER_OPTIONS, MARITAL_STATUS_OPTIONS } from './
 import { listTradelineEducation } from './data/tradeline-education';
 import { sendSms } from './lib/alerts';
 import sampleMfsnReport from './data/sample-mfsn-report.json';
-import { spaAppSource, pwaSwSource, pwaManifestSource, marketingLandingHtml, marketingCompareHtml, marketingDemoHtml, demoExperienceSource } from './generated/spa-source';
+import { spaAppSource, pwaSwSource, pwaManifestSource, marketingLandingHtml, marketingCompareHtml, marketingDemoHtml, demoExperienceSource, platformGuideSource } from './generated/spa-source';
 import { persistCreditTwinFromParsed } from './lib/credit-twin';
 import { registerClientIntelligenceRoutes } from './lib/client-intelligence-routes';
 import { inspectUpload, decodeBase64Bytes, sanitizeFileName } from './lib/upload-hygiene';
@@ -159,8 +159,9 @@ import { registerRoadmapRoutes, handleClientBillingWebhook } from './lib/roadmap
 import { registerComplianceOsRoutes } from './lib/compliance-os-routes';
 import { registerIntegrationOsRoutes } from './lib/integration-os-routes';
 import { registerPlatformExtensionRoutes } from './lib/platform-extension-routes';
+import { registerPlatformGuideRoutes } from './lib/platform-guide-routes';
 import { loadOrgGhlEnv } from './lib/integration-hub';
-import { encryptionReady, resolveOrgEncryptionKey, generateOrgAiText, addOrgAiCredits } from './lib/platform-extensions';
+import { encryptionReady, resolveOrgEncryptionKey, generateOrgAiText, addOrgAiCredits, getOrgAiCredits } from './lib/platform-extensions';
 import { startWorkflowRun } from './lib/crm-workflow-engine';
 import { emitOrgWebhook } from './lib/outbound-webhooks';
 import { buildTradelineMatrix } from './lib/bureau-matrix';
@@ -865,6 +866,13 @@ app.get('/static/app.js', (c) => {
 });
 app.get('/static/demo-experience.js', (c) => {
   return c.body(demoExperienceSource, 200, {
+    'Content-Type': 'application/javascript; charset=utf-8',
+    'Cache-Control': 'no-cache, must-revalidate',
+    'X-Content-Type-Options': 'nosniff',
+  });
+});
+app.get('/static/platform-guide.js', (c) => {
+  return c.body(platformGuideSource, 200, {
     'Content-Type': 'application/javascript; charset=utf-8',
     'Cache-Control': 'no-cache, must-revalidate',
     'X-Content-Type-Options': 'nosniff',
@@ -10753,11 +10761,13 @@ app.get('/api/admin/organizations/:id/summary', authMiddleware, adminGateMiddlew
       payments = [];
     }
     const reports = await c.env.DB.prepare('SELECT COUNT(*) as count FROM credit_reports WHERE org_id = ?').bind(id).first('count');
+    const aiCredits = await getOrgAiCredits(c.env.DB, id).catch(() => ({ freeAiOverride: false }));
     return c.json({
       organization: org,
       users: users?.results || [],
       clients: clients?.results || [],
       payments,
+      aiFreeOverride: !!(aiCredits as any).freeAiOverride,
       counts: {
         users: (users?.results || []).length,
         clients: (clients?.results || []).length,
@@ -11536,7 +11546,8 @@ function getAppHtml(mode: 'login' | 'app' = 'app'): string {
     }
   </script>
   <script src="/static/demo-experience.js?v=20260819-stripe-live"></script>
-  <script src="/static/app.js?v=20260819-platform-max"></script>
+  <script src="/static/platform-guide.js?v=20260819-platform-guide"></script>
+  <script src="/static/app.js?v=20260819-platform-guide"></script>
 </body>
 </html>`;
 }
@@ -11554,5 +11565,6 @@ registerRoadmapRoutes(app, { authMiddleware });
 registerComplianceOsRoutes(app, { authMiddleware });
 registerIntegrationOsRoutes(app, { authMiddleware });
 registerPlatformExtensionRoutes(app, { authMiddleware });
+registerPlatformGuideRoutes(app, { authMiddleware });
 
 export default app;
