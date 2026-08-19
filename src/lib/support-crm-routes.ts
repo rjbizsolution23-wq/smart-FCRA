@@ -11,6 +11,7 @@ import {
   WEBHOOK_EVENTS,
   type WebhookEventType,
 } from './outbound-webhooks';
+import { startWorkflowRun } from './crm-workflow-engine';
 import { getClick2MailAccountAddresses, click2mailConfigured } from './click2mail';
 import {
   detectRedFlagTerms,
@@ -218,6 +219,18 @@ export function registerSupportCrmRoutes(app: Hono<any>, opts: RegisterOpts) {
       eventType: 'complaint.created',
       payload: { complaintId: id, complaintNumber: num, classification: body.classification },
     }).catch(() => null);
+
+    if (body.clientId) {
+      startWorkflowRun({
+        db: c.env.DB,
+        env: c.env,
+        orgId: user.org_id,
+        workflowKey: 'complaint_ack',
+        clientId: body.clientId,
+        context: { complaint_id: num },
+        generateId,
+      }).catch(() => null);
+    }
 
     return c.json({ ok: true, id, complaintNumber: num });
   });

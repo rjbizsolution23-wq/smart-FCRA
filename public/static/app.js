@@ -1379,6 +1379,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'violations', icon: 'fa-exclamation-triangle', label: 'Violations' },
         { id: 'documents', icon: 'fa-file-contract', label: 'Documents' },
         { id: 'compliance-hub', icon: 'fa-shield-alt', label: 'Compliance Hub' },
+        { id: 'compliance-os', icon: 'fa-shield-virus', label: 'Compliance OS' },
         { id: 'support-center', icon: 'fa-headset', label: 'Support Center' },
         { id: 'campaigns', icon: 'fa-bullhorn', label: 'Campaigns' },
         { id: 'mailing-campaigns', icon: 'fa-mail-bulk', label: 'Mailing Campaigns' },
@@ -1541,6 +1542,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'violations': await pgViolations(el); break;
         case 'documents': await pgDocuments(el); break;
         case 'compliance-hub': await pgComplianceHub(el); break;
+        case 'compliance-os': await pgComplianceOs(el); break;
         case 'support-center': await pgSupportCenter(el); break;
         case 'campaigns': await pgCampaigns(el); break;
         case 'mailing-campaigns': await pgMailingCampaigns(el); break;
@@ -6364,6 +6366,29 @@ Status: Discharged`;
           </div>
         </div>
 
+        <div class="glass rounded-xl p-6 border border-emerald-900/40" id="org-integrations-panel">
+          <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-key text-emerald-400"></i> Your GHL &amp; MFSN credentials</h2>
+          <p class="text-xs text-gray-500 mb-4">Per-organization tokens override platform defaults. Stored in org settings (admin-only). Never share or commit passwords.</p>
+          <form id="org-integrations-form" class="grid md:grid-cols-2 gap-3 text-xs">
+            <div class="md:col-span-2 text-[10px] font-bold text-orange-300 uppercase tracking-wider">GoHighLevel</div>
+            <input name="ghlPitToken" id="ghl-pit-token" placeholder="GHL Private Integration Token" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white md:col-span-2" autocomplete="off">
+            <input name="ghlLocationId" id="ghl-location-id" placeholder="GHL Location ID" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
+            <label class="flex items-center gap-2 text-gray-400"><input type="checkbox" name="ghlEnabled" id="ghl-enabled" checked> GHL enabled</label>
+            <div class="md:col-span-2 text-[10px] font-bold text-cyan-300 uppercase tracking-wider mt-2">MyFreeScoreNow (affiliate)</div>
+            <input name="mfsnEmail" id="mfsn-org-email" placeholder="MFSN API User email" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
+            <input name="mfsnPassword" id="mfsn-org-password" type="password" placeholder="MFSN API User password (leave blank to keep)" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white" autocomplete="new-password">
+            <input name="mfsnClientToken" id="mfsn-org-token" placeholder="Partner MAPIK# token (optional)" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white md:col-span-2">
+            <input name="mfsnAffiliateId" id="mfsn-affiliate-id" placeholder="Affiliate ID (default A8289)" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
+            <label class="flex items-center gap-2 text-gray-400"><input type="checkbox" name="mfsnEnabled" id="mfsn-enabled" checked> MFSN sync enabled</label>
+            <div class="md:col-span-2 flex flex-wrap gap-2 mt-2">
+              <button type="submit" class="bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Save integration credentials</button>
+              <button type="button" id="btn-ghl-test-org" class="bg-orange-800 hover:bg-orange-700 text-white px-3 py-2 rounded-lg text-xs font-semibold">Test GHL connection</button>
+              <button type="button" id="btn-mfsn-reconcile" class="bg-cyan-700 hover:bg-cyan-600 text-white px-3 py-2 rounded-lg text-xs font-semibold">Reconcile MFSN → CRM clients</button>
+            </div>
+          </form>
+          <div id="org-integrations-status" class="text-xs text-gray-400 mt-3">Loading status…</div>
+        </div>
+
         <div class="glass rounded-xl p-6 border border-orange-900/40" id="ghl-mfsn-sync-panel">
           <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-cloud-upload-alt text-orange-400"></i> GoHighLevel + MyFreeScoreNow Sync</h2>
           <p class="text-xs text-gray-500 mb-4">Push every CRM client and every MFSN member into your GHL location with full custom fields, scores, offer codes, and tags.</p>
@@ -6556,6 +6581,67 @@ Status: Discharged`;
       };
       const btnRefresh = $('#btn-ghl-refresh-status');
       if (btnRefresh) btnRefresh.onclick = () => renderGhlStatus();
+
+      const renderOrgIntegrations = async () => {
+        const box = $('#org-integrations-status');
+        try {
+          const d = await api('/settings/integrations');
+          if (box) box.innerHTML = `<span class="text-emerald-400">GHL:</span> ${d.ghl?.orgConfigured ? 'org token set' : 'platform/env'} · loc ${escapeHtml(d.ghl?.locationId || '—')} ·
+            <span class="text-cyan-400 ml-2">MFSN:</span> ${d.mfsn?.orgConfigured ? escapeHtml(d.mfsn?.email || 'configured') : 'platform/env'} · affiliate ${escapeHtml(d.mfsn?.affiliateId || 'A8289')}`;
+          if ($('#ghl-location-id') && d.ghl?.locationId) $('#ghl-location-id').value = d.ghl.locationId;
+          if ($('#mfsn-affiliate-id')) $('#mfsn-affiliate-id').value = d.mfsn?.affiliateId || 'A8289';
+          if ($('#mfsn-org-email') && d.mfsn?.email) $('#mfsn-org-email').value = d.mfsn.email;
+        } catch { if (box) box.textContent = 'Apply migration 0028 for per-org integrations.'; }
+      };
+      renderOrgIntegrations();
+      const orgIntForm = $('#org-integrations-form');
+      if (orgIntForm) orgIntForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          await api('/settings/integrations', {
+            method: 'PUT',
+            body: JSON.stringify({
+              ghl: {
+                enabled: !!fd.get('ghlEnabled'),
+                pitToken: fd.get('ghlPitToken') || undefined,
+                locationId: fd.get('ghlLocationId') || undefined,
+              },
+              mfsn: {
+                enabled: !!fd.get('mfsnEnabled'),
+                email: fd.get('mfsnEmail') || undefined,
+                password: fd.get('mfsnPassword') || undefined,
+                clientToken: fd.get('mfsnClientToken') || undefined,
+                affiliateId: fd.get('mfsnAffiliateId') || undefined,
+              },
+            }),
+          });
+          toast('Integration credentials saved', 'success');
+          if ($('#ghl-pit-token')) $('#ghl-pit-token').value = '';
+          if ($('#mfsn-org-password')) $('#mfsn-org-password').value = '';
+          await renderOrgIntegrations();
+          await renderGhlStatus();
+        } catch (err) { toast(err.message, 'error'); }
+      };
+      const btnGhlTestOrg = $('#btn-ghl-test-org');
+      if (btnGhlTestOrg) btnGhlTestOrg.onclick = async () => {
+        try {
+          const d = await api('/integrations/ghl/test-org', { method: 'POST', body: '{}' });
+          toast(d.ok ? 'GHL connection OK' : (d.verify?.error || 'GHL test failed'), d.ok ? 'success' : 'error');
+        } catch (err) { toast(err.message, 'error'); }
+      };
+      const btnMfsnReconcile = $('#btn-mfsn-reconcile');
+      if (btnMfsnReconcile) btnMfsnReconcile.onclick = async () => {
+        if (!confirm('Pull MFSN active members and create/update Smart FCRA client records (+ GHL sync)?')) return;
+        btnMfsnReconcile.disabled = true;
+        try {
+          const d = await api('/integrations/mfsn/reconcile-clients', { method: 'POST', body: JSON.stringify({ syncGhl: true }) });
+          toast(`Reconciled: ${d.created} created, ${d.updated} updated, ${d.ghlSynced} GHL synced`, 'success');
+          showGhlLog(d);
+        } catch (err) { toast(err.message, 'error'); }
+        finally { btnMfsnReconcile.disabled = false; }
+      };
+
       if (staffPwdForm) staffPwdForm.onsubmit = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
@@ -13019,6 +13105,122 @@ async function pgAdminConsole(el) {
         </div>
       </div>
     `;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // COMPLIANCE OS — lifecycle, suppression, workflows, NBA
+  // ═══════════════════════════════════════════════════════════════
+  async function pgComplianceOs(el) {
+    el.innerHTML = `<div class="flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-3xl text-emerald-400"></i></div>`;
+    try {
+      const [overview, workflows, actions, leads] = await Promise.all([
+        api('/compliance-os/overview'),
+        api('/compliance-os/workflows'),
+        api('/compliance-os/actions').catch(() => ({ actions: [] })),
+        api('/leads').catch(() => ({ leads: [] })),
+      ]);
+      const lanes = overview.lanes || ['marketing', 'transactional', 'compliance'];
+      const wfList = workflows.workflows || [];
+      const nba = actions.actions || [];
+      const leadRows = leads.leads || [];
+
+      el.innerHTML = `
+        <div class="fade-in space-y-6">
+          <div>
+            <h1 class="text-xl font-bold text-white flex items-center gap-2"><i class="fas fa-shield-virus text-emerald-400"></i> Smart FCRA Compliance OS</h1>
+            <p class="text-sm text-gray-400 mt-1">Three communication lanes enforced on every send. Marketing never overrides consumer rights.</p>
+          </div>
+
+          <div class="grid md:grid-cols-3 gap-3">
+            ${lanes.map((lane) => `<div class="glass rounded-xl p-4 border border-gray-800">
+              <div class="text-[10px] uppercase font-bold text-gray-500 mb-1">${escapeHtml(lane)}</div>
+              <div class="text-xs text-gray-300">${lane === 'marketing' ? 'Consent + suppression required' : lane === 'compliance' ? 'Contracts, cancellation, complaints' : 'Service, security, case status'}</div>
+            </div>`).join('')}
+          </div>
+
+          <div class="grid md:grid-cols-4 gap-3">
+            <div class="glass rounded-xl p-4 border border-rose-900/30"><div class="text-[10px] text-gray-500 uppercase">Open complaints</div><div class="text-2xl font-black text-rose-400">${overview.openComplaints || 0}</div></div>
+            <div class="glass rounded-xl p-4 border border-amber-900/30"><div class="text-[10px] text-gray-500 uppercase">Pending escalations</div><div class="text-2xl font-black text-amber-400">${overview.pendingEscalations || 0}</div></div>
+            <div class="glass rounded-xl p-4 border border-violet-900/30"><div class="text-[10px] text-gray-500 uppercase">Prebuilt workflows</div><div class="text-2xl font-black text-violet-400">${wfList.length}</div></div>
+            <div class="glass rounded-xl p-4 border border-emerald-900/30"><div class="text-[10px] text-gray-500 uppercase">Staff actions (NBA)</div><div class="text-2xl font-black text-emerald-400">${nba.length}</div></div>
+          </div>
+
+          <div class="grid lg:grid-cols-2 gap-4">
+            <div class="glass rounded-xl p-5 border border-gray-800">
+              <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-route text-sky-400 mr-2"></i>Next Best Actions</h2>
+              <div class="space-y-2 max-h-64 overflow-y-auto text-xs">${nba.length ? nba.slice(0, 20).map((a) => `
+                <div class="border border-gray-800 rounded-lg p-2 flex justify-between gap-2">
+                  <div><span class="text-amber-300 font-mono">${escapeHtml(a.priority)}</span> <span class="text-white">${escapeHtml(a.title)}</span>
+                  <div class="text-gray-500">${escapeHtml(a.action_type)}</div></div>
+                  <button type="button" class="nba-done text-emerald-400 font-semibold" data-id="${escapeHtml(a.id)}">Done</button>
+                </div>`).join('') : '<p class="text-gray-500">No open staff actions.</p>'}</div>
+            </div>
+            <div class="glass rounded-xl p-5 border border-gray-800">
+              <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-user-plus text-cyan-400 mr-2"></i>Leads (${leadRows.length})</h2>
+              <form id="compliance-os-lead-form" class="space-y-2 text-xs mb-3">
+                <div class="grid grid-cols-2 gap-2">
+                  <input name="firstName" placeholder="First name" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
+                  <input name="lastName" placeholder="Last name" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
+                </div>
+                <input name="email" type="email" placeholder="Email" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white" required>
+                <input name="phone" placeholder="Phone" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
+                <label class="flex items-center gap-2 text-gray-400"><input type="checkbox" name="marketingEmailConsent"> Marketing email consent</label>
+                <label class="flex items-center gap-2 text-gray-400"><input type="checkbox" name="marketingSmsConsent"> Marketing SMS consent</label>
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg font-semibold">Create Lead + start workflows</button>
+              </form>
+              <div class="space-y-1 max-h-40 overflow-y-auto">${leadRows.slice(0, 15).map((l) => `
+                <div class="text-[10px] text-gray-400 border-t border-gray-800 pt-1">${escapeHtml(l.first_name || '')} ${escapeHtml(l.last_name || '')} · ${escapeHtml(l.email || '')} · ${escapeHtml(l.lifecycle_stage || l.status)}</div>`).join('')}</div>
+            </div>
+          </div>
+
+          <div class="glass rounded-xl p-5 border border-gray-800">
+            <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-project-diagram text-purple-400 mr-2"></i>Campaign / Workflow Library</h2>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs max-h-96 overflow-y-auto">${wfList.map((w) => `
+              <div class="bg-gray-950/40 border border-gray-800 rounded-lg p-3">
+                <div class="font-semibold text-white">${escapeHtml(w.name)}</div>
+                <div class="text-gray-500">${escapeHtml(w.key)} · ${escapeHtml(w.lane)} · ${escapeHtml(w.category)}</div>
+                ${w.mandatory ? '<span class="text-[9px] text-amber-400">Mandatory compliance</span>' : ''}
+              </div>`).join('')}</div>
+          </div>
+
+          <div class="glass rounded-xl p-4 border border-emerald-900/30 text-xs text-gray-400">
+            <strong class="text-emerald-300">Integrations:</strong> GHL ${overview.integrations?.ghl?.orgConfigured ? 'org token' : 'platform'} ·
+            MFSN ${overview.integrations?.mfsn?.orgConfigured ? 'org login' : 'platform'} —
+            configure in <button type="button" class="text-emerald-400 underline" onclick="window._nav('settings')">Settings → Your GHL &amp; MFSN credentials</button>
+          </div>
+        </div>`;
+
+      el.querySelectorAll('.nba-done').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            await api(`/compliance-os/actions/${btn.dataset.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'completed' }) });
+            await pgComplianceOs(el);
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      });
+      const leadForm = $('#compliance-os-lead-form');
+      if (leadForm) leadForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          await api('/leads', {
+            method: 'POST',
+            body: JSON.stringify({
+              firstName: fd.get('firstName'),
+              lastName: fd.get('lastName'),
+              email: fd.get('email'),
+              phone: fd.get('phone'),
+              marketingEmailConsent: !!fd.get('marketingEmailConsent'),
+              marketingSmsConsent: !!fd.get('marketingSmsConsent'),
+            }),
+          });
+          toast('Lead created — new_lead + follow-up workflows started', 'success');
+          await pgComplianceOs(el);
+        } catch (err) { toast(err.message, 'error'); }
+      };
+    } catch (err) {
+      el.innerHTML = `<div class="glass p-8 rounded-xl border border-red-500/30 text-center text-sm text-gray-300">${escapeHtml(err.message)}<br><span class="text-xs text-gray-500">Run migration 0028_compliance_os.sql</span></div>`;
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════

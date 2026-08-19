@@ -156,6 +156,8 @@ import { recordServiceCompleted, assertCoveredChargeAllowed, writeBillingLedger 
 import { sendLetterViaClick2Mail, resolveMailClass } from './lib/click2mail';
 import { registerSupportCrmRoutes, registerExternalIntegrationRoutes } from './lib/support-crm-routes';
 import { registerRoadmapRoutes, handleClientBillingWebhook } from './lib/roadmap-routes';
+import { registerComplianceOsRoutes } from './lib/compliance-os-routes';
+import { startWorkflowRun } from './lib/crm-workflow-engine';
 import { emitOrgWebhook } from './lib/outbound-webhooks';
 import { buildTradelineMatrix } from './lib/bureau-matrix';
 import { buildEscalationRecommendation, persistEscalation } from './lib/escalation-engine';
@@ -291,6 +293,15 @@ async function persistBureauScores(
         db: c.env.DB, env: c.env, orgId: opts.orgId, clientId: opts.clientId,
         creditEventId: ev.id, accountKey: ev.account_key || 'account',
         orgSettings, generateId,
+      }).catch(() => null);
+      startWorkflowRun({
+        db: c.env.DB,
+        env: c.env,
+        orgId: opts.orgId,
+        workflowKey: 'change_detected',
+        clientId: opts.clientId,
+        context: { item: ev.account_key || 'account', source: opts.bureau || 'report' },
+        generateId,
       }).catch(() => null);
     }
   } catch (e) {
@@ -11447,7 +11458,7 @@ function getAppHtml(mode: 'login' | 'app' = 'app'): string {
     }
   </script>
   <script src="/static/demo-experience.js?v=20260819-stripe-live"></script>
-  <script src="/static/app.js?v=20260819-roadmap-parity"></script>
+  <script src="/static/app.js?v=20260819-compliance-os"></script>
 </body>
 </html>`;
 }
@@ -11462,5 +11473,6 @@ registerClientIntelligenceRoutes(app, {
 registerSupportCrmRoutes(app, { authMiddleware });
 registerExternalIntegrationRoutes(app);
 registerRoadmapRoutes(app, { authMiddleware });
+registerComplianceOsRoutes(app, { authMiddleware });
 
 export default app;

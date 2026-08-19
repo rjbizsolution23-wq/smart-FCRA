@@ -12,6 +12,8 @@ import { seedKnowledgeBase, retrieveKnowledge } from './knowledge-base';
 import { syncTradelineInventory } from './tradeline-sync';
 import { tradelineMasterConfigured } from './tradelinemaster-client';
 import { OPS_BACKUP_TABLES } from './data-compliance';
+import { processDueWorkflowSteps } from './crm-workflow-engine';
+import { reconcileMfsnMembersToClients } from './mfsn-reconcile';
 
 export type OpsEnv = {
   DB: any;
@@ -41,11 +43,13 @@ export type OpsJobName =
   | 'monthly_compliance_snapshot'
   | 'monthly_progress_reports'
   | 'client_billing_dunning'
+  | 'crm_workflow_tick'
+  | 'mfsn_member_reconcile'
   | 'backup_snapshot'
   | 'tradeline_inventory_refresh';
 
 export const OPS_PACKS: Record<string, OpsJobName[]> = {
-  hourly: ['housekeeping', 'email_health', 'ron_video_cleanup'],
+  hourly: ['housekeeping', 'email_health', 'ron_video_cleanup', 'crm_workflow_tick'],
   daily: [
     'morning_ritual',
     'enterprise_comms',
@@ -55,6 +59,7 @@ export const OPS_PACKS: Record<string, OpsJobName[]> = {
     'privacy_sla',
     'email_health',
     'client_billing_dunning',
+    'mfsn_member_reconcile',
     'tradeline_inventory_refresh',
   ],
   weekly: ['fundability_refresh', 'newsletter_weekly', 'weekly_owner_report', 'kb_health', 'backup_snapshot'],
@@ -1023,6 +1028,47 @@ async function jobClientBillingDunning(env: OpsEnv) {
   return { sent, total: ((pastDue as any)?.results || []).length };
 }
 
+async function jobCrmWorkflowTick(env: OpsEnv) {
+  return processDueWorkflowSteps({
+    db: env.DB,
+    env,
+    generateId: rid,
+    limit: 100,
+  });
+}
+
+async function jobMfsnMemberReconcile(env: OpsEnv, opts?: { orgId?: string }) {
+  let orgs: any[] = [];
+  if (opts?.orgId) {
+    orgs = [{ id: opts.orgId, name: '', settings: '{}' }];
+  } else {
+    const rows = await env.DB.prepare(
+      `SELECT id, name, settings FROM organizations WHERE coalesce(json_extract(settings, '$.integrations.mfsn.enabled'), 1) != 0 LIMIT 50`,
+    ).all();
+    orgs = rows.results || [];
+  }
+  let totalCreated = 0;
+  let totalUpdated = 0;
+  const errors: string[] = [];
+  for (const org of orgs) {
+    let settings = {};
+    try { settings = JSON.parse(org.settings || '{}'); } catch { /* */ }
+    const result = await reconcileMfsnMembersToClients({
+      db: env.DB,
+      env,
+      orgId: org.id,
+      orgSettings: settings,
+      orgName: org.name,
+      generateId: rid,
+      syncGhl: true,
+    });
+    totalCreated += result.created;
+    totalUpdated += result.updated;
+    errors.push(...result.errors);
+  }
+  return { orgs: orgs.length, created: totalCreated, updated: totalUpdated, errors: errors.slice(0, 10) };
+}
+
 const JOB_MAP: Record<OpsJobName, JobFn> = {
   housekeeping: jobHousekeeping,
   email_health: jobEmailHealth,
@@ -1040,6 +1086,8 @@ const JOB_MAP: Record<OpsJobName, JobFn> = {
   monthly_compliance_snapshot: jobMonthlyComplianceSnapshot,
   monthly_progress_reports: jobMonthlyProgressReports,
   client_billing_dunning: jobClientBillingDunning,
+  crm_workflow_tick: jobCrmWorkflowTick,
+  mfsn_member_reconcile: jobMfsnMemberReconcile,
   backup_snapshot: jobBackupSnapshot,
   tradeline_inventory_refresh: jobTradelineInventoryRefresh,
 };

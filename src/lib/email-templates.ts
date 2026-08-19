@@ -4,6 +4,7 @@
 import { sendAppEmail, type EmailEnv } from './email';
 import { dispatchClientAlert, type AlertEnv } from './alerts';
 import { loadOrgBrand, brandVars, type OrgBrand } from './org-branding';
+import { canSendMessage, logCommunicationAttempt, type CommsLane } from './comms-compliance';
 
 export type TemplateId =
   | 'account_verify'
@@ -40,10 +41,21 @@ export type EmailTemplate = {
   name: string;
   description: string;
   eventType: string;
+  lane?: CommsLane;
   subject: (vars: Record<string, string>) => string;
   html: (vars: Record<string, string>) => string;
   text: (vars: Record<string, string>) => string;
 };
+
+const MARKETING_TEMPLATES = new Set<TemplateId>(['client_newsletter', 'inactive_reengage', 'onboarding_day1', 'onboarding_day3']);
+
+export function templateLane(id: TemplateId): CommsLane {
+  const tpl = EMAIL_TEMPLATES.find((t) => t.id === id);
+  if (tpl?.lane) return tpl.lane;
+  if (MARKETING_TEMPLATES.has(id)) return 'marketing';
+  if (id === 'privacy_sla_alert') return 'compliance';
+  return 'transactional';
+}
 
 function esc(s: string): string {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -415,6 +427,35 @@ export async function sendTemplatedClientMessage(
 
   let deliveryStatus = 'skipped';
   if (opts.notifyEmail !== false && opts.email) {
+    const lane = templateLane(opts.templateId);
+    const gate = await canSendMessage({
+      db: env.DB,
+      orgId: opts.orgId,
+      clientId: opts.clientId,
+      email: opts.email,
+      lane,
+      channel: 'email',
+      templateId: opts.templateId,
+    });
+    const attemptId = crypto.randomUUID();
+    await logCommunicationAttempt(env.DB, {
+      ...gate,
+      id: attemptId,
+      db: env.DB,
+      orgId: opts.orgId,
+      clientId: opts.clientId,
+      email: opts.email,
+      lane,
+      channel: 'email',
+      templateId: opts.templateId,
+      renderedSubject: title,
+      sent: false,
+    });
+    if (!gate.allowed) {
+      deliveryStatus = 'blocked';
+      channels.email = `blocked:${gate.reasons.join(';')}`;
+      return { ok: false, templateId: opts.templateId, channels, deliveryStatus };
+    }
     try {
       const mail = await sendAppEmail(env, {
         to: opts.email,

@@ -1,6 +1,7 @@
 /**
  * Marketing campaign builder MVP — saved segments + email/SMS broadcast.
  */
+import { canSendMessage, logCommunicationAttempt } from './comms-compliance';
 export type CampaignSegment = {
   id: string;
   label: string;
@@ -78,6 +79,36 @@ export async function runCampaignDelivery(opts: {
     const body = String(campaign.body_template || '')
       .replace(/\{first_name\}/g, client.first_name || '')
       .replace(/\{last_name\}/g, client.last_name || '');
+    const gate = await canSendMessage({
+      db: opts.db,
+      orgId: opts.orgId,
+      clientId: client.id,
+      email,
+      lane: 'marketing',
+      channel: 'email',
+      campaignId: opts.campaignId,
+    });
+    const attemptId = crypto.randomUUID();
+    await logCommunicationAttempt(opts.db, {
+      ...gate,
+      id: attemptId,
+      db: opts.db,
+      orgId: opts.orgId,
+      clientId: client.id,
+      email,
+      lane: 'marketing',
+      channel: 'email',
+      campaignId: opts.campaignId,
+      renderedSubject: campaign.subject || campaign.name,
+      sent: false,
+    });
+    if (!gate.allowed) {
+      await opts.db.prepare(
+        `INSERT INTO campaign_deliveries (id, org_id, campaign_id, client_id, email, status, error) VALUES (?, ?, ?, ?, ?, 'blocked', ?)`,
+      ).bind(deliveryId, opts.orgId, opts.campaignId, client.id, email, gate.reasons.join('; ').slice(0, 500)).run();
+      failed += 1;
+      continue;
+    }
     try {
       await opts.sendEmail({ to: email, subject: campaign.subject || campaign.name, body });
       await opts.db.prepare(
