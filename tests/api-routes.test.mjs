@@ -213,6 +213,23 @@ const mockEnv = {
   const xml = await sitemap.text();
   assert(xml.includes('https://smartfcra.com/login'), 'sitemap login');
   assert(xml.includes('https://smartfcra.com/demo'), 'sitemap demo');
+  assert(xml.includes('https://smartfcra.com/legal/privacy'), 'sitemap privacy');
+  const home = await app.request('/', {}, mockEnv);
+  assert(home.status === 200, 'GET / landing');
+  const homeHtml = await home.text();
+  assert(homeHtml.includes('application/ld+json'), 'landing json-ld');
+  assert(homeHtml.includes('sf-footer'), 'landing professional footer');
+  assert(homeHtml.includes('geo.region'), 'landing geo tags');
+  assert(homeHtml.includes('credit repair software'), 'landing keywords');
+  const demo = await app.request('/demo', {}, mockEnv);
+  assert(demo.status === 200, 'GET /demo');
+  const demoHtml = await demo.text();
+  assert(demoHtml.includes('sf-footer'), 'demo professional footer');
+  assert(demoHtml.includes('Tijeras'), 'demo geo copy');
+  const llms = await app.request('/llms.txt', {}, mockEnv);
+  assert(llms.status === 200, 'GET /llms.txt');
+  const llmsText = await llms.text();
+  assert(llmsText.includes('# Smart FCRA'), 'llms heading');
 }
 
 console.log('PASS: API route integration tests');

@@ -32,7 +32,8 @@
     nav a { color: #fff; text-decoration: none; opacity: 0.9; }
     .brand { font-family: var(--font-head); font-weight: 700; }
     h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); max-width: 18ch; line-height: 1.1; margin-bottom: 0.75rem; }
-    .lede { max-width: 48ch; color: rgba(255,255,255,0.85); line-height: 1.55; }
+    .lede { max-width: 52ch; color: rgba(255,255,255,0.85); line-height: 1.55; }
+    .geo { margin: 0.85rem 0 0; font-size: 0.82rem; color: rgba(255,255,255,0.7); }
     .grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 2rem; padding: 2.5rem 0 4rem; align-items: start; }
     .card { background: #fff; border: 1px solid var(--sf-line); border-radius: 16px; padding: 1.4rem; }
     .card h2 { font-size: 1.15rem; margin-bottom: 0.85rem; }
@@ -54,8 +55,11 @@
     .note { font-size: 0.8rem; color: var(--sf-muted); line-height: 1.45; }
     .status { min-height: 1.2rem; font-size: 0.9rem; color: #047857; }
     .status.err { color: #b91c1c; }
-    footer { padding: 1.5rem 0 2rem; color: var(--sf-muted); font-size: 0.85rem; }
-    footer a { color: var(--sf-blue); text-decoration: none; }
+    .demo-faq { padding: 0 0 3rem; }
+    .demo-faq h2 { font-size: 1.35rem; margin-bottom: 1rem; }
+    .demo-faq dl { display: grid; gap: 0.85rem; margin: 0; }
+    .demo-faq dt { font-family: var(--font-head); font-weight: 650; }
+    .demo-faq dd { margin: 0.25rem 0 0; color: var(--sf-muted); line-height: 1.5; }
     @media (max-width: 860px) { .grid, .row { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -66,38 +70,58 @@
         <a class="brand" href="/">Smart FCRA</a>
         <a href="/login">Sign in</a>
       </nav>
-      <h1>Interactive product demo — gated to real operators.</h1>
-      <p class="lede">Give us your firm details. Then a popup tour walks the whole app, and a voice-and-text agent answers questions and drives the screens. One live MyFreeScoreNow report, one person, per account.</p>
+      <h1>Interactive credit repair software demo — gated to real operators.</h1>
+      <p class="lede">Give us your firm details. Then a popup tour walks the whole app — FCRA violation engine, generated dispute letters, client portal, Metro 2 review, and CROA cancel. A voice-and-text agent answers questions and drives the screens. One live MyFreeScoreNow 3-bureau report, one person, per account.</p>
+      <p class="geo">RJ Business Solutions · Tijeras, New Mexico · serving credit repair companies across the United States</p>
     </div>
   </header>
-  <main class="wrap grid">
-    <div>
-      <ul class="points">
-        <li><strong>Guided tour of the full product</strong> — ingest, violation engine, litigation scoring, generated letters, mail clocks, consumer portal, tutors, CROA cancel.</li>
-        <li><strong>Ask anything</strong> — type or talk. The agent navigates to the screen and explains why firms buy Smart FCRA. Not legal advice. No source or IP dump.</li>
-        <li><strong>Letters are generated</strong> — from violations on the file, not fill-in forms. You will see that on the generate-letter step.</li>
-        <li><strong>Optional live MFSN pull</strong> — member email + MAPIK# token, once. After that pull this email/phone cannot import another live demo report.</li>
-      </ul>
+  <main>
+    <div class="wrap grid">
+      <div>
+        <ul class="points">
+          <li><strong>Guided tour of the full product</strong> — ingest, 15-category violation engine, litigation scoring, generated letters, mail clocks, consumer portal, tutors, CROA cancel.</li>
+          <li><strong>Ask anything</strong> — type or talk. The agent navigates to the screen and explains why firms buy Smart FCRA. Not legal advice. No source or IP dump.</li>
+          <li><strong>Letters are generated</strong> — from violations on the file, not fill-in forms. You will see that on the generate-letter step.</li>
+          <li><strong>Optional live MFSN pull</strong> — member email + MAPIK# token, once. After that pull this email/phone cannot import another live demo report.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>Start the demo</h2>
+        <form id="demo-gate">
+          <div class="row">
+            <label>First name <input name="firstName" required autocomplete="given-name" /></label>
+            <label>Last name <input name="lastName" required autocomplete="family-name" /></label>
+          </div>
+          <label>Work email <input name="email" type="email" required autocomplete="email" placeholder="you@yourfirm.com" /></label>
+          <label>Mobile / desk phone <input name="phone" type="tel" required autocomplete="tel" placeholder="(555) 555-5555" /></label>
+          <label>Business name <input name="businessName" required autocomplete="organization" placeholder="Your CRO or firm" /></label>
+          <label>Business address
+            <textarea name="businessAddress" required rows="2" placeholder="Street, city, state, ZIP"></textarea>
+          </label>
+          <div id="cf-turnstile"></div>
+          <p class="note">Required before the app opens. RJ Business Solutions will follow up. This is not consumer credit-repair enrollment. Live bureau pulls are capped at one person / one report on this demo account.</p>
+          <button class="btn" type="submit">Enter interactive demo</button>
+          <div class="status" id="status" role="status"></div>
+        </form>
+      </div>
     </div>
-    <div class="card">
-      <h2>Start the demo</h2>
-      <form id="demo-gate">
-        <div class="row">
-          <label>First name <input name="firstName" required autocomplete="given-name" /></label>
-          <label>Last name <input name="lastName" required autocomplete="family-name" /></label>
+    <section class="wrap demo-faq" id="faq">
+      <h2>Before you enter</h2>
+      <dl>
+        <div>
+          <dt>Is this credit repair software for consumers?</dt>
+          <dd>No. This demo is for credit repair organizations, CROs, and consumer-rights firms evaluating Smart FCRA as operations software.</dd>
         </div>
-        <label>Work email <input name="email" type="email" required autocomplete="email" placeholder="you@yourfirm.com" /></label>
-        <label>Mobile / desk phone <input name="phone" type="tel" required autocomplete="tel" placeholder="(555) 555-5555" /></label>
-        <label>Business name <input name="businessName" required autocomplete="organization" placeholder="Your CRO or firm" /></label>
-        <label>Business address
-          <textarea name="businessAddress" required rows="2" placeholder="Street, city, state, ZIP"></textarea>
-        </label>
-        <div id="cf-turnstile"></div>
-        <p class="note">Required before the app opens. RJ Business Solutions will follow up. This is not consumer credit-repair enrollment. Live bureau pulls are capped at one person / one report on this demo account.</p>
-        <button class="btn" type="submit">Enter interactive demo</button>
-        <div class="status" id="status" role="status"></div>
-      </form>
-    </div>
+        <div>
+          <dt>Will I see template letters?</dt>
+          <dd>No. The tour shows letters generated from findings on the sample file — FCRA § 611 / § 623 paths, not blank forms.</dd>
+        </div>
+        <div>
+          <dt>Where is RJ Business Solutions based?</dt>
+          <dd>Tijeras, New Mexico (Albuquerque metro), serving operators nationwide in the United States.</dd>
+        </div>
+      </dl>
+    </section>
   </main>
   <footer class="wrap">Smart FCRA by RJ Business Solutions · <a href="/">Marketing site</a></footer>
   <script src="/static/brand/turnstile.js"></script>

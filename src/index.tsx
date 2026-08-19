@@ -169,6 +169,14 @@ import {
   stripeSecretMode,
 } from './lib/stripe-catalog';
 import { CANONICAL_ORIGIN, canonicalRedirectUrl } from './lib/public-origin';
+import {
+  applyMarketingChrome,
+  llmsFullTxt,
+  llmsTxt,
+  loginSeoHead,
+  robotsTxt,
+  sitemapXml,
+} from './lib/marketing-site';
 import { shouldApplyActingOrg } from './lib/acting-org';
 import {
   isPlatformOwnerUser,
@@ -1932,26 +1940,16 @@ app.get('/api/brand/catalog', authMiddleware, async (c) => {
 });
 
 /** Public Smart FCRA sales funnel (software landing). */
-app.get('/', (c) => c.html(marketingLandingHtml));
-app.get('/pricing', (c) => c.redirect('/#pricing', 302));
-app.get('/demo', (c) => c.html(marketingDemoHtml));
-app.get('/robots.txt', (c) => {
-  const body = `User-agent: *\nAllow: /\nSitemap: ${CANONICAL_ORIGIN}/sitemap.xml\n`;
-  return c.text(body, 200, { 'Content-Type': 'text/plain; charset=utf-8' });
-});
-app.get('/sitemap.xml', (c) => {
-  const urls = ['/', '/pricing', '/demo', '/login', '/app'];
-  const body =
-    `<?xml version="1.0" encoding="UTF-8"?>\n` +
-    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-    urls
-      .map((path) => `  <url><loc>${CANONICAL_ORIGIN}${path}</loc></url>`)
-      .join('\n') +
-    `\n</urlset>\n`;
-  return c.text(body, 200, { 'Content-Type': 'application/xml; charset=utf-8' });
-});
-app.get('/login', (c) => c.html(getAppHtml()));
-app.get('/app', (c) => c.html(getAppHtml()));
+app.get('/', (c) => c.html(applyMarketingChrome(marketingLandingHtml, 'home')));
+app.get('/pricing', (c) => c.html(applyMarketingChrome(marketingLandingHtml, 'pricing')));
+app.get('/demo', (c) => c.html(applyMarketingChrome(marketingDemoHtml, 'demo')));
+app.get('/robots.txt', (c) => c.text(robotsTxt(), 200, { 'Content-Type': 'text/plain; charset=utf-8' }));
+app.get('/sitemap.xml', (c) => c.text(sitemapXml(), 200, { 'Content-Type': 'application/xml; charset=utf-8' }));
+app.get('/llms.txt', (c) => c.text(llmsTxt(), 200, { 'Content-Type': 'text/markdown; charset=utf-8' }));
+app.get('/llms-full.txt', (c) => c.text(llmsFullTxt(), 200, { 'Content-Type': 'text/markdown; charset=utf-8' }));
+app.get('/ai.txt', (c) => c.redirect('/llms.txt', 301));
+app.get('/login', (c) => c.html(getAppHtml('login')));
+app.get('/app', (c) => c.html(getAppHtml('app')));
 
 /** Friendly short URLs into the brand library — owner SPA only (static hub is gated). */
 app.get('/brand', (c) => c.redirect('/login', 302));
@@ -11042,7 +11040,7 @@ app.get('*', async (c) => {
     }
   }
 
-  return c.html(getAppHtml());
+  return c.html(getAppHtml('app'));
 });
 
 // Helper to serve static HTML files
@@ -11190,13 +11188,18 @@ async function getStaticFile(path: string): Promise<string | null> {
   return staticFiles[path] || null;
 }
 
-function getAppHtml(): string {
+function getAppHtml(mode: 'login' | 'app' = 'app'): string {
+  const seo =
+    mode === 'login'
+      ? loginSeoHead()
+      : `<title>Smart FCRA · RJ Business Solutions</title>
+  <meta name="robots" content="noindex, nofollow" />`;
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en-US">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#2563eb">
+  ${seo}
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Smart FCRA">
@@ -11204,7 +11207,6 @@ function getAppHtml(): string {
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/brand/pwa-icon.jpg">
   <link rel="icon" href="/static/brand/pwa-icon.jpg">
-  <title>Smart FCRA · RJ Business Solutions</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
