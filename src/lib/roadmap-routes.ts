@@ -188,6 +188,13 @@ export function registerRoadmapRoutes(app: Hono<any>, opts: RegisterOpts) {
   app.post('/api/campaigns/:id/send', authMiddleware, async (c) => {
     const user = c.get('user');
     if (user.role !== 'admin' && user.role !== 'super_admin') return c.json({ error: 'Admin only' }, 403);
+    const campaign = await c.env.DB.prepare(
+      'SELECT approval_status FROM marketing_campaigns WHERE id = ? AND org_id = ?',
+    ).bind(c.req.param('id'), user.org_id).first() as any;
+    const status = campaign?.approval_status || 'draft';
+    if (!['approved', 'sent'].includes(status)) {
+      return c.json({ error: 'Campaign must pass compliance approval before send. Submit for review in Campaigns.' }, 403);
+    }
     const result = await runCampaignDelivery({
       db: c.env.DB,
       env: c.env,

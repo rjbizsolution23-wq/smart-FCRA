@@ -31,7 +31,10 @@ assert(!isMarketingOptOutMessage('Hello'), 'hello not opt-out');
 assert(COMMS_POLICY_VERSION.startsWith('2026'), 'policy version');
 
 const lib = listWorkflowLibrary();
-assert(lib.length >= 15, `campaign library size ${lib.length}`);
+assert(lib.length >= 40, `campaign library size ${lib.length}`);
+assert(lib.some((w) => w.key === 'hot_lead'), 'hot_lead workflow');
+assert(lib.some((w) => w.key === 'referral'), 'referral workflow');
+assert(lib.some((w) => w.key === 'win_back'), 'win_back workflow');
 assert(lib.some((w) => w.key === 'new_lead'), 'new_lead workflow');
 assert(lib.some((w) => w.mandatory), 'has mandatory workflows');
 assert(getWorkflowDefinition('cancellation')?.lane === 'compliance', 'cancellation is compliance lane');

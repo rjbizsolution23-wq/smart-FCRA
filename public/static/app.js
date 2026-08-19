@@ -1853,7 +1853,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         ${statCard('fa-file-contract','Documents',res.documents.length,'purple')}
       </div>
       ${renderBureauTriad(res)}
-      <div class="flex border-b border-gray-800 mb-4 overflow-x-auto">${['reports','violations','bureaus','documents','mailing','compliance','email-log','activity'].map((t)=>`<button class="client-tab pb-2.5 px-4 text-sm font-medium whitespace-nowrap ${(data.initialTab||'violations')===t?'text-blue-400 border-b-2 border-blue-400':'text-gray-500 border-b-2 border-transparent hover:text-gray-300'}" data-tab="${t}">${t==='mailing'?'Mailing':t==='bureaus'?'Tri-Bureau':t==='email-log'?'Email Log':t==='compliance'?'Legal / RON':(t[0].toUpperCase()+t.slice(1))} ${t==='activity'?'('+res.activity.length+')':t==='mailing'?'('+res.documents.filter(d=>d.status==='sent').length+')':t==='bureaus'?'':t==='compliance'||t==='email-log'?'':'('+res[t].length+')'}</button>`).join('')}</div>
+      <div class="flex border-b border-gray-800 mb-4 overflow-x-auto">${['reports','violations','bureaus','timeline','documents','mailing','compliance','email-log','activity'].map((t)=>`<button class="client-tab pb-2.5 px-4 text-sm font-medium whitespace-nowrap ${(data.initialTab||'violations')===t?'text-blue-400 border-b-2 border-blue-400':'text-gray-500 border-b-2 border-transparent hover:text-gray-300'}" data-tab="${t}">${t==='mailing'?'Mailing':t==='bureaus'?'Tri-Bureau':t==='timeline'?'Timeline':t==='email-log'?'Email Log':t==='compliance'?'Legal / RON':(t[0].toUpperCase()+t.slice(1))} ${t==='activity'?'('+res.activity.length+')':t==='mailing'?'('+res.documents.filter(d=>d.status==='sent').length+')':t==='bureaus'||t==='timeline'?'':t==='compliance'||t==='email-log'?'':'('+res[t].length+')'}</button>`).join('')}</div>
       <div id="client-tab-content">${(data.initialTab && data.initialTab !== 'violations') ? '' : renderViolationsList(res.violations)}</div>
 
       <!-- Edit Client Slide-Over Panel -->
@@ -2081,6 +2081,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         document.querySelectorAll('.client-tab').forEach(t => { t.className = 'client-tab pb-2.5 px-4 text-sm font-medium whitespace-nowrap text-gray-500 border-b-2 border-transparent hover:text-gray-300'; });
         tabBtn.className = 'client-tab pb-2.5 px-4 text-sm font-medium whitespace-nowrap text-blue-400 border-b-2 border-blue-400';
         if (initialTab === 'bureaus' && ct) loadBureauComparisonTab(ct, c.id);
+        if (initialTab === 'timeline' && ct) loadClientTimelineTab(ct, c.id);
         else if (initialTab === 'compliance' && ct) loadClientComplianceTab(ct, c.id);
         else if (initialTab === 'email-log' && ct) loadClientEmailLogTab(ct, c.id);
         else if (ct) tabBtn.click();
@@ -2095,6 +2096,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           case 'reports': ct.innerHTML = renderReportsList(res.reports); break;
           case 'violations': ct.innerHTML = renderViolationsList(res.violations); break;
           case 'bureaus': loadBureauComparisonTab(ct, c.id); break;
+          case 'timeline': loadClientTimelineTab(ct, c.id); break;
           case 'documents': ct.innerHTML = renderDocsList(res.documents); break;
           case 'mailing': ct.innerHTML = renderMailingTab(res.documents, c); break;
           case 'compliance': loadClientComplianceTab(ct, c.id); break;
@@ -2267,6 +2269,45 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
             </table>
             <p class="text-[10px] text-gray-500 mt-2">Variances flagged for review — not automatic legal conclusions.</p>
           </div>` : ''}
+        </div>`;
+    } catch (err) {
+      el.innerHTML = `<div class="text-red-400 text-sm p-4">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function loadClientTimelineTab(el, clientId) {
+    el.innerHTML = '<div class="flex items-center justify-center py-12"><i class="fas fa-spinner fa-spin text-emerald-400"></i></div>';
+    try {
+      const [timeline, prefs] = await Promise.all([
+        api(`/clients/${clientId}/timeline`),
+        api(`/clients/${clientId}/communication-preferences`).catch(() => ({ preferences: {} })),
+      ]);
+      const events = timeline.events || [];
+      const p = prefs.preferences || {};
+      el.innerHTML = `
+        <div class="space-y-4">
+          <div class="glass rounded-xl border border-emerald-900/30 p-4">
+            <h3 class="text-xs font-bold text-emerald-300 uppercase mb-2">Communication preferences</h3>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-[10px] text-gray-400">
+              <div>Service email: <span class="text-white">${p.emailService ? 'On' : 'Off'}</span></div>
+              <div>Service SMS: <span class="text-white">${p.smsService ? 'On' : 'Off'}</span></div>
+              <div>Marketing email: <span class="text-white">${p.marketingEmail ? 'On' : 'Off'}</span></div>
+              <div>Marketing SMS: <span class="text-white">${p.marketingSms ? 'On' : 'Off'}</span></div>
+              <div>Marketing calls: <span class="text-white">${p.marketingCalls ? 'On' : 'Off'}</span></div>
+              <div>Push: <span class="text-white">${p.pushEnabled ? 'On' : 'Off'}</span></div>
+            </div>
+          </div>
+          <h3 class="text-sm font-bold text-white"><i class="fas fa-stream text-emerald-400 mr-2"></i>Unified timeline (${events.length})</h3>
+          <div class="space-y-2 max-h-[480px] overflow-y-auto">${events.length ? events.map((ev) => `
+            <div class="glass rounded-lg border border-gray-800 p-3 text-xs">
+              <div class="flex justify-between gap-2">
+                <span class="text-white font-semibold">${escapeHtml(ev.title)}</span>
+                <span class="text-gray-500 shrink-0">${escapeHtml(shortDate(ev.createdAt))}</span>
+              </div>
+              <div class="text-[10px] text-gray-500 mt-1">${escapeHtml(ev.eventType)} · ${escapeHtml(ev.source || '')}</div>
+              ${ev.summary ? `<p class="text-gray-400 mt-1">${escapeHtml(String(ev.summary).slice(0, 200))}</p>` : ''}
+            </div>`).join('') : '<p class="text-gray-500 text-sm">No timeline events yet.</p>'}
+          </div>
         </div>`;
     } catch (err) {
       el.innerHTML = `<div class="text-red-400 text-sm p-4">${escapeHtml(err.message)}</div>`;
@@ -13113,16 +13154,20 @@ async function pgAdminConsole(el) {
   async function pgComplianceOs(el) {
     el.innerHTML = `<div class="flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-3xl text-emerald-400"></i></div>`;
     try {
-      const [overview, workflows, actions, leads] = await Promise.all([
+      const [overview, workflows, actions, leads, catalog, automations] = await Promise.all([
         api('/compliance-os/overview'),
         api('/compliance-os/workflows'),
         api('/compliance-os/actions').catch(() => ({ actions: [] })),
         api('/leads').catch(() => ({ leads: [] })),
+        api('/compliance-os/automation-catalog').catch(() => ({ triggers: [], stepTypes: [] })),
+        api('/compliance-os/automations').catch(() => ({ automations: [] })),
       ]);
       const lanes = overview.lanes || ['marketing', 'transactional', 'compliance'];
       const wfList = workflows.workflows || [];
       const nba = actions.actions || [];
       const leadRows = leads.leads || [];
+      const autoList = automations.automations || [];
+      const triggers = catalog.triggers || [];
 
       el.innerHTML = `
         <div class="fade-in space-y-6">
@@ -13183,6 +13228,25 @@ async function pgAdminConsole(el) {
               </div>`).join('')}</div>
           </div>
 
+          <div class="glass rounded-xl p-5 border border-sky-900/30">
+            <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-magic text-sky-400 mr-2"></i>Automation Builder (WHEN → IF → THEN)</h2>
+            <form id="automation-create-form" class="grid md:grid-cols-2 gap-3 text-xs mb-4">
+              <input name="name" placeholder="Automation name" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white" required>
+              <select name="triggerEvent" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">${triggers.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}</select>
+              <select name="lane" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
+                <option value="transactional">Transactional</option>
+                <option value="marketing">Marketing</option>
+                <option value="compliance">Compliance</option>
+              </select>
+              <input name="emailSubject" placeholder="Email subject (optional)" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
+              <textarea name="emailBody" rows="3" placeholder="Email/SMS body template with {{first_name}}" class="md:col-span-2 bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white"></textarea>
+              <button type="submit" class="md:col-span-2 bg-sky-700 hover:bg-sky-600 text-white py-2 rounded-lg font-semibold">Save custom automation (draft)</button>
+            </form>
+            <div class="space-y-1 max-h-32 overflow-y-auto text-[10px] text-gray-400">${autoList.length ? autoList.map((a) => `
+              <div class="border-t border-gray-800 pt-1 flex justify-between"><span>${escapeHtml(a.name)} · ${escapeHtml(a.triggerEvent)} · ${escapeHtml(a.status)}</span>
+              <button type="button" class="auto-run-btn text-sky-400" data-id="${escapeHtml(a.id)}">Run test</button></div>`).join('') : 'No custom automations yet.'}</div>
+          </div>
+
           <div class="glass rounded-xl p-4 border border-emerald-900/30 text-xs text-gray-400">
             <strong class="text-emerald-300">Integrations:</strong> GHL ${overview.integrations?.ghl?.orgConfigured ? 'org token' : 'platform'} ·
             MFSN ${overview.integrations?.mfsn?.orgConfigured ? 'org login' : 'platform'} —
@@ -13218,6 +13282,38 @@ async function pgAdminConsole(el) {
           await pgComplianceOs(el);
         } catch (err) { toast(err.message, 'error'); }
       };
+      const autoForm = $('#automation-create-form');
+      if (autoForm) autoForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const steps = [];
+        if (fd.get('emailBody')) {
+          steps.push({ type: 'send_email', lane: fd.get('lane'), subject: fd.get('emailSubject'), bodyTemplate: fd.get('emailBody') });
+        }
+        steps.push({ type: 'wait', delayHours: 0 });
+        try {
+          await api('/compliance-os/automations', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: fd.get('name'),
+              triggerEvent: fd.get('triggerEvent'),
+              lane: fd.get('lane'),
+              steps,
+            }),
+          });
+          toast('Automation saved as draft', 'success');
+          await pgComplianceOs(el);
+        } catch (err) { toast(err.message, 'error'); }
+      };
+      el.querySelectorAll('.auto-run-btn').forEach((btn) => {
+        btn.onclick = async () => {
+          const clientId = prompt('Client ID for test run (optional)', '') || undefined;
+          try {
+            await api(`/compliance-os/automations/${btn.dataset.id}/run`, { method: 'POST', body: JSON.stringify({ clientId, context: {} }) });
+            toast('Automation run queued', 'success');
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      });
     } catch (err) {
       el.innerHTML = `<div class="glass p-8 rounded-xl border border-red-500/30 text-center text-sm text-gray-300">${escapeHtml(err.message)}<br><span class="text-xs text-gray-500">Run migration 0028_compliance_os.sql</span></div>`;
     }
@@ -13377,10 +13473,15 @@ async function pgAdminConsole(el) {
                 return `<div class="border border-gray-800 rounded-lg p-3 flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <div class="text-white font-semibold">${escapeHtml(c.name)}</div>
-                    <div class="text-gray-500">${escapeHtml(c.status)} · ${escapeHtml(seg.id || 'segment')} · ${escapeHtml(c.channel || 'email')}</div>
+                    <div class="text-gray-500">${escapeHtml(c.status)} · ${escapeHtml(c.approval_status || 'draft')} · ${escapeHtml(seg.id || 'segment')}</div>
                     ${c.sent_at ? `<div class="text-emerald-400 mt-1">Sent ${escapeHtml(shortDate(c.sent_at))} — ${stats.sent || 0} delivered, ${stats.failed || 0} failed</div>` : ''}
                   </div>
-                  ${c.status === 'draft' ? `<button type="button" class="campaign-send-btn bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg font-semibold" data-id="${escapeHtml(c.id)}">Send now</button>` : ''}
+                  <div class="flex flex-wrap gap-1">
+                    ${(c.approval_status || 'draft') === 'draft' ? `<button type="button" class="campaign-approve-btn bg-violet-700 hover:bg-violet-600 text-white px-2 py-1 rounded text-[10px] font-semibold" data-id="${escapeHtml(c.id)}" data-status="compliance_review">Submit review</button>` : ''}
+                    ${c.approval_status === 'compliance_review' ? `<button type="button" class="campaign-approve-btn bg-emerald-700 hover:bg-emerald-600 text-white px-2 py-1 rounded text-[10px] font-semibold" data-id="${escapeHtml(c.id)}" data-status="approved">Approve</button>` : ''}
+                    <button type="button" class="campaign-simulate-btn bg-gray-800 hover:bg-gray-700 text-white px-2 py-1 rounded text-[10px] font-semibold" data-id="${escapeHtml(c.id)}">Simulate</button>
+                    ${c.status === 'draft' && (c.approval_status === 'approved' || c.approval_status === 'sent') ? `<button type="button" class="campaign-send-btn bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg font-semibold" data-id="${escapeHtml(c.id)}">Send</button>` : ''}
+                  </div>
                 </div>`;
               }).join('') : '<p class="text-gray-500">No campaigns yet — create one below.</p>'}</div>
             </div>
@@ -13440,11 +13541,28 @@ async function pgAdminConsole(el) {
 
       el.querySelectorAll('.campaign-send-btn').forEach((btn) => {
         btn.onclick = async () => {
-          if (!confirm('Send this campaign to the selected segment now?')) return;
+          if (!confirm('Send this approved campaign to the selected segment now?')) return;
           try {
             const r = await api(`/campaigns/${btn.dataset.id}/send`, { method: 'POST' });
             toast(`Sent: ${r.sent || 0}, failed: ${r.failed || 0}`, 'success');
             await pgCampaigns(el);
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      });
+      el.querySelectorAll('.campaign-approve-btn').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            await api(`/campaigns/${btn.dataset.id}/approval`, { method: 'POST', body: JSON.stringify({ status: btn.dataset.status }) });
+            toast('Approval updated', 'success');
+            await pgCampaigns(el);
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      });
+      el.querySelectorAll('.campaign-simulate-btn').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            const r = await api(`/campaigns/${btn.dataset.id}/suppression-simulation`, { method: 'POST', body: '{}' });
+            toast(`Audience ${r.simulation.audience}: ${r.simulation.allowed} allowed, ${r.simulation.blocked} blocked`, 'info');
           } catch (err) { toast(err.message, 'error'); }
         };
       });

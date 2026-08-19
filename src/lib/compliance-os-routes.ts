@@ -30,6 +30,34 @@ import {
 import { reconcileMfsnMembersToClients } from './mfsn-reconcile';
 import { ensureCustomFields, syncClientToGhl, verifyGhlConnection, clearGhlFieldCache } from './ghl-client';
 import { portalBaseUrl } from './portal-services';
+import {
+  AUTOMATION_TRIGGER_CATALOG,
+  AUTOMATION_STEP_TYPES,
+  parseAutomationRow,
+  evaluateConditions,
+  automationStepsToWorkflow,
+} from './automation-builder';
+import { buildClientTimeline, appendTimelineEvent } from './client-timeline';
+import {
+  getCommunicationPreferences,
+  saveCommunicationPreferences,
+} from './communication-preferences';
+import {
+  transitionCampaignApproval,
+  simulateCampaignSuppression,
+  APPROVAL_TRANSITIONS,
+} from './campaign-approval';
+import {
+  canPlaceMarketingCall,
+  recordingPolicyForState,
+  DEFAULT_CALL_RECORDING_POLICIES,
+} from './calling-hours';
+import {
+  processGhlInboundWebhook,
+  resolveOrgIdFromGhlLocation,
+  type GhlWebhookPayload,
+} from './ghl-inbound';
+import { registerPushSubscription } from './push-notifications';
 
 type RegisterOpts = { authMiddleware: any };
 
@@ -377,6 +405,274 @@ export function registerComplianceOsRoutes(app: Hono<any>, opts: RegisterOpts) {
       configured: orgGhlConfigured(c.env, settings),
       verify,
     });
+  });
+
+  // ── Client timeline ─────────────────────────────────────
+  app.get('/api/clients/:id/timeline', authMiddleware, async (c) => {
+    const user = c.get('user');
+    if (staffOnly(user)) return c.json({ error: 'Staff only' }, 403);
+    const events = await buildClientTimeline(c.env.DB, user.org_id, c.req.param('id'));
+    return c.json({ events });
+  });
+
+  // ── Communication preferences (staff view) ──────────────
+  app.get('/api/clients/:id/communication-preferences', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const prefs = await getCommunicationPreferences(c.env.DB, user.org_id, c.req.param('id'));
+    return c.json({ preferences: prefs });
+  });
+
+  app.put('/api/clients/:id/communication-preferences', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const body = await c.req.json().catch(() => ({}));
+    await saveCommunicationPreferences(c.env.DB, {
+      id: generateId(),
+      orgId: user.org_id,
+      clientId: c.req.param('id'),
+      prefs: body,
+    });
+    return c.json({ ok: true });
+  });
+
+  // ── Client portal: preferences + push + timeline ────────
+  app.get('/api/client-portal/communication-preferences', authMiddleware, async (c) => {
+    const user = c.get('user');
+    if (!user.client_id) return c.json({ error: 'Client only' }, 403);
+    const prefs = await getCommunicationPreferences(c.env.DB, user.org_id, user.client_id);
+    return c.json({ preferences: prefs });
+  });
+
+  app.put('/api/client-portal/communication-preferences', authMiddleware, async (c) => {
+    const user = c.get('user');
+    if (!user.client_id) return c.json({ error: 'Client only' }, 403);
+    const body = await c.req.json().catch(() => ({}));
+    await saveCommunicationPreferences(c.env.DB, {
+      id: generateId(),
+      orgId: user.org_id,
+      clientId: user.client_id,
+      prefs: body,
+    });
+    return c.json({ ok: true });
+  });
+
+  app.get('/api/client-portal/timeline', authMiddleware, async (c) => {
+    const user = c.get('user');
+    if (!user.client_id) return c.json({ error: 'Client only' }, 403);
+    const events = await buildClientTimeline(c.env.DB, user.org_id, user.client_id, 80);
+    return c.json({ events });
+  });
+
+  app.post('/api/client-portal/push/subscribe', authMiddleware, async (c) => {
+    const user = c.get('user');
+    if (!user.client_id) return c.json({ error: 'Client only' }, 403);
+    const body = await c.req.json().catch(() => ({}));
+    if (!body.endpoint) return c.json({ error: 'endpoint required' }, 400);
+    await registerPushSubscription(c.env.DB, {
+      id: generateId(),
+      orgId: user.org_id,
+      clientId: user.client_id,
+      endpoint: body.endpoint,
+      keys: body.keys,
+      userAgent: c.req.header('user-agent') || undefined,
+    });
+    return c.json({ ok: true });
+  });
+
+  // ── Custom automations (visual builder storage) ─────────
+  app.get('/api/compliance-os/automation-catalog', authMiddleware, async (c) => {
+    if (staffOnly(c.get('user'))) return c.json({ error: 'Staff only' }, 403);
+    return c.json({ triggers: AUTOMATION_TRIGGER_CATALOG, stepTypes: AUTOMATION_STEP_TYPES });
+  });
+
+  app.get('/api/compliance-os/automations', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const rows = await c.env.DB.prepare(
+      'SELECT * FROM automation_definitions WHERE org_id = ? ORDER BY updated_at DESC LIMIT 50',
+    ).bind(user.org_id).all().catch(() => ({ results: [] }));
+    return c.json({ automations: (rows.results || []).map(parseAutomationRow) });
+  });
+
+  app.post('/api/compliance-os/automations', authMiddleware, async (c) => {
+    const user = c.get('user');
+    if (staffOnly(user)) return c.json({ error: 'Staff only' }, 403);
+    const body = await c.req.json().catch(() => ({}));
+    const id = generateId();
+    await c.env.DB.prepare(
+      `INSERT INTO automation_definitions (id, org_id, name, description, trigger_event, conditions_json, steps_json, lane, category, status, mandatory_controls, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 1, ?)`,
+    ).bind(
+      id, user.org_id, body.name || 'Custom automation', body.description || '',
+      body.triggerEvent || 'custom.manual',
+      JSON.stringify(body.conditions || []),
+      JSON.stringify(body.steps || []),
+      body.lane || 'transactional', body.category || 'custom', user.id,
+    ).run();
+    return c.json({ ok: true, id });
+  });
+
+  app.post('/api/compliance-os/automations/:id/activate', authMiddleware, async (c) => {
+    const user = c.get('user');
+    if (user.role !== 'admin' && user.role !== 'super_admin') return c.json({ error: 'Admin only' }, 403);
+    const row = await c.env.DB.prepare(
+      'SELECT * FROM automation_definitions WHERE id = ? AND org_id = ?',
+    ).bind(c.req.param('id'), user.org_id).first() as any;
+    if (!row) return c.json({ error: 'Not found' }, 404);
+    if (row.status !== 'approved' && row.status !== 'active') {
+      return c.json({ error: 'Automation must be approved before activation' }, 403);
+    }
+    await c.env.DB.prepare(
+      `UPDATE automation_definitions SET status = 'active', approved_by = ?, approved_at = datetime('now') WHERE id = ?`,
+    ).bind(user.id, row.id).run();
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/compliance-os/automations/:id/run', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const body = await c.req.json().catch(() => ({}));
+    const row = await c.env.DB.prepare(
+      'SELECT * FROM automation_definitions WHERE id = ? AND org_id = ?',
+    ).bind(c.req.param('id'), user.org_id).first() as any;
+    if (!row) return c.json({ error: 'Not found' }, 404);
+    const def = parseAutomationRow(row);
+    const ctx = body.context || {};
+    if (!evaluateConditions(def.conditions, ctx)) {
+      return c.json({ ok: false, error: 'Conditions not met' });
+    }
+    const steps = automationStepsToWorkflow(def.steps);
+    const runId = generateId();
+    for (let i = 0; i < steps.length; i++) {
+      const s = steps[i];
+      await c.env.DB.prepare(
+        `INSERT INTO crm_workflow_steps (id, org_id, run_id, step_index, action_type, action_json, lane, channel, run_at, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 'pending')`,
+      ).bind(
+        generateId(), user.org_id, runId, i, s.action, JSON.stringify(s),
+        s.lane || def.lane, s.action === 'sms' ? 'sms' : s.action === 'email' ? 'email' : null,
+      ).run();
+    }
+    await c.env.DB.prepare(
+      `INSERT INTO crm_workflow_runs (id, org_id, workflow_key, client_id, lead_id, context_json, status)
+       VALUES (?, ?, ?, ?, ?, ?, 'active')`,
+    ).bind(runId, user.org_id, `custom:${row.id}`, body.clientId || null, body.leadId || null, JSON.stringify(ctx)).run();
+    return c.json({ ok: true, runId });
+  });
+
+  // ── Campaign approval ───────────────────────────────────
+  app.get('/api/campaigns/:id/approval', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const campaign = await c.env.DB.prepare(
+      'SELECT id, name, approval_status, approved_by, approved_at, compliance_reviewed_by FROM marketing_campaigns WHERE id = ? AND org_id = ?',
+    ).bind(c.req.param('id'), user.org_id).first();
+    const log = await c.env.DB.prepare(
+      'SELECT * FROM campaign_approval_log WHERE org_id = ? AND target_id = ? ORDER BY created_at DESC LIMIT 20',
+    ).bind(user.org_id, c.req.param('id')).all().catch(() => ({ results: [] }));
+    return c.json({ campaign, log: log.results || [], transitions: APPROVAL_TRANSITIONS });
+  });
+
+  app.post('/api/campaigns/:id/approval', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const body = await c.req.json().catch(() => ({}));
+    const result = await transitionCampaignApproval({
+      db: c.env.DB,
+      orgId: user.org_id,
+      campaignId: c.req.param('id'),
+      toStatus: body.status,
+      reviewerId: user.id,
+      notes: body.notes,
+      logId: generateId(),
+    });
+    if (!result.ok) return c.json({ error: result.error }, 400);
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/campaigns/:id/suppression-simulation', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const body = await c.req.json().catch(() => ({}));
+    const campaign = await c.env.DB.prepare(
+      'SELECT segment_json FROM marketing_campaigns WHERE id = ? AND org_id = ?',
+    ).bind(c.req.param('id'), user.org_id).first() as any;
+    let segment: any = {};
+    try { segment = JSON.parse(campaign?.segment_json || '{}'); } catch { /* */ }
+    const sim = await simulateCampaignSuppression({
+      db: c.env.DB,
+      orgId: user.org_id,
+      segmentId: body.segmentId || segment.id || 'inactive_30',
+    });
+    await c.env.DB.prepare(
+      'UPDATE marketing_campaigns SET suppression_simulation_json = ? WHERE id = ? AND org_id = ?',
+    ).bind(JSON.stringify(sim), c.req.param('id'), user.org_id).run();
+    return c.json({ ok: true, simulation: sim });
+  });
+
+  // ── Calling hours + recording policies ──────────────────
+  app.get('/api/compliance-os/calling-hours', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const clientId = c.req.query('clientId');
+    if (!clientId) {
+      return c.json({ policies: DEFAULT_CALL_RECORDING_POLICIES, defaultWindow: '8:00-21:00 local' });
+    }
+    const client = await c.env.DB.prepare(
+      'SELECT * FROM clients WHERE id = ? AND org_id = ?',
+    ).bind(clientId, user.org_id).first() as any;
+    const callCheck = canPlaceMarketingCall({ client });
+    const recording = recordingPolicyForState(client?.state);
+    return c.json({ callCheck, recordingPolicy: recording });
+  });
+
+  app.post('/api/compliance-os/call-log', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const body = await c.req.json().catch(() => ({}));
+    const client = body.clientId
+      ? await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(body.clientId, user.org_id).first() as any
+      : null;
+    let blockedReason: string | null = null;
+    if (body.purpose === 'marketing') {
+      const check = canPlaceMarketingCall({ client });
+      if (!check.allowed) blockedReason = check.reason || 'blocked';
+    }
+    const policy = recordingPolicyForState(client?.state);
+    const id = generateId();
+    await c.env.DB.prepare(
+      `INSERT INTO call_log (id, org_id, client_id, direction, phone, duration_sec, disclosure_required, disclosure_played, jurisdiction, purpose, blocked_reason, staff_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      id, user.org_id, body.clientId || null, body.direction || 'outbound', body.phone || null,
+      body.durationSec || null, policy.disclosureRequired ? 1 : 0, body.disclosurePlayed ? 1 : 0,
+      client?.state || 'US-default', body.purpose || 'service', blockedReason, user.id,
+    ).run();
+    if (body.clientId) {
+      await appendTimelineEvent(c.env.DB, {
+        id: generateId(),
+        orgId: user.org_id,
+        clientId: body.clientId,
+        eventType: blockedReason ? 'call.blocked' : 'call.logged',
+        title: blockedReason ? 'Marketing call blocked' : 'Call logged',
+        summary: blockedReason || body.purpose,
+        actorId: user.id,
+      });
+    }
+    return c.json({ ok: true, id, blocked: !!blockedReason, reason: blockedReason });
+  });
+
+  // ── GHL inbound webhook ─────────────────────────────────
+  app.post('/api/webhooks/ghl', async (c) => {
+    const body = await c.req.json().catch(() => ({})) as GhlWebhookPayload;
+    const eventId = generateId();
+    const locationId = body.locationId || c.req.query('locationId') || '';
+    const orgId = await resolveOrgIdFromGhlLocation(c.env.DB, locationId, c.env.GHL_LOCATION_ID);
+    await c.env.DB.prepare(
+      `INSERT INTO ghl_webhook_events (id, org_id, event_type, contact_id, payload_json, processed)
+       VALUES (?, ?, ?, ?, ?, 0)`,
+    ).bind(eventId, orgId, body.type || 'contact.updated', body.contactId || null, JSON.stringify(body)).run();
+    const result = await processGhlInboundWebhook({
+      db: c.env.DB,
+      env: c.env,
+      orgId,
+      eventId,
+      payload: body,
+      generateId,
+    });
+    return c.json({ ok: true, ...result });
   });
 
   // ── Inbound SMS opt-out webhook stub ─────────────────────

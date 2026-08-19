@@ -11458,7 +11458,7 @@ function getAppHtml(mode: 'login' | 'app' = 'app'): string {
     }
   </script>
   <script src="/static/demo-experience.js?v=20260819-stripe-live"></script>
-  <script src="/static/app.js?v=20260819-compliance-os"></script>
+  <script src="/static/app.js?v=20260819-compliance-os-p2"></script>
 </body>
 </html>`;
 }

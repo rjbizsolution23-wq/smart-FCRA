@@ -134,6 +134,20 @@ export async function executeWorkflowStep(opts: {
     return { ok: true, detail: 'task_created' };
   }
 
+  if (action.action === 'push' && opts.run.client_id) {
+    const { sendPushToClient } = await import('./push-notifications');
+    const title = renderTemplate(action.pushTitle || action.subject || 'Update from {{org_name}}', ctx);
+    const body = renderTemplate(action.pushBody || action.bodyTemplate || '', ctx);
+    await sendPushToClient(opts.db, {
+      orgId: opts.run.org_id,
+      clientId: opts.run.client_id,
+      title,
+      body,
+      eventType: `workflow.${opts.run.workflow_key}`,
+    });
+    return { ok: true, detail: 'push_sent' };
+  }
+
   const email = ctx.email;
   const phone = ctx.phone_e164 || ctx.phone;
 
