@@ -1380,6 +1380,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'documents', icon: 'fa-file-contract', label: 'Documents' },
         { id: 'compliance-hub', icon: 'fa-shield-alt', label: 'Compliance Hub' },
         { id: 'compliance-os', icon: 'fa-shield-virus', label: 'Compliance OS' },
+        { id: 'integration-os', icon: 'fa-plug', label: 'Integration Hub' },
         { id: 'support-center', icon: 'fa-headset', label: 'Support Center' },
         { id: 'campaigns', icon: 'fa-bullhorn', label: 'Campaigns' },
         { id: 'mailing-campaigns', icon: 'fa-mail-bulk', label: 'Mailing Campaigns' },
@@ -1543,6 +1544,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'documents': await pgDocuments(el); break;
         case 'compliance-hub': await pgComplianceHub(el); break;
         case 'compliance-os': await pgComplianceOs(el); break;
+        case 'integration-os': await pgIntegrationHub(el); break;
         case 'support-center': await pgSupportCenter(el); break;
         case 'campaigns': await pgCampaigns(el); break;
         case 'mailing-campaigns': await pgMailingCampaigns(el); break;
@@ -6660,26 +6662,52 @@ Status: Discharged`;
         e.preventDefault();
         const fd = new FormData(e.target);
         try {
+          const ghlPit = fd.get('ghlPitToken');
+          const mfsnPass = fd.get('mfsnPassword');
+          const mfsnToken = fd.get('mfsnClientToken');
+          if (ghlPit) {
+            await api('/integration-os/connections/ghl', {
+              method: 'PUT',
+              body: JSON.stringify({
+                enabled: !!fd.get('ghlEnabled'),
+                pitToken: ghlPit,
+                locationId: fd.get('ghlLocationId') || undefined,
+                authType: 'pit',
+              }),
+            });
+          }
+          if (mfsnPass || mfsnToken || fd.get('mfsnEmail')) {
+            await api('/integration-os/connections/mfsn', {
+              method: 'PUT',
+              body: JSON.stringify({
+                enabled: !!fd.get('mfsnEnabled'),
+                email: fd.get('mfsnEmail') || undefined,
+                password: mfsnPass || undefined,
+                clientToken: mfsnToken || undefined,
+                affiliateId: fd.get('mfsnAffiliateId') || undefined,
+                authType: 'partner_api',
+              }),
+            });
+          }
           await api('/settings/integrations', {
             method: 'PUT',
             body: JSON.stringify({
               ghl: {
                 enabled: !!fd.get('ghlEnabled'),
-                pitToken: fd.get('ghlPitToken') || undefined,
                 locationId: fd.get('ghlLocationId') || undefined,
+                pitToken: ghlPit ? '__vault__' : undefined,
               },
               mfsn: {
                 enabled: !!fd.get('mfsnEnabled'),
                 email: fd.get('mfsnEmail') || undefined,
-                password: fd.get('mfsnPassword') || undefined,
-                clientToken: fd.get('mfsnClientToken') || undefined,
                 affiliateId: fd.get('mfsnAffiliateId') || undefined,
               },
             }),
           });
-          toast('Integration credentials saved', 'success');
+          toast('Integration credentials saved to encrypted vault', 'success');
           if ($('#ghl-pit-token')) $('#ghl-pit-token').value = '';
           if ($('#mfsn-org-password')) $('#mfsn-org-password').value = '';
+          if ($('#mfsn-client-token')) $('#mfsn-client-token').value = '';
           await renderOrgIntegrations();
           await renderGhlStatus();
         } catch (err) { toast(err.message, 'error'); }
@@ -13209,6 +13237,97 @@ async function pgAdminConsole(el) {
         </div>
       </div>
     `;
+  }
+
+  async function pgIntegrationHub(el) {
+    el.innerHTML = `<div class="flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-3xl text-cyan-400"></i></div>`;
+    try {
+      const [hub, jobs, identityQ, events] = await Promise.all([
+        api('/integration-os/hub'),
+        api('/integration-os/jobs?status=pending').catch(() => ({ jobs: [], pendingTotal: 0 })),
+        api('/integration-os/identity-queue').catch(() => ({ queue: [] })),
+        api('/integration-os/events').catch(() => ({ events: [] })),
+      ]);
+      const ghl = hub.ghl || {};
+      const mfsn = hub.mfsn || {};
+      el.innerHTML = `
+        <div class="fade-in space-y-6">
+          <div>
+            <h1 class="text-xl font-bold text-white flex items-center gap-2"><i class="fas fa-plug text-cyan-400"></i> Integration Hub</h1>
+            <p class="text-sm text-gray-400 mt-1">Per-organization connections, encrypted credential vault, identity matching, event bus, and sync health.</p>
+          </div>
+          <div class="grid md:grid-cols-4 gap-3">
+            <div class="glass rounded-xl p-4 border border-cyan-900/30"><div class="text-[10px] text-gray-500 uppercase">Action required</div><div class="text-2xl font-black text-amber-400">${hub.healthSummary?.actionRequired || 0}</div></div>
+            <div class="glass rounded-xl p-4 border border-rose-900/30"><div class="text-[10px] text-gray-500 uppercase">Degraded</div><div class="text-2xl font-black text-rose-400">${hub.healthSummary?.degraded || 0}</div></div>
+            <div class="glass rounded-xl p-4 border border-violet-900/30"><div class="text-[10px] text-gray-500 uppercase">Pending jobs</div><div class="text-2xl font-black text-violet-400">${jobs.pendingTotal || 0}</div></div>
+            <div class="glass rounded-xl p-4 border border-emerald-900/30"><div class="text-[10px] text-gray-500 uppercase">Identity links</div><div class="text-2xl font-black text-emerald-400">${hub.externalIdentityLinks || 0}</div></div>
+          </div>
+          <div class="grid lg:grid-cols-2 gap-4">
+            <div class="glass rounded-xl p-5 border border-gray-800">
+              <h2 class="text-sm font-bold text-white mb-3"><i class="fab fa-hubspot text-orange-400 mr-2"></i>GoHighLevel</h2>
+              <div class="text-xs space-y-2 text-gray-400">
+                <div>Status: <span class="${ghl.configured ? 'text-emerald-400' : 'text-amber-400'}">${ghl.configured ? 'Connected' : 'Not configured'}</span></div>
+                <div>Location: <span class="text-white">${escapeHtml(ghl.locationId || '—')}</span></div>
+                <div>Token: <span class="font-mono">${escapeHtml(ghl.pitTokenMasked || '—')}</span> <span class="text-gray-600">(never shown again after save)</span></div>
+                <div>Auth: OAuth · Private Integration · PIT</div>
+                <div class="text-[10px] text-gray-500">Safe sync: ${(ghl.syncOptions || []).join(', ')}</div>
+                <div class="text-[10px] text-rose-400/80">Blocked: ${(ghl.blockedFromSync || []).join(', ')}</div>
+              </div>
+              <div class="flex flex-wrap gap-2 mt-3">
+                <button type="button" class="ih-ghl-test bg-orange-700 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Test connection</button>
+                <button type="button" onclick="window._nav('settings')" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Configure in Settings</button>
+              </div>
+            </div>
+            <div class="glass rounded-xl p-5 border border-gray-800">
+              <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-chart-line text-sky-400 mr-2"></i>MyFreeScoreNow</h2>
+              <div class="text-xs space-y-2 text-gray-400">
+                <div>Strategy: <span class="text-sky-300">${escapeHtml(mfsn.strategy || 'partner_api_first')}</span></div>
+                <div>Status: <span class="text-white">${escapeHtml(mfsn.connectionStatus || 'unknown')}</span></div>
+                <div>Affiliate ID: <span class="text-white">${escapeHtml(mfsn.affiliateId || 'A8289')}</span></div>
+                <div>Enrolled clients: <span class="text-white">${mfsn.enrolledClients || 0}</span></div>
+                <p class="text-[10px] text-amber-300/90 border border-amber-500/20 rounded-lg p-2 mt-2">${escapeHtml(mfsn.disclaimer || '')}</p>
+                <div class="text-[10px]">Supported: ${(mfsn.supportedMechanisms || []).join(' · ')}</div>
+              </div>
+            </div>
+          </div>
+          <div class="glass rounded-xl p-5 border border-gray-800">
+            <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-fingerprint text-violet-400 mr-2"></i>Identity Resolution Queue (${(identityQ.queue || []).length})</h2>
+            <div class="space-y-2 max-h-40 overflow-y-auto text-xs">${(identityQ.queue || []).length ? identityQ.queue.map((q) => `
+              <div class="border border-gray-800 rounded-lg p-2 flex justify-between gap-2">
+                <div><span class="text-white">${escapeHtml(q.external_system)}</span> · ${escapeHtml(q.external_record_id || '')} · score ${q.match_score}</div>
+                <button type="button" class="ih-resolve-btn text-emerald-400" data-id="${escapeHtml(q.id)}">Resolve</button>
+              </div>`).join('') : '<p class="text-gray-500">No ambiguous matches pending.</p>'}</div>
+          </div>
+          <div class="glass rounded-xl p-5 border border-gray-800">
+            <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-stream text-emerald-400 mr-2"></i>Recent Platform Events</h2>
+            <div class="space-y-1 max-h-48 overflow-y-auto text-[10px] text-gray-400">${(events.events || []).slice(0, 30).map((ev) => `
+              <div class="border-t border-gray-800 pt-1">${escapeHtml(ev.event_type)} · ${escapeHtml(shortDate(ev.created_at))} · ${escapeHtml(ev.source || '')}</div>`).join('') || 'No events yet.'}</div>
+          </div>
+          <div class="glass rounded-xl p-4 border border-gray-800 text-xs text-gray-500">
+            <strong class="text-gray-300">12-system platform map:</strong> CRM & Sales · Communication · Marketing Automation · Compliance · Credit Intelligence · Evidence · Dispute Ops · Deadline & Escalation · Customer Success · Billing · <span class="text-cyan-400">Integration OS</span> · Security & Governance
+          </div>
+        </div>`;
+      el.querySelector('.ih-ghl-test')?.addEventListener('click', async () => {
+        try {
+          const r = await api('/integration-os/connections/ghl/test', { method: 'POST', body: '{}' });
+          toast(r.ok ? 'GHL connection OK' : (r.error || 'Failed'), r.ok ? 'success' : 'error');
+          await pgIntegrationHub(el);
+        } catch (err) { toast(err.message, 'error'); }
+      });
+      el.querySelectorAll('.ih-resolve-btn').forEach((btn) => {
+        btn.onclick = async () => {
+          const clientId = prompt('Link to Smart FCRA client ID');
+          if (!clientId) return;
+          try {
+            await api(`/integration-os/identity-queue/${btn.dataset.id}/resolve`, { method: 'POST', body: JSON.stringify({ clientId }) });
+            toast('Identity resolved', 'success');
+            await pgIntegrationHub(el);
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      });
+    } catch (err) {
+      el.innerHTML = `<div class="glass p-8 rounded-xl border border-red-500/30 text-center text-sm text-gray-300">${escapeHtml(err.message)}<br><span class="text-xs text-gray-500">Apply migration 0030_integration_os.sql</span></div>`;
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════

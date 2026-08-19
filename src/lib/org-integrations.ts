@@ -37,10 +37,12 @@ export function parseOrgIntegrations(settings: any): OrgIntegrations {
 export function mergeGhlEnv(platformEnv: GhlEnv, orgSettings: any): GhlEnv {
   const integ = parseOrgIntegrations(orgSettings).ghl || {};
   if (!integ.enabled && !integ.pitToken) return platformEnv;
+  const token = integ.pitToken === '__vault__' ? platformEnv.GHL_PIT_TOKEN : integ.pitToken;
+  if (!token && !integ.locationId) return platformEnv;
   return {
     ...platformEnv,
-    GHL_PIT_TOKEN: integ.pitToken || platformEnv.GHL_PIT_TOKEN,
-    GHL_API_KEY: integ.pitToken || platformEnv.GHL_API_KEY,
+    GHL_PIT_TOKEN: token || platformEnv.GHL_PIT_TOKEN,
+    GHL_API_KEY: token || platformEnv.GHL_API_KEY,
     GHL_LOCATION_ID: integ.locationId || platformEnv.GHL_LOCATION_ID,
     GHL_API_BASE: integ.apiBase || platformEnv.GHL_API_BASE,
   };

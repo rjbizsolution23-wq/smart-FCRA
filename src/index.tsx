@@ -157,6 +157,8 @@ import { sendLetterViaClick2Mail, resolveMailClass } from './lib/click2mail';
 import { registerSupportCrmRoutes, registerExternalIntegrationRoutes } from './lib/support-crm-routes';
 import { registerRoadmapRoutes, handleClientBillingWebhook } from './lib/roadmap-routes';
 import { registerComplianceOsRoutes } from './lib/compliance-os-routes';
+import { registerIntegrationOsRoutes } from './lib/integration-os-routes';
+import { loadOrgGhlEnv } from './lib/integration-hub';
 import { startWorkflowRun } from './lib/crm-workflow-engine';
 import { emitOrgWebhook } from './lib/outbound-webhooks';
 import { buildTradelineMatrix } from './lib/bureau-matrix';
@@ -4053,20 +4055,22 @@ app.get('/api/integrations/ghl/status', authMiddleware, async (c) => {
   const user = c.get('user');
   if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
   clearGhlFieldCache();
-  const verify = await verifyGhlConnection(c.env);
+  const ghlEnv = await loadOrgGhlEnv(c.env.DB, user.org_id, c.env, c.env.PII_ENCRYPTION_KEY);
+  const verify = await verifyGhlConnection(ghlEnv);
   let fieldIds: Record<string, string> = {};
-  try { fieldIds = await ensureCustomFields(c.env); } catch { /* soft */ }
+  try { fieldIds = await ensureCustomFields(ghlEnv); } catch { /* soft */ }
   const catalog = listGhlFieldCatalog();
   const present = catalog.filter((f) => !!fieldIds[f.key]).map((f) => f.key);
   return c.json({
     ok: !!verify.ok,
-    configured: ghlConfigured(c.env),
-    locationId: c.env.GHL_LOCATION_ID || null,
+    configured: ghlConfigured(ghlEnv),
+    locationId: ghlEnv.GHL_LOCATION_ID || null,
     verify,
     fieldCatalog: catalog,
     fieldsPresent: present,
     fieldsMissing: catalog.filter((f) => !fieldIds[f.key]).map((f) => f.key),
     mfsnConfigured: !!resolvePartnerMfsnCredentials(c.env),
+    orgScoped: true,
   });
 });
 
@@ -4074,7 +4078,8 @@ app.get('/api/integrations/ghl/status', authMiddleware, async (c) => {
 app.post('/api/integrations/ghl/sync-all-clients', authMiddleware, async (c) => {
   const user = c.get('user');
   if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
-  if (!ghlConfigured(c.env)) return c.json({ error: 'GoHighLevel is not configured' }, 503);
+  const ghlEnv = await loadOrgGhlEnv(c.env.DB, user.org_id, c.env, c.env.PII_ENCRYPTION_KEY);
+  if (!ghlConfigured(ghlEnv)) return c.json({ error: 'GoHighLevel is not configured for this organization' }, 503);
   const org = await c.env.DB.prepare('SELECT name FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
   const rows = await c.env.DB.prepare(
     `SELECT * FROM clients WHERE org_id = ? AND coalesce(status,'active') = 'active' ORDER BY created_at DESC LIMIT 500`
@@ -4087,7 +4092,7 @@ app.post('/api/integrations/ghl/sync-all-clients', authMiddleware, async (c) => 
     const vCount = await c.env.DB.prepare(
       'SELECT COUNT(*) as c FROM violations WHERE client_id = ? AND org_id = ?'
     ).bind(client.id, user.org_id).first() as any;
-    const synced = await syncClientToGhl(c.env, client, {
+    const synced = await syncClientToGhl(ghlEnv, client, {
       portalUrl,
       violationCount: Number(vCount?.c || 0),
       analysisUnlocked: isPortalAnalysisUnlocked(client),
@@ -4113,7 +4118,8 @@ app.post('/api/integrations/ghl/sync-all-clients', authMiddleware, async (c) => 
 app.post('/api/integrations/ghl/sync-mfsn-members', authMiddleware, async (c) => {
   const user = c.get('user');
   if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
-  if (!ghlConfigured(c.env)) return c.json({ error: 'GoHighLevel is not configured' }, 503);
+  const ghlEnv = await loadOrgGhlEnv(c.env.DB, user.org_id, c.env, c.env.PII_ENCRYPTION_KEY);
+  if (!ghlConfigured(ghlEnv)) return c.json({ error: 'GoHighLevel is not configured for this organization' }, 503);
 
   const body = await c.req.json().catch(() => ({}));
   const list = body.list === 'paused' ? 'paused' : 'active';
@@ -4156,7 +4162,7 @@ app.post('/api/integrations/ghl/sync-mfsn-members', authMiddleware, async (c) =>
     }
 
     const push = client
-      ? await syncClientToGhl(c.env, {
+      ? await syncClientToGhl(ghlEnv, {
           ...client,
           phone: client.phone || member.phone_number,
           address_line1: client.address_line1 || member.street_address,
@@ -4170,7 +4176,7 @@ app.post('/api/integrations/ghl/sync-mfsn-members', authMiddleware, async (c) =>
           orgName: org?.name,
           mfsnMember: member,
         })
-      : await syncMfsnMemberToGhl(c.env, member, {
+      : await syncMfsnMemberToGhl(ghlEnv, member, {
           portalUrl,
           orgName: org?.name,
           analysisUnlocked: false,
@@ -4222,14 +4228,16 @@ app.post('/api/integrations/ghl/sync-mfsn-members', authMiddleware, async (c) =>
 app.post('/api/integrations/ghl/ensure-fields', authMiddleware, async (c) => {
   const user = c.get('user');
   if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
-  if (!ghlConfigured(c.env)) return c.json({ error: 'GoHighLevel is not configured' }, 503);
+  const ghlEnv = await loadOrgGhlEnv(c.env.DB, user.org_id, c.env, c.env.PII_ENCRYPTION_KEY);
+  if (!ghlConfigured(ghlEnv)) return c.json({ error: 'GoHighLevel is not configured for this organization' }, 503);
   clearGhlFieldCache();
-  const fieldIds = await ensureCustomFields(c.env);
+  const fieldIds = await ensureCustomFields(ghlEnv);
   const catalog = listGhlFieldCatalog();
   return c.json({
     ok: true,
-    locationId: c.env.GHL_LOCATION_ID,
+    locationId: ghlEnv.GHL_LOCATION_ID,
     fields: catalog.map((f) => ({ ...f, ghlFieldId: fieldIds[f.key] || null })),
+    orgScoped: true,
   });
 });
 
@@ -11459,7 +11467,7 @@ function getAppHtml(mode: 'login' | 'app' = 'app'): string {
     }
   </script>
   <script src="/static/demo-experience.js?v=20260819-stripe-live"></script>
-  <script src="/static/app.js?v=20260819-compliance-os-p3"></script>
+  <script src="/static/app.js?v=20260819-integration-os"></script>
 </body>
 </html>`;
 }
@@ -11475,5 +11483,6 @@ registerSupportCrmRoutes(app, { authMiddleware });
 registerExternalIntegrationRoutes(app);
 registerRoadmapRoutes(app, { authMiddleware });
 registerComplianceOsRoutes(app, { authMiddleware });
+registerIntegrationOsRoutes(app, { authMiddleware });
 
 export default app;

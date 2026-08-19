@@ -55,6 +55,9 @@ import {
 import {
   processGhlInboundWebhook,
   resolveOrgIdFromGhlLocation,
+  verifyGhlWebhookSignature,
+  ghlIdempotencyKey,
+  checkGhlWebhookIdempotency,
   type GhlWebhookPayload,
 } from './ghl-inbound';
 import { registerPushSubscription } from './push-notifications';
@@ -323,6 +326,19 @@ export function registerComplianceOsRoutes(app: Hono<any>, opts: RegisterOpts) {
       generateId,
     }).catch(() => { /* soft */ });
 
+    const { publishPlatformEvent } = await import('./event-bus');
+    await publishPlatformEvent({
+      db: c.env.DB,
+      env: c.env,
+      orgId: user.org_id,
+      eventType: 'lead.created',
+      payload: { leadId: id, email: body.email },
+      aggregateType: 'lead',
+      aggregateId: id,
+      actorId: user.id,
+      idempotencyKey: `lead.created:${id}`,
+    }).catch(() => null);
+
     return c.json({ ok: true, id, workflow: wf });
   });
 
@@ -386,9 +402,9 @@ export function registerComplianceOsRoutes(app: Hono<any>, opts: RegisterOpts) {
     const user = c.get('user');
     if (staffOnly(user)) return c.json({ error: 'Staff only' }, 403);
     const body = await c.req.json().catch(() => ({}));
-    const org = await c.env.DB.prepare('SELECT name, settings FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
-    let settings = {};
-    try { settings = JSON.parse(org?.settings || '{}'); } catch { /* */ }
+    const org = await c.env.DB.prepare('SELECT name FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+    const { loadOrgSettingsWithVault } = await import('./integration-hub');
+    const settings = await loadOrgSettingsWithVault(c.env.DB, user.org_id, c.env.PII_ENCRYPTION_KEY);
     const result = await reconcileMfsnMembersToClients({
       db: c.env.DB,
       env: c.env,
@@ -679,14 +695,33 @@ export function registerComplianceOsRoutes(app: Hono<any>, opts: RegisterOpts) {
 
   // ── GHL inbound webhook ─────────────────────────────────
   app.post('/api/webhooks/ghl', async (c) => {
-    const body = await c.req.json().catch(() => ({})) as GhlWebhookPayload;
+    const rawBody = await c.req.text();
+    let body: GhlWebhookPayload = {};
+    try { body = JSON.parse(rawBody); } catch { return c.json({ error: 'Invalid JSON' }, 400); }
+
+    const sigOk = await verifyGhlWebhookSignature({
+      secret: c.env.GHL_WEBHOOK_SECRET,
+      rawBody,
+      signatureHeader: c.req.header('x-ghl-signature') || c.req.header('x-wh-signature'),
+    });
+    if (c.env.GHL_WEBHOOK_SECRET && !sigOk) {
+      return c.json({ error: 'Invalid webhook signature' }, 401);
+    }
+
     const eventId = generateId();
     const locationId = body.locationId || c.req.query('locationId') || '';
     const orgId = await resolveOrgIdFromGhlLocation(c.env.DB, locationId, c.env.GHL_LOCATION_ID);
+    const idempotencyKey = ghlIdempotencyKey(body);
+
+    if (await checkGhlWebhookIdempotency(c.env.DB, orgId, idempotencyKey)) {
+      return c.json({ ok: true, duplicate: true });
+    }
+
     await c.env.DB.prepare(
-      `INSERT INTO ghl_webhook_events (id, org_id, event_type, contact_id, payload_json, processed)
-       VALUES (?, ?, ?, ?, ?, 0)`,
-    ).bind(eventId, orgId, body.type || 'contact.updated', body.contactId || null, JSON.stringify(body)).run();
+      `INSERT INTO ghl_webhook_events (id, org_id, event_type, contact_id, payload_json, processed, idempotency_key)
+       VALUES (?, ?, ?, ?, ?, 0, ?)`,
+    ).bind(eventId, orgId, body.type || 'contact.updated', body.contactId || null, rawBody, idempotencyKey || null).run();
+
     const result = await processGhlInboundWebhook({
       db: c.env.DB,
       env: c.env,
@@ -695,6 +730,20 @@ export function registerComplianceOsRoutes(app: Hono<any>, opts: RegisterOpts) {
       payload: body,
       generateId,
     });
+
+    if (orgId && body.contactId) {
+      const { resolveOrQueueIdentity } = await import('./identity-matching');
+      await resolveOrQueueIdentity({
+        db: c.env.DB,
+        orgId,
+        externalSystem: 'ghl',
+        externalRecordId: body.contactId,
+        candidate: { email: body.email, phone: body.phone },
+        payload: body as Record<string, unknown>,
+        generateId,
+      }).catch(() => null);
+    }
+
     return c.json({ ok: true, ...result });
   });
 

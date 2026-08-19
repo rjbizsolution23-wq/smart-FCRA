@@ -44,12 +44,13 @@ export type OpsJobName =
   | 'monthly_progress_reports'
   | 'client_billing_dunning'
   | 'crm_workflow_tick'
+  | 'integration_job_tick'
   | 'mfsn_member_reconcile'
   | 'backup_snapshot'
   | 'tradeline_inventory_refresh';
 
 export const OPS_PACKS: Record<string, OpsJobName[]> = {
-  hourly: ['housekeeping', 'email_health', 'ron_video_cleanup', 'crm_workflow_tick'],
+  hourly: ['housekeeping', 'email_health', 'ron_video_cleanup', 'crm_workflow_tick', 'integration_job_tick'],
   daily: [
     'morning_ritual',
     'enterprise_comms',
@@ -1037,6 +1038,11 @@ async function jobCrmWorkflowTick(env: OpsEnv) {
   });
 }
 
+async function jobIntegrationJobTick(env: OpsEnv) {
+  const { runIntegrationOsCron } = await import('./integration-os-routes');
+  return runIntegrationOsCron(env.DB);
+}
+
 async function jobMfsnMemberReconcile(env: OpsEnv, opts?: { orgId?: string }) {
   let orgs: any[] = [];
   if (opts?.orgId) {
@@ -1087,6 +1093,7 @@ const JOB_MAP: Record<OpsJobName, JobFn> = {
   monthly_progress_reports: jobMonthlyProgressReports,
   client_billing_dunning: jobClientBillingDunning,
   crm_workflow_tick: jobCrmWorkflowTick,
+  integration_job_tick: jobIntegrationJobTick,
   mfsn_member_reconcile: jobMfsnMemberReconcile,
   backup_snapshot: jobBackupSnapshot,
   tradeline_inventory_refresh: jobTradelineInventoryRefresh,

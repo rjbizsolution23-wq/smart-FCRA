@@ -13,8 +13,45 @@ export type GhlWebhookPayload = {
   tags?: string[];
   dnd?: boolean;
   dndSettings?: { SMS?: boolean; Email?: boolean; Call?: boolean };
+  timestamp?: string;
   [key: string]: unknown;
 };
+
+/** Verify GHL webhook signature when GHL_WEBHOOK_SECRET is configured. */
+export async function verifyGhlWebhookSignature(opts: {
+  secret?: string;
+  rawBody: string;
+  signatureHeader?: string | null;
+}): Promise<boolean> {
+  if (!opts.secret) return true;
+  if (!opts.signatureHeader) return false;
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(opts.secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(opts.rawBody));
+  const expected = Array.from(new Uint8Array(sig), (b) => b.toString(16).padStart(2, '0')).join('');
+  return expected === opts.signatureHeader || `sha256=${expected}` === opts.signatureHeader;
+}
+
+export function ghlIdempotencyKey(payload: GhlWebhookPayload): string {
+  return `${payload.type || 'unknown'}:${payload.contactId || payload.email || 'none'}:${payload.timestamp || ''}`;
+}
+
+export async function checkGhlWebhookIdempotency(
+  db: D1Database,
+  orgId: string | null,
+  key: string,
+): Promise<boolean> {
+  if (!orgId || !key) return false;
+  const existing = await db.prepare(
+    'SELECT id FROM ghl_webhook_events WHERE org_id = ? AND idempotency_key = ?',
+  ).bind(orgId, key).first();
+  return !!existing;
+}
 
 export async function processGhlInboundWebhook(opts: {
   db: D1Database;
