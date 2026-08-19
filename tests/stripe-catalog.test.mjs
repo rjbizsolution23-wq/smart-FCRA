@@ -24,6 +24,7 @@ const {
   formatPlanAmount,
   stripeSecretMode,
   stripePublishableMode,
+  stripeSecretKind,
   isProductionRuntime,
   productionStripeBlockReason,
 } = await import(pathToFileURL(path.join(root, 'src/lib/stripe-catalog.ts')).href);
@@ -80,14 +81,20 @@ const publicTest = publicPlansFromCatalog({ mode: 'test', plans: publicLive.map(
 })) });
 assert(publicTest.every((p) => p.live === false), 'test catalog is not advertised as live');
 
-assert(stripeSecretMode('sk_live_abc') === 'live', 'live secret');
+assert(stripeSecretKind('  rk_live_abc') === 'rk_live', 'kind rk_live');
+assert(stripeSecretKind('sk_live_abc') === 'sk_live', 'kind sk_live');
+assert(stripeSecretMode('  sk_live_abc\n') === 'live', 'trimmed live secret');
+assert(stripeSecretMode('"sk_live_abc"') === 'live', 'quoted live secret');
+assert(stripeSecretMode('rk_live_abc') === 'live', 'restricted live secret');
 assert(stripeSecretMode('sk_test_abc') === 'test', 'test secret');
-assert(stripePublishableMode('pk_live_x') === 'live', 'live pk');
+assert(stripeSecretMode('rk_test_abc') === 'test', 'restricted test secret');
+assert(stripePublishableMode(' pk_live_x ') === 'live', 'live pk');
 assert(stripePublishableMode('pk_test_x') === 'test', 'test pk');
 assert(isProductionRuntime({ ENVIRONMENT: 'production' }), 'prod runtime');
 assert(!isProductionRuntime({ ENVIRONMENT: 'development' }), 'dev runtime');
 assert(productionStripeBlockReason({ ENVIRONMENT: 'production', STRIPE_API_KEY: 'sk_test_x' }), 'prod blocks test secret');
 assert(!productionStripeBlockReason({ ENVIRONMENT: 'production', STRIPE_API_KEY: 'sk_live_x', STRIPE_PUBLISHABLE_KEY: 'pk_live_x' }), 'prod allows live pair');
+assert(!productionStripeBlockReason({ ENVIRONMENT: 'production', STRIPE_API_KEY: ' rk_live_x ', STRIPE_PUBLISHABLE_KEY: 'pk_live_x' }), 'prod allows restricted live');
 assert(productionStripeBlockReason({ ENVIRONMENT: 'production', STRIPE_API_KEY: 'sk_live_x', STRIPE_PUBLISHABLE_KEY: 'pk_test_x' }), 'prod blocks mismatched pk_test');
 assert(!productionStripeBlockReason({ ENVIRONMENT: 'development', STRIPE_API_KEY: 'sk_test_x' }), 'dev allows test');
 

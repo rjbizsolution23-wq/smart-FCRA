@@ -165,6 +165,7 @@ import {
   resolveFrontendUrl,
   staticPublicPlans,
   stripePublishableMode,
+  stripeSecretKind,
   stripeSecretMode,
 } from './lib/stripe-catalog';
 import { CANONICAL_ORIGIN, canonicalRedirectUrl } from './lib/public-origin';
@@ -7709,6 +7710,7 @@ app.get('/api/health/ready', async (c) => {
     encryptionKey: !!(c.env.PII_ENCRYPTION_KEY && c.env.PII_ENCRYPTION_KEY.length >= 32),
     stripe: !!c.env.STRIPE_API_KEY,
     stripeMode: stripeSecretMode(c.env.STRIPE_API_KEY),
+    stripeSecretKind: stripeSecretKind(c.env.STRIPE_API_KEY),
     stripeLive: stripeSecretMode(c.env.STRIPE_API_KEY) === 'live',
     stripePublishable: !!c.env.STRIPE_PUBLISHABLE_KEY,
     stripePublishableMode: stripePublishableMode(c.env.STRIPE_PUBLISHABLE_KEY),

@@ -136,15 +136,33 @@ export function clearStripeCatalogCache(): void {
   catalogMemo = null;
 }
 
+function normalizeStripeKey(value?: string | null): string {
+  return String(value || '').trim().replace(/^["']+|["']+$/g, '').trim();
+}
+
+/** Safe label for operators — never the secret itself. */
+export function stripeSecretKind(secretKey?: string | null): string {
+  const k = normalizeStripeKey(secretKey);
+  if (!k) return 'empty';
+  if (k.startsWith('sk_live_')) return 'sk_live';
+  if (k.startsWith('sk_test_')) return 'sk_test';
+  if (k.startsWith('rk_live_')) return 'rk_live';
+  if (k.startsWith('rk_test_')) return 'rk_test';
+  if (k.startsWith('pk_live_')) return 'pk_live_in_secret_slot';
+  if (k.startsWith('pk_test_')) return 'pk_test_in_secret_slot';
+  if (k.startsWith('whsec_')) return 'webhook_in_secret_slot';
+  return 'unknown_prefix';
+}
+
 export function stripeSecretMode(secretKey?: string | null): 'live' | 'test' | 'unconfigured' {
-  const k = String(secretKey || '');
-  if (k.startsWith('sk_live_')) return 'live';
-  if (k.startsWith('sk_test_')) return 'test';
+  const k = normalizeStripeKey(secretKey);
+  if (k.startsWith('sk_live_') || k.startsWith('rk_live_')) return 'live';
+  if (k.startsWith('sk_test_') || k.startsWith('rk_test_')) return 'test';
   return 'unconfigured';
 }
 
 export function stripePublishableMode(publishableKey?: string | null): 'live' | 'test' | 'unconfigured' {
-  const k = String(publishableKey || '');
+  const k = normalizeStripeKey(publishableKey);
   if (k.startsWith('pk_live_')) return 'live';
   if (k.startsWith('pk_test_')) return 'test';
   return 'unconfigured';
@@ -163,7 +181,7 @@ export function productionStripeBlockReason(env?: {
   if (!isProductionRuntime(env)) return null;
   const secret = stripeSecretMode(env?.STRIPE_API_KEY);
   if (secret !== 'live') {
-    return 'Production billing requires a live Stripe secret (sk_live_...) in Cloudflare Pages. Test keys (sk_test_) cannot take real payments.';
+    return 'Production billing requires a live Stripe secret (sk_live_... or rk_live_...) in Cloudflare Pages. Test keys cannot take real payments.';
   }
   const pub = stripePublishableMode(env?.STRIPE_PUBLISHABLE_KEY);
   if (pub === 'test') {
@@ -173,7 +191,7 @@ export function productionStripeBlockReason(env?: {
 }
 
 function stripeMode(secretKey: string): 'live' | 'test' {
-  return secretKey.startsWith('sk_live_') ? 'live' : 'test';
+  return stripeSecretMode(secretKey) === 'live' ? 'live' : 'test';
 }
 
 async function findProductByPlan(stripe: Stripe, planId: SaaSPlanId): Promise<Stripe.Product | null> {
