@@ -146,7 +146,7 @@ import { CITIZENSHIP_STATUSES, GENDER_OPTIONS, MARITAL_STATUS_OPTIONS } from './
 import { listTradelineEducation } from './data/tradeline-education';
 import { sendSms } from './lib/alerts';
 import sampleMfsnReport from './data/sample-mfsn-report.json';
-import { spaAppSource, pwaSwSource, pwaManifestSource, marketingLandingHtml, marketingDemoHtml, demoExperienceSource } from './generated/spa-source';
+import { spaAppSource, pwaSwSource, pwaManifestSource, marketingLandingHtml, marketingCompareHtml, marketingDemoHtml, demoExperienceSource } from './generated/spa-source';
 import { persistCreditTwinFromParsed } from './lib/credit-twin';
 import { registerClientIntelligenceRoutes } from './lib/client-intelligence-routes';
 import { inspectUpload, decodeBase64Bytes, sanitizeFileName } from './lib/upload-hygiene';
@@ -1980,6 +1980,7 @@ app.get('/api/brand/catalog', authMiddleware, async (c) => {
 /** Public Smart FCRA sales funnel (software landing). */
 app.get('/', (c) => c.html(applyMarketingChrome(marketingLandingHtml, 'home')));
 app.get('/pricing', (c) => c.html(applyMarketingChrome(marketingLandingHtml, 'pricing')));
+app.get('/compare', (c) => c.html(applyMarketingChrome(marketingCompareHtml, 'compare')));
 app.get('/demo', (c) => c.html(applyMarketingChrome(marketingDemoHtml, 'demo')));
 app.get('/robots.txt', (c) => c.text(robotsTxt(), 200, { 'Content-Type': 'text/plain; charset=utf-8' }));
 app.get('/sitemap.xml', (c) => c.text(sitemapXml(), 200, { 'Content-Type': 'application/xml; charset=utf-8' }));
@@ -11458,7 +11459,7 @@ function getAppHtml(mode: 'login' | 'app' = 'app'): string {
     }
   </script>
   <script src="/static/demo-experience.js?v=20260819-stripe-live"></script>
-  <script src="/static/app.js?v=20260819-compliance-os-p2"></script>
+  <script src="/static/app.js?v=20260819-compliance-os-p3"></script>
 </body>
 </html>`;
 }

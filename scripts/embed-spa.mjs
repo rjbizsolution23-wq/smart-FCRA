@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const srcPath = path.join(root, 'public/static/app.js');
 const marketingPath = path.join(root, 'public/static/marketing/index.html');
+const comparePath = path.join(root, 'public/static/marketing/compare.html');
 const demoPath = path.join(root, 'public/static/marketing/demo.html');
 const demoJsPath = path.join(root, 'public/static/demo-experience.js');
 const outDir = path.join(root, 'src/generated');
@@ -19,6 +20,9 @@ const manifestSource = readFileSync(path.join(root, 'public/manifest.webmanifest
 const marketingSource = existsSync(marketingPath)
   ? readFileSync(marketingPath, 'utf8')
   : '<!DOCTYPE html><html><body><p>Smart FCRA marketing page missing.</p></body></html>';
+const compareSource = existsSync(comparePath)
+  ? readFileSync(comparePath, 'utf8')
+  : marketingSource;
 const demoSource = existsSync(demoPath)
   ? readFileSync(demoPath, 'utf8')
   : marketingSource;
@@ -32,6 +36,7 @@ writeFileSync(
   `export const pwaSwSource: string = ${JSON.stringify(swSource)};\n` +
   `export const pwaManifestSource: string = ${JSON.stringify(manifestSource)};\n` +
   `export const marketingLandingHtml: string = ${JSON.stringify(marketingSource)};\n` +
+  `export const marketingCompareHtml: string = ${JSON.stringify(compareSource)};\n` +
   `export const marketingDemoHtml: string = ${JSON.stringify(demoSource)};\n` +
   `export const demoExperienceSource: string = ${JSON.stringify(demoJsSource)};\n`,
 );

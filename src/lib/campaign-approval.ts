@@ -34,13 +34,22 @@ export async function transitionCampaignApproval(opts: {
   logId: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const campaign = await opts.db.prepare(
-    'SELECT approval_status FROM marketing_campaigns WHERE id = ? AND org_id = ?',
+    'SELECT approval_status, body_template, subject FROM marketing_campaigns WHERE id = ? AND org_id = ?',
   ).bind(opts.campaignId, opts.orgId).first() as any;
   if (!campaign) return { ok: false, error: 'Campaign not found' };
 
   const from = (campaign.approval_status || 'draft') as ApprovalStatus;
   if (!canTransition(from, opts.toStatus)) {
     return { ok: false, error: `Cannot transition ${from} → ${opts.toStatus}` };
+  }
+
+  if (opts.toStatus === 'approved' || opts.toStatus === 'compliance_review') {
+    const { assertCopyApprovedForSend } = await import('./copy-qa');
+    const copyText = `${campaign.subject || ''}\n${campaign.body_template || ''}`;
+    const qa = assertCopyApprovedForSend(copyText);
+    if (!qa.ok && opts.toStatus === 'approved') {
+      return { ok: false, error: qa.error || 'Copy QA failed — prohibited phrases detected' };
+    }
   }
 
   const updates: string[] = ['approval_status = ?', 'updated_at = datetime(\'now\')'];

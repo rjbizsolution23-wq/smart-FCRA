@@ -212,6 +212,17 @@ export function registerComplianceOsRoutes(app: Hono<any>, opts: RegisterOpts) {
     return c.json(result);
   });
 
+  // ── Copy QA phrase scan ─────────────────────────────────
+  app.post('/api/compliance-os/scan-copy', authMiddleware, async (c) => {
+    const user = c.get('user');
+    const staffErr = staffOnly(user);
+    if (staffErr) return c.json({ error: staffErr }, 403);
+    const body = await c.req.json().catch(() => ({}));
+    const { scanOutboundCopy } = await import('./copy-qa');
+    const scan = scanOutboundCopy(String(body.text || ''), { strict: !!body.strict });
+    return c.json({ ok: true, scan });
+  });
+
   // ── Consent evidence ────────────────────────────────────
   app.post('/api/compliance-os/consent', authMiddleware, async (c) => {
     const user = c.get('user');
@@ -496,6 +507,18 @@ export function registerComplianceOsRoutes(app: Hono<any>, opts: RegisterOpts) {
     const user = c.get('user');
     if (staffOnly(user)) return c.json({ error: 'Staff only' }, 403);
     const body = await c.req.json().catch(() => ({}));
+    const steps = body.steps || [];
+    const copyParts = steps
+      .filter((s: any) => s.bodyTemplate || s.subject || s.pushBody || s.pushTitle)
+      .map((s: any) => [s.subject, s.bodyTemplate, s.pushTitle, s.pushBody].filter(Boolean).join('\n'))
+      .join('\n');
+    if (copyParts.trim()) {
+      const { assertCopyApprovedForSend } = await import('./copy-qa');
+      const qa = assertCopyApprovedForSend(copyParts);
+      if (!qa.ok && body.requireQaPass !== false) {
+        return c.json({ error: qa.error, scan: qa.scan }, 400);
+      }
+    }
     const id = generateId();
     await c.env.DB.prepare(
       `INSERT INTO automation_definitions (id, org_id, name, description, trigger_event, conditions_json, steps_json, lane, category, status, mandatory_controls, created_by)

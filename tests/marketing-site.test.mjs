@@ -35,9 +35,9 @@ assert(home.includes('/legal/privacy'), 'privacy in footer');
 assert(home.includes('id="faq"'), 'faq section');
 assert(!home.includes('/brand">Brand library'), 'owner brand hub not in public footer');
 
-const demo = applyMarketingChrome('<!DOCTYPE html><html lang="en"><head><title>d</title></head><body><footer>old</footer></body></html>', 'demo');
-assert(demo.includes('Interactive Credit Repair Software Demo'), 'demo title');
-assert(demo.includes('sf-footer'), 'demo footer');
+const compare = applyMarketingChrome('<!DOCTYPE html><html lang="en"><head><title>c</title></head><body><footer>old</footer></body></html>', 'compare');
+assert(compare.includes('Compare CRM'), 'compare title');
+assert(compare.includes('sf-footer'), 'compare footer');
 
 const robots = robotsTxt();
 assert(robots.includes('Sitemap: https://smartfcra.com/sitemap.xml'), 'robots sitemap');
@@ -46,6 +46,7 @@ assert(robots.includes('llms.txt'), 'robots points at llms');
 
 const xml = sitemapXml();
 assert(xml.includes('https://smartfcra.com/demo'), 'sitemap demo');
+assert(xml.includes('https://smartfcra.com/compare'), 'sitemap compare');
 assert(xml.includes('https://smartfcra.com/legal/terms'), 'sitemap terms');
 assert(!xml.includes('https://smartfcra.com/app<'), 'app is not indexed');
 

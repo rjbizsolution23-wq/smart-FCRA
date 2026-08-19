@@ -74,7 +74,7 @@ export const MARKETING_FAQ: { q: string; a: string }[] = [
   },
 ];
 
-export type MarketingPageId = 'home' | 'demo' | 'pricing' | 'login';
+export type MarketingPageId = 'home' | 'demo' | 'pricing' | 'login' | 'compare';
 
 type PageMeta = {
   path: string;
@@ -111,6 +111,13 @@ const PAGES: Record<MarketingPageId, PageMeta> = {
     description:
       'Sign in to Smart FCRA by RJ Business Solutions — credit repair CRM, Credit Compliance Intelligence™, generated dispute letters, and client portal for U.S. operators.',
     robots: 'index, follow',
+  },
+  compare: {
+    path: '/compare',
+    title: 'Smart FCRA vs Credit Repair Software | Compare CRM, Compliance & Client Portal',
+    description:
+      'Compare Smart FCRA to template CRMs and dispute-only tools: Credit Compliance Intelligence™, enforced communication lanes, campaign QA, generated FCRA letters, MFSN imports, and CROA client portal.',
+    robots: 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
   },
 };
 
@@ -378,6 +385,7 @@ export const SITEMAP_PATHS = [
   '/',
   '/pricing',
   '/demo',
+  '/compare',
   '/login',
   '/legal/terms',
   '/legal/privacy',
@@ -401,6 +409,7 @@ export function robotsTxt(): string {
     'Allow: /',
     'Allow: /demo',
     'Allow: /pricing',
+    'Allow: /compare',
     'Allow: /login',
     'Allow: /legal/',
     'Allow: /llms.txt',

@@ -635,6 +635,19 @@ export const CRM_CAMPAIGN_LIBRARY: WorkflowDefinition[] = [
       { delayHours: 0, action: 'email', lane: 'compliance', subject: 'Affiliate marketing compliance notice', bodyTemplate: 'Prohibited claim detected from affiliate {{affiliate_id}}. Review approved claims list and take corrective action.' },
     ],
   },
+  {
+    key: 'copy_qa_review',
+    name: 'Copy QA Review',
+    category: 'compliance',
+    lane: 'compliance',
+    mandatory: true,
+    description: 'Automated phrase scan flagged outbound copy — human review before send',
+    trigger: 'copy.qa_failed',
+    steps: [
+      { delayHours: 0, action: 'task', taskTitle: 'Review outbound copy — prohibited phrases detected', taskPriority: 'P1' },
+      { delayHours: 2, action: 'email', lane: 'compliance', subject: 'Copy QA reminder', bodyTemplate: 'Campaign or automation copy still requires compliance review. Open Campaigns or Compliance OS to approve revised copy.' },
+    ],
+  },
 ];
 
 export function getWorkflowDefinition(key: string): WorkflowDefinition | undefined {

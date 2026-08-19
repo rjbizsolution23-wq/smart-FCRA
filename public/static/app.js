@@ -2286,17 +2286,18 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       const p = prefs.preferences || {};
       el.innerHTML = `
         <div class="space-y-4">
-          <div class="glass rounded-xl border border-emerald-900/30 p-4">
-            <h3 class="text-xs font-bold text-emerald-300 uppercase mb-2">Communication preferences</h3>
-            <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-[10px] text-gray-400">
-              <div>Service email: <span class="text-white">${p.emailService ? 'On' : 'Off'}</span></div>
-              <div>Service SMS: <span class="text-white">${p.smsService ? 'On' : 'Off'}</span></div>
-              <div>Marketing email: <span class="text-white">${p.marketingEmail ? 'On' : 'Off'}</span></div>
-              <div>Marketing SMS: <span class="text-white">${p.marketingSms ? 'On' : 'Off'}</span></div>
-              <div>Marketing calls: <span class="text-white">${p.marketingCalls ? 'On' : 'Off'}</span></div>
-              <div>Push: <span class="text-white">${p.pushEnabled ? 'On' : 'Off'}</span></div>
+          <form id="staff-comms-prefs-form" class="glass rounded-xl border border-emerald-900/30 p-4">
+            <h3 class="text-xs font-bold text-emerald-300 uppercase mb-3">Communication preferences (staff edit)</h3>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs text-gray-300">
+              <label class="flex items-center gap-2"><input type="checkbox" name="emailService" ${p.emailService !== false ? 'checked' : ''}> Service email</label>
+              <label class="flex items-center gap-2"><input type="checkbox" name="smsService" ${p.smsService !== false ? 'checked' : ''}> Service SMS</label>
+              <label class="flex items-center gap-2"><input type="checkbox" name="pushEnabled" ${p.pushEnabled !== false ? 'checked' : ''}> Push</label>
+              <label class="flex items-center gap-2"><input type="checkbox" name="marketingEmail" ${p.marketingEmail ? 'checked' : ''}> Marketing email</label>
+              <label class="flex items-center gap-2"><input type="checkbox" name="marketingSms" ${p.marketingSms ? 'checked' : ''}> Marketing SMS</label>
+              <label class="flex items-center gap-2"><input type="checkbox" name="marketingCalls" ${p.marketingCalls ? 'checked' : ''}> Marketing calls</label>
             </div>
-          </div>
+            <button type="submit" class="mt-3 bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg">Save preferences</button>
+          </form>
           <h3 class="text-sm font-bold text-white"><i class="fas fa-stream text-emerald-400 mr-2"></i>Unified timeline (${events.length})</h3>
           <div class="space-y-2 max-h-[480px] overflow-y-auto">${events.length ? events.map((ev) => `
             <div class="glass rounded-lg border border-gray-800 p-3 text-xs">
@@ -2309,6 +2310,25 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
             </div>`).join('') : '<p class="text-gray-500 text-sm">No timeline events yet.</p>'}
           </div>
         </div>`;
+      const prefsForm = el.querySelector('#staff-comms-prefs-form');
+      if (prefsForm) prefsForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          await api(`/clients/${clientId}/communication-preferences`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              emailService: !!fd.get('emailService'),
+              smsService: !!fd.get('smsService'),
+              pushEnabled: !!fd.get('pushEnabled'),
+              marketingEmail: !!fd.get('marketingEmail'),
+              marketingSms: !!fd.get('marketingSms'),
+              marketingCalls: !!fd.get('marketingCalls'),
+            }),
+          });
+          toast('Client preferences updated', 'success');
+        } catch (err) { toast(err.message, 'error'); }
+      };
     } catch (err) {
       el.innerHTML = `<div class="text-red-400 text-sm p-4">${escapeHtml(err.message)}</div>`;
     }
@@ -11144,12 +11164,17 @@ async function pgAdminConsole(el) {
     let posture = null;
     let alerts = [];
     let journeyState = { focusGoal: 'mortgage', motivationOptIn: true };
+    let commPrefs = { emailService: true, smsService: true, marketingEmail: false, marketingSms: false, marketingCalls: false, pushEnabled: true };
     try { mfa = await api('/auth/mfa/status'); } catch (_) {}
     try { posture = await api('/security/posture'); } catch (_) {}
     try { const a = await api('/client-portal/alerts' + qs); alerts = a.alerts || []; } catch (_) {}
     try {
       const j = await api('/client-portal/journey' + qs);
       if (j?.state) journeyState = j.state;
+    } catch (_) {}
+    try {
+      const cp = await api('/client-portal/communication-preferences' + qs);
+      if (cp?.preferences) commPrefs = { ...commPrefs, ...cp.preferences };
     } catch (_) {}
 
     el.innerHTML = `
@@ -11203,6 +11228,27 @@ async function pgAdminConsole(el) {
           </div>
           <div id="mfa-panel" class="hidden space-y-2"></div>
         </div>
+
+        <form id="comms-prefs-form" class="glass rounded-xl border border-emerald-900/40 p-4 space-y-4">
+          <h2 class="text-sm font-bold text-white"><i class="fas fa-sliders-h text-emerald-400 mr-1.5"></i>Communication Preferences</h2>
+          <p class="text-[11px] text-gray-500">Service messages (case updates, security) are separate from marketing. Marketing requires your explicit consent and can be turned off anytime.</p>
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div class="space-y-2">
+              <div class="text-[10px] font-bold uppercase text-cyan-400">Service (transactional)</div>
+              <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="cp-email-service" ${commPrefs.emailService !== false ? 'checked' : ''}> Email — case status &amp; documents</label>
+              <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="cp-sms-service" ${commPrefs.smsService !== false ? 'checked' : ''}> SMS — urgent service alerts</label>
+              <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="cp-push" ${commPrefs.pushEnabled !== false ? 'checked' : ''}> Push / in-app notifications</label>
+            </div>
+            <div class="space-y-2">
+              <div class="text-[10px] font-bold uppercase text-amber-400">Marketing (optional)</div>
+              <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="cp-mkt-email" ${commPrefs.marketingEmail ? 'checked' : ''}> Marketing email</label>
+              <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="cp-mkt-sms" ${commPrefs.marketingSms ? 'checked' : ''}> Marketing SMS</label>
+              <label class="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" id="cp-mkt-calls" ${commPrefs.marketingCalls ? 'checked' : ''}> Marketing phone calls (8am–9pm local)</label>
+            </div>
+          </div>
+          <p class="text-[10px] text-gray-500">Legal consent records are in <button type="button" class="text-emerald-400 underline" onclick="window._nav('client-consents')">Consents &amp; Agreements</button>. Reply STOP to any SMS to opt out of marketing texts.</p>
+          <button type="submit" class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold px-3 py-2 rounded-lg">Save communication preferences</button>
+        </form>
 
         <form id="notify-form" class="glass rounded-xl border border-gray-800 p-4 space-y-3">
           <h2 class="text-sm font-bold text-white">Alert Preferences</h2>
@@ -11265,6 +11311,23 @@ async function pgAdminConsole(el) {
       if (!code) return;
       try { await api('/auth/mfa/disable', { method: 'POST', body: JSON.stringify({ code }) }); toast('MFA disabled', 'success'); pgClientSettings(el); }
       catch (err) { toast(err.message, 'error'); }
+    };
+    document.getElementById('comms-prefs-form').onsubmit = async (e) => {
+      e.preventDefault();
+      try {
+        await api('/client-portal/communication-preferences', {
+          method: 'PUT',
+          body: JSON.stringify(portalClientBody({
+            emailService: document.getElementById('cp-email-service').checked,
+            smsService: document.getElementById('cp-sms-service').checked,
+            pushEnabled: document.getElementById('cp-push').checked,
+            marketingEmail: document.getElementById('cp-mkt-email').checked,
+            marketingSms: document.getElementById('cp-mkt-sms').checked,
+            marketingCalls: document.getElementById('cp-mkt-calls').checked,
+          })),
+        });
+        toast('Communication preferences saved', 'success');
+      } catch (err) { toast(err.message, 'error'); }
     };
     document.getElementById('notify-form').onsubmit = async (e) => {
       e.preventDefault();
@@ -13151,6 +13214,179 @@ async function pgAdminConsole(el) {
   // ═══════════════════════════════════════════════════════════════
   // COMPLIANCE OS — lifecycle, suppression, workflows, NBA
   // ═══════════════════════════════════════════════════════════════
+  async function apiScanCopy(text, strict) {
+    const r = await api('/compliance-os/scan-copy', { method: 'POST', body: JSON.stringify({ text: text || '', strict: !!strict }) });
+    return r.scan || {};
+  }
+
+  function renderCopyScanPanel(scan, id) {
+    if (!scan || !scan.summary) return '';
+    const cls = scan.passed ? 'border-emerald-500/30 bg-emerald-950/20' : 'border-rose-500/30 bg-rose-950/20';
+    return `<div id="${id}" class="rounded-lg border ${cls} p-3 text-xs mt-2">
+      <div class="font-semibold ${scan.passed ? 'text-emerald-300' : 'text-rose-300'}">${escapeHtml(scan.summary)} (score ${scan.score || 0})</div>
+      ${(scan.prohibitedHits || []).length ? `<div class="text-rose-400 mt-1">Prohibited: ${escapeHtml(scan.prohibitedHits.join(', '))}</div>` : ''}
+      ${(scan.redFlagHits || []).length ? `<div class="text-amber-400 mt-1">Red flags: ${escapeHtml(scan.redFlagHits.slice(0, 8).join(', '))}</div>` : ''}
+      ${(scan.suggestions || []).slice(0, 3).map((s) => `<div class="text-gray-400 mt-1"><span class="line-through text-rose-300/80">${escapeHtml(s.never)}</span> → ${escapeHtml(s.use)}</div>`).join('')}
+    </div>`;
+  }
+
+  function initVisualAutomationBuilder(el, catalog, onSaved) {
+    const palette = el.querySelector('#auto-step-palette');
+    const canvas = el.querySelector('#auto-step-canvas');
+    const props = el.querySelector('#auto-step-props');
+    const scanOut = el.querySelector('#auto-scan-result');
+    let steps = [];
+    let selectedIdx = -1;
+
+    const stepLabel = (t) => (catalog.stepTypes || []).find((s) => s.type === t)?.label || t;
+
+    function renderCanvas() {
+      if (!canvas) return;
+      canvas.innerHTML = steps.length ? steps.map((s, i) => `
+        <div class="auto-step-card flex items-start gap-2 border ${selectedIdx === i ? 'border-sky-500' : 'border-gray-700'} rounded-lg p-2 bg-gray-950/60 cursor-move" draggable="true" data-idx="${i}">
+          <span class="text-gray-500 font-mono text-[10px] pt-1">${i + 1}</span>
+          <div class="flex-1 min-w-0">
+            <div class="text-white font-semibold text-xs">${escapeHtml(stepLabel(s.type))}</div>
+            <div class="text-[10px] text-gray-500 truncate">${escapeHtml(s.subject || s.bodyTemplate || s.taskTitle || s.pushTitle || (s.delayHours ? `Wait ${s.delayHours}h` : ''))}</div>
+          </div>
+          <button type="button" class="auto-step-del text-rose-400 text-[10px]" data-idx="${i}">×</button>
+        </div>`).join('') : '<p class="text-gray-500 text-xs text-center py-6">Drag steps from the palette or click to add</p>';
+
+      canvas.querySelectorAll('.auto-step-card').forEach((card) => {
+        card.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/reorder', card.dataset.idx); });
+        card.addEventListener('dragover', (e) => e.preventDefault());
+        card.addEventListener('drop', (e) => {
+          e.preventDefault();
+          const from = Number(e.dataTransfer.getData('text/reorder'));
+          const to = Number(card.dataset.idx);
+          if (Number.isNaN(from) || from === to) return;
+          const [moved] = steps.splice(from, 1);
+          steps.splice(to, 0, moved);
+          selectedIdx = to;
+          renderCanvas();
+          renderProps();
+        });
+        card.onclick = () => { selectedIdx = Number(card.dataset.idx); renderCanvas(); renderProps(); };
+      });
+      canvas.querySelectorAll('.auto-step-del').forEach((btn) => {
+        btn.onclick = (e) => { e.stopPropagation(); steps.splice(Number(btn.dataset.idx), 1); selectedIdx = -1; renderCanvas(); renderProps(); };
+      });
+    }
+
+    function renderProps() {
+      if (!props) return;
+      const s = steps[selectedIdx];
+      if (!s) { props.innerHTML = '<p class="text-gray-500 text-xs">Select a step to edit properties.</p>'; return; }
+      props.innerHTML = `
+        <div class="space-y-2 text-xs">
+          <div class="text-sky-300 font-semibold">${escapeHtml(stepLabel(s.type))}</div>
+          ${['send_email', 'send_sms'].includes(s.type) ? `
+            <select class="auto-prop-lane w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white">
+              <option value="transactional" ${s.lane === 'transactional' ? 'selected' : ''}>Transactional</option>
+              <option value="marketing" ${s.lane === 'marketing' ? 'selected' : ''}>Marketing</option>
+              <option value="compliance" ${s.lane === 'compliance' ? 'selected' : ''}>Compliance</option>
+            </select>
+            <input class="auto-prop-subject w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white" placeholder="Subject" value="${escapeHtml(s.subject || '')}">
+            <textarea class="auto-prop-body w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white" rows="4" placeholder="Body template">${escapeHtml(s.bodyTemplate || '')}</textarea>` : ''}
+          ${s.type === 'push' ? `
+            <input class="auto-prop-push-title w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white" placeholder="Push title" value="${escapeHtml(s.pushTitle || '')}">
+            <textarea class="auto-prop-push-body w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white" rows="3" placeholder="Push body">${escapeHtml(s.pushBody || '')}</textarea>` : ''}
+          ${s.type === 'task' ? `
+            <input class="auto-prop-task w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white" placeholder="Task title" value="${escapeHtml(s.taskTitle || '')}">
+            <select class="auto-prop-priority w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white">
+              ${['P0','P1','P2','P3'].map((p) => `<option value="${p}" ${s.taskPriority === p ? 'selected' : ''}>${p}</option>`).join('')}
+            </select>` : ''}
+          ${s.type === 'wait' ? `
+            <input type="number" min="0" class="auto-prop-wait w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white" placeholder="Hours" value="${s.delayHours || 0}">` : ''}
+          ${s.type === 'stage_change' ? `
+            <input class="auto-prop-stage w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-white" placeholder="Target stage" value="${escapeHtml(s.targetStage || '')}">` : ''}
+        </div>`;
+      const saveProp = () => {
+        if (s.type === 'send_email' || s.type === 'send_sms') {
+          s.lane = props.querySelector('.auto-prop-lane')?.value || s.lane;
+          s.subject = props.querySelector('.auto-prop-subject')?.value || '';
+          s.bodyTemplate = props.querySelector('.auto-prop-body')?.value || '';
+        }
+        if (s.type === 'push') {
+          s.pushTitle = props.querySelector('.auto-prop-push-title')?.value || '';
+          s.pushBody = props.querySelector('.auto-prop-push-body')?.value || '';
+        }
+        if (s.type === 'task') {
+          s.taskTitle = props.querySelector('.auto-prop-task')?.value || '';
+          s.taskPriority = props.querySelector('.auto-prop-priority')?.value || 'P2';
+        }
+        if (s.type === 'wait') s.delayHours = Number(props.querySelector('.auto-prop-wait')?.value || 0);
+        if (s.type === 'stage_change') s.targetStage = props.querySelector('.auto-prop-stage')?.value || '';
+        renderCanvas();
+      };
+      props.querySelectorAll('input,textarea,select').forEach((inp) => { inp.onchange = saveProp; inp.oninput = saveProp; });
+    }
+
+    function addStep(type) {
+      const base = { type };
+      if (type === 'send_email') Object.assign(base, { lane: 'transactional', subject: '', bodyTemplate: '' });
+      if (type === 'send_sms') Object.assign(base, { lane: 'transactional', bodyTemplate: '' });
+      if (type === 'push') Object.assign(base, { pushTitle: 'Update', pushBody: '' });
+      if (type === 'task') Object.assign(base, { taskTitle: 'Follow up', taskPriority: 'P2' });
+      if (type === 'wait') Object.assign(base, { delayHours: 24 });
+      if (type === 'stage_change') Object.assign(base, { targetStage: 'active' });
+      steps.push(base);
+      selectedIdx = steps.length - 1;
+      renderCanvas();
+      renderProps();
+    }
+
+    palette?.querySelectorAll('[data-step-type]').forEach((chip) => {
+      chip.draggable = true;
+      chip.addEventListener('dragstart', (e) => e.dataTransfer.setData('text/step-type', chip.dataset.stepType));
+      chip.onclick = () => addStep(chip.dataset.stepType);
+    });
+    canvas?.addEventListener('dragover', (e) => e.preventDefault());
+    canvas?.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const type = e.dataTransfer.getData('text/step-type');
+      if (type) addStep(type);
+    });
+
+    el.querySelector('#auto-scan-btn')?.addEventListener('click', async () => {
+      const copy = steps.map((s) => [s.subject, s.bodyTemplate, s.pushTitle, s.pushBody].filter(Boolean).join('\n')).join('\n');
+      try {
+        const scan = await apiScanCopy(copy, false);
+        if (scanOut) scanOut.innerHTML = renderCopyScanPanel(scan, 'auto-scan-panel');
+      } catch (err) { toast(err.message, 'error'); }
+    });
+
+    el.querySelector('#automation-visual-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const conditions = [];
+      const condField = fd.get('condField');
+      if (condField) conditions.push({ field: condField, op: fd.get('condOp') || 'eq', value: fd.get('condValue') });
+      try {
+        await api('/compliance-os/automations', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: fd.get('name'),
+            triggerEvent: fd.get('triggerEvent'),
+            lane: fd.get('lane'),
+            conditions,
+            steps,
+          }),
+        });
+        toast('Automation saved as draft', 'success');
+        if (onSaved) await onSaved();
+      } catch (err) {
+        if (err.data?.scan) {
+          if (scanOut) scanOut.innerHTML = renderCopyScanPanel(err.data.scan, 'auto-scan-panel');
+        }
+        toast(err.message || 'Save failed', 'error');
+      }
+    });
+
+    renderCanvas();
+    renderProps();
+  }
+
   async function pgComplianceOs(el) {
     el.innerHTML = `<div class="flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-3xl text-emerald-400"></i></div>`;
     try {
@@ -13229,20 +13465,49 @@ async function pgAdminConsole(el) {
           </div>
 
           <div class="glass rounded-xl p-5 border border-sky-900/30">
-            <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-magic text-sky-400 mr-2"></i>Automation Builder (WHEN → IF → THEN)</h2>
-            <form id="automation-create-form" class="grid md:grid-cols-2 gap-3 text-xs mb-4">
-              <input name="name" placeholder="Automation name" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white" required>
-              <select name="triggerEvent" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">${triggers.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}</select>
-              <select name="lane" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
-                <option value="transactional">Transactional</option>
-                <option value="marketing">Marketing</option>
-                <option value="compliance">Compliance</option>
-              </select>
-              <input name="emailSubject" placeholder="Email subject (optional)" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
-              <textarea name="emailBody" rows="3" placeholder="Email/SMS body template with {{first_name}}" class="md:col-span-2 bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white"></textarea>
-              <button type="submit" class="md:col-span-2 bg-sky-700 hover:bg-sky-600 text-white py-2 rounded-lg font-semibold">Save custom automation (draft)</button>
+            <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-project-diagram text-sky-400 mr-2"></i>Visual Automation Builder (WHEN → IF → THEN)</h2>
+            <form id="automation-visual-form" class="space-y-4 text-xs">
+              <div class="grid md:grid-cols-3 gap-2">
+                <input name="name" placeholder="Automation name" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white" required>
+                <select name="triggerEvent" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">${triggers.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}</select>
+                <select name="lane" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
+                  <option value="transactional">Transactional lane</option>
+                  <option value="marketing">Marketing lane</option>
+                  <option value="compliance">Compliance lane</option>
+                </select>
+              </div>
+              <div class="glass rounded-lg border border-violet-900/30 p-3">
+                <div class="text-[10px] font-bold text-violet-300 uppercase mb-2">IF (optional condition)</div>
+                <div class="grid md:grid-cols-3 gap-2">
+                  <input name="condField" placeholder="Context field e.g. stage" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
+                  <select name="condOp" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
+                    <option value="eq">equals</option><option value="neq">not equals</option><option value="exists">exists</option><option value="gt">greater than</option>
+                  </select>
+                  <input name="condValue" placeholder="Value" class="bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
+                </div>
+              </div>
+              <div class="grid lg:grid-cols-12 gap-3 min-h-[280px]">
+                <div class="lg:col-span-3 border border-gray-800 rounded-xl p-3 bg-gray-950/40">
+                  <div class="text-[10px] font-bold text-gray-400 uppercase mb-2">Step palette</div>
+                  <div id="auto-step-palette" class="flex flex-wrap gap-1.5">${(catalog.stepTypes || []).map((s) => `
+                    <button type="button" data-step-type="${escapeHtml(s.type)}" class="px-2 py-1 rounded bg-gray-800 hover:bg-sky-900/40 text-white text-[10px] border border-gray-700">${escapeHtml(s.label)}</button>`).join('')}</div>
+                </div>
+                <div class="lg:col-span-5 border border-dashed border-gray-700 rounded-xl p-3 bg-gray-950/20">
+                  <div class="text-[10px] font-bold text-gray-400 uppercase mb-2">Workflow canvas — drag to reorder</div>
+                  <div id="auto-step-canvas" class="space-y-2 min-h-[200px]"></div>
+                </div>
+                <div class="lg:col-span-4 border border-gray-800 rounded-xl p-3 bg-gray-950/40">
+                  <div class="text-[10px] font-bold text-gray-400 uppercase mb-2">Step properties</div>
+                  <div id="auto-step-props"></div>
+                </div>
+              </div>
+              <div class="flex flex-wrap gap-2 items-center">
+                <button type="button" id="auto-scan-btn" class="bg-violet-800 hover:bg-violet-700 text-white px-3 py-2 rounded-lg font-semibold"><i class="fas fa-search mr-1"></i>Run copy QA scan</button>
+                <button type="submit" class="bg-sky-700 hover:bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold">Save automation (draft)</button>
+              </div>
+              <div id="auto-scan-result"></div>
             </form>
-            <div class="space-y-1 max-h-32 overflow-y-auto text-[10px] text-gray-400">${autoList.length ? autoList.map((a) => `
+            <div class="space-y-1 max-h-32 overflow-y-auto text-[10px] text-gray-400 mt-4">${autoList.length ? autoList.map((a) => `
               <div class="border-t border-gray-800 pt-1 flex justify-between"><span>${escapeHtml(a.name)} · ${escapeHtml(a.triggerEvent)} · ${escapeHtml(a.status)}</span>
               <button type="button" class="auto-run-btn text-sky-400" data-id="${escapeHtml(a.id)}">Run test</button></div>`).join('') : 'No custom automations yet.'}</div>
           </div>
@@ -13282,29 +13547,7 @@ async function pgAdminConsole(el) {
           await pgComplianceOs(el);
         } catch (err) { toast(err.message, 'error'); }
       };
-      const autoForm = $('#automation-create-form');
-      if (autoForm) autoForm.onsubmit = async (e) => {
-        e.preventDefault();
-        const fd = new FormData(e.target);
-        const steps = [];
-        if (fd.get('emailBody')) {
-          steps.push({ type: 'send_email', lane: fd.get('lane'), subject: fd.get('emailSubject'), bodyTemplate: fd.get('emailBody') });
-        }
-        steps.push({ type: 'wait', delayHours: 0 });
-        try {
-          await api('/compliance-os/automations', {
-            method: 'POST',
-            body: JSON.stringify({
-              name: fd.get('name'),
-              triggerEvent: fd.get('triggerEvent'),
-              lane: fd.get('lane'),
-              steps,
-            }),
-          });
-          toast('Automation saved as draft', 'success');
-          await pgComplianceOs(el);
-        } catch (err) { toast(err.message, 'error'); }
-      };
+      initVisualAutomationBuilder(el, catalog, () => pgComplianceOs(el));
       el.querySelectorAll('.auto-run-btn').forEach((btn) => {
         btn.onclick = async () => {
           const clientId = prompt('Client ID for test run (optional)', '') || undefined;
@@ -13478,7 +13721,8 @@ async function pgAdminConsole(el) {
                   </div>
                   <div class="flex flex-wrap gap-1">
                     ${(c.approval_status || 'draft') === 'draft' ? `<button type="button" class="campaign-approve-btn bg-violet-700 hover:bg-violet-600 text-white px-2 py-1 rounded text-[10px] font-semibold" data-id="${escapeHtml(c.id)}" data-status="compliance_review">Submit review</button>` : ''}
-                    ${c.approval_status === 'compliance_review' ? `<button type="button" class="campaign-approve-btn bg-emerald-700 hover:bg-emerald-600 text-white px-2 py-1 rounded text-[10px] font-semibold" data-id="${escapeHtml(c.id)}" data-status="approved">Approve</button>` : ''}
+                    ${c.approval_status === 'compliance_review' ? `<button type="button" class="campaign-approve-btn bg-emerald-700 hover:bg-emerald-600 text-white px-2 py-1 rounded text-[10px] font-semibold" data-id="${escapeHtml(c.id)}" data-status="approved">Approve</button>
+                    <button type="button" class="campaign-qa-btn bg-violet-800 hover:bg-violet-700 text-white px-2 py-1 rounded text-[10px] font-semibold" data-id="${escapeHtml(c.id)}" data-subject="${escapeHtml(c.subject || '')}" data-body="${escapeHtml((c.body_template || '').slice(0, 500))}">QA scan</button>` : ''}
                     <button type="button" class="campaign-simulate-btn bg-gray-800 hover:bg-gray-700 text-white px-2 py-1 rounded text-[10px] font-semibold" data-id="${escapeHtml(c.id)}">Simulate</button>
                     ${c.status === 'draft' && (c.approval_status === 'approved' || c.approval_status === 'sent') ? `<button type="button" class="campaign-send-btn bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg font-semibold" data-id="${escapeHtml(c.id)}">Send</button>` : ''}
                   </div>
@@ -13491,9 +13735,13 @@ async function pgAdminConsole(el) {
                 <input name="name" placeholder="Campaign name" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white" required>
                 <select name="segmentId" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">${segments.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.label)}</option>`).join('')}</select>
                 <input name="subject" placeholder="Email subject" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white">
-                <textarea name="bodyTemplate" rows="5" placeholder="Hi {first_name}, …" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white" required></textarea>
-                <p class="text-[10px] text-gray-500">Merge tags: {first_name}, {last_name}. No outcome guarantees — educational tone only.</p>
-                <button type="submit" class="w-full bg-amber-600 hover:bg-amber-500 text-white py-2 rounded-lg font-semibold">Save draft</button>
+                <textarea id="campaign-body-template" name="bodyTemplate" rows="5" placeholder="Hi {first_name}, …" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white" required></textarea>
+                <div id="campaign-scan-result"></div>
+                <div class="flex flex-wrap gap-2">
+                  <button type="button" id="campaign-scan-btn" class="bg-violet-800 hover:bg-violet-700 text-white px-3 py-1.5 rounded-lg font-semibold text-[10px]">Run copy QA scan</button>
+                  <button type="submit" class="bg-amber-600 hover:bg-amber-500 text-white py-1.5 px-4 rounded-lg font-semibold text-xs">Save draft</button>
+                </div>
+                <p class="text-[10px] text-gray-500">Merge tags: {first_name}, {last_name}. Copy QA blocks prohibited outcome guarantees before approval.</p>
               </form>
             </div>
           </div>
@@ -13521,10 +13769,29 @@ async function pgAdminConsole(el) {
         </div>`;
 
       const createForm = $('#campaign-create-form');
+      const scanCampaignCopy = async () => {
+        const subj = createForm?.querySelector('[name=subject]')?.value || '';
+        const body = createForm?.querySelector('#campaign-body-template')?.value || '';
+        const scan = await apiScanCopy(`${subj}\n${body}`, false);
+        const out = $('#campaign-scan-result');
+        if (out) out.innerHTML = renderCopyScanPanel(scan, 'campaign-scan-panel');
+        return scan;
+      };
+      $('#campaign-scan-btn')?.addEventListener('click', async () => {
+        try { await scanCampaignCopy(); } catch (err) { toast(err.message, 'error'); }
+      });
+      createForm?.querySelector('#campaign-body-template')?.addEventListener('blur', async () => {
+        try { await scanCampaignCopy(); } catch (_) { /* optional live scan */ }
+      });
       if (createForm) createForm.onsubmit = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
         try {
+          const scan = await scanCampaignCopy();
+          if (!scan.passed) {
+            toast('Copy QA failed — fix prohibited phrases before saving', 'error');
+            return;
+          }
           await api('/campaigns', {
             method: 'POST',
             body: JSON.stringify({
@@ -13555,6 +13822,14 @@ async function pgAdminConsole(el) {
             await api(`/campaigns/${btn.dataset.id}/approval`, { method: 'POST', body: JSON.stringify({ status: btn.dataset.status }) });
             toast('Approval updated', 'success');
             await pgCampaigns(el);
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      });
+      el.querySelectorAll('.campaign-qa-btn').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            const scan = await apiScanCopy(`${btn.dataset.subject}\n${btn.dataset.body}`, false);
+            alert(`${scan.summary}\n\nProhibited: ${(scan.prohibitedHits || []).join(', ') || 'none'}\nRed flags: ${(scan.redFlagHits || []).slice(0, 5).join(', ') || 'none'}`);
           } catch (err) { toast(err.message, 'error'); }
         };
       });

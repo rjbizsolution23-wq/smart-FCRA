@@ -226,6 +226,7 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
   { method: 'post', path: '/api/campaigns/{id}/approval', summary: 'Transition campaign approval status', tags: ['Campaigns'], security: true },
   { method: 'post', path: '/api/campaigns/{id}/suppression-simulation', summary: 'Simulate suppression on campaign segment', tags: ['Campaigns'], security: true },
   { method: 'get', path: '/api/compliance-os/calling-hours', summary: 'Marketing call window and recording policy', tags: ['Compliance OS'], security: true },
+  { method: 'post', path: '/api/compliance-os/scan-copy', summary: 'AI phrase-scan outbound copy for prohibited language', tags: ['Compliance OS'], security: true },
   { method: 'post', path: '/api/compliance-os/call-log', summary: 'Log call with compliance checks', tags: ['Compliance OS'], security: true },
   // Privacy
   { method: 'post', path: '/api/privacy/export', summary: 'GDPR/CCPA data export', tags: ['Privacy'], security: true },

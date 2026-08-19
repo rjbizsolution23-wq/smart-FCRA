@@ -32,6 +32,7 @@ assert(COMMS_POLICY_VERSION.startsWith('2026'), 'policy version');
 
 const lib = listWorkflowLibrary();
 assert(lib.length >= 40, `campaign library size ${lib.length}`);
+assert(lib.some((w) => w.key === 'copy_qa_review'), 'copy_qa_review workflow');
 assert(lib.some((w) => w.key === 'hot_lead'), 'hot_lead workflow');
 assert(lib.some((w) => w.key === 'referral'), 'referral workflow');
 assert(lib.some((w) => w.key === 'win_back'), 'win_back workflow');
