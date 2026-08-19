@@ -228,6 +228,15 @@ export const API_ROUTE_REGISTRY: OpenApiRoute[] = [
   { method: 'get', path: '/api/compliance-os/calling-hours', summary: 'Marketing call window and recording policy', tags: ['Compliance OS'], security: true },
   { method: 'post', path: '/api/compliance-os/scan-copy', summary: 'AI phrase-scan outbound copy for prohibited language', tags: ['Compliance OS'], security: true },
   { method: 'post', path: '/api/compliance-os/call-log', summary: 'Log call with compliance checks', tags: ['Compliance OS'], security: true },
+  // Integration OS
+  { method: 'get', path: '/api/integration-os/hub', summary: 'Integration hub dashboard (health, connections, vault previews)', tags: ['Integration OS'], security: true },
+  { method: 'put', path: '/api/integration-os/connections/{provider}', summary: 'Save encrypted integration credentials', tags: ['Integration OS'], security: true },
+  { method: 'post', path: '/api/integration-os/connections/{provider}/test', summary: 'Test integration connection', tags: ['Integration OS'], security: true },
+  { method: 'get', path: '/api/integration-os/identity-queue', summary: 'Ambiguous identity resolution queue', tags: ['Integration OS'], security: true },
+  { method: 'get', path: '/api/integration-os/events', summary: 'Platform event bus log', tags: ['Integration OS'], security: true },
+  { method: 'get', path: '/api/integration-os/jobs', summary: 'Integration retry / dead-letter job queue', tags: ['Integration OS'], security: true },
+  { method: 'post', path: '/api/integration-os/workflows/simulate', summary: 'Simulate workflow as test consumer', tags: ['Integration OS'], security: true },
+  { method: 'get', path: '/api/integration-os/maker-checker', summary: 'Pending dual-approval requests', tags: ['Integration OS'], security: true },
   // Privacy
   { method: 'post', path: '/api/privacy/export', summary: 'GDPR/CCPA data export', tags: ['Privacy'], security: true },
   { method: 'post', path: '/api/privacy/delete-request', summary: 'Request account deletion', tags: ['Privacy'], security: true },
