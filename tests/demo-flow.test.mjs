@@ -199,7 +199,7 @@ const env = {
   const res = await app.request('/demo', {}, env);
   assert(res.status === 200, 'GET /demo');
   const html = await res.text();
-  assert(html.includes('Interactive product demo'), 'demo gate copy');
+  assert(/Interactive (credit repair software )?demo/i.test(html), 'demo gate copy');
   assert(/business name/i.test(html), 'asks for business name');
 }
 
