@@ -10,6 +10,7 @@
     "/static/brand/brand.css",
     "/static/brand/forms.css",
     "/static/brand/turnstile.js",
-    "/static/brand/pwa-icon.jpg"
+    "/static/brand/pwa-icon.jpg",
+    "/static/brand/tenants/*"
   ]
 }
