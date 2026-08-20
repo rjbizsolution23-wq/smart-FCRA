@@ -11424,6 +11424,22 @@ app.post('/api/marketing/campaign/trigger', authMiddleware, async (c) => {
   }
 });
 
+registerClientIntelligenceRoutes(app, {
+  authMiddleware,
+  resolvePortalClientSafe,
+  isPortalAnalysisUnlocked,
+  decryptPII,
+});
+
+registerSupportCrmRoutes(app, { authMiddleware });
+registerExternalIntegrationRoutes(app);
+registerRoadmapRoutes(app, { authMiddleware });
+registerTenantRoutes(app, { authMiddleware, adminGateMiddleware });
+registerComplianceOsRoutes(app, { authMiddleware });
+registerIntegrationOsRoutes(app, { authMiddleware });
+registerPlatformExtensionRoutes(app, { authMiddleware });
+registerPlatformGuideRoutes(app, { authMiddleware });
+
 // ═══════════════════════════════════════════════════════════════
 // SERVE FRONTEND SPA
 // ═══════════════════════════════════════════════════════════════
@@ -11776,21 +11792,5 @@ function getAppHtml(mode: 'login' | 'app' = 'app'): string {
 </body>
 </html>`;
 }
-
-registerClientIntelligenceRoutes(app, {
-  authMiddleware,
-  resolvePortalClientSafe,
-  isPortalAnalysisUnlocked,
-  decryptPII,
-});
-
-registerSupportCrmRoutes(app, { authMiddleware });
-registerExternalIntegrationRoutes(app);
-registerRoadmapRoutes(app, { authMiddleware });
-registerTenantRoutes(app, { authMiddleware, adminGateMiddleware });
-registerComplianceOsRoutes(app, { authMiddleware });
-registerIntegrationOsRoutes(app, { authMiddleware });
-registerPlatformExtensionRoutes(app, { authMiddleware });
-registerPlatformGuideRoutes(app, { authMiddleware });
 
 export default app;
