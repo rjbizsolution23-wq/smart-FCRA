@@ -3230,9 +3230,9 @@ app.post('/api/clients', authMiddleware, async (c) => {
   const data = await c.req.json();
   const id = generateId();
 
-  // Support both {name} and {firstName, lastName} payloads
-  let firstName = data.firstName || '';
-  let lastName = data.lastName || '';
+  // Support both {name}, {firstName, lastName}, and {first_name, last_name} payloads
+  let firstName = data.firstName || data.first_name || '';
+  let lastName = data.lastName || data.last_name || '';
   if (!firstName && data.name) {
     const parts = data.name.trim().split(/\s+/);
     firstName = parts[0] || '';
@@ -3241,17 +3241,20 @@ app.post('/api/clients', authMiddleware, async (c) => {
   if (!firstName) return c.json({ error: 'First name is required' }, 400);
 
   // Regulatory checkbox values (CROA, FCRA, and TSR)
-  const permissiblePurposeConsent = data.permissiblePurposeConsent ? 1 : 0;
-  const croaContractAgreed = data.croaContractAgreed ? 1 : 0;
-  const tsrAdvanceFeeWaived = data.tsrAdvanceFeeWaived ? 1 : 0;
-  const consentTimestamp = data.consentTimestamp || (permissiblePurposeConsent || croaContractAgreed || tsrAdvanceFeeWaived ? new Date().toISOString() : null);
+  const permissiblePurposeConsent = (data.permissiblePurposeConsent || data.permissible_purpose_consent) ? 1 : 0;
+  const croaContractAgreed = (data.croaContractAgreed || data.croa_contract_agreed) ? 1 : 0;
+  const tsrAdvanceFeeWaived = (data.tsrAdvanceFeeWaived || data.tsr_advance_fee_waived) ? 1 : 0;
+  const consentTimestamp = data.consentTimestamp || data.consent_timestamp || (permissiblePurposeConsent || croaContractAgreed || tsrAdvanceFeeWaived ? new Date().toISOString() : null);
 
   await c.env.DB.prepare(
     'INSERT INTO clients (id, org_id, created_by, first_name, last_name, email, phone, address_line1, address_line2, city, state, zip, dob, ssn_last4, notes, tags, permissible_purpose_consent, croa_contract_agreed, tsr_advance_fee_waived, consent_timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     id, user.org_id, user.id, firstName, lastName,
-    data.email || null, data.phone || null, data.addressLine1 || null, data.addressLine2 || null,
-    data.city || null, data.state || null, data.zip || null, data.dob || null, data.ssnLast4 || null,
+    data.email || null, data.phone || null,
+    data.addressLine1 || data.address_line1 || null,
+    data.addressLine2 || data.address_line2 || null,
+    data.city || null, data.state || null, data.zip || null,
+    data.dob || null, data.ssnLast4 || data.ssn_last4 || null,
     data.notes || null, JSON.stringify(data.tags || []),
     permissiblePurposeConsent, croaContractAgreed, tsrAdvanceFeeWaived, consentTimestamp
   ).run();
