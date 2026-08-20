@@ -6,7 +6,7 @@
 import { generateId } from './auth';
 
 export type MailPostagePayerMode = 'org' | 'client' | 'org_then_client' | 'client_then_org';
-export type MailPostagePayer = 'org' | 'client' | 'comped';
+export type MailPostagePayer = 'org' | 'client' | 'comped' | 'org_card';
 
 /** Retail postage rates (covers Lob print+mail + platform margin). */
 export const MAIL_POSTAGE_RATES_CENTS = {
@@ -84,20 +84,85 @@ export function payerOrder(mode: MailPostagePayerMode, preferred?: string | null
 
 export async function getOrgMailCredits(db: D1Database, orgId: string) {
   const row = await db.prepare(
-    'SELECT balance_cents, lifetime_purchased_cents, lifetime_used_cents, postage_comped FROM org_mail_credits WHERE org_id = ?',
+    'SELECT balance_cents, lifetime_purchased_cents, lifetime_used_cents, postage_comped, card_on_file, mail_unlocked, default_payment_method_id FROM org_mail_credits WHERE org_id = ?',
   ).bind(orgId).first() as any;
   if (!row) {
     await db.prepare(
       'INSERT OR IGNORE INTO org_mail_credits (org_id, balance_cents) VALUES (?, 0)',
     ).bind(orgId).run().catch(() => null);
-    return { balanceCents: 0, lifetimePurchasedCents: 0, lifetimeUsedCents: 0, postageComped: false };
+    return {
+      balanceCents: 0,
+      lifetimePurchasedCents: 0,
+      lifetimeUsedCents: 0,
+      postageComped: false,
+      cardOnFile: false,
+      mailUnlocked: false,
+      defaultPaymentMethodId: null as string | null,
+    };
   }
   return {
     balanceCents: Number(row.balance_cents || 0),
     lifetimePurchasedCents: Number(row.lifetime_purchased_cents || 0),
     lifetimeUsedCents: Number(row.lifetime_used_cents || 0),
     postageComped: !!row.postage_comped,
+    cardOnFile: !!row.card_on_file,
+    mailUnlocked: !!row.mail_unlocked || !!row.card_on_file,
+    defaultPaymentMethodId: row.default_payment_method_id ? String(row.default_payment_method_id) : null,
   };
+}
+
+export async function markOrgMailCardUnlocked(db: D1Database, orgId: string, opts?: {
+  paymentMethodId?: string | null;
+  unlocked?: boolean;
+  cardOnFile?: boolean;
+}) {
+  const unlocked = opts?.unlocked !== false ? 1 : 0;
+  const cardOnFile = opts?.cardOnFile !== false ? 1 : 0;
+  const pm = opts?.paymentMethodId || null;
+  await db.prepare(
+    `INSERT INTO org_mail_credits (org_id, balance_cents, card_on_file, mail_unlocked, default_payment_method_id)
+     VALUES (?, 0, ?, ?, ?)
+     ON CONFLICT(org_id) DO UPDATE SET
+       card_on_file = excluded.card_on_file,
+       mail_unlocked = excluded.mail_unlocked,
+       default_payment_method_id = COALESCE(excluded.default_payment_method_id, org_mail_credits.default_payment_method_id),
+       updated_at = datetime('now')`,
+  ).bind(orgId, cardOnFile, unlocked, pm).run();
+}
+
+export async function recordOrgCardPostageSend(opts: {
+  db: D1Database;
+  orgId: string;
+  clientId?: string | null;
+  mailClass: string;
+  costCents: number;
+  paymentIntentId?: string | null;
+  actorUserId?: string | null;
+  documentId?: string | null;
+  disputeId?: string | null;
+}) {
+  await opts.db.prepare(
+    `INSERT INTO org_mail_credits (org_id, balance_cents, lifetime_used_cents) VALUES (?, 0, ?)
+     ON CONFLICT(org_id) DO UPDATE SET
+       lifetime_used_cents = lifetime_used_cents + excluded.lifetime_used_cents,
+       updated_at = datetime('now')`,
+  ).bind(opts.orgId, opts.costCents).run().catch(() => null);
+  const after = await getOrgMailCredits(opts.db, opts.orgId);
+  await writeMailPostageLedger(opts.db, {
+    orgId: opts.orgId,
+    clientId: opts.clientId || null,
+    payer: 'org_card',
+    eventType: 'send_card',
+    mailClass: opts.mailClass,
+    amountCents: -opts.costCents,
+    balanceAfterCents: after.balanceCents,
+    documentId: opts.documentId,
+    disputeId: opts.disputeId,
+    stripeSessionId: opts.paymentIntentId || null,
+    actorUserId: opts.actorUserId,
+    note: 'charged saved card',
+  });
+  return after;
 }
 
 export async function getClientMailCredits(db: D1Database, orgId: string, clientId: string) {
@@ -254,10 +319,11 @@ export type ChargePostageResult =
       orgBalanceCents: number;
       clientBalanceCents: number;
       freeOverride?: boolean;
+      paymentIntentId?: string | null;
     }
   | {
       ok: false;
-      code: 'MAIL_POSTAGE_REQUIRED';
+      code: 'MAIL_POSTAGE_REQUIRED' | 'MAIL_CARD_REQUIRED';
       error: string;
       costCents: number;
       mailClass: PostageMailClass;
@@ -266,6 +332,9 @@ export type ChargePostageResult =
       payerMode: MailPostagePayerMode;
       canPayOrg: boolean;
       canPayClient: boolean;
+      mailUnlocked: boolean;
+      cardOnFile: boolean;
+      needsCard: boolean;
     };
 
 export async function chargeMailPostage(opts: {
@@ -278,6 +347,10 @@ export async function chargeMailPostage(opts: {
   actorUserId?: string | null;
   documentId?: string | null;
   disputeId?: string | null;
+  chargeOrgCard?: (args: {
+    costCents: number;
+    mailClass: PostageMailClass;
+  }) => Promise<{ ok: true; paymentIntentId?: string | null } | { ok: false; error?: string }>;
 }): Promise<ChargePostageResult> {
   const mailClass = normalizePostageMailClass(opts.mailClass);
   const costCents = postageCostCents(mailClass);
@@ -338,6 +411,31 @@ export async function chargeMailPostage(opts: {
           clientBalanceCents: clientCredits.balanceCents,
         };
       }
+      if (opts.chargeOrgCard && (orgCredits.mailUnlocked || orgCredits.cardOnFile)) {
+        const card = await opts.chargeOrgCard({ costCents, mailClass });
+        if (card.ok) {
+          const afterCard = await recordOrgCardPostageSend({
+            db: opts.db,
+            orgId: opts.orgId,
+            clientId: opts.clientId,
+            mailClass,
+            costCents,
+            paymentIntentId: card.paymentIntentId,
+            actorUserId: opts.actorUserId,
+            documentId: opts.documentId,
+            disputeId: opts.disputeId,
+          });
+          return {
+            ok: true,
+            costCents,
+            mailClass,
+            payer: 'org_card',
+            orgBalanceCents: afterCard.balanceCents,
+            clientBalanceCents: clientCredits.balanceCents,
+            paymentIntentId: card.paymentIntentId,
+          };
+        }
+      }
     }
     if (who === 'client' && opts.clientId) {
       const after = await deductClient(opts.db, opts.orgId, opts.clientId, costCents);
@@ -369,10 +467,13 @@ export async function chargeMailPostage(opts: {
 
   const canPayOrg = settings.mailPostagePayer !== 'client';
   const canPayClient = settings.mailPostagePayer !== 'org' && !!opts.clientId;
+  const needsCard = canPayOrg && !orgCredits.mailUnlocked && !orgCredits.cardOnFile;
   return {
     ok: false,
-    code: 'MAIL_POSTAGE_REQUIRED',
-    error: 'Insufficient postage credits. Buy a postage pack or pay for this letter with a card.',
+    code: needsCard ? 'MAIL_CARD_REQUIRED' : 'MAIL_POSTAGE_REQUIRED',
+    error: needsCard
+      ? 'Add your firm card to unlock mailing. Each letter is charged to your card automatically — nothing is stored in platform secret files.'
+      : 'Insufficient postage credits. Buy a pack, pay for this letter, or ensure your saved card can be charged.',
     costCents,
     mailClass,
     orgBalanceCents: orgCredits.balanceCents,
@@ -380,6 +481,9 @@ export async function chargeMailPostage(opts: {
     payerMode: settings.mailPostagePayer,
     canPayOrg,
     canPayClient,
+    mailUnlocked: orgCredits.mailUnlocked,
+    cardOnFile: orgCredits.cardOnFile,
+    needsCard,
   };
 }
 

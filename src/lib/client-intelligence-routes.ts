@@ -38,6 +38,9 @@ import {
   MAIL_POSTAGE_RATES_CENTS,
   CLIENT_MAIL_CREDIT_PACKS,
 } from './mail-postage';
+import { chargeOrgSavedCardPostage } from './mail-postage-routes';
+import { productionStripeBlockReason } from './stripe-catalog';
+import Stripe from 'stripe';
 
 const CONSENT_CATALOG = [
   { type: 'ELECTRONIC_COMMUNICATIONS', version: '1.0', label: 'Electronic communications' },
@@ -725,6 +728,22 @@ export function registerClientIntelligenceRoutes(
       orgSettingsRaw: orgSettings,
       actorUserId: user.id,
       disputeId: id,
+      chargeOrgCard: async ({ costCents, mailClass: cls }) => {
+        if (!c.env.STRIPE_API_KEY) return { ok: false, error: 'Stripe not configured' };
+        const blocked = productionStripeBlockReason(c.env);
+        if (blocked) return { ok: false, error: blocked };
+        const orgBill = await c.env.DB.prepare('SELECT stripe_customer_id FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+        if (!orgBill?.stripe_customer_id) return { ok: false, error: 'Firm must add a card to unlock mailing' };
+        const stripe = new Stripe(c.env.STRIPE_API_KEY, { httpClient: Stripe.createFetchHttpClient() });
+        return chargeOrgSavedCardPostage({
+          stripe,
+          customerId: orgBill.stripe_customer_id,
+          amountCents: costCents,
+          mailClass: cls,
+          orgId: user.org_id,
+          disputeId: id,
+        });
+      },
     });
     if (!postage.ok) {
       return c.json({
@@ -737,6 +756,10 @@ export function registerClientIntelligenceRoutes(
         payerMode: postage.payerMode,
         canPayOrg: postage.canPayOrg,
         canPayClient: postage.canPayClient,
+        needsCard: postage.needsCard,
+        mailUnlocked: postage.mailUnlocked,
+        cardOnFile: postage.cardOnFile,
+        addCardPath: '/api/mail-postage/org/add-card',
         purchaseClientPath: '/api/mail-postage/client/credits/purchase',
         payLetterPath: '/api/mail-postage/client/pay-letter',
       }, 402);

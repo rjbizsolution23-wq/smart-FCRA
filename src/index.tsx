@@ -166,7 +166,7 @@ import { persistInvestigationClock, closeInvestigationClock, FCRA_611_OPERATIONA
 import { recordServiceCompleted, assertCoveredChargeAllowed, writeBillingLedger } from './lib/service-ledger';
 import { sendLetterViaLob, resolveMailClass, lobConfigured, lobPublicStatus, verifyUsAddress } from './lib/lob';
 import { chargeMailPostage } from './lib/mail-postage';
-import { registerMailPostageRoutes, fulfillMailPostageCheckout } from './lib/mail-postage-routes';
+import { registerMailPostageRoutes, fulfillMailPostageCheckout, chargeOrgSavedCardPostage, ensureOrgStripeCustomer } from './lib/mail-postage-routes';
 import { registerSupportCrmRoutes, registerExternalIntegrationRoutes } from './lib/support-crm-routes';
 import { registerRoadmapRoutes, handleClientBillingWebhook } from './lib/roadmap-routes';
 import { registerComplianceOsRoutes } from './lib/compliance-os-routes';
@@ -7670,11 +7670,21 @@ app.post('/api/billing/portal', authMiddleware, async (c) => {
   const blocked = productionStripeBlockReason(c.env);
   if (blocked) return c.json({ error: blocked, code: 'STRIPE_LIVE_REQUIRED' }, 503);
   const stripe = getStripe(c.env);
-  const org = await c.env.DB.prepare('SELECT stripe_customer_id FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
-  if (!org?.stripe_customer_id) return c.json({ error: 'Subscribe first' }, 400);
+  let org = await c.env.DB.prepare('SELECT name, stripe_customer_id FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+  let customerId = org?.stripe_customer_id as string | undefined;
+  if (!customerId) {
+    // Self-serve: create Stripe customer so firm can add a card without a SaaS subscribe first
+    customerId = await ensureOrgStripeCustomer({
+      stripe,
+      db: c.env.DB,
+      orgId: user.org_id,
+      email: user.email,
+      name: org?.name,
+    });
+  }
   const session = await stripe.billingPortal.sessions.create({
-    customer: org.stripe_customer_id,
-    return_url: `${resolveFrontendUrl(c.env, c.req.url)}/app`,
+    customer: customerId,
+    return_url: `${resolveFrontendUrl(c.env, c.req.url)}/app?page=settings`,
   });
   return c.json({ url: session.url });
 });
@@ -7835,6 +7845,7 @@ app.post('/api/billing/webhook', async (c) => {
         sessionObj?.metadata?.type === 'mail_postage_pack'
         || sessionObj?.metadata?.type === 'mail_postage_client_pack'
         || sessionObj?.metadata?.type === 'mail_postage_letter'
+        || sessionObj?.metadata?.type === 'mail_postage_card_setup'
       ) {
         try {
           await fulfillMailPostageCheckout(c.env.DB, sessionObj);
@@ -9906,6 +9917,25 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
     orgSettingsRaw: orgSettings,
     actorUserId: user.id,
     documentId: id,
+    chargeOrgCard: async ({ costCents, mailClass: cls }) => {
+      if (!stripeConfigured(c.env) || !c.env.STRIPE_API_KEY) return { ok: false, error: 'Stripe not configured' };
+      const blocked = productionStripeBlockReason(c.env);
+      if (blocked) return { ok: false, error: blocked };
+      const orgBill = await c.env.DB.prepare('SELECT stripe_customer_id FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+      if (!orgBill?.stripe_customer_id) return { ok: false, error: 'Add your firm card to unlock mailing' };
+      const credits = await c.env.DB.prepare(
+        'SELECT default_payment_method_id FROM org_mail_credits WHERE org_id = ?',
+      ).bind(user.org_id).first() as any;
+      return chargeOrgSavedCardPostage({
+        stripe: getStripe(c.env),
+        customerId: orgBill.stripe_customer_id,
+        amountCents: costCents,
+        mailClass: cls,
+        orgId: user.org_id,
+        paymentMethodId: credits?.default_payment_method_id || null,
+        documentId: id,
+      });
+    },
   });
   if (!postage.ok) {
     return c.json({
@@ -9918,6 +9948,10 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
       payerMode: postage.payerMode,
       canPayOrg: postage.canPayOrg,
       canPayClient: postage.canPayClient,
+      needsCard: postage.needsCard,
+      mailUnlocked: postage.mailUnlocked,
+      cardOnFile: postage.cardOnFile,
+      addCardPath: '/api/mail-postage/org/add-card',
       purchaseOrgPath: '/api/mail-postage/org/credits/purchase',
       payLetterPath: '/api/mail-postage/client/pay-letter',
     }, 402);
@@ -11931,7 +11965,7 @@ function getAppHtml(mode: 'login' | 'app' = 'app'): string {
   </script>
   <script src="/static/demo-experience.js?v=20260819-stripe-live"></script>
   <script src="/static/platform-guide.js?v=20260819-platform-guide"></script>
-  <script src="/static/app.js?v=20260821-mail-postage"></script>
+  <script src="/static/app.js?v=20260821-mail-card-unlock"></script>
 </body>
 </html>`;
 }

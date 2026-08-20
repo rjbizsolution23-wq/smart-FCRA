@@ -424,10 +424,20 @@
     setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 4000);
   }
 
-  /** When Lob send returns 402 MAIL_POSTAGE_REQUIRED, offer Stripe checkout. */
+  /** When Lob send returns 402 MAIL_POSTAGE_REQUIRED / MAIL_CARD_REQUIRED, offer Stripe checkout. */
   async function offerMailPostageCheckout(err, opts = {}) {
     const d = err?.data || {};
-    if (err?.code !== 'MAIL_POSTAGE_REQUIRED' && d.code !== 'MAIL_POSTAGE_REQUIRED') return false;
+    const code = err?.code || d.code;
+    if (code !== 'MAIL_POSTAGE_REQUIRED' && code !== 'MAIL_CARD_REQUIRED') return false;
+    if (code === 'MAIL_CARD_REQUIRED' || d.needsCard) {
+      if (!confirm(`${d.error || 'Add your firm card to unlock mailing.'}\n\nContinue to secure Stripe card setup?`)) return true;
+      try {
+        const r = await api('/mail-postage/org/add-card', { method: 'POST', body: '{}' });
+        if (r.url) { window.location.href = r.url; return true; }
+        toast(r.error || 'Card setup unavailable', 'error');
+      } catch (e) { toast(e.message, 'error'); }
+      return true;
+    }
     const cost = ((d.costCents || 0) / 100).toFixed(2);
     const orgBal = ((d.orgBalanceCents || 0) / 100).toFixed(2);
     const clientBal = ((d.clientBalanceCents || 0) / 100).toFixed(2);
@@ -436,7 +446,7 @@
       d.canPayClient ? 'letter' : 'org',
       {
         title: 'Postage required',
-        description: `Need $${cost} for ${d.mailClass || 'FIRST_CLASS'}. Firm wallet $${orgBal} · Client wallet $${clientBal}. Type: org (buy firm pack), pack (client pack), or letter (pay this one letter).`,
+        description: `Need $${cost} for ${d.mailClass || 'FIRST_CLASS'}. Firm wallet $${orgBal} · Client wallet $${clientBal}. Type: card (add/update firm card), org (buy firm pack), pack (client pack), or letter (pay this one letter).`,
         submitLabel: 'Continue to card checkout',
       },
     );
@@ -444,7 +454,9 @@
     const mode = String(choice).trim().toLowerCase();
     try {
       let r;
-      if (mode === 'org' || mode === 'firm') {
+      if (mode === 'card' || mode === 'add') {
+        r = await api('/mail-postage/org/add-card', { method: 'POST', body: '{}' });
+      } else if (mode === 'org' || mode === 'firm') {
         r = await api('/mail-postage/org/credits/purchase', { method: 'POST', body: JSON.stringify({ packId: 'mail_starter' }) });
       } else if (mode === 'pack' || mode === 'credits') {
         r = await api('/mail-postage/client/credits/purchase', {
@@ -6862,12 +6874,15 @@ Status: Discharged`;
           </form>
           <div id="mail-postage-box" class="bg-gray-950/50 border border-violet-900/40 rounded-xl p-4 mb-4 text-xs text-gray-400">
             <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-              <h3 class="text-xs font-bold text-white uppercase tracking-wider">Postage wallet</h3>
-              <button type="button" id="btn-mail-portal" class="text-[10px] text-sky-300 hover:text-sky-200 font-semibold">Manage card (Stripe portal)</button>
+              <h3 class="text-xs font-bold text-white uppercase tracking-wider">Postage &amp; mailing unlock</h3>
+              <div class="flex gap-2">
+                <button type="button" id="btn-mail-add-card" class="bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg">Add your card · unlock mailing</button>
+                <button type="button" id="btn-mail-portal" class="text-[10px] text-sky-300 hover:text-sky-200 font-semibold">Manage card</button>
+              </div>
             </div>
-            <div id="mail-postage-balance">Loading postage balance…</div>
+            <div id="mail-postage-balance">Loading postage status…</div>
             <div id="mail-postage-packs" class="flex flex-wrap gap-2 mt-3"></div>
-            <p class="text-[10px] text-gray-600 mt-2">Buy postage with your card. First Class $1.49 · Standard $0.99 · Certified $8.99. Clients can also buy packs or pay per letter when enabled.</p>
+            <p class="text-[10px] text-gray-600 mt-2">You add the card yourself in Stripe — we never store card numbers in platform files or secrets. After unlock, each letter charges your card (or prepaid wallet). First Class $1.49 · Standard $0.99 · Certified $8.99.</p>
           </div>
           <div id="c2m-addresses-box" class="text-xs text-gray-400 mb-4">Loading Lob mail status…</div>
           <div class="grid md:grid-cols-2 gap-4">
@@ -7321,7 +7336,15 @@ Status: Discharged`;
         api('/mail-postage/org').then((d) => {
           const bal = ((d.credits?.balanceCents || 0) / 100).toFixed(2);
           const mode = d.settings?.mailPostagePayer || 'org_then_client';
-          mailBal.innerHTML = `<strong class="text-white">$${bal}</strong> postage wallet · payer mode <span class="text-violet-300">${escapeHtml(mode)}</span>${d.settings?.postageComped ? ' · <span class="text-emerald-400">comped</span>' : ''}`;
+          const unlocked = !!d.unlocked;
+          const card = d.card || {};
+          const cardLabel = card.onFile
+            ? `<span class="text-emerald-400">Card on file${card.brand ? ` · ${escapeHtml(String(card.brand).toUpperCase())}` : ''}${card.last4 ? ` ·•••• ${escapeHtml(card.last4)}` : ''}</span>`
+            : '<span class="text-amber-400">No card yet</span>';
+          const unlockBadge = unlocked
+            ? '<span class="ml-2 px-2 py-0.5 rounded bg-emerald-900/50 text-emerald-300 text-[10px] font-bold uppercase border border-emerald-700/40">Mailing unlocked</span>'
+            : '<span class="ml-2 px-2 py-0.5 rounded bg-amber-900/50 text-amber-200 text-[10px] font-bold uppercase border border-amber-700/40">Add card to unlock</span>';
+          mailBal.innerHTML = `${cardLabel}${unlockBadge}<div class="mt-1"><strong class="text-white">$${bal}</strong> prepaid wallet · payer <span class="text-violet-300">${escapeHtml(mode)}</span></div><p class="text-[10px] text-gray-500 mt-1">${escapeHtml(d.hint || '')}</p>`;
           if (mailPacks) {
             mailPacks.innerHTML = (d.packs || []).map((p) =>
               `<button type="button" class="mail-pack-btn bg-violet-900/60 hover:bg-violet-800 text-violet-200 px-3 py-1.5 rounded-lg text-[10px] font-bold border border-violet-800" data-pack="${escapeHtml(p.id)}">Buy ${escapeHtml(p.label)}</button>`
@@ -7336,15 +7359,25 @@ Status: Discharged`;
               };
             });
           }
-        }).catch(() => { mailBal.textContent = 'Postage wallet unavailable (apply migration 0038).'; });
+        }).catch(() => { mailBal.textContent = 'Postage status unavailable (apply migrations 0038–0039).'; });
       }
+      $('#btn-mail-add-card')?.addEventListener('click', async () => {
+        try {
+          const r = await api('/mail-postage/org/add-card', { method: 'POST', body: '{}' });
+          if (r.url) window.location.href = r.url;
+          else toast(r.error || 'Could not start card setup', 'error');
+        } catch (err) { toast(err.message, 'error'); }
+      });
       $('#btn-mail-portal')?.addEventListener('click', async () => {
         try {
           const r = await api('/billing/portal', { method: 'POST', body: '{}' });
           if (r.url) window.location.href = r.url;
-          else toast(r.error || 'Subscribe first to manage a card', 'warning');
+          else toast(r.error || 'Could not open card portal', 'warning');
         } catch (err) { toast(err.message, 'error'); }
       });
+      if (new URLSearchParams(location.search).get('mailCard') === 'unlocked') {
+        toast('Card saved — mailing unlocked', 'success');
+      }
       const c2mAddrBox = $('#c2m-addresses-box');
       if (c2mAddrBox) {
         api('/integrations/lob/status').then((d) => {
