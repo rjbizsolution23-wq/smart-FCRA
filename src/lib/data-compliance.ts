@@ -244,9 +244,12 @@ export function sessionsListScope(session: { demo_session_id?: string | null }) 
   return { mode: 'staff' as const, demoSessionId: null };
 }
 
-export const SQL_ACTIVE_SESSION = `SELECT s.*, u.id as user_id, u.name as user_name, u.email as user_email, u.role as user_role, u.is_active, u.org_id, COALESCE(u.must_change_password, 0) as must_change_password, COALESCE(u.mfa_enabled, 0) as mfa_enabled FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND s.expires_at > datetime("now") AND s.revoked_at IS NULL`;
+/** ISO expires_at compares incorrectly to datetime('now') when the date matches (T > space). */
+export const SQL_EXPIRES_FUTURE = `datetime(replace(substr(expires_at, 1, 19), 'T', ' ')) > datetime('now')`;
 
-export const SQL_ACTIVE_SESSION_LEGACY = `SELECT s.*, u.id as user_id, u.name as user_name, u.email as user_email, u.role as user_role, u.is_active, u.org_id, COALESCE(u.must_change_password, 0) as must_change_password, COALESCE(u.mfa_enabled, 0) as mfa_enabled FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND s.expires_at > datetime("now")`;
+export const SQL_ACTIVE_SESSION = `SELECT s.*, u.id as user_id, u.name as user_name, u.email as user_email, u.role as user_role, u.is_active, u.org_id, COALESCE(u.must_change_password, 0) as must_change_password, COALESCE(u.mfa_enabled, 0) as mfa_enabled FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND datetime(replace(substr(s.expires_at, 1, 19), 'T', ' ')) > datetime('now') AND s.revoked_at IS NULL`;
+
+export const SQL_ACTIVE_SESSION_LEGACY = `SELECT s.*, u.id as user_id, u.name as user_name, u.email as user_email, u.role as user_role, u.is_active, u.org_id, COALESCE(u.must_change_password, 0) as must_change_password, COALESCE(u.mfa_enabled, 0) as mfa_enabled FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND datetime(replace(substr(s.expires_at, 1, 19), 'T', ' ')) > datetime('now')`;
 
 export const SQL_REVOKE_SESSION = `UPDATE sessions SET revoked_at = datetime('now') WHERE id = ? AND user_id = ? AND revoked_at IS NULL`;
 export const SQL_REVOKE_OTHERS = `UPDATE sessions SET revoked_at = datetime('now') WHERE user_id = ? AND id != ? AND revoked_at IS NULL`;
@@ -262,18 +265,24 @@ export async function lookupActiveSession(db: SessionDb, sessionId: string) {
   }
 }
 
+export function normalizeExpiresAt(value: string | Date): string {
+  const iso = value instanceof Date ? value.toISOString() : String(value || '');
+  return iso.slice(0, 19).replace('T', ' ');
+}
+
 export async function insertSessionRow(
   db: SessionDb,
   row: { id: string; userId: string; orgId: string; expires: string; ip: string; ua: string; demoSessionId?: string | null },
 ) {
+  const expiresAt = normalizeExpiresAt(row.expires);
   try {
     await db.prepare(
       `INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent, last_seen_at, demo_session_id) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?)`,
-    ).bind(row.id, row.userId, row.orgId, row.expires, row.ip, row.ua, row.demoSessionId || null).run();
+    ).bind(row.id, row.userId, row.orgId, expiresAt, row.ip, row.ua, row.demoSessionId || null).run();
   } catch {
     await db.prepare(
       `INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)`,
-    ).bind(row.id, row.userId, row.orgId, row.expires, row.ip, row.ua).run();
+    ).bind(row.id, row.userId, row.orgId, expiresAt, row.ip, row.ua).run();
   }
 }
 

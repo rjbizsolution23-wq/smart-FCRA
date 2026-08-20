@@ -345,6 +345,21 @@
     navigate('client-detail', { clientId: prevId });
   };
 
+  function clearAuthSession(message) {
+    setState({
+      token: null,
+      user: null,
+      org: null,
+      demoSession: null,
+      impersonateClientId: null,
+      impersonateClientName: null,
+      actingOrgId: null,
+      actingOrgName: null,
+      homeOrg: null,
+    });
+    if (message) toast(message, 'warning');
+  }
+
   async function api(path, opts = {}) {
     const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
     if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
@@ -359,6 +374,11 @@
       err.code = data.code;
       err.status = res.status;
       err.data = data;
+      if (res.status === 401 && state.token && !String(path).startsWith('/auth/login')) {
+        clearAuthSession('Session expired — please sign in again');
+        render();
+        err.sessionCleared = true;
+      }
       if (data.code === 'MFA_REQUIRED' && state.token) {
         toast('MFA required for this action — enable it in Settings', 'warning');
         if (state.user?.role === 'client') navigate('client-settings');
@@ -1710,7 +1730,10 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 
         default: el.innerHTML = '<p class="text-gray-400">Page not found.</p>';
       }
-    } catch(err) { el.innerHTML = `<div class="text-red-400 p-4"><i class="fas fa-exclamation-triangle mr-2"></i>${err.message}</div>`; }
+    } catch(err) {
+      if (err.sessionCleared || err.status === 401) return;
+      el.innerHTML = `<div class="text-red-400 p-4"><i class="fas fa-exclamation-triangle mr-2"></i>${err.message}</div>`;
+    }
     prependPortalWalkthrough(el, page);
   }
 
@@ -15744,7 +15767,9 @@ async function pgAdminConsole(el) {
           }
           setState(patch);
         }
-      } catch (_) {}
+      } catch (err) {
+        if (!err.sessionCleared && err.status === 401) clearAuthSession('Session expired — please sign in again');
+      }
     }
     render();
     if (state.token) maybeStartPendingCheckout();
