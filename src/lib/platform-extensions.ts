@@ -455,8 +455,16 @@ export async function generateOrgAiText(opts: {
   skipCreditCharge?: boolean;
 }): Promise<{ text: string; provider: string; model: string; creditsCharged?: number; creditsBalance?: number }> {
   const { generateAiText } = await import('./ai-providers');
+  const taskIds = new Set([
+    'tutor_chat', 'mentor_chat', 'document_analysis', 'credit_recommendation',
+    'score_explanation', 'letter_rewrite', 'compliance_draft', 'embedding',
+  ]);
+  const taskId = taskIds.has(opts.feature)
+    ? (opts.feature as import('./ai-providers').AiTaskId)
+    : undefined;
+
   if (!opts.env.DB) {
-    return generateAiText(opts.env as any, opts.messages);
+    return generateAiText(opts.env as any, opts.messages, undefined, taskId);
   }
 
   const encKey = resolveOrgEncryptionKey(opts.env.PII_ENCRYPTION_KEY, opts.orgId);
@@ -465,6 +473,7 @@ export async function generateOrgAiText(opts: {
     opts.env as any,
     opts.messages,
     Object.keys(overrides).length ? overrides : undefined,
+    taskId,
   );
 
   if (opts.skipCreditCharge) return result;

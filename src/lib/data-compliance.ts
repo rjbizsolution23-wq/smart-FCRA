@@ -36,6 +36,8 @@ export const DATA_CATALOG: DataCollection[] = [
   { table: 'portal_uploads', store: 'd1', orgScoped: true, pii: true, purpose: 'ID/SSN/evidence vault metadata + R2 key', retention: 'Case life; R2 deleted on purge', backup: 'both' },
   { table: 'education_progress', store: 'd1', orgScoped: true, pii: false, purpose: 'Consumer education lessons', retention: 'Case life', backup: 'both' },
   { table: 'tutor_memory', store: 'd1', orgScoped: true, pii: true, purpose: 'AI tutor notes and goals', retention: 'Case life', backup: 'both' },
+  { table: 'client_memory_chunks', store: 'd1', orgScoped: true, pii: true, purpose: 'Semantic learned intelligence — goals, facts, preferences per client', retention: 'Case life', backup: 'both' },
+  { table: 'org_ai_task_models', store: 'd1', orgScoped: true, pii: false, purpose: 'Org overrides for task-specific AI model routing', retention: 'Life of tenant', backup: 'both' },
   { table: 'fundability_snapshots', store: 'd1', orgScoped: true, pii: true, purpose: 'Funding readiness scores', retention: 'Case life', backup: 'both' },
   { table: 'underwriting_snapshots', store: 'd1', orgScoped: true, pii: true, purpose: 'Income/debt/DTI underwriting', retention: 'Case life / 7 years credit', backup: 'both' },
   { table: 'tradeline_orders', store: 'd1', orgScoped: true, pii: true, purpose: 'Authorized-user tradeline checkout', retention: '7 years billing', backup: 'both' },

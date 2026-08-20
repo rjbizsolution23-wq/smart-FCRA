@@ -91,6 +91,16 @@ import { importBureauReportsBatch } from './lib/bureau-import';
 import { loadClientJourney, checkInJourney, generateAndDispatchDailyMotivation, dispatchDailyMotivationBatch } from './lib/portal-journey';
 import { loadTutorCompanion, tutorChatSystemBlock, buildTutorFallbackReply } from './lib/portal-tutor';
 import {
+  retrieveClientMemory,
+  buildLearnedMemoryContext,
+  recordTutorTurnMemory,
+  getLearnedIntelligenceSummary,
+  syncEducationMemory,
+} from './lib/client-learned-intelligence';
+import { describeRealAiStack, listAiTasks } from './data/ai-model-registry';
+import { kaggleIntegrationGuide, KAGGLE_CREDIT_DATASETS } from './data/kaggle-credit-datasets';
+import { listConfiguredProviders } from './lib/ai-providers';
+import {
   parsePersonNameFromReport,
   parseAddressFromReport,
   extractSsnLast4,
@@ -5164,6 +5174,7 @@ app.get('/api/client-portal/tutor', authMiddleware, async (c) => {
   if (!client) return c.json({ error: 'Client not found' }, 404);
   try {
     const companion = await loadTutorCompanion(c.env, client);
+    const learned = await getLearnedIntelligenceSummary(c.env, user.org_id, client.id).catch(() => null);
     return c.json({
       mentor: MENTORS.find(m => m.id === 'personal-finance-tutor'),
       memory: companion.memory,
@@ -5173,6 +5184,7 @@ app.get('/api/client-portal/tutor', authMiddleware, async (c) => {
       focusGoal: companion.input.focusGoal,
       financialSummary: companion.input.financialSummary || null,
       educationTotal: companion.input.educationTotal,
+      learnedIntelligence: learned,
       client: {
         id: client.id,
         first_name: client.first_name,
@@ -5231,6 +5243,9 @@ app.post('/api/client-portal/tutor/quiz', authMiddleware, async (c) => {
   const q = lesson.quiz[idx];
   if (!q) return c.json({ error: 'Question not found' }, 404);
   const correct = choice === q.answer;
+  if (correct) {
+    syncEducationMemory(c.env, user.org_id, client.id, lesson.title, 1, 1).catch(() => {});
+  }
   return c.json({
     correct,
     explanation: correct
@@ -5251,12 +5266,16 @@ app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
   const companion = await loadTutorCompanion(c.env, client);
   const { growth, input, memory } = companion;
 
+  const memoryChunks = await retrieveClientMemory(c.env, user.org_id, client.id, message).catch(() => []);
+  const learnedBlock = buildLearnedMemoryContext(memoryChunks);
+
   const { mentor, knowledgeBlock } = buildMentorContext('personal-finance-tutor', message);
   const growthBlock = tutorChatSystemBlock(input, growth, memory?.summary, memory?.goals_json);
   const context = [
     `Client: ${client.first_name} ${client.last_name}`,
     `Scores EQ/EX/TU: ${client.eq_score || '—'} / ${client.ex_score || '—'} / ${client.tu_score || '—'}`,
     input.financialSummary ? `Financial documents on file:\n${input.financialSummary}` : 'No bank/paystub upload yet.',
+    learnedBlock,
   ].filter(Boolean).join('\n');
 
   let reply = '';
@@ -5328,6 +5347,17 @@ app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
     ).bind(generateId(), user.org_id, client.id, user.id, `You: ${message}\n\nAlex: ${reply}`).run();
   }
 
+  recordTutorTurnMemory(c.env, {
+    orgId: user.org_id,
+    clientId: client.id,
+    userMessage: message,
+    assistantReply: reply,
+    growthLevel: growth.level,
+    rank: growth.rank,
+  }).catch(() => {});
+
+  const learned = await getLearnedIntelligenceSummary(c.env, user.org_id, client.id).catch(() => null);
+
   // Recompute growth after session bump for response
   const refreshed = await loadTutorCompanion(c.env, client).catch(() => companion);
 
@@ -5338,6 +5368,40 @@ app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
     mentor: mentor.id,
     growth: refreshed.growth,
     leveledUp: refreshed.growth.level > growth.level,
+    learnedIntelligence: learned,
+    memoryChunksUsed: memoryChunks.length,
+  });
+});
+
+// Real AI stack — model registry, providers, Kaggle offline training path
+app.get('/api/ai/stack', authMiddleware, async (c) => {
+  const providers = listConfiguredProviders(c.env);
+  const configured = {
+    workersAi: !!c.env.AI,
+    huggingface: !!c.env.HUGGINGFACE_TOKEN,
+    groq: !!c.env.GROQ_API_KEY,
+    gemini: !!(c.env.GEMINI_API_KEY || c.env.GOOGLE_API_KEY),
+  };
+  return c.json({
+    realAi: describeRealAiStack(configured),
+    tasks: listAiTasks().map((t) => ({
+      id: t.id,
+      label: t.label,
+      description: t.description,
+      requiresAiConsent: !!t.requiresAiConsent,
+      defaultModels: t.models.slice(0, 3).map((m) => ({ provider: m.provider, model: m.model, label: m.label })),
+    })),
+    providers,
+    kaggle: {
+      datasets: KAGGLE_CREDIT_DATASETS,
+      integrationGuide: kaggleIntegrationGuide(),
+    },
+    storage: {
+      memory: 'Cloudflare D1 — client_memory_chunks (semantic persistent memory per client)',
+      documents: 'Cloudflare R2 — encrypted vault binaries',
+      embeddings: 'Workers AI @cf/baai/bge-base-en-v1.5 — stored as embedding_json in D1',
+      protection: 'AES-256-GCM PII encryption · org-scoped tenancy · retention in data inventory',
+    },
   });
 });
 

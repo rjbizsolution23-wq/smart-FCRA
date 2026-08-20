@@ -2,7 +2,9 @@
  * Multi-provider AI — FREE MODELS ONLY.
  * Cascade: NVIDIA NIM → Groq → OpenRouter :free → Gemini free → Together free-tier →
  * Cloudflare Workers AI → Hugging Face. Paid OpenAI is never used when FREE_AI_ONLY=true.
+ * Task-specific models (tutor, documents, recommendations) route via ai-model-registry first.
  */
+import { getAiTask, type AiTaskId } from '../data/ai-model-registry';
 
 export type AiEnv = {
   AI?: any;
@@ -110,12 +112,14 @@ async function chatGemini(apiKey: string, messages: ChatMessage[]): Promise<stri
   return text;
 }
 
-async function chatWorkersAi(ai: any, messages: ChatMessage[]): Promise<string> {
-  const models = [
-    '@cf/meta/llama-3.1-8b-instruct',
-    '@cf/meta/llama-3.2-3b-instruct',
-    '@cf/qwen/qwen1.5-7b-chat-awq',
-  ];
+async function chatWorkersAi(ai: any, messages: ChatMessage[], preferredModels?: string[]): Promise<string> {
+  const models = preferredModels?.length
+    ? preferredModels
+    : [
+      '@cf/meta/llama-3.1-8b-instruct',
+      '@cf/meta/llama-3.2-3b-instruct',
+      '@cf/qwen/qwen1.5-7b-chat-awq',
+    ];
   let lastErr: any;
   for (const model of models) {
     try {
@@ -129,32 +133,40 @@ async function chatWorkersAi(ai: any, messages: ChatMessage[]): Promise<string> 
   throw lastErr || new Error('Workers AI failed');
 }
 
-async function chatHuggingFace(token: string, messages: ChatMessage[]): Promise<string> {
-  const models = [
-    'meta-llama/Meta-Llama-3.1-8B-Instruct',
-    'google/gemma-2-2b-it',
-    'mistralai/Mistral-7B-Instruct-v0.3',
-  ];
+async function chatHuggingFaceModel(token: string, model: string, messages: ChatMessage[]): Promise<string> {
   const prompt = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n') + '\nASSISTANT:';
+  const res = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      inputs: prompt,
+      parameters: { max_new_tokens: 1024, return_full_text: false },
+      options: { wait_for_model: true },
+    }),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 160)}`);
+  const data = await res.json() as any;
+  const text = Array.isArray(data) ? (data[0]?.generated_text || '') : (data.generated_text || data[0]?.generated_text || '');
+  if (!text) throw new Error('Empty Hugging Face response');
+  return String(text).replace(prompt, '').trim() || String(text);
+}
+
+async function chatHuggingFace(token: string, messages: ChatMessage[], preferredModels?: string[]): Promise<string> {
+  const models = preferredModels?.length
+    ? preferredModels
+    : [
+      'meta-llama/Meta-Llama-3.1-8B-Instruct',
+      'google/gemma-2-2b-it',
+      'mistralai/Mistral-7B-Instruct-v0.3',
+    ];
   let lastErr: any;
   for (const model of models) {
     try {
-      const res = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          inputs: prompt,
-          parameters: { max_new_tokens: 1024, return_full_text: false },
-          options: { wait_for_model: true },
-        }),
-      });
-      if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 160)}`);
-      const data = await res.json() as any;
-      const text = Array.isArray(data) ? (data[0]?.generated_text || '') : (data.generated_text || data[0]?.generated_text || '');
-      if (text) return String(text).replace(prompt, '').trim() || String(text);
+      const text = await chatHuggingFaceModel(token, model, messages);
+      if (text) return text;
     } catch (e) {
       lastErr = e;
     }
@@ -162,15 +174,62 @@ async function chatHuggingFace(token: string, messages: ChatMessage[]): Promise<
   throw lastErr || new Error('Hugging Face inference failed');
 }
 
+/** Try task-specific Workers AI / Hugging Face models before the general cascade */
+export async function generateTaskAiText(
+  env: AiEnv,
+  taskId: AiTaskId,
+  messages: ChatMessage[],
+  orgOverrides?: Partial<AiEnv>,
+): Promise<AiResult | null> {
+  const merged = orgOverrides ? { ...env, ...orgOverrides } : env;
+  const task = getAiTask(taskId);
+  if (!task) return null;
+
+  const workersModels = task.models
+    .filter((m) => m.provider === 'cloudflare-workers-ai')
+    .sort((a, b) => a.priority - b.priority)
+    .map((m) => m.model);
+  const hfModels = task.models
+    .filter((m) => m.provider === 'huggingface')
+    .sort((a, b) => a.priority - b.priority)
+    .map((m) => m.model);
+
+  if (merged.AI && workersModels.length) {
+    try {
+      const text = await chatWorkersAi(merged.AI, messages, workersModels);
+      return { text, provider: 'cloudflare-workers-ai', model: workersModels[0] };
+    } catch { /* fall through */ }
+  }
+
+  if (merged.HUGGINGFACE_TOKEN && hfModels.length) {
+    try {
+      const text = await chatHuggingFace(merged.HUGGINGFACE_TOKEN, messages, hfModels);
+      return { text, provider: 'huggingface', model: hfModels[0] };
+    } catch { /* fall through */ }
+  }
+
+  return null;
+}
+
 /** Free-only cascade with NVIDIA first. Optional org BYOK keys override platform env. */
 export async function generateAiText(
   env: AiEnv,
   messages: ChatMessage[],
   orgOverrides?: Partial<AiEnv>,
+  taskId?: AiTaskId,
 ): Promise<AiResult> {
   const merged = orgOverrides ? { ...env, ...orgOverrides } : env;
   const errors: string[] = [];
   const onlyFree = freeOnly(merged);
+
+  if (taskId) {
+    try {
+      const taskResult = await generateTaskAiText(merged, taskId, messages);
+      if (taskResult?.text) return taskResult;
+    } catch (e: any) {
+      errors.push(`task/${taskId}: ${e.message}`);
+    }
+  }
 
   if (merged.NVIDIA_API_KEY) {
     for (const model of NVIDIA_FREE_MODELS) {

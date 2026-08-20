@@ -15,6 +15,8 @@ import {
 import { validateAssertions, type FactualAssertion } from '../engine/hallucination-firewall';
 import { tallyResultTaxonomy } from '../engine/credit-events';
 import { computeNextBestAction, CASE_STAGE_LABELS, type NbaContext } from '../engine/next-best-action';
+import { getLearnedIntelligenceSummary } from './client-learned-intelligence';
+import { describeRealAiStack } from '../data/ai-model-registry';
 import { aggregateUtilization } from '../engine/utilization';
 import { evaluateBillableEvent, isCoveredCreditRepairService, BILLING_POLICY_VERSION } from './billing-compliance';
 import { findingHasForbiddenLabel } from '../engine/metro2-findings';
@@ -249,6 +251,13 @@ export function registerClientIntelligenceRoutes(
     const hour = new Date().getUTCHours();
     const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
+    const learned = await getLearnedIntelligenceSummary(c.env, user.org_id, client.id).catch(() => ({
+      chunkCount: 0,
+      byCategory: {},
+      latestAt: null,
+      persistent: false,
+    }));
+
     return c.json({
       client: {
         id: client.id,
@@ -292,6 +301,13 @@ export function registerClientIntelligenceRoutes(
         isCurrent: r.is_current,
       })),
       noGuaranteeNotice: 'Smart FCRA does not guarantee deletions, score increases, lending approval, homeownership, or funding.',
+      learnedIntelligence: learned,
+      realAi: describeRealAiStack({
+        workersAi: !!c.env.AI,
+        huggingface: !!c.env.HUGGINGFACE_TOKEN,
+        groq: !!c.env.GROQ_API_KEY,
+        gemini: !!(c.env.GEMINI_API_KEY || c.env.GOOGLE_API_KEY),
+      }).headline,
     });
   });
 
