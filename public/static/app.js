@@ -424,6 +424,50 @@
     setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 4000);
   }
 
+  /** When Lob send returns 402 MAIL_POSTAGE_REQUIRED, offer Stripe checkout. */
+  async function offerMailPostageCheckout(err, opts = {}) {
+    const d = err?.data || {};
+    if (err?.code !== 'MAIL_POSTAGE_REQUIRED' && d.code !== 'MAIL_POSTAGE_REQUIRED') return false;
+    const cost = ((d.costCents || 0) / 100).toFixed(2);
+    const orgBal = ((d.orgBalanceCents || 0) / 100).toFixed(2);
+    const clientBal = ((d.clientBalanceCents || 0) / 100).toFixed(2);
+    const choice = await brandedPrompt(
+      'Postage payment',
+      d.canPayClient ? 'letter' : 'org',
+      {
+        title: 'Postage required',
+        description: `Need $${cost} for ${d.mailClass || 'FIRST_CLASS'}. Firm wallet $${orgBal} · Client wallet $${clientBal}. Type: org (buy firm pack), pack (client pack), or letter (pay this one letter).`,
+        submitLabel: 'Continue to card checkout',
+      },
+    );
+    if (!choice) return true;
+    const mode = String(choice).trim().toLowerCase();
+    try {
+      let r;
+      if (mode === 'org' || mode === 'firm') {
+        r = await api('/mail-postage/org/credits/purchase', { method: 'POST', body: JSON.stringify({ packId: 'mail_starter' }) });
+      } else if (mode === 'pack' || mode === 'credits') {
+        r = await api('/mail-postage/client/credits/purchase', {
+          method: 'POST',
+          body: JSON.stringify({ packId: 'client_mail_5', clientId: opts.clientId }),
+        });
+      } else {
+        r = await api('/mail-postage/client/pay-letter', {
+          method: 'POST',
+          body: JSON.stringify({
+            clientId: opts.clientId,
+            mailClass: opts.mailClass || d.mailClass,
+            documentId: opts.documentId,
+            disputeId: opts.disputeId,
+          }),
+        });
+      }
+      if (r.url) { window.location.href = r.url; return true; }
+      toast(r.error || 'Checkout unavailable', 'error');
+    } catch (e) { toast(e.message, 'error'); }
+    return true;
+  }
+
   function $(s) { return document.querySelector(s); }
   window.$ = $; // Expose for inline onclick handlers
 
@@ -6046,7 +6090,7 @@ Status: Discharged`;
     el.innerHTML = `<div class="fade-in">
       <button onclick="window._nav('documents')" class="text-gray-400 hover:text-white text-sm mb-4 inline-flex items-center gap-1.5 transition"><i class="fas fa-arrow-left text-xs"></i>Back</button>
       <div class="flex items-center justify-between mb-4"><h1 class="text-xl font-bold text-white">${dc.title}</h1>
-        <div class="flex gap-2"><button id="ai-rewrite-btn" onclick="window._aiRewrite('${dc.id}')" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-robot mr-1"></i>AI Rewrite</button><button onclick="window._copyDoc()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-copy mr-1"></i>Copy</button><button onclick="window._emailDoc()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-envelope mr-1"></i>Email</button><button onclick="window._mailDoc('${dc.id}','${encodeURIComponent(client.first_name||'')}','${encodeURIComponent(client.last_name||'')}','${encodeURIComponent(client.address_line1||'')}','${encodeURIComponent(client.city||'')}','${encodeURIComponent(client.state||'')}','${encodeURIComponent(client.zip||'')}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-paper-plane mr-1"></i>Mail</button><button onclick="window._printDoc()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-print mr-1"></i>Print</button></div>
+        <div class="flex gap-2"><button id="ai-rewrite-btn" onclick="window._aiRewrite('${dc.id}')" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-robot mr-1"></i>AI Rewrite</button><button onclick="window._copyDoc()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-copy mr-1"></i>Copy</button><button onclick="window._emailDoc()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-envelope mr-1"></i>Email</button><button onclick="window._mailDoc('${dc.id}','${encodeURIComponent(client.first_name||'')}','${encodeURIComponent(client.last_name||'')}','${encodeURIComponent(client.address_line1||'')}','${encodeURIComponent(client.city||'')}','${encodeURIComponent(client.state||'')}','${encodeURIComponent(client.zip||'')}','${encodeURIComponent(dc.client_id||'')}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-paper-plane mr-1"></i>Mail</button><button onclick="window._printDoc()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-print mr-1"></i>Print</button></div>
       </div>
       <div class="glass rounded-xl p-6"><pre id="doc-content" class="whitespace-pre-wrap text-sm text-gray-200 font-mono leading-relaxed">${dc.content}</pre></div>
     </div>`;
@@ -6084,25 +6128,30 @@ Status: Discharged`;
       btn.innerHTML = originalHtml;
     }
   };
-  window._mailDoc = async function(id, firstName, lastName, address, city, state, zip) {
+  window._mailDoc = async function(id, firstName, lastName, address, city, state, zip, clientIdEnc) {
     const recipientName = `${decodeURIComponent(firstName || '')} ${decodeURIComponent(lastName || '')}`.trim();
     const recipientAddress = decodeURIComponent(address || '');
     const recipientCity = decodeURIComponent(city || '');
     const recipientState = decodeURIComponent(state || '');
     const recipientZip = decodeURIComponent(zip || '');
+    const clientId = decodeURIComponent(clientIdEnc || '');
     if (!recipientAddress || !recipientCity || !recipientState || !recipientZip) {
       toast('Client address incomplete — please fill address in client profile first','error');
       return;
     }
     const mailClass = (await brandedPrompt('USPS mail class', 'FIRST_CLASS', { title: 'Mail document', description: 'STANDARD, FIRST_CLASS, or CERTIFIED', submitLabel: 'Continue' }) || 'FIRST_CLASS').trim().toUpperCase();
-    if (!confirm(`Mail document?\n\nTo: ${recipientName}\n${recipientAddress}\n${recipientCity}, ${recipientState} ${recipientZip}\n\nClass: ${mailClass}\n\nSent via Lob with FCRA §611 clock.`)) return;
+    if (!confirm(`Mail document?\n\nTo: ${recipientName}\n${recipientAddress}\n${recipientCity}, ${recipientState} ${recipientZip}\n\nClass: ${mailClass}\n\nPostage is deducted from your firm or client postage wallet. Sent via Lob with FCRA §611 clock.`)) return;
     try {
       const data = await api(`/documents/${id}/send`, {
         method: 'POST',
         body: JSON.stringify({ recipientName, recipientAddress, recipientCity, recipientState, recipientZip, mailClass }),
       });
-      toast(`Mailed (${data.mailClass || mailClass})! Mailing ID: ${data.mailingId}`, 'success');
-    } catch (err) { toast(err.message, 'error'); }
+      const paid = data.postage ? ` · postage $${((data.postage.costCents || 0) / 100).toFixed(2)} (${data.postage.payer})` : '';
+      toast(`Mailed (${data.mailClass || mailClass})! Mailing ID: ${data.mailingId}${paid}`, 'success');
+    } catch (err) {
+      if (await offerMailPostageCheckout(err, { clientId, mailClass, documentId: id })) return;
+      toast(err.message, 'error');
+    }
   };
 
   // ═══════════════════════════════════════════════════════════════
@@ -6801,8 +6850,25 @@ Status: Discharged`;
                 <option value="CERTIFIED" ${settings.default_mail_class === 'CERTIFIED' ? 'selected' : ''}>Certified (tracking)</option>
               </select>
             </div>
-            <div class="md:col-span-2 flex items-end"><button type="submit" class="bg-violet-700 hover:bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Save mail default</button></div>
+            <div><label class="block text-xs text-gray-400 mb-1">Who pays postage</label>
+              <select name="mailPostagePayer" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white">
+                <option value="org_then_client" ${(settings.mail_postage_payer || 'org_then_client') === 'org_then_client' ? 'selected' : ''}>Firm wallet first, then client</option>
+                <option value="client_then_org" ${settings.mail_postage_payer === 'client_then_org' ? 'selected' : ''}>Client wallet first, then firm</option>
+                <option value="org" ${settings.mail_postage_payer === 'org' ? 'selected' : ''}>Firm only (your card / credits)</option>
+                <option value="client" ${settings.mail_postage_payer === 'client' ? 'selected' : ''}>Client only (they buy credits)</option>
+              </select>
+            </div>
+            <div class="flex items-end"><button type="submit" class="bg-violet-700 hover:bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Save mail defaults</button></div>
           </form>
+          <div id="mail-postage-box" class="bg-gray-950/50 border border-violet-900/40 rounded-xl p-4 mb-4 text-xs text-gray-400">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <h3 class="text-xs font-bold text-white uppercase tracking-wider">Postage wallet</h3>
+              <button type="button" id="btn-mail-portal" class="text-[10px] text-sky-300 hover:text-sky-200 font-semibold">Manage card (Stripe portal)</button>
+            </div>
+            <div id="mail-postage-balance">Loading postage balance…</div>
+            <div id="mail-postage-packs" class="flex flex-wrap gap-2 mt-3"></div>
+            <p class="text-[10px] text-gray-600 mt-2">Buy postage with your card. First Class $1.49 · Standard $0.99 · Certified $8.99. Clients can also buy packs or pay per letter when enabled.</p>
+          </div>
           <div id="c2m-addresses-box" class="text-xs text-gray-400 mb-4">Loading Lob mail status…</div>
           <div class="grid md:grid-cols-2 gap-4">
             <div class="bg-gray-950/40 border border-gray-800 rounded-xl p-4">
@@ -7239,10 +7305,46 @@ Status: Discharged`;
         e.preventDefault();
         const fd = new FormData(e.target);
         try {
-          await api('/settings/org', { method: 'PUT', body: JSON.stringify({ defaultMailClass: fd.get('defaultMailClass') }) });
-          toast('Default mail class saved', 'success');
+          await api('/settings/org', {
+            method: 'PUT',
+            body: JSON.stringify({
+              defaultMailClass: fd.get('defaultMailClass'),
+              mailPostagePayer: fd.get('mailPostagePayer'),
+            }),
+          });
+          toast('Mail defaults saved', 'success');
         } catch (err) { toast(err.message, 'error'); }
       };
+      const mailBal = $('#mail-postage-balance');
+      const mailPacks = $('#mail-postage-packs');
+      if (mailBal) {
+        api('/mail-postage/org').then((d) => {
+          const bal = ((d.credits?.balanceCents || 0) / 100).toFixed(2);
+          const mode = d.settings?.mailPostagePayer || 'org_then_client';
+          mailBal.innerHTML = `<strong class="text-white">$${bal}</strong> postage wallet · payer mode <span class="text-violet-300">${escapeHtml(mode)}</span>${d.settings?.postageComped ? ' · <span class="text-emerald-400">comped</span>' : ''}`;
+          if (mailPacks) {
+            mailPacks.innerHTML = (d.packs || []).map((p) =>
+              `<button type="button" class="mail-pack-btn bg-violet-900/60 hover:bg-violet-800 text-violet-200 px-3 py-1.5 rounded-lg text-[10px] font-bold border border-violet-800" data-pack="${escapeHtml(p.id)}">Buy ${escapeHtml(p.label)}</button>`
+            ).join('');
+            mailPacks.querySelectorAll('.mail-pack-btn').forEach((btn) => {
+              btn.onclick = async () => {
+                try {
+                  const r = await api('/mail-postage/org/credits/purchase', { method: 'POST', body: JSON.stringify({ packId: btn.dataset.pack }) });
+                  if (r.url) window.location.href = r.url;
+                  else toast(r.error || 'Checkout unavailable', 'error');
+                } catch (err) { toast(err.message, 'error'); }
+              };
+            });
+          }
+        }).catch(() => { mailBal.textContent = 'Postage wallet unavailable (apply migration 0038).'; });
+      }
+      $('#btn-mail-portal')?.addEventListener('click', async () => {
+        try {
+          const r = await api('/billing/portal', { method: 'POST', body: '{}' });
+          if (r.url) window.location.href = r.url;
+          else toast(r.error || 'Subscribe first to manage a card', 'warning');
+        } catch (err) { toast(err.message, 'error'); }
+      });
       const c2mAddrBox = $('#c2m-addresses-box');
       if (c2mAddrBox) {
         api('/integrations/lob/status').then((d) => {
@@ -11711,7 +11813,10 @@ async function pgAdminConsole(el) {
         const r = await api('/client-portal/disputes/' + id + '/send', { method: 'POST', body: '{}' });
         toast('Mailed · clock ' + (r.investigationClock && r.investigationClock.statutoryTarget), 'success');
         pgClientDisputes(el);
-      } catch (err) { toast(err.message, 'error'); }
+      } catch (err) {
+        if (await offerMailPostageCheckout(err, { disputeId: id, mailClass: 'FIRST_CLASS' })) return;
+        toast(err.message, 'error');
+      }
     };
     const createBtn = document.getElementById('btn-create-disp');
     if (createBtn) createBtn.onclick = async () => {
@@ -11766,11 +11871,22 @@ async function pgAdminConsole(el) {
 
   async function pgClientBilling(el) {
     const data = await api('/client-portal/billing-center' + portalClientQs());
+    const mp = data.mailPostage || {};
+    const bal = ((mp.credits?.balanceCents || 0) / 100).toFixed(2);
     el.innerHTML = `
       <div class="fade-in space-y-5 max-w-3xl">
         <h1 class="text-xl font-bold text-white font-display">Billing</h1>
         <p class="text-sm text-gray-400">${escapeHtml(data.croaNotice || data.notice || '')}</p>
         ${(data.currentServices||[]).map((s) => `<div class="glass rounded-xl p-4 text-sm text-white">${escapeHtml(s.type)} · ${escapeHtml(s.status)}</div>`).join('')}
+        <div class="glass rounded-xl p-4 border border-sky-900/40">
+          <h2 class="text-sm font-bold text-white mb-1">Mail postage</h2>
+          <p class="text-xs text-gray-400 mb-2">${escapeHtml(mp.notice || 'Buy postage credits or pay per letter when you mail a dispute.')}</p>
+          <div class="text-sm text-white mb-3">Wallet: <strong>$${bal}</strong>${mp.canPurchase === false ? ' · firm pays postage' : ''}</div>
+          <div id="client-mail-packs" class="flex flex-wrap gap-2 mb-2">
+            ${(mp.packs || []).map((p) => `<button type="button" class="client-mail-pack bg-sky-900/60 hover:bg-sky-800 text-sky-100 px-3 py-1.5 rounded-lg text-[10px] font-bold border border-sky-800" data-pack="${escapeHtml(p.id)}" ${mp.canPurchase === false ? 'disabled' : ''}>Buy ${escapeHtml(p.label)}</button>`).join('') || '<span class="text-xs text-gray-500">Packs unavailable</span>'}
+          </div>
+          <button type="button" id="btn-pay-one-letter" class="bg-sky-700 hover:bg-sky-600 text-white text-xs font-bold px-3 py-2 rounded-lg" ${mp.canPurchase === false ? 'disabled' : ''}>Pay for one First Class letter ($${(mp.ratesCents?.FIRST_CLASS || 149) / 100})</button>
+        </div>
         <div class="glass rounded-xl p-4">
           <h2 class="text-sm font-bold text-white mb-2">Completed services (required before covered charges)</h2>
           ${(data.completedServices||[]).map((s) => `<div class="text-xs text-gray-300 py-1">${escapeHtml(s.service_type)} · ${escapeHtml((s.performed_at||'').slice(0,16))} · ${escapeHtml(s.status)}</div>`).join('') || '<p class="text-xs text-gray-500">None recorded yet. Analysis unlock cannot be charged until a report is analyzed.</p>'}
@@ -11785,6 +11901,24 @@ async function pgAdminConsole(el) {
         </div>
         <button type="button" onclick="window._nav('client-cancel')" class="bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold px-3 py-2 rounded-lg">Cancel services</button>
       </div>`;
+    el.querySelectorAll('.client-mail-pack').forEach((btn) => {
+      btn.onclick = async () => {
+        if (portalStaffBlocked()) return;
+        try {
+          const r = await api('/mail-postage/client/credits/purchase', { method: 'POST', body: JSON.stringify({ packId: btn.dataset.pack }) });
+          if (r.url) window.location.href = r.url;
+          else toast(r.error || 'Checkout unavailable', 'error');
+        } catch (err) { toast(err.message, 'error'); }
+      };
+    });
+    $('#btn-pay-one-letter')?.addEventListener('click', async () => {
+      if (portalStaffBlocked()) return;
+      try {
+        const r = await api('/mail-postage/client/pay-letter', { method: 'POST', body: JSON.stringify({ mailClass: 'FIRST_CLASS' }) });
+        if (r.url) window.location.href = r.url;
+        else toast(r.error || 'Checkout unavailable', 'error');
+      } catch (err) { toast(err.message, 'error'); }
+    });
   }
 
   async function pgClientConsents(el) {

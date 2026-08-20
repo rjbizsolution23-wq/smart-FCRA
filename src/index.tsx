@@ -165,6 +165,8 @@ import { vaultOriginalFromBody } from './lib/report-vault';
 import { persistInvestigationClock, closeInvestigationClock, FCRA_611_OPERATIONAL_DAYS } from './lib/investigation-clocks';
 import { recordServiceCompleted, assertCoveredChargeAllowed, writeBillingLedger } from './lib/service-ledger';
 import { sendLetterViaLob, resolveMailClass, lobConfigured, lobPublicStatus, verifyUsAddress } from './lib/lob';
+import { chargeMailPostage } from './lib/mail-postage';
+import { registerMailPostageRoutes, fulfillMailPostageCheckout } from './lib/mail-postage-routes';
 import { registerSupportCrmRoutes, registerExternalIntegrationRoutes } from './lib/support-crm-routes';
 import { registerRoadmapRoutes, handleClientBillingWebhook } from './lib/roadmap-routes';
 import { registerComplianceOsRoutes } from './lib/compliance-os-routes';
@@ -7829,6 +7831,16 @@ app.post('/api/billing/webhook', async (c) => {
         } catch (e) { console.warn('[ai credit webhook]', e); }
         break;
       }
+      if (
+        sessionObj?.metadata?.type === 'mail_postage_pack'
+        || sessionObj?.metadata?.type === 'mail_postage_client_pack'
+        || sessionObj?.metadata?.type === 'mail_postage_letter'
+      ) {
+        try {
+          await fulfillMailPostageCheckout(c.env.DB, sessionObj);
+        } catch (e) { console.warn('[mail postage webhook]', e); }
+        break;
+      }
 
       const orgIdHint = session.client_reference_id || session.metadata?.orgId || null;
       const stripeCustomerId = session.customer as string;
@@ -8038,6 +8050,11 @@ app.put('/api/settings/org', authMiddleware, async (c) => {
   }
   if (body.defaultMailClass) {
     settings.default_mail_class = String(body.defaultMailClass).toUpperCase();
+  }
+  if (body.mailPostagePayer || body.mail_postage_payer) {
+    const mode = String(body.mailPostagePayer || body.mail_postage_payer).toLowerCase();
+    const allowed = ['org', 'client', 'org_then_client', 'client_then_org'];
+    if (allowed.includes(mode)) settings.mail_postage_payer = mode;
   }
   // Re-normalize after branding/advocate flags so flat keys stay in sync
   settings = mergeLetterheadIntoSettings(settings, settings.letterhead || {}, displayName);
@@ -9864,7 +9881,11 @@ app.get('/api/documents/:id/pdf', authMiddleware, async (c) => {
 app.post('/api/documents/:id/send', authMiddleware, async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
-  const { recipientName, recipientAddress, recipientCity, recipientState, recipientZip, mailClass: bodyMailClass } = await c.req.json();
+  const sendBody = await c.req.json().catch(() => ({}));
+  const {
+    recipientName, recipientAddress, recipientCity, recipientState, recipientZip,
+    mailClass: bodyMailClass, paidBy: preferredPayer,
+  } = sendBody;
 
   const doc = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
   if (!doc) return c.json({ error: 'Document not found' }, 404);
@@ -9875,6 +9896,33 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
   const orgRow = await c.env.DB.prepare('SELECT name, settings FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
   const orgSettings = typeof orgRow?.settings === 'string' ? JSON.parse(orgRow.settings || '{}') : (orgRow?.settings || {});
   const mailClass = resolveMailClass({ bodyMailClass, orgDefault: orgSettings.default_mail_class });
+
+  const postage = await chargeMailPostage({
+    db: c.env.DB,
+    orgId: user.org_id,
+    clientId: doc.client_id || null,
+    mailClass,
+    preferredPayer,
+    orgSettingsRaw: orgSettings,
+    actorUserId: user.id,
+    documentId: id,
+  });
+  if (!postage.ok) {
+    return c.json({
+      error: postage.error,
+      code: postage.code,
+      costCents: postage.costCents,
+      mailClass: postage.mailClass,
+      orgBalanceCents: postage.orgBalanceCents,
+      clientBalanceCents: postage.clientBalanceCents,
+      payerMode: postage.payerMode,
+      canPayOrg: postage.canPayOrg,
+      canPayClient: postage.canPayClient,
+      purchaseOrgPath: '/api/mail-postage/org/credits/purchase',
+      payLetterPath: '/api/mail-postage/client/pay-letter',
+    }, 402);
+  }
+
   const lh = orgSettings.letterhead || {};
   const from = {
     name: String(lh.attorneyName || lh.firmName || orgRow?.name || c.env.COMPANY_OWNER || 'Smart FCRA Operator'),
@@ -9979,6 +10027,12 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
     expectedDeliveryDate: mailing.expectedDeliveryDate,
     trackingNumber: mailing.trackingNumber || null,
     investigationClock: clock,
+    postage: {
+      payer: postage.payer,
+      costCents: postage.costCents,
+      orgBalanceCents: postage.orgBalanceCents,
+      clientBalanceCents: postage.clientBalanceCents,
+    },
     message: 'Document mailed via Lob. FCRA § 611 30-day investigation clock started (35-day operational due date includes mail transit).',
   });
 });
@@ -11526,6 +11580,7 @@ registerTenantRoutes(app, { authMiddleware, adminGateMiddleware });
 registerComplianceOsRoutes(app, { authMiddleware });
 registerIntegrationOsRoutes(app, { authMiddleware });
 registerPlatformExtensionRoutes(app, { authMiddleware });
+registerMailPostageRoutes(app, { authMiddleware });
 registerPlatformGuideRoutes(app, { authMiddleware });
 
 // ═══════════════════════════════════════════════════════════════
@@ -11876,7 +11931,7 @@ function getAppHtml(mode: 'login' | 'app' = 'app'): string {
   </script>
   <script src="/static/demo-experience.js?v=20260819-stripe-live"></script>
   <script src="/static/platform-guide.js?v=20260819-platform-guide"></script>
-  <script src="/static/app.js?v=20260821-lob-mail"></script>
+  <script src="/static/app.js?v=20260821-mail-postage"></script>
 </body>
 </html>`;
 }

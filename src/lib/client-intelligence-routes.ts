@@ -31,6 +31,13 @@ import {
 import { persistInvestigationClock, craAddressForRecipient } from './investigation-clocks';
 import { recordServiceCompleted } from './service-ledger';
 import { sendLetterViaLob, lobConfigured, resolveMailClass } from './lob';
+import {
+  chargeMailPostage,
+  getClientMailCredits,
+  parseOrgMailSettings,
+  MAIL_POSTAGE_RATES_CENTS,
+  CLIENT_MAIL_CREDIT_PACKS,
+} from './mail-postage';
 
 const CONSENT_CATALOG = [
   { type: 'ELECTRONIC_COMMUNICATIONS', version: '1.0', label: 'Electronic communications' },
@@ -708,6 +715,33 @@ export function registerClientIntelligenceRoutes(
     const orgRow = await c.env.DB.prepare('SELECT name, settings FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
     const orgSettings = typeof orgRow?.settings === 'string' ? JSON.parse(orgRow.settings || '{}') : (orgRow?.settings || {});
     const mailClass = resolveMailClass({ bodyMailClass: sendBody.mailClass, orgDefault: orgSettings.default_mail_class });
+
+    const postage = await chargeMailPostage({
+      db: c.env.DB,
+      orgId: user.org_id,
+      clientId: client.id,
+      mailClass,
+      preferredPayer: sendBody.paidBy || 'client',
+      orgSettingsRaw: orgSettings,
+      actorUserId: user.id,
+      disputeId: id,
+    });
+    if (!postage.ok) {
+      return c.json({
+        error: postage.error,
+        code: postage.code,
+        costCents: postage.costCents,
+        mailClass: postage.mailClass,
+        orgBalanceCents: postage.orgBalanceCents,
+        clientBalanceCents: postage.clientBalanceCents,
+        payerMode: postage.payerMode,
+        canPayOrg: postage.canPayOrg,
+        canPayClient: postage.canPayClient,
+        purchaseClientPath: '/api/mail-postage/client/credits/purchase',
+        payLetterPath: '/api/mail-postage/client/pay-letter',
+      }, 402);
+    }
+
     const cra = craAddressForRecipient(dispute.recipient || dispute.recipient_type);
     const reasons = qJson(dispute.dispute_basis_json, []);
     const letterBody = [
@@ -797,6 +831,12 @@ export function registerClientIntelligenceRoutes(
       documentId: docId,
       mailingId: mailing.mailingId,
       investigationClock: clock,
+      postage: {
+        payer: postage.payer,
+        costCents: postage.costCents,
+        orgBalanceCents: postage.orgBalanceCents,
+        clientBalanceCents: postage.clientBalanceCents,
+      },
       notice: 'FCRA § 611 30-day investigation clock started. The operational due date includes a 5-day mail-transit buffer. This mailing does not guarantee deletion.',
     });
   });
@@ -955,11 +995,26 @@ export function registerClientIntelligenceRoutes(
       `SELECT id, deadline_type, calculated_target_date, operational_target_date, status, mailing_date, actual_response_date FROM investigation_clocks WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 20`,
       client.id, user.org_id,
     );
+    const org = await softFirst(c.env.DB, `SELECT settings FROM organizations WHERE id = ?`, user.org_id);
+    let mailPostage: any = null;
+    try {
+      const settings = parseOrgMailSettings((org as any)?.settings);
+      const credits = await getClientMailCredits(c.env.DB, user.org_id, client.id);
+      mailPostage = {
+        credits,
+        ratesCents: MAIL_POSTAGE_RATES_CENTS,
+        packs: CLIENT_MAIL_CREDIT_PACKS,
+        payerMode: settings.mailPostagePayer,
+        canPurchase: settings.mailPostagePayer !== 'org',
+        notice: 'Postage is separate from credit-repair service fees. Buying postage funds USPS/Lob mailing only.',
+      };
+    } catch { /* migration 0038 */ }
     return c.json({
       currentServices: [{ type: 'credit_intelligence', status: client.payment_status || 'active' }],
       completedServices: services,
       ledger,
       investigationClocks: clocks,
+      mailPostage,
       croaNotice: 'Covered credit-repair charges are blocked until a completion record exists. Platform software subscriptions are billed separately.',
       notice: 'You are billed only after covered credit-repair work is recorded as performed. Invoices from Stripe appear when a charge is allowed and collected.',
       cancelPage: 'client-cancel',
