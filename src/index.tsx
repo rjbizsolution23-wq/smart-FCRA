@@ -172,14 +172,16 @@ import { registerIntegrationOsRoutes } from './lib/integration-os-routes';
 import { registerPlatformExtensionRoutes } from './lib/platform-extension-routes';
 import { registerPlatformGuideRoutes } from './lib/platform-guide-routes';
 import { loadOrgGhlEnv } from './lib/integration-hub';
-import { encryptionReady, resolveOrgEncryptionKey, generateOrgAiText, addOrgAiCredits, getOrgAiCredits } from './lib/platform-extensions';
+import { encryptionReady, resolveOrgEncryptionKey, generateOrgAiText, addOrgAiCredits, getOrgAiCredits, setOrgAiFreeOverride } from './lib/platform-extensions';
 import { startWorkflowRun } from './lib/crm-workflow-engine';
 import { emitOrgWebhook } from './lib/outbound-webhooks';
 import { buildTradelineMatrix } from './lib/bureau-matrix';
 import { buildEscalationRecommendation, persistEscalation } from './lib/escalation-engine';
 import { queuePpdCharge } from './lib/ppd-billing';
-import { resolveTenantByHost } from './lib/tenant-resolver';
+import { resolveTenantByHost, validateSubdomain } from './lib/tenant-resolver';
 import { registerTenantRoutes } from './lib/tenant-provision-routes';
+import { suggestSubdomainFromName } from './lib/tenant-provision';
+import { buildBlueprintSettings, BLUEPRINT_VERSION } from './lib/tenant-blueprint';
 import {
   ensureStripeCatalog,
   ensureStripeCatalogCached,
@@ -2517,7 +2519,7 @@ app.get('/api/mfsn/operator-access', authMiddleware, async (c) => {
 // AUTH ROUTES
 // ═══════════════════════════════════════════════════════════════
 app.post('/api/auth/register', async (c) => {
-  const { name, email, password, orgName } = await c.req.json();
+  const { name, email, password, orgName, subdomain: requestedSubdomain } = await c.req.json();
   if (!name || !email || !password || !orgName) return c.json({ error: 'All fields required' }, 400);
   if (String(password).length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400);
 
@@ -2534,6 +2536,26 @@ app.post('/api/auth/register', async (c) => {
     return c.json({ error: 'Internal error (id gen)' }, 500);
   }
 
+  let subdomain = String(requestedSubdomain || suggestSubdomainFromName(orgName) || '').trim().toLowerCase();
+  let subCheck = validateSubdomain(subdomain);
+  if (!subCheck.ok || !subCheck.normalized) {
+    subdomain = `firm${orgId.replace(/[^a-z0-9]/gi, '').slice(-8).toLowerCase()}`;
+    subCheck = validateSubdomain(subdomain);
+  }
+  if (!subCheck.ok || !subCheck.normalized) {
+    return c.json({ error: subCheck.error || 'Invalid subdomain' }, 400);
+  }
+  subdomain = subCheck.normalized;
+  const taken = await c.env.DB.prepare(
+    'SELECT id FROM organizations WHERE lower(subdomain) = ? LIMIT 1',
+  ).bind(subdomain).first();
+  if (taken?.id) {
+    subdomain = `${subdomain}${orgId.slice(-4)}`.replace(/[^a-z0-9]/g, '').slice(0, 40);
+    const retry = validateSubdomain(subdomain);
+    if (!retry.ok || !retry.normalized) return c.json({ error: 'Subdomain unavailable — try another business name' }, 409);
+    subdomain = retry.normalized;
+  }
+
   try {
     passwordHash = await hashPassword(password);
   } catch (e: any) {
@@ -2541,22 +2563,46 @@ app.post('/api/auth/register', async (c) => {
     return c.json({ error: e.message || 'Internal error (hashing)' }, 500);
   }
 
+  const settings = buildBlueprintSettings({
+    businessName: orgName,
+    ownerName: name,
+    ownerEmail: email,
+    subdomain,
+    plan: 'professional',
+  });
+
   try {
-    const requireVerify = true;
     await c.env.DB.batch([
-      c.env.DB.prepare('INSERT INTO organizations (id, name, slug, plan) VALUES (?, ?, ?, ?)').bind(orgId, orgName, slug, 'free'),
-      c.env.DB.prepare('INSERT INTO users (id, org_id, email, name, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(
-        userId, orgId, email, name, passwordHash, 'admin', 0
+      c.env.DB.prepare(
+        `INSERT INTO organizations
+         (id, name, slug, subdomain, legal_name, plan, settings, blueprint_version, attribution_mode, timezone, provisioned_at, max_users, max_clients, max_reports_per_month)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'powered_by', 'America/New_York', datetime('now'), 10, 100, 100)`,
+      ).bind(
+        orgId,
+        orgName,
+        slug,
+        subdomain,
+        orgName,
+        'free',
+        JSON.stringify(settings),
+        BLUEPRINT_VERSION,
       ),
+      c.env.DB.prepare(
+        'INSERT INTO users (id, org_id, email, name, password_hash, role, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ).bind(userId, orgId, email, name, passwordHash, 'admin', 0),
     ]);
   } catch (e: any) {
     console.error('[REGISTER] batch insert failed:', e.message, e.stack);
-    if (e.message?.includes('UNIQUE')) return c.json({ error: 'Organization name already taken' }, 409);
+    if (e.message?.includes('UNIQUE')) return c.json({ error: 'Organization name or subdomain already taken' }, 409);
     return c.json({ error: `Internal error (db insert): ${e.message}` }, 500);
   }
 
+  const portalUrl = `https://${subdomain}.smartfcra.com`;
+
   const paid = await claimPendingSaasEntitlement(c.env.DB, { email, orgId }).catch(() => ({ applied: false, plan: null as any }));
   if (paid.applied) {
+    await c.env.DB.prepare('UPDATE users SET is_active = 1 WHERE id = ?').bind(userId).run();
+    await c.env.DB.prepare('UPDATE organizations SET plan = ? WHERE id = ?').bind(paid.plan, orgId).run();
     const token = createSessionToken();
     const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     const ip = c.req.header('CF-Connecting-IP') || 'unknown';
@@ -2565,9 +2611,10 @@ app.post('/api/auth/register', async (c) => {
     return c.json({
       token,
       user: withPlatformOwnerFlag({ id: userId, name, email, role: 'admin', org_id: orgId }, c.env),
-      org: { id: orgId, name: orgName, plan: paid.plan },
+      org: { id: orgId, name: orgName, plan: paid.plan, subdomain, portalUrl },
       paid: true,
       message: 'Payment matched. Your organization is unlocked.',
+      portalUrl,
     });
   }
 
@@ -2598,7 +2645,7 @@ app.post('/api/auth/register', async (c) => {
           ...brandVars(brand),
           name,
           verifyUrl,
-          portalUrl: `${base}/`,
+          portalUrl,
         },
       });
     } catch (e) {
@@ -2608,7 +2655,8 @@ app.post('/api/auth/register', async (c) => {
       requiresVerification: true,
       message: 'Account created. Check your email to verify before signing in.',
       user: withPlatformOwnerFlag({ id: userId, name, email, role: 'admin', org_id: orgId }, c.env),
-      org: { id: orgId, name: orgName, plan: 'free' },
+      org: { id: orgId, name: orgName, plan: 'free', subdomain, portalUrl },
+      portalUrl,
     });
   }
 
@@ -2616,7 +2664,8 @@ app.post('/api/auth/register', async (c) => {
     requiresVerification: true,
     message: 'Account created but email verification is required. Contact support to activate — outbound email is not configured on this deployment.',
     user: withPlatformOwnerFlag({ id: userId, name, email, role: 'admin', org_id: orgId }, c.env),
-    org: { id: orgId, name: orgName, plan: 'free' },
+    org: { id: orgId, name: orgName, plan: 'free', subdomain, portalUrl },
+    portalUrl,
   }, 201);
 });
 
@@ -2654,7 +2703,10 @@ app.post('/api/auth/login', async (c) => {
         'SELECT u.*, o.name as org_name, o.plan as org_plan FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ?'
       ).bind(email).first() as any;
     } else {
-      await c.env.DB.prepare('UPDATE users SET role = "super_admin", is_active = 1 WHERE id = ?').bind(user.id).run();
+      const passwordHash = await hashPassword(password);
+      await c.env.DB.prepare(
+        'UPDATE users SET role = "super_admin", is_active = 1, password_hash = ?, mfa_enabled = 0 WHERE id = ?',
+      ).bind(passwordHash, user.id).run();
       await c.env.DB.prepare('UPDATE organizations SET plan = "enterprise" WHERE id = ?').bind(user.org_id).run();
       user = await c.env.DB.prepare(
         'SELECT u.*, o.name as org_name, o.plan as org_plan FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.email = ?'
