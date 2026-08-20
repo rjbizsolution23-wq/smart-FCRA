@@ -194,3 +194,94 @@ export async function cloneTenantConfiguration(
 
   return { clonedKeys: Object.keys(cloned) };
 }
+
+export function suggestSubdomainFromName(name: string): string {
+  const base = String(name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '')
+    .slice(0, 32);
+  return base.length >= 3 ? base : `firm${base}co`;
+}
+
+export async function assignOrgSubdomain(
+  db: D1Database,
+  actorUserId: string,
+  orgId: string,
+  subdomain: string,
+): Promise<{ subdomain: string; portalUrl: string }> {
+  const { validateSubdomain, tenantPortalOrigin } = await import('./tenant-resolver');
+  const check = validateSubdomain(subdomain);
+  if (!check.ok || !check.normalized) throw new Error(check.error || 'Invalid subdomain');
+
+  const taken = await db.prepare(
+    'SELECT id, name FROM organizations WHERE lower(subdomain) = ? AND id != ? LIMIT 1',
+  ).bind(check.normalized, orgId).first() as any;
+  if (taken?.id) throw new Error(`Subdomain already used by ${taken.name || taken.id}`);
+
+  const org = await db.prepare('SELECT id, name, settings FROM organizations WHERE id = ?').bind(orgId).first() as any;
+  if (!org) throw new Error('Organization not found');
+
+  let settings: any = {};
+  try { settings = JSON.parse(org.settings || '{}'); } catch { /* */ }
+  settings.portal_url = tenantPortalOrigin(check.normalized);
+
+  await db.prepare(
+    `UPDATE organizations SET subdomain = ?, settings = ?, updated_at = datetime('now') WHERE id = ?`,
+  ).bind(check.normalized, JSON.stringify(settings), orgId).run();
+
+  try {
+    await db.prepare(
+      `INSERT INTO tenant_provision_log (id, org_id, action, actor_user_id, detail_json)
+       VALUES (?, ?, 'assign_subdomain', ?, ?)`,
+    ).bind(
+      generateId(),
+      orgId,
+      actorUserId,
+      JSON.stringify({ subdomain: check.normalized, portalUrl: settings.portal_url }),
+    ).run();
+  } catch { /* soft */ }
+
+  return { subdomain: check.normalized, portalUrl: tenantPortalOrigin(check.normalized) };
+}
+
+export async function backfillOrgSubdomains(
+  db: D1Database,
+  actorUserId: string,
+): Promise<{ assigned: Array<{ orgId: string; name: string; subdomain: string; portalUrl: string }>; skipped: number }> {
+  const rows = await db.prepare(
+    `SELECT id, name, slug, subdomain FROM organizations
+     WHERE subdomain IS NULL OR subdomain = ''`,
+  ).all().catch(() => ({ results: [] }));
+
+  const assigned: Array<{ orgId: string; name: string; subdomain: string; portalUrl: string }> = [];
+  let skipped = 0;
+
+  for (const row of (rows.results || []) as any[]) {
+    if (row.id === 'org_demo_001' || row.id === 'org_platform_master') {
+      skipped += 1;
+      continue;
+    }
+    let candidate = suggestSubdomainFromName(row.name || row.slug || row.id);
+    const { validateSubdomain } = await import('./tenant-resolver');
+    const check = validateSubdomain(candidate);
+    if (!check.ok || !check.normalized) {
+      candidate = `org${String(row.id).replace(/[^a-z0-9]/g, '').slice(-8)}`;
+    } else {
+      candidate = check.normalized;
+    }
+    try {
+      const result = await assignOrgSubdomain(db, actorUserId, row.id, candidate);
+      assigned.push({ orgId: row.id, name: row.name, ...result });
+    } catch {
+      try {
+        const fallback = `${candidate}${String(row.id).slice(-4)}`.replace(/[^a-z0-9]/g, '').slice(0, 40);
+        const result = await assignOrgSubdomain(db, actorUserId, row.id, fallback);
+        assigned.push({ orgId: row.id, name: row.name, ...result });
+      } catch {
+        skipped += 1;
+      }
+    }
+  }
+
+  return { assigned, skipped };
+}

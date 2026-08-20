@@ -9,7 +9,19 @@ import {
   tenantPortalOrigin,
   OAUTH_HOST,
 } from './tenant-resolver';
-import { provisionTenant, cloneTenantConfiguration } from './tenant-provision';
+import { provisionTenant, cloneTenantConfiguration, assignOrgSubdomain, backfillOrgSubdomains } from './tenant-provision';
+import { tenantConfigSchemaPayload } from './tenant-config-lock';
+import {
+  decodeOAuthState,
+  encodeOAuthState,
+  exchangeOAuthCode,
+  oauthAuthorizeUrl,
+  oauthCallbackUrl,
+  oauthClientCredentials,
+  oauthReturnUrl,
+  persistOAuthTokens,
+  type OAuthProviderId,
+} from './oauth-hub';
 import { isPlatformOwnerUser } from './platform-owner';
 
 export function registerTenantRoutes(
@@ -89,29 +101,101 @@ export function registerTenantRoutes(
     }
   });
 
-  /** Central OAuth callback hub — state carries tenant subdomain for redirect */
-  app.get('/api/oauth/:provider/callback', async (c) => {
-    const provider = c.req.param('provider');
-    const stateRaw = c.req.query('state') || '';
-    let state: { orgId?: string; subdomain?: string; returnUrl?: string } = {};
+  app.get('/api/admin/tenants/config-schema', deps.authMiddleware, async (c) => {
+    return c.json(tenantConfigSchemaPayload());
+  });
+
+  app.put('/api/admin/tenants/:orgId/subdomain', deps.authMiddleware, deps.adminGateMiddleware, async (c) => {
+    const user = c.get('user');
+    const body = await c.req.json().catch(() => ({}));
     try {
-      state = JSON.parse(atob(String(stateRaw).replace(/-/g, '+').replace(/_/g, '/')));
-    } catch { /* invalid state */ }
-
-    const returnBase = state.subdomain
-      ? tenantPortalOrigin(state.subdomain, c.env)
-      : (state.returnUrl || `https://${OAUTH_HOST}`);
-
-    if (provider === 'ghl') {
-      const code = c.req.query('code');
-      if (!code || !state.orgId) {
-        return c.redirect(`${returnBase}/app?oauth=error&provider=ghl`);
-      }
-      // GHL token exchange wired in integration-os; redirect back to tenant workspace
-      return c.redirect(`${returnBase}/app?oauth=ghl&code=${encodeURIComponent(String(code))}&org=${encodeURIComponent(state.orgId)}`);
+      const result = await assignOrgSubdomain(
+        c.env.DB,
+        user.id,
+        c.req.param('orgId'),
+        String(body.subdomain || ''),
+      );
+      return c.json({ ok: true, ...result });
+    } catch (e: any) {
+      return c.json({ error: e.message || 'Assign failed' }, 400);
     }
+  });
 
-    return c.redirect(`${returnBase}/app?oauth=unsupported&provider=${encodeURIComponent(provider)}`);
+  app.post('/api/admin/tenants/backfill-subdomains', deps.authMiddleware, deps.adminGateMiddleware, async (c) => {
+    const user = c.get('user');
+    try {
+      const result = await backfillOrgSubdomains(c.env.DB, user.id);
+      return c.json({ ok: true, ...result });
+    } catch (e: any) {
+      return c.json({ error: e.message || 'Backfill failed' }, 400);
+    }
+  });
+
+  /** Start OAuth from tenant workspace — redirects to provider */
+  app.get('/api/oauth/:provider/start', deps.authMiddleware, async (c) => {
+    const user = c.get('user');
+    if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
+    const provider = c.req.param('provider') as OAuthProviderId;
+    if (!['ghl', 'meta', 'google'].includes(provider)) {
+      return c.json({ error: 'Unsupported OAuth provider' }, 400);
+    }
+    const creds = oauthClientCredentials(c.env, provider);
+    if (!creds) {
+      return c.json({
+        ok: false,
+        error: `${provider} OAuth is not configured on the platform. Set ${provider.toUpperCase()}_OAUTH_CLIENT_ID and _CLIENT_SECRET.`,
+      }, 400);
+    }
+    const org = await c.env.DB.prepare('SELECT subdomain FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+    const state = await encodeOAuthState({
+      orgId: user.org_id,
+      subdomain: org?.subdomain || '',
+      userId: user.id,
+      provider,
+    }, c.env);
+    const redirectUri = oauthCallbackUrl(c.env, provider);
+    const authorizeUrl = oauthAuthorizeUrl({ provider, clientId: creds.clientId, redirectUri, state });
+    if (!authorizeUrl) return c.json({ error: 'Unable to build authorize URL' }, 500);
+    if (c.req.query('redirect') === '0') {
+      return c.json({ ok: true, authorizeUrl, redirectUri, state: 'signed' });
+    }
+    return c.redirect(authorizeUrl);
+  });
+
+  /** Central OAuth callback hub — exchange code, store vault tokens, return to tenant subdomain */
+  app.get('/api/oauth/:provider/callback', async (c) => {
+    const provider = c.req.param('provider') as OAuthProviderId;
+    const errQ = c.req.query('error');
+    const state = await decodeOAuthState(c.req.query('state') || '', c.env);
+    const fallback = `https://${OAUTH_HOST}`;
+    if (!state) {
+      return c.redirect(`${fallback}/app?oauth=error&reason=invalid_state&provider=${encodeURIComponent(provider)}`);
+    }
+    const returnBase = oauthReturnUrl(state, c.env, { oauth: 'error', provider });
+    if (errQ) {
+      return c.redirect(oauthReturnUrl(state, c.env, { oauth: 'error', provider, reason: String(errQ) }));
+    }
+    const code = c.req.query('code');
+    if (!code) return c.redirect(returnBase);
+
+    try {
+      const tokens = await exchangeOAuthCode(provider, String(code), c.env);
+      await persistOAuthTokens({
+        db: c.env.DB,
+        env: c.env,
+        orgId: state.orgId,
+        userId: state.userId,
+        provider,
+        tokens,
+      });
+      return c.redirect(oauthReturnUrl(state, c.env, { oauth: 'connected', provider }));
+    } catch (e: any) {
+      return c.redirect(oauthReturnUrl(state, c.env, {
+        oauth: 'error',
+        provider,
+        reason: String(e.message || 'exchange_failed').slice(0, 80),
+      }));
+    }
   });
 
   app.get('/api/admin/tenants/provision-log/:orgId', deps.authMiddleware, deps.adminGateMiddleware, async (c) => {

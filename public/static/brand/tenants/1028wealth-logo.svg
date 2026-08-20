@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="1028 Wealth Management">
+  <defs>
+    <linearGradient id="1028-orange" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FF8C00"/>
+      <stop offset="100%" stop-color="#FF4D00"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="#ffffff"/>
+  <g fill="url(#1028-orange)" font-family="Georgia, 'Times New Roman', serif" font-weight="700">
+    <text x="256" y="218" text-anchor="middle" font-size="168" letter-spacing="-4">10</text>
+    <text x="256" y="418" text-anchor="middle" font-size="168" letter-spacing="-4">28</text>
+  </g>
+</svg>

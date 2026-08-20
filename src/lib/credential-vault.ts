@@ -3,7 +3,7 @@
  */
 import { encryptText, decryptText } from './crypto';
 
-export type VaultProvider = 'ghl' | 'mfsn' | 'twilio' | 'click2mail' | 'stripe' | 'sendgrid' | 'webhook';
+export type VaultProvider = 'ghl' | 'mfsn' | 'twilio' | 'click2mail' | 'stripe' | 'sendgrid' | 'webhook' | 'meta' | 'google';
 
 export function maskSecretPreview(value: string): string {
   const s = String(value || '');

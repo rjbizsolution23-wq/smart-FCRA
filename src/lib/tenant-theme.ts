@@ -29,7 +29,7 @@ export function resolveTenantTheme(settings: any, orgName?: string): TenantTheme
     sky: hex(b.sky, RJ_THEME_DEFAULTS.sky),
     navy: hex(b.navy, RJ_THEME_DEFAULTS.navy),
     deep: hex(b.deep, RJ_THEME_DEFAULTS.deep),
-    gold: hex(b.gold, RJ_THEME_DEFAULTS.gold),
+    gold: hex(b.gold || b.secondary, RJ_THEME_DEFAULTS.gold),
     logoUrl: String(b.logoUrl || lh.logoUrl || settings?.logo_url || RJ_THEME_DEFAULTS.logoUrl).slice(0, 500),
     productName: String(b.productName || RJ_THEME_DEFAULTS.productName).slice(0, 80),
     companyName: String(b.companyName || lh.firmName || settings?.company_name || orgName || RJ_THEME_DEFAULTS.companyName).slice(0, 80),
