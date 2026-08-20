@@ -10,6 +10,10 @@ export type Lesson = {
   title: string;
   summary: string;
   content: string;
+  objectives?: string[];
+  takeaways?: string[];
+  practice?: string;
+  minutes?: number;
   quiz: { q: string; choices: string[]; answer: number }[];
 };
 
@@ -192,6 +196,112 @@ export const EDUCATION_LIBRARY: Lesson[] = [
     content: `You confirm facts before disputes go out. Letters are generated from your file — account numbers, statutes, and round strategy — not downloaded Word templates. Metro 2 observations stay in REVIEW until staff owns them. Progress shows measured changes, not promised deletions.`,
     quiz: [
       { q: 'Dispute letters in Smart FCRA are:', choices: ['Blank PDF downloads', 'Generated from your file facts', 'Guaranteed deletions', 'Staff free-text only'], answer: 1 },
+    ],
+  },
+  {
+    id: 'lit-04',
+    track: 'literacy',
+    level: 2,
+    title: 'Reading a Bank Statement with Your Tutor',
+    summary: 'Upload statements so coaching uses your numbers.',
+    content: `Your Documents vault accepts bank statements, paystubs, and W-2/1099 text. The system estimates income, outflows, and DTI from what you upload. Your tutor (Alex Rivera) then coaches three actions — never invented balances. Redact full account numbers if you paste text. This is education for fundability, not a lender decision.`,
+    objectives: ['Upload or paste a recent statement', 'Know what DTI means', 'Ask the tutor one cash-flow question'],
+    takeaways: ['Numbers come from your file', 'DTI is debts ÷ income', 'The tutor will not invent balances'],
+    practice: 'Open Documents, choose Bank Statement, paste one month of transactions or upload a PDF with OCR text, then tap Ask tutor.',
+    minutes: 8,
+    quiz: [
+      { q: 'Where should bank statements go?', choices: ['Personal Gmail with SSN', 'Portal Documents vault', 'Public Dropbox', 'SMS to staff'], answer: 1 },
+      { q: 'The tutor should:', choices: ['Invent a balance if missing', 'Coach from uploaded numbers', 'Approve a mortgage', 'Guarantee a score'], answer: 1 },
+    ],
+  },
+  {
+    id: 'cred-04',
+    track: 'credit',
+    level: 2,
+    title: 'Hard vs Soft Inquiries',
+    summary: 'Know which pulls can affect a score.',
+    content: `Hard inquiries usually happen when you apply for new credit. Soft inquiries (your own pulls, some pre-screens) typically do not. Rate-shopping similar loans in a short window is often treated more gently than scattering applications all year. Seeing an inquiry is not automatically a FCRA violation.`,
+    objectives: ['Tell hard from soft', 'Avoid stacking random applications', 'Review new inquiries in My Credit'],
+    takeaways: ['Hard pulls can affect scores for a time', 'Shopping similar loans close together is different from random apps', 'Ask before applying'],
+    practice: 'Open My Credit → inquiries. Mark any you do not recognize and message your advisor with facts you personally know.',
+    minutes: 6,
+    quiz: [
+      { q: 'A hard inquiry usually happens when:', choices: ['You check your own report', 'You apply for new credit', 'A friend looks at your score', 'You complete Academy'], answer: 1 },
+    ],
+  },
+  {
+    id: 'cred-05',
+    track: 'credit',
+    level: 3,
+    title: 'Credit Freeze & Fraud Alert',
+    summary: 'Two different tools — neither deletes accurate accounts.',
+    content: `A security freeze restricts most new credit. A fraud alert tells lenders to take extra steps. Unfreezing is required when you actually apply. These tools do not remove accurate negative items. Identity theft still needs your own attestation and supporting reports.`,
+    objectives: ['Know freeze vs alert', 'Plan unfreeze before applying', 'Never confuse freeze with deletion'],
+    takeaways: ['Freeze ≠ delete', 'You control PIN/unfreeze', 'ID theft is a separate attestation'],
+    practice: 'Write down which bureaus you have frozen (if any) in Messages so staff does not assume you can pull new credit tomorrow.',
+    minutes: 7,
+    quiz: [
+      { q: 'A credit freeze:', choices: ['Deletes collections', 'Restricts most new credit', 'Raises FICO 100 points', 'Is the same as a dispute'], answer: 1 },
+    ],
+  },
+  {
+    id: 'fund-05',
+    track: 'fundability',
+    level: 2,
+    title: 'DTI in Plain Language',
+    summary: 'Debts versus income — what underwriters glance at.',
+    content: `Debt-to-income (DTI) is monthly debt payments divided by gross monthly income. Front-end often looks at housing; back-end includes other debts. Uploading statements and paystubs lets the tutor estimate a range. Smart FCRA does not issue loans or pre-approvals.`,
+    objectives: ['Compute a rough DTI', 'See why extra cards raise DTI', 'Upload income proof'],
+    takeaways: ['DTI is a ratio, not a score', 'Lower is generally easier for approvals', 'Estimates ≠ lender decision'],
+    practice: 'Upload a paystub and a bank statement, then ask the tutor: “Walk me through my estimated DTI.”',
+    minutes: 8,
+    quiz: [
+      { q: 'DTI is roughly:', choices: ['Score ÷ inquiries', 'Monthly debts ÷ monthly income', 'Limit × utilization', 'Age of file'], answer: 1 },
+    ],
+  },
+  {
+    id: 'rights-01',
+    track: 'credit',
+    level: 1,
+    title: 'FDCPA: Collector Communication Basics',
+    summary: 'Validation, cease communication, and keeping records.',
+    content: `Collectors generally must provide validation information. You can request it in writing and keep proof. Cease-communication is a different tool from disputing accuracy on a credit report. Neither is a magic delete button. Educational only — not legal advice.`,
+    objectives: ['Know validation vs cease', 'Keep copies of letters', 'Use the portal vault'],
+    takeaways: ['Write, don’t just call', 'Report disputes and collection rights are related but not identical', 'No guaranteed wipe'],
+    practice: 'If a collector contacted you, upload the letter under Documents and describe the facts in Confirm Facts.',
+    minutes: 7,
+    quiz: [
+      { q: 'Asking a collector to validate is:', choices: ['The same as a bureau dispute', 'A written consumer right in many cases', 'A guaranteed deletion', 'Illegal'], answer: 1 },
+    ],
+  },
+  {
+    id: 'idtheft-01',
+    track: 'expert',
+    level: 3,
+    title: 'Identity Theft: Your Facts Only',
+    summary: 'You describe what happened. Staff and AI do not invent it.',
+    content: `Identity-theft disputes require your attestation. Typical supporting items: FTC IdentityTheft.gov report, police report where applicable, and a list of accounts that are not yours. Smart FCRA will not sign an affidavit containing facts you did not supply.`,
+    objectives: ['Separate ID theft from “I dislike this account”', 'Gather your own reports', 'Use the identity-theft form only when true'],
+    takeaways: ['Consumer supplies facts', 'Separate from normal disputes', 'No invented affidavits'],
+    practice: 'If this applies, complete Identity Theft attestation in Confirm Facts and upload your FTC report to the vault.',
+    minutes: 8,
+    quiz: [
+      { q: 'Who must supply identity-theft facts?', choices: ['The AI tutor', 'The consumer', 'The CRO owner automatically', 'The bureau'], answer: 1 },
+    ],
+  },
+  {
+    id: 'habit-01',
+    track: 'literacy',
+    level: 1,
+    title: 'The Weekly Money Hour',
+    summary: 'A 60-minute ritual that compounds.',
+    content: `Pick one hour a week: (1) check portal Messages, (2) pay cards that report soon, (3) one Academy lesson or tutor quiz, (4) journey check-in. Consistency beats intensity. Lenders notice clean recent history more than a heroic weekend.`,
+    objectives: ['Schedule a weekly hour', 'Tie it to portal tasks', 'Protect on-time payments'],
+    takeaways: ['Ritual > binge', 'Portal is the hub', 'Recent history matters'],
+    practice: 'Set a recurring calendar event named Money Hour and complete today’s journey check-in.',
+    minutes: 5,
+    quiz: [
+      { q: 'A weekly money hour should include:', choices: ['Opening 10 new cards', 'On-time payments + one learning action', 'Ignoring the portal', 'Closing oldest accounts'], answer: 1 },
     ],
   },
 ];

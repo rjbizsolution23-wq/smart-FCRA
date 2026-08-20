@@ -8,6 +8,7 @@ import {
   type TutorGrowthInput,
   type TutorGrowthProfile,
 } from '../data/tutor-growth';
+import { EDUCATION_LIBRARY } from '../data/portal-education';
 import { buildJourneyPlan } from '../data/client-journey';
 
 export type TutorEnv = {
@@ -35,7 +36,7 @@ export async function gatherTutorGrowthInput(env: TutorEnv, client: any, memory?
   const clientId = client.id;
   const orgId = client.org_id;
 
-  const [reports, viol, signed, fundSnap, edu, roadmap, journey, reportMeta] = await Promise.all([
+  const [reports, viol, signed, fundSnap, edu, roadmap, journey, reportMeta, underwriting, financialUploads] = await Promise.all([
     softFirst(env, `SELECT COUNT(*) as c FROM credit_reports WHERE client_id = ? AND org_id = ?`, clientId, orgId),
     softFirst(env, `SELECT COUNT(*) as c FROM violations WHERE client_id = ? AND org_id = ?`, clientId, orgId),
     softFirst(env, `SELECT COUNT(*) as c FROM documents WHERE client_id = ? AND org_id = ? AND (status = 'signed' OR status = 'sent')`, clientId, orgId),
@@ -44,6 +45,8 @@ export async function gatherTutorGrowthInput(env: TutorEnv, client: any, memory?
     softAll(env, `SELECT completed_steps_json FROM roadmap_progress WHERE client_id = ? AND org_id = ?`, clientId, orgId),
     softFirst(env, `SELECT * FROM client_journey_state WHERE client_id = ? AND org_id = ?`, clientId, orgId),
     softFirst(env, `SELECT total_collections FROM credit_reports WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 1`, clientId, orgId),
+    softFirst(env, `SELECT monthly_income, monthly_debt, dti_pct, reserves_months, report_json, created_at FROM underwriting_snapshots WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 1`, clientId, orgId),
+    softAll(env, `SELECT category, file_name, analysis_json, created_at FROM portal_uploads WHERE client_id = ? AND org_id = ? AND category IN ('bank_statement','paystub','w2','tax_return') ORDER BY created_at DESC LIMIT 5`, clientId, orgId),
   ]);
 
   let revolvingUtilPct: number | null = null;
@@ -76,13 +79,31 @@ export async function gatherTutorGrowthInput(env: TutorEnv, client: any, memory?
     focusGoal: journey?.focus_goal || 'mortgage',
     streakDays: journey?.streak_days || 0,
     educationCompleted: edu?.c || 0,
-    educationTotal: 8,
+    educationTotal: EDUCATION_LIBRARY.length,
     roadmapCompletedSteps,
     roadmapTotalSteps: 12,
   };
 
   const plan = buildJourneyPlan(journeyInput);
   const milestonesDone = plan.milestones.filter((m) => m.done).length;
+
+  const financialBits: string[] = [];
+  if (underwriting) {
+    financialBits.push(
+      `Latest underwriting ${underwriting.created_at || ''}: income ~$${Number(underwriting.monthly_income || 0).toFixed(0)}/mo, debts ~$${Number(underwriting.monthly_debt || 0).toFixed(0)}/mo, DTI ${underwriting.dti_pct ?? 'n/a'}%, reserves ${underwriting.reserves_months ?? 'n/a'} mo.`,
+    );
+  }
+  for (const u of financialUploads || []) {
+    let summary = '';
+    try {
+      const a = JSON.parse(u.analysis_json || '{}');
+      summary = String(a.summary || '').slice(0, 400);
+      if (!summary && a.underwriting) {
+        summary = `DTI ${a.underwriting.dtiPct}% · income $${a.underwriting.monthlyIncomeEstimate}`;
+      }
+    } catch { /* */ }
+    financialBits.push(`${u.category} “${u.file_name || ''}” (${(u.created_at || '').slice(0, 10)}): ${summary || 'uploaded — ask client to confirm numbers'}`);
+  }
 
   return {
     firstName: client.first_name || 'friend',
@@ -101,11 +122,12 @@ export async function gatherTutorGrowthInput(env: TutorEnv, client: any, memory?
     revolvingUtilPct,
     collectionCount: reportMeta?.total_collections || 0,
     educationCompleted: edu?.c || 0,
-    educationTotal: 8,
+    educationTotal: EDUCATION_LIBRARY.length,
     sessionsCount: memory?.sessions_count || 0,
     roadmapCompletedSteps,
     milestonesDone,
     milestonesTotal: plan.milestones.length,
+    financialSummary: financialBits.length ? financialBits.join('\n') : null,
   };
 }
 

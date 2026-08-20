@@ -3,6 +3,7 @@
  * Orgs can clone but cannot disable mandatory compliance controls.
  */
 import type { CommsLane } from './comms-compliance';
+import { CRM_BUSINESS_IN_A_BOX } from './crm-campaign-box';
 
 export type WorkflowStepDef = {
   delayHours: number;
@@ -19,7 +20,7 @@ export type WorkflowStepDef = {
 export type WorkflowDefinition = {
   key: string;
   name: string;
-  category: 'sales' | 'onboarding' | 'service' | 'billing' | 'compliance' | 'education' | 'b2b';
+  category: 'sales' | 'onboarding' | 'service' | 'billing' | 'compliance' | 'education' | 'b2b' | 'marketing';
   lane: CommsLane;
   mandatory: boolean;
   description: string;
@@ -28,7 +29,7 @@ export type WorkflowDefinition = {
   steps: WorkflowStepDef[];
 };
 
-export const CRM_CAMPAIGN_LIBRARY: WorkflowDefinition[] = [
+export const CRM_CAMPAIGN_CORE: WorkflowDefinition[] = [
   {
     key: 'new_lead',
     name: 'New Lead Acknowledgment',
@@ -650,12 +651,33 @@ export const CRM_CAMPAIGN_LIBRARY: WorkflowDefinition[] = [
   },
 ];
 
+export const CRM_CAMPAIGN_LIBRARY: WorkflowDefinition[] = [
+  ...CRM_CAMPAIGN_CORE,
+  ...CRM_BUSINESS_IN_A_BOX,
+];
+
 export function getWorkflowDefinition(key: string): WorkflowDefinition | undefined {
   return CRM_CAMPAIGN_LIBRARY.find((w) => w.key === key);
 }
 
-export function listWorkflowLibrary(): Array<{ key: string; name: string; category: string; mandatory: boolean; lane: CommsLane }> {
+export function listWorkflowLibrary(): Array<{
+  key: string;
+  name: string;
+  category: string;
+  mandatory: boolean;
+  lane: CommsLane;
+  description: string;
+  trigger: string;
+  stepCount: number;
+}> {
   return CRM_CAMPAIGN_LIBRARY.map((w) => ({
-    key: w.key, name: w.name, category: w.category, mandatory: w.mandatory, lane: w.lane,
+    key: w.key,
+    name: w.name,
+    category: w.category,
+    mandatory: w.mandatory,
+    lane: w.lane,
+    description: w.description,
+    trigger: w.trigger,
+    stepCount: w.steps.length,
   }));
 }

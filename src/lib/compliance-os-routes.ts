@@ -815,6 +815,41 @@ export function registerComplianceOsRoutes(app: Hono<any>, opts: RegisterOpts) {
     return c.json({ ok: true, checklist: buildSignatureChecklist(status) });
   });
 
+  app.post('/api/compliance-os/clients/:clientId/signature-packet/send', authMiddleware, async (c) => {
+    const user = c.get('user');
+    if (staffOnly(user)) return c.json({ error: 'Staff only' }, 403);
+    const clientId = c.req.param('clientId');
+    const row = await c.env.DB.prepare(
+      'SELECT id, email, first_name FROM clients WHERE id = ? AND org_id = ?',
+    ).bind(clientId, user.org_id).first() as any;
+    if (!row) return c.json({ error: 'Client not found' }, 404);
+    const send = await startWorkflowRun({
+      db: c.env.DB,
+      env: c.env,
+      orgId: user.org_id,
+      workflowKey: 'signature_packet_send',
+      clientId,
+      context: { reason: 'staff_send_packet' },
+      generateId,
+    });
+    const nudge = await startWorkflowRun({
+      db: c.env.DB,
+      env: c.env,
+      orgId: user.org_id,
+      workflowKey: 'signature_packet_nudge',
+      clientId,
+      context: { reason: 'recommended_not_blocking' },
+      generateId,
+    });
+    return c.json({
+      ok: true,
+      blocking: false,
+      message: 'Packet queued for delivery. Unsigned documents stay recommended — the file is not locked.',
+      send,
+      nudge,
+    });
+  });
+
   app.get('/api/compliance-os/comms/library', authMiddleware, async (c) => {
     const user = c.get('user');
     if (staffOnly(user)) return c.json({ error: 'Staff only' }, 403);
@@ -828,7 +863,7 @@ export function registerComplianceOsRoutes(app: Hono<any>, opts: RegisterOpts) {
     const body = await c.req.json().catch(() => ({}));
     const prompt = String(body.prompt || body.message || '').trim();
     if (!prompt) return c.json({ error: 'prompt required' }, 400);
-    const starters = COMMS_STARTER_LIBRARY.slice(0, 8).map((t) => `${t.id}: ${t.name} (${t.channel})`).join('\n');
+      const starters = COMMS_STARTER_LIBRARY.map((t) => `${t.id}: ${t.name} (${t.channel})`).join('\n');
     try {
       const result = await generateOrgAiText({
         env: c.env,

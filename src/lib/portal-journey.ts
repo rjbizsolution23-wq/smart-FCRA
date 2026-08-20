@@ -10,6 +10,7 @@ import {
   type JourneyPlan,
   type DailyMotivation,
 } from '../data/client-journey';
+import { EDUCATION_LIBRARY } from '../data/portal-education';
 
 export type JourneyEnv = AlertEnv & {
   FRONTEND_URL?: string;
@@ -93,7 +94,7 @@ async function gatherJourneyInput(env: JourneyEnv, client: any): Promise<Journey
     roadmapCompletedSteps,
     roadmapTotalSteps: 12,
     educationCompleted: edu?.c || 0,
-    educationTotal: 8,
+    educationTotal: EDUCATION_LIBRARY.length,
     focusGoal: journey?.focus_goal || 'mortgage',
     streakDays: journey?.streak_days || 0,
     sendDate: utcDate(),

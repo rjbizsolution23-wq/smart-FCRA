@@ -80,5 +80,9 @@ assert(resolveTutorRank(1, 'get_started') === 'newcomer', 'rank map');
 const fallback = buildTutorFallbackReply(advanced, 'Quiz me on FICO', advanced);
 assert(fallback.toLowerCase().includes('quiz') || fallback.includes('utilization'), 'fallback quiz content');
 assert(buildTutorSystemAddendum(advanced, advanced).includes('GROWTH STATE'), 'system addendum present');
+{
+  const withBank = buildTutorFallbackReply({ ...advanced, financialSummary: 'DTI 32% · income $6200' }, 'walk me through my bank statement', advanced);
+  assert(withBank.includes('6200') || withBank.includes('DTI'), 'fallback uses uploaded financial numbers');
+}
 
 console.log('PASS: tutor growth engine');

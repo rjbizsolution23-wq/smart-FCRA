@@ -31,21 +31,24 @@ assert(CLIENT_SIGNATURE_PACKET.find((d) => d.id === 'croa_disclosure')?.lockedSt
 
 {
   const status = defaultPacketStatus();
-  assert(evaluateWorkflowGate('contract', status).blocked === true, 'no disclosure blocks contract');
+  const contract = evaluateWorkflowGate('contract', status);
+  assert(contract.blocked === false, 'firms are never locked out of the product');
+  assert(contract.recommended === true, 'unsigned disclosure is recommended, not a lock');
   status.croa_disclosure = 'signed';
-  assert(evaluateWorkflowGate('contract', status).blocked === false, 'disclosure signed clears contract gate');
-  assert(evaluateWorkflowGate('service', status).blocked === true, 'no contract blocks service');
+  assert(evaluateWorkflowGate('contract', status).recommended === false, 'disclosure signed clears recommendation');
+  assert(evaluateWorkflowGate('service', status).recommended === true, 'unsigned contract is still recommended');
   status.croa_contract = 'signed';
-  assert(evaluateWorkflowGate('service', status).blocked === false, 'contract signed clears service');
-  assert(evaluateWorkflowGate('dispute', status).blocked === true, 'dispute needs attestation');
+  assert(evaluateWorkflowGate('service', status).recommended === false, 'contract signed clears recommendation');
+  assert(evaluateWorkflowGate('dispute', status).recommended === true, 'dispute attestation recommended');
   status.dispute_attestation = 'signed';
-  assert(evaluateWorkflowGate('dispute', status).blocked === false, 'attestation clears dispute');
+  assert(evaluateWorkflowGate('dispute', status).recommended === false, 'attestation complete');
 }
 
 {
   const checklist = buildSignatureChecklist(defaultPacketStatus());
   assert(checklist.length === CLIENT_SIGNATURE_PACKET.length, 'checklist covers all docs');
   assert(checklist.some((r) => r.displayStatus === 'NOT YET REQUIRED'), 'optional docs marked');
+  assert(checklist.some((r) => r.displayStatus === 'RECOMMENDED'), 'unsigned docs are recommended');
 }
 
 {

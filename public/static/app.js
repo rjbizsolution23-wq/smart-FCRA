@@ -9599,7 +9599,10 @@ async function pgAdminConsole(el) {
                 <option value="creditor_reply">Creditor / Bureau Reply (auto-classify)</option>
                 <option value="bureau_response">Bureau Investigation Results</option>
                 <option value="furnisher_response">Furnisher Direct Dispute Reply</option>
-                <option value="bank_statement">Bank Statement (DTI + AI)</option>
+                <option value="bank_statement">Bank Statement (DTI + tutor)</option>
+                <option value="paystub">Paystub</option>
+                <option value="w2">W-2 / 1099</option>
+                <option value="tax_return">Tax return excerpt</option>
                 <option value="credit_report">Credit Report PDF (text extract)</option>
                 <option value="other">Other Document</option>
               </select>
@@ -9621,6 +9624,7 @@ async function pgAdminConsole(el) {
                 <div class="flex flex-col gap-1 shrink-0">
                 <button type="button" data-dl="${u.id}" data-fn="${escapeHtml(u.file_name || '')}" data-mime="${escapeHtml(u.mime_type || '')}" class="vault-dl text-[10px] text-cyan-300 hover:text-cyan-200">${t('common.download')}</button>
                 ${(u.mime_type || '').includes('pdf') || (u.file_name || '').toLowerCase().endsWith('.pdf') ? `<button type="button" data-pv="${u.id}" data-fn="${escapeHtml(u.file_name || 'document.pdf')}" class="vault-pv text-[10px] text-amber-300 hover:text-amber-200">${t('vault.previewPdf')}</button>` : ''}
+                ${['bank_statement','paystub','w2','tax_return'].includes(u.category) ? `<button type="button" class="vault-tutor text-[10px] text-violet-300 hover:text-violet-200">Ask tutor</button>` : ''}
                 </div>
               </div>`).join('') : '<p class="text-sm text-gray-500">No uploads yet.</p>'}
           </div>
@@ -9630,6 +9634,11 @@ async function pgAdminConsole(el) {
           try {
             await previewVaultPdf(btn.getAttribute('data-pv'), btn.getAttribute('data-fn'));
           } catch (err) { toast(err.message, 'error'); }
+        };
+      });
+      document.querySelectorAll('.vault-tutor').forEach(btn => {
+        btn.onclick = () => {
+          window._nav('client-tutor');
         };
       });
       document.querySelectorAll('.vault-dl').forEach(btn => {
@@ -9676,7 +9685,7 @@ async function pgAdminConsole(el) {
               fileBase64,
               contentText: document.getElementById('vault-text').value,
               notes: document.getElementById('vault-notes').value,
-              runUnderwriting: document.getElementById('vault-cat').value === 'bank_statement',
+              runUnderwriting: ['bank_statement','paystub','w2','tax_return'].includes(document.getElementById('vault-cat').value),
             })),
           });
           const uw = res.underwriting;
@@ -10541,6 +10550,7 @@ async function pgAdminConsole(el) {
         { label: 'Quiz me', prompt: 'Quiz me on FICO basics' },
         { label: 'Budget plan', prompt: 'Build me a weekly budget plan for fundability' },
         { label: 'Next steps', prompt: 'What should I do next for mortgage readiness?' },
+        { label: 'My cash flow', prompt: 'Walk me through my uploaded bank statement and estimated DTI' },
       ]);
       el.innerHTML = `
         <div class="fade-in space-y-4 max-w-3xl">
@@ -10567,7 +10577,25 @@ async function pgAdminConsole(el) {
               </div>` : ''}
             </div>
             ${meta.memory?.summary ? `<p class="relative text-xs text-violet-200/60 mt-3 line-clamp-2 border-t border-white/5 pt-3">Memory: ${escapeHtml(meta.memory.summary.slice(0,240))}</p>` : ''}
+            ${meta.financialSummary ? `<div class="relative mt-3 border-t border-emerald-500/20 pt-3">
+              <div class="text-[10px] uppercase font-bold text-emerald-300 mb-1">Documents I can already see</div>
+              <p class="text-[11px] text-emerald-100/80 whitespace-pre-wrap line-clamp-6">${escapeHtml(meta.financialSummary)}</p>
+            </div>` : `<p class="relative text-[11px] text-amber-200/80 mt-3 border-t border-white/5 pt-3">Upload a bank statement, paystub, or W-2 in Documents and I will coach from those numbers — I never invent balances.</p>`}
           </div>
+          <div id="tutor-quiz-box" class="hidden glass rounded-xl border border-cyan-500/30 p-4 text-sm"></div>
+          <form id="tutor-upload-form" class="glass rounded-xl border border-gray-800 p-3 flex flex-wrap gap-2 items-end text-xs">
+            <div class="flex-1 min-w-[160px]">
+              <label class="text-[10px] text-gray-500 uppercase">Share a statement with Alex</label>
+              <select id="tutor-upload-cat" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-2 py-2 text-white">
+                <option value="bank_statement">Bank statement</option>
+                <option value="paystub">Paystub</option>
+                <option value="w2">W-2 / 1099</option>
+                <option value="tax_return">Tax return excerpt</option>
+              </select>
+            </div>
+            <textarea id="tutor-upload-text" rows="2" class="flex-[2] min-w-[200px] bg-gray-950 border border-gray-800 rounded-lg px-2 py-2 text-white font-mono" placeholder="Paste OCR / statement text…"></textarea>
+            <button class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg font-semibold">Analyze with tutor</button>
+          </form>
           <div id="tutor-thread" class="glass rounded-2xl border border-gray-800 p-4 h-[380px] overflow-y-auto space-y-3">
             ${history.map(h => `
               <div class="flex ${h.role==='you'?'justify-end':'justify-start'}">
@@ -10580,7 +10608,9 @@ async function pgAdminConsole(el) {
           </form>
           <div class="flex flex-wrap gap-2 text-xs">
             ${prompts.map(p => `<button type="button" class="tutor-quick px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:border-violet-500/40" data-q="${escapeHtml(p.prompt)}">${escapeHtml(p.label)}</button>`).join('')}
+            <button type="button" id="tutor-live-quiz" class="px-3 py-1.5 rounded-lg border border-cyan-700/50 text-cyan-300">Live quiz</button>
             <button type="button" onclick="window._nav('client-knowledge')" class="px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300">Open Education Hub</button>
+            <button type="button" onclick="window._nav('client-uploads')" class="px-3 py-1.5 rounded-lg border border-emerald-700/50 text-emerald-300">Upload documents</button>
             <button type="button" onclick="window._nav('client-journey')" class="px-3 py-1.5 rounded-lg border border-cyan-700/50 text-cyan-300">My Journey</button>
           </div>
         </div>`;
@@ -10613,6 +10643,49 @@ async function pgAdminConsole(el) {
       document.querySelectorAll('.tutor-quick').forEach(btn => {
         btn.onclick = () => send(btn.getAttribute('data-q'));
       });
+      const liveQuiz = document.getElementById('tutor-live-quiz');
+      if (liveQuiz) liveQuiz.onclick = async () => {
+        try {
+          const q = await api('/client-portal/tutor/quiz' + qs);
+          const box = document.getElementById('tutor-quiz-box');
+          if (!box) return;
+          box.classList.remove('hidden');
+          box.innerHTML = `<div class="text-[10px] uppercase text-cyan-400 mb-1">${escapeHtml(q.lessonTitle)}</div>
+            <div class="text-white font-medium mb-2">${escapeHtml(q.question)}</div>
+            <div class="space-y-1">${(q.choices||[]).map((ch,i)=>`<button type="button" class="tutor-q-choice w-full text-left px-3 py-2 rounded-lg border border-gray-700 text-gray-200 hover:border-cyan-400" data-i="${i}">${escapeHtml(ch)}</button>`).join('')}</div>
+            <div id="tutor-quiz-result" class="text-xs text-gray-400 mt-2"></div>`;
+          box.querySelectorAll('.tutor-q-choice').forEach((btn) => {
+            btn.onclick = async () => {
+              try {
+                const r = await api('/client-portal/tutor/quiz', { method: 'POST', body: JSON.stringify(portalClientBody({ lessonId: q.lessonId, questionIndex: q.questionIndex, choice: Number(btn.dataset.i) })) });
+                document.getElementById('tutor-quiz-result').textContent = (r.correct ? 'Correct. ' : 'Try again. ') + (r.explanation || '');
+                document.getElementById('tutor-quiz-result').className = 'text-xs mt-2 ' + (r.correct ? 'text-emerald-300' : 'text-amber-300');
+              } catch (err) { toast(err.message, 'error'); }
+            };
+          });
+        } catch (err) { toast(err.message, 'error'); }
+      };
+      const upForm = document.getElementById('tutor-upload-form');
+      if (upForm) upForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const text = document.getElementById('tutor-upload-text').value.trim();
+        if (text.length < 40) { toast('Paste more statement text so I can read real numbers', 'warning'); return; }
+        try {
+          await api('/client-portal/uploads', {
+            method: 'POST',
+            body: JSON.stringify(portalClientBody({
+              category: document.getElementById('tutor-upload-cat').value,
+              fileName: 'tutor-paste.txt',
+              mimeType: 'text/plain',
+              contentText: text,
+              runUnderwriting: true,
+            })),
+          });
+          document.getElementById('tutor-upload-text').value = '';
+          toast('Document saved — asking Alex to review', 'success');
+          await send('Please review the financial document I just uploaded. Walk me through income, expenses, estimated DTI, and three actions. Do not invent balances.');
+        } catch (err) { toast(err.message, 'error'); }
+      };
     }
     try { await paint(); } catch (err) {
       el.innerHTML = `<div class="text-red-400 p-6">${escapeHtml(err.message)}</div>`;
@@ -12618,8 +12691,21 @@ async function pgAdminConsole(el) {
         const paintLesson = () => {
           el.innerHTML = `<div class="fade-in max-w-2xl space-y-4">
             <button onclick="window._closeCoursePlayer()" class="text-sm text-gray-400 hover:text-white"><i class="fas fa-arrow-left mr-1"></i>Back</button>
+            <div class="flex items-center gap-2 text-[10px] uppercase tracking-wider text-cyan-300">
+              <span>${escapeHtml(lesson.track || '')}</span>
+              ${lesson.minutes ? `<span>· ${lesson.minutes} min</span>` : ''}
+            </div>
             <h1 class="text-xl font-bold text-white">${escapeHtml(lesson.title)}</h1>
+            ${(lesson.objectives||[]).length ? `<div class="glass border border-cyan-500/20 rounded-xl p-4">
+              <div class="text-[10px] uppercase font-bold text-cyan-300 mb-2">You will be able to</div>
+              <ul class="list-disc pl-5 text-sm text-gray-200 space-y-1">${lesson.objectives.map((o)=>`<li>${escapeHtml(o)}</li>`).join('')}</ul>
+            </div>` : ''}
             <p class="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">${escapeHtml(lesson.content)}</p>
+            ${(lesson.takeaways||[]).length ? `<div class="glass border border-emerald-500/20 rounded-xl p-4">
+              <div class="text-[10px] uppercase font-bold text-emerald-300 mb-2">Takeaways</div>
+              <ul class="list-disc pl-5 text-sm text-gray-200 space-y-1">${lesson.takeaways.map((o)=>`<li>${escapeHtml(o)}</li>`).join('')}</ul>
+            </div>` : ''}
+            ${lesson.practice ? `<div class="glass border border-amber-500/20 rounded-xl p-4 text-sm text-amber-100"><strong class="text-amber-300">Practice:</strong> ${escapeHtml(lesson.practice)}</div>` : ''}
             <div class="space-y-4">${(lesson.quiz||[]).map((q,qi)=>`
               <div class="glass border border-gray-800 rounded-xl p-4">
                 <div class="text-sm text-white font-medium mb-2">${escapeHtml(q.q)}</div>
@@ -12627,6 +12713,7 @@ async function pgAdminConsole(el) {
                   <button type="button" class="w-full text-left text-xs px-3 py-2 rounded-lg border ${answers[qi]===ci?'border-cyan-500 bg-cyan-500/15':'border-gray-800'} text-gray-200" onclick="window._portalPick(${qi},${ci})">${escapeHtml(ch)}</button>`).join('')}</div>
               </div>`).join('')}</div>
             <button id="btn-finish-lesson" class="bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold px-4 py-2 rounded-lg">Submit quiz</button>
+            <button type="button" class="ml-2 text-sm text-violet-300" onclick="window._nav('client-tutor')">Ask tutor about this lesson</button>
           </div>`;
           window._portalPick = (qi, ci) => { answers[qi]=ci; paintLesson(); };
           document.getElementById('btn-finish-lesson').onclick = async () => {
@@ -12702,6 +12789,7 @@ async function pgAdminConsole(el) {
                   <div class="text-[10px] uppercase text-gray-500">${escapeHtml(l.track)} · L${l.level}</div>
                   <h3 class="text-sm font-bold text-white mt-1">${escapeHtml(l.title)}</h3>
                   <p class="text-xs text-gray-400 mt-1">${escapeHtml(l.summary)}</p>
+                  <div class="text-[10px] text-gray-500 mt-2">${l.minutes || 6} min · ${l.quizCount || 0} quiz${l.hasPractice ? ' · practice' : ''}</div>
                   <button onclick="window._openPortalLesson('${l.id}')" class="mt-3 text-xs font-semibold ${done?'text-emerald-300':'text-cyan-300'}">${done?'Review ✓':'Start lesson'}</button>
                 </div>`;
               }).join('')}
@@ -14106,26 +14194,33 @@ async function pgAdminConsole(el) {
           </div>
 
           <div class="glass rounded-xl p-5 border border-gray-800">
-            <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-project-diagram text-purple-400 mr-2"></i>Campaign / Workflow Library</h2>
-            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs max-h-96 overflow-y-auto">${wfList.map((w) => `
-              <div class="bg-gray-950/40 border border-gray-800 rounded-lg p-3">
+            <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-project-diagram text-purple-400 mr-2"></i>Campaign / Workflow Library (${wfList.length} prebuilt)</h2>
+            <p class="text-[11px] text-gray-400 mb-2">Sales drips, onboarding, service clocks, Academy, mortgage/auto readiness, cash-flow coaching, reactivation — clone and run. Three-lane gated on send.</p>
+            <div class="flex flex-wrap gap-1 mb-3 text-[10px]" id="wf-cat-filters">
+              ${['all','sales','onboarding','service','billing','compliance','education','b2b','marketing'].map((cat) =>
+                `<button type="button" class="wf-cat px-2 py-1 rounded border border-gray-700 text-gray-300 hover:border-purple-400" data-cat="${cat}">${cat}</button>`).join('')}
+            </div>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs max-h-[28rem] overflow-y-auto" id="wf-grid">${wfList.map((w) => `
+              <div class="wf-card bg-gray-950/40 border border-gray-800 rounded-lg p-3" data-cat="${escapeHtml(w.category)}">
                 <div class="font-semibold text-white">${escapeHtml(w.name)}</div>
-                <div class="text-gray-500">${escapeHtml(w.key)} · ${escapeHtml(w.lane)} · ${escapeHtml(w.category)}</div>
+                <div class="text-gray-500">${escapeHtml(w.key)} · ${escapeHtml(w.lane)} · ${w.stepCount || ''} steps</div>
+                <p class="text-[10px] text-gray-400 mt-1">${escapeHtml(w.description || '')}</p>
                 ${w.mandatory ? '<span class="text-[9px] text-amber-400">Mandatory compliance</span>' : ''}
                 <div class="flex flex-wrap gap-1 mt-2">
                   <button type="button" class="wf-run-client bg-emerald-800 hover:bg-emerald-700 text-white px-2 py-0.5 rounded text-[9px] font-bold" data-key="${escapeHtml(w.key)}">Run on client</button>
                   <button type="button" class="wf-view bg-gray-800 hover:bg-gray-700 text-gray-300 px-2 py-0.5 rounded text-[9px]" data-key="${escapeHtml(w.key)}">Preview</button>
                 </div>
               </div>`).join('')}</div>
-            <p class="text-[10px] text-gray-500 mt-2">New leads auto-start <strong class="text-white">new_lead</strong> + follow-up workflows. Use Run on client to start any library workflow on a specific file.</p>
+            <p class="text-[10px] text-gray-500 mt-2">New leads auto-start <strong class="text-white">new_lead</strong> + follow-up. Packet send is recommended, never a lockout. Use Run on client to start any library workflow.</p>
           </div>
 
           <div class="glass rounded-xl p-5 border border-rose-900/30">
-            <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-file-signature text-rose-400 mr-2"></i>Client signature packet (CROA spine)</h2>
-            <p class="text-[11px] text-gray-400 mb-3">Federal disclosure → contract → limited POA → dispute attestation. Missing required docs block workflows server-side.</p>
+            <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-file-signature text-rose-400 mr-2"></i>Client signature packet</h2>
+            <p class="text-[11px] text-gray-400 mb-3">Send the CROA packet for e-sign and keep a checklist. <strong class="text-white">Missing documents are recommended — they never lock the firm or the consumer out of the product.</strong></p>
             <div class="flex flex-wrap gap-2 mb-3 text-xs">
               <input id="sig-packet-client-id" placeholder="Client ID (e.g. cli_demo_001)" class="flex-1 min-w-[180px] bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white">
               <button type="button" id="sig-packet-load" class="bg-rose-800 hover:bg-rose-700 text-white px-4 py-2 rounded-lg font-semibold">Load checklist</button>
+              <button type="button" id="sig-packet-send" class="bg-emerald-800 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-semibold">Send packet</button>
             </div>
             <div id="sig-packet-gates" class="grid md:grid-cols-2 lg:grid-cols-3 gap-2 mb-3 text-[10px]"></div>
             <div id="sig-packet-checklist" class="space-y-1 max-h-64 overflow-y-auto text-[10px] font-mono"></div>
@@ -14137,8 +14232,8 @@ async function pgAdminConsole(el) {
 
           <div class="glass rounded-xl p-5 border border-sky-900/30">
             <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-envelope-open-text text-sky-400 mr-2"></i>Branded email &amp; SMS library</h2>
-            <p class="text-[11px] text-gray-400 mb-3">Pre-built transactional, compliance, and engagement starters — three-lane gated on send.</p>
-            <div class="grid md:grid-cols-2 gap-2 max-h-56 overflow-y-auto text-xs mb-4">${commsTemplates.map((t) => `
+            <p class="text-[11px] text-gray-400 mb-3">${commsTemplates.length} branded starters — onboarding, disputes, Academy, billing, sales, cash-flow coaching. Three-lane gated on send.</p>
+            <div class="grid md:grid-cols-2 gap-2 max-h-72 overflow-y-auto text-xs mb-4">${commsTemplates.map((t) => `
               <div class="bg-gray-950/40 border border-gray-800 rounded-lg p-3">
                 <div class="font-semibold text-white">${escapeHtml(t.name)}</div>
                 <div class="text-gray-500">${escapeHtml(t.id)} · ${escapeHtml(t.channel)} · ${escapeHtml(t.lane)}</div>
@@ -14272,9 +14367,9 @@ async function pgAdminConsole(el) {
           const listEl = document.getElementById('sig-packet-checklist');
           if (gatesEl) {
             gatesEl.innerHTML = Object.entries(r.gates || {}).map(([k, g]) => `
-              <div class="rounded-lg border p-2 ${g.blocked ? 'border-rose-500/40 bg-rose-950/20 text-rose-200' : 'border-emerald-500/30 bg-emerald-950/15 text-emerald-200'}">
+              <div class="rounded-lg border p-2 ${g.blocked ? 'border-rose-500/40 bg-rose-950/20 text-rose-200' : g.recommended ? 'border-amber-500/40 bg-amber-950/20 text-amber-100' : 'border-emerald-500/30 bg-emerald-950/15 text-emerald-200'}">
                 <div class="font-bold uppercase">${escapeHtml(k)}</div>
-                <div>${g.blocked ? escapeHtml(g.message) : 'CLEAR'}</div>
+                <div>${g.blocked ? escapeHtml(g.message) : g.recommended ? escapeHtml(g.message) : 'COMPLETE'}</div>
               </div>`).join('');
           }
           if (listEl) {
@@ -14287,6 +14382,22 @@ async function pgAdminConsole(el) {
           toast('Signature checklist loaded', 'success');
         } catch (err) { toast(err.message, 'error'); }
       };
+      const sigSend = document.getElementById('sig-packet-send');
+      if (sigSend) sigSend.onclick = async () => {
+        const clientId = document.getElementById('sig-packet-client-id')?.value?.trim() || state.demoSession?.sampleClientId || 'cli_demo_001';
+        try {
+          const r = await api('/compliance-os/clients/' + encodeURIComponent(clientId) + '/signature-packet/send', { method: 'POST', body: '{}' });
+          toast(r.message || 'Packet queued — file stays unlocked', 'success');
+        } catch (err) { toast(err.message, 'error'); }
+      };
+      el.querySelectorAll('.wf-cat').forEach((btn) => {
+        btn.onclick = () => {
+          const cat = btn.dataset.cat;
+          el.querySelectorAll('.wf-card').forEach((card) => {
+            card.style.display = (cat === 'all' || card.dataset.cat === cat) ? '' : 'none';
+          });
+        };
+      });
       const commsAiForm = document.getElementById('comms-ai-setup-form');
       if (commsAiForm) commsAiForm.onsubmit = async (e) => {
         e.preventDefault();

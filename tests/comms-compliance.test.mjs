@@ -31,7 +31,10 @@ assert(!isMarketingOptOutMessage('Hello'), 'hello not opt-out');
 assert(COMMS_POLICY_VERSION.startsWith('2026'), 'policy version');
 
 const lib = listWorkflowLibrary();
-assert(lib.length >= 40, `campaign library size ${lib.length}`);
+assert(lib.length >= 65, `campaign library size ${lib.length}`);
+assert(lib.some((w) => w.key === 'signature_packet_send'), 'signature packet send workflow');
+assert(lib.some((w) => w.key === 'academy_12_week'), 'academy 12-week drip');
+assert(lib.some((w) => w.key === 'cashflow_coach_drip'), 'cashflow coach drip');
 assert(lib.some((w) => w.key === 'copy_qa_review'), 'copy_qa_review workflow');
 assert(lib.some((w) => w.key === 'hot_lead'), 'hot_lead workflow');
 assert(lib.some((w) => w.key === 'referral'), 'referral workflow');

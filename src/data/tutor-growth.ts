@@ -25,6 +25,7 @@ export type TutorGrowthInput = {
   roadmapCompletedSteps?: number;
   milestonesDone?: number;
   milestonesTotal?: number;
+  financialSummary?: string | null;
 };
 
 export type TutorRank =
@@ -267,8 +268,11 @@ export function buildTutorFallbackReply(input: TutorGrowthInput, message: string
     return `Quick quiz for you, ${name} (Level ${growth.level}):\n1) What utilization % do most lenders prefer on revolving cards?\n2) About how many days do CRAs usually have to reinvestigate a dispute?\n3) Name one thing that does NOT help ${goal} readiness: new inquiries, on-time payments, or lower balances.\n\nReply with your answers and I’ll grade you. Hint: aim under 30% utilization, ~30 days for reinvestigation, and avoid unnecessary inquiries.`;
   }
 
-  if (lower.includes('budget') || lower.includes('cash')) {
-    return `${name}, here’s a Level ${growth.level} weekly money plan:\n• List every income deposit this month\n• Cap revolving spend so utilization trends under 30%\n• Automate at least one “credit health” payment mid-cycle\n• Keep a 1-page note of wins for our next session\n\nFocus right now: ${growth.curriculumFocus}`;
+  if (lower.includes('budget') || lower.includes('cash') || lower.includes('bank') || lower.includes('statement') || lower.includes('dti')) {
+    if (input.financialSummary) {
+      return `${name}, I already have notes from your uploaded financial documents:\n${input.financialSummary.slice(0, 900)}\n\nLet’s pick one action this week (pay-down, cut a recurring debit, or raise reserves). I will not invent balances that are not in those notes.`;
+    }
+    return `${name}, here’s a Level ${growth.level} weekly money plan:\n• Upload a bank statement in Documents so I can coach from real numbers\n• List every income deposit this month\n• Cap revolving spend so utilization trends under 30%\n• Automate at least one “credit health” payment mid-cycle\n\nFocus right now: ${growth.curriculumFocus}`;
   }
 
   if (lower.includes('next') || lower.includes('mortgage') || lower.includes('auto') || lower.includes('should i')) {
@@ -293,6 +297,7 @@ export function buildTutorSystemAddendum(input: TutorGrowthInput, growth: TutorG
 - Curriculum focus: ${growth.curriculumFocus}
 - Tone: ${growth.companionTone}
 - Growth notes: ${growth.growthNotes.join('; ')}
+${input.financialSummary ? `- Uploaded financial documents (ground truth — do not invent numbers):\n${input.financialSummary.slice(0, 2500)}` : '- No bank/paystub upload yet — invite them to Documents vault if they ask about DTI or cash flow.'}
 
-Coach at THEIR level — beginner language for newcomers, tactical for strategists. Reference their journey phase and celebrate streak/education progress when relevant. Assign one concrete next action each reply.`;
+Coach at THEIR level — beginner language for newcomers, tactical for strategists. Reference their journey phase and celebrate streak/education progress when relevant. Assign one concrete next action each reply. When they uploaded statements, quiz them on THEIR cash flow (recurring debits, income cadence) and never fabricate balances.`;
 }

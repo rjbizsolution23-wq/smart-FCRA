@@ -4940,7 +4940,7 @@ app.post('/api/client-portal/uploads', authMiddleware, async (c) => {
     }
   }
 
-  if ((category === 'bank_statement' || body.runUnderwriting) && contentText.length > 40) {
+  if ((category === 'bank_statement' || category === 'paystub' || category === 'w2' || category === 'tax_return' || body.runUnderwriting) && contentText.length > 40) {
     underwriting = parseBankStatementText(contentText);
     try {
       await c.env.DB.prepare(
@@ -4961,7 +4961,7 @@ app.post('/api/client-portal/uploads', authMiddleware, async (c) => {
     } catch { /* soft */ }
   }
 
-  if (category === 'bank_statement' && contentText.length > 40) {
+  if ((category === 'bank_statement' || category === 'paystub' || category === 'w2' || category === 'tax_return') && contentText.length > 40) {
     try {
       const { mentor, knowledgeBlock } = buildMentorContext('personal-finance-tutor', contentText.slice(0, 4000));
       const ai = await generateOrgAiText({
@@ -5095,6 +5095,9 @@ app.get('/api/client-portal/education', authMiddleware, async (c) => {
     lessons: EDUCATION_LIBRARY.map(l => ({
       id: l.id, track: l.track, level: l.level, title: l.title, summary: l.summary,
       quizCount: l.quiz.length,
+      minutes: l.minutes || 6,
+      hasPractice: !!l.practice,
+      objectiveCount: (l.objectives || []).length,
     })),
     progress,
   });
@@ -5168,6 +5171,8 @@ app.get('/api/client-portal/tutor', authMiddleware, async (c) => {
       growth: companion.growth,
       journeyPhase: companion.input.journeyPhase,
       focusGoal: companion.input.focusGoal,
+      financialSummary: companion.input.financialSummary || null,
+      educationTotal: companion.input.educationTotal,
       client: {
         id: client.id,
         first_name: client.first_name,
@@ -5189,6 +5194,52 @@ app.get('/api/client-portal/tutor', authMiddleware, async (c) => {
   }
 });
 
+app.get('/api/client-portal/tutor/quiz', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  let done = new Set<string>();
+  try {
+    const rows = await c.env.DB.prepare(
+      `SELECT lesson_id FROM education_progress WHERE client_id = ? AND org_id = ? AND status = 'completed'`,
+    ).bind(client.id, user.org_id).all();
+    done = new Set((rows?.results || []).map((r: any) => r.lesson_id));
+  } catch { /* */ }
+  const pool = EDUCATION_LIBRARY.filter((l) => !done.has(l.id));
+  const lesson = (pool.length ? pool : EDUCATION_LIBRARY)[Math.floor(Math.random() * (pool.length || EDUCATION_LIBRARY.length) || 0)] || EDUCATION_LIBRARY[0];
+  const qi = Math.floor(Math.random() * lesson.quiz.length);
+  const q = lesson.quiz[qi];
+  return c.json({
+    lessonId: lesson.id,
+    lessonTitle: lesson.title,
+    questionIndex: qi,
+    question: q.q,
+    choices: q.choices,
+    practice: lesson.practice || null,
+  });
+});
+
+app.post('/api/client-portal/tutor/quiz', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  const client = await resolvePortalClientSafe(c, user, body.clientId);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const lesson = getLessonById(String(body.lessonId || ''));
+  if (!lesson) return c.json({ error: 'Lesson not found' }, 404);
+  const idx = Number(body.questionIndex);
+  const choice = Number(body.choice);
+  const q = lesson.quiz[idx];
+  if (!q) return c.json({ error: 'Question not found' }, 404);
+  const correct = choice === q.answer;
+  return c.json({
+    correct,
+    explanation: correct
+      ? `Yes — ${lesson.takeaways?.[0] || 'keep going.'} Practice: ${lesson.practice || 'Open Academy for the full lesson.'}`
+      : `Not quite. The better answer is “${q.choices[q.answer]}”. ${lesson.takeaways?.[0] || ''} Open the full lesson in Academy when you are ready.`,
+    lessonId: lesson.id,
+  });
+});
+
 app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
   const user = c.get('user');
   const body = await c.req.json();
@@ -5205,6 +5256,7 @@ app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
   const context = [
     `Client: ${client.first_name} ${client.last_name}`,
     `Scores EQ/EX/TU: ${client.eq_score || '—'} / ${client.ex_score || '—'} / ${client.tu_score || '—'}`,
+    input.financialSummary ? `Financial documents on file:\n${input.financialSummary}` : 'No bank/paystub upload yet.',
   ].filter(Boolean).join('\n');
 
   let reply = '';

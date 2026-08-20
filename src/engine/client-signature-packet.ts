@@ -60,12 +60,16 @@ export const CLIENT_SIGNATURE_PACKET: PacketDocumentDef[] = [
   { id: 'dispute_auth_history', label: 'Complaint / Dispute Authorization History', category: 'internal', requiredBefore: [], description: 'Evidence record of what the consumer authorized.' },
 ];
 
+/**
+ * Advisory only — never locks the firm or consumer out of the product.
+ * Documents are sent for signature and recommended; missing items stay on the checklist.
+ */
 export const WORKFLOW_GATE_RULES: Record<string, { missing: string[]; message: string }> = {
-  contract: { missing: ['croa_disclosure'], message: 'NO CROA DISCLOSURE → CONTRACT BLOCKED' },
-  service: { missing: ['croa_disclosure', 'croa_contract'], message: 'NO CONTRACT → SERVICE BLOCKED' },
-  dispute: { missing: ['dispute_attestation'], message: 'NO CONSUMER DISPUTE ATTESTATION → DISPUTE BLOCKED' },
-  identity_theft: { missing: ['identity_theft_attestation'], message: 'NO IDENTITY-THEFT ATTESTATION → IDENTITY-THEFT SUBMISSION BLOCKED' },
-  payment: { missing: ['payment_authorization'], message: 'NO BILLING AUTHORIZATION → PAYMENT BLOCKED' },
+  contract: { missing: ['croa_disclosure'], message: 'RECOMMENDED: send CROA disclosure for signature — not required to keep working' },
+  service: { missing: ['croa_disclosure', 'croa_contract'], message: 'RECOMMENDED: send service agreement — the firm is not locked out' },
+  dispute: { missing: ['dispute_attestation'], message: 'RECOMMENDED: consumer dispute attestation before mail — not a product lock' },
+  identity_theft: { missing: ['identity_theft_attestation'], message: 'RECOMMENDED: identity-theft attestation when the consumer alleges theft' },
+  payment: { missing: ['payment_authorization'], message: 'RECOMMENDED: payment-method authorization before EFTs' },
 };
 
 export type ClientPacketStatus = Record<string, PacketDocStatus>;
@@ -82,16 +86,22 @@ export function defaultPacketStatus(): ClientPacketStatus {
 
 export function evaluateWorkflowGate(action: keyof typeof WORKFLOW_GATE_RULES, status: ClientPacketStatus): {
   blocked: boolean;
+  recommended: boolean;
   missing: string[];
   message: string;
 } {
   const rule = WORKFLOW_GATE_RULES[action];
-  if (!rule) return { blocked: false, missing: [], message: '' };
+  if (!rule) return { blocked: false, recommended: false, missing: [], message: '' };
   const missing = rule.missing.filter((id) => {
     const st = status[id];
-    return st !== 'signed' && st !== 'delivered';
+    return st !== 'signed' && st !== 'delivered' && st !== 'n/a' && st !== 'not_required';
   });
-  return { blocked: missing.length > 0, missing, message: missing.length ? rule.message : '' };
+  return {
+    blocked: false,
+    recommended: missing.length > 0,
+    missing,
+    message: missing.length ? rule.message : 'Packet item complete',
+  };
 }
 
 export function buildSignatureChecklist(status: ClientPacketStatus) {
@@ -108,7 +118,7 @@ function formatStatus(st: PacketDocStatus): string {
     case 'delivered': return 'DELIVERED';
     case 'not_required': return 'NOT YET REQUIRED';
     case 'n/a': return 'N/A';
-    default: return 'REQUIRED';
+    default: return 'RECOMMENDED';
   }
 }
 
