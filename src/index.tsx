@@ -662,6 +662,10 @@ type Bindings = {
   LOB_SECRET_KEY?: string;
   LOB_API_KEY?: string;
   LOB_PUBLISHABLE_KEY?: string;
+  LOB_TEST_SECRET_KEY?: string;
+  LOB_TEST_PUBLISHABLE_KEY?: string;
+  LOB_LIVE_SECRET_KEY?: string;
+  LOB_LIVE_PUBLISHABLE_KEY?: string;
   LOB_MODE?: string;
   LOB_WEBHOOK_SECRET?: string;
   AI?: any;
