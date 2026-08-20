@@ -6095,7 +6095,7 @@ Status: Discharged`;
       return;
     }
     const mailClass = (await brandedPrompt('USPS mail class', 'FIRST_CLASS', { title: 'Mail document', description: 'STANDARD, FIRST_CLASS, or CERTIFIED', submitLabel: 'Continue' }) || 'FIRST_CLASS').trim().toUpperCase();
-    if (!confirm(`Mail document?\n\nTo: ${recipientName}\n${recipientAddress}\n${recipientCity}, ${recipientState} ${recipientZip}\n\nClass: ${mailClass}\n\nSent via Click2Mail with FCRA §611 clock.`)) return;
+    if (!confirm(`Mail document?\n\nTo: ${recipientName}\n${recipientAddress}\n${recipientCity}, ${recipientState} ${recipientZip}\n\nClass: ${mailClass}\n\nSent via Lob with FCRA §611 clock.`)) return;
     try {
       const data = await api(`/documents/${id}/send`, {
         method: 'POST',
@@ -6791,7 +6791,7 @@ Status: Discharged`;
         </div>
 
         <div class="glass rounded-xl p-6 border border-violet-900/40" id="integrations-panel">
-          <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-plug text-violet-400"></i> Click2Mail, Zapier &amp; Webhooks</h2>
+          <h2 class="text-sm font-semibold text-white mb-1 flex items-center gap-2"><i class="fas fa-plug text-violet-400"></i> Lob Mail, Zapier &amp; Webhooks</h2>
           <p class="text-xs text-gray-500 mb-4">Default mail class, sender addresses, API keys for Zapier/Make, and outbound event webhooks.</p>
           <form id="mail-default-form" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
             <div><label class="block text-xs text-gray-400 mb-1">Default mail class</label>
@@ -6803,7 +6803,7 @@ Status: Discharged`;
             </div>
             <div class="md:col-span-2 flex items-end"><button type="submit" class="bg-violet-700 hover:bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Save mail default</button></div>
           </form>
-          <div id="c2m-addresses-box" class="text-xs text-gray-400 mb-4">Loading Click2Mail sender addresses…</div>
+          <div id="c2m-addresses-box" class="text-xs text-gray-400 mb-4">Loading Lob mail status…</div>
           <div class="grid md:grid-cols-2 gap-4">
             <div class="bg-gray-950/40 border border-gray-800 rounded-xl p-4">
               <h3 class="text-xs font-bold text-white uppercase tracking-wider mb-2">API Keys (Zapier)</h3>
@@ -7245,13 +7245,10 @@ Status: Discharged`;
       };
       const c2mAddrBox = $('#c2m-addresses-box');
       if (c2mAddrBox) {
-        api('/integrations/click2mail/addresses').then((d) => {
-          if (!d.configured) { c2mAddrBox.textContent = 'Click2Mail not configured on this deployment.'; return; }
-          const addrs = d.addresses || [];
-          c2mAddrBox.innerHTML = addrs.length
-            ? `<span class="text-gray-500">Sender addresses:</span> ${addrs.map((a) => `<span class="text-white font-mono ml-1">#${a.id}</span> ${escapeHtml(a.address1 || a.name || '')}`).join(' · ')}`
-            : (d.error ? `Click2Mail error: ${escapeHtml(d.error)}` : 'No sender addresses returned.');
-        }).catch(() => { c2mAddrBox.textContent = 'Could not load Click2Mail addresses.'; });
+        api('/integrations/lob/status').then((d) => {
+          if (!d.configured) { c2mAddrBox.textContent = 'Lob not configured on this deployment. Set LOB_SECRET_KEY.'; return; }
+          c2mAddrBox.innerHTML = `<span class="text-emerald-400 font-semibold">${escapeHtml(d.label || 'CONNECTED')}</span> · provider Lob · mode ${escapeHtml(d.mode || 'test')}`;
+        }).catch(() => { c2mAddrBox.textContent = 'Could not load Lob status.'; });
       }
       const renderApiKeys = async () => {
         const box = $('#api-keys-list');
@@ -11694,7 +11691,7 @@ async function pgAdminConsole(el) {
                 <button type="button" class="bg-gray-800 text-gray-200 text-xs font-bold px-3 py-2 rounded-lg" onclick="window._nav('client-attest')">Request changes</button>
               </div>` : ''}
             ${d.status === 'READY_TO_SEND' ? `
-              <button type="button" class="bg-sky-700 hover:bg-sky-600 text-white text-xs font-bold px-3 py-2 rounded-lg" onclick="window._mailDispute('${escapeHtml(d.id)}')">Mail via Click2Mail · start 30-day clock</button>
+              <button type="button" class="bg-sky-700 hover:bg-sky-600 text-white text-xs font-bold px-3 py-2 rounded-lg" onclick="window._mailDispute('${escapeHtml(d.id)}')">Mail via Lob · start 30-day clock</button>
               <p class="text-[10px] text-gray-500">Mailing starts the FCRA § 611 investigation clock. It does not guarantee deletion.</p>` : ''}
             ${d.status === 'SENT' ? `<p class="text-[11px] text-emerald-300">Mailed ${escapeHtml((d.sent_at || '').slice(0,16))}. Investigation clock is running.</p>` : ''}
           </div>`).join('') || '<p class="text-sm text-gray-500">No dispute drafts. Confirm facts first.</p>'}

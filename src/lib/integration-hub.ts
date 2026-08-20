@@ -12,7 +12,8 @@ import { minimizationPayload } from './data-classification';
 export const INTEGRATION_PROVIDERS = [
   { id: 'ghl', name: 'GoHighLevel', category: 'crm', authTypes: ['oauth', 'private_integration', 'pit'] },
   { id: 'mfsn', name: 'MyFreeScoreNow', category: 'credit_monitoring', authTypes: ['partner_api', 'affiliate_feed'] },
-  { id: 'click2mail', name: 'Click2Mail', category: 'mailing', authTypes: ['api_key'] },
+  { id: 'lob', name: 'Lob', category: 'mailing', authTypes: ['api_key'] },
+  { id: 'click2mail', name: 'Click2Mail (legacy)', category: 'mailing', authTypes: ['api_key'] },
   { id: 'stripe', name: 'Stripe', category: 'billing', authTypes: ['api_key'] },
   { id: 'twilio', name: 'Twilio', category: 'telephony', authTypes: ['api_key'] },
   { id: 'zapier', name: 'Zapier / Webhooks', category: 'automation', authTypes: ['webhook', 'api_key'] },

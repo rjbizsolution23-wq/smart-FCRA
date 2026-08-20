@@ -164,7 +164,7 @@ import { inspectUpload, decodeBase64Bytes, sanitizeFileName } from './lib/upload
 import { vaultOriginalFromBody } from './lib/report-vault';
 import { persistInvestigationClock, closeInvestigationClock, FCRA_611_OPERATIONAL_DAYS } from './lib/investigation-clocks';
 import { recordServiceCompleted, assertCoveredChargeAllowed, writeBillingLedger } from './lib/service-ledger';
-import { sendLetterViaClick2Mail, resolveMailClass } from './lib/click2mail';
+import { sendLetterViaLob, resolveMailClass, lobConfigured, lobPublicStatus, verifyUsAddress } from './lib/lob';
 import { registerSupportCrmRoutes, registerExternalIntegrationRoutes } from './lib/support-crm-routes';
 import { registerRoadmapRoutes, handleClientBillingWebhook } from './lib/roadmap-routes';
 import { registerComplianceOsRoutes } from './lib/compliance-os-routes';
@@ -659,6 +659,11 @@ type Bindings = {
   CLICK2MAIL_USERNAME?: string;
   CLICK2MAIL_AUTH_BASIC?: string;
   CLICK2MAIL_API_URL?: string;
+  LOB_SECRET_KEY?: string;
+  LOB_API_KEY?: string;
+  LOB_PUBLISHABLE_KEY?: string;
+  LOB_MODE?: string;
+  LOB_WEBHOOK_SECRET?: string;
   AI?: any;
   SMARTCREDIT_CLIENT_KEY?: string;
   SMARTCREDIT_CLIENT_SECRET?: string;
@@ -8047,12 +8052,14 @@ app.put('/api/settings/org', authMiddleware, async (c) => {
 app.get('/api/settings/integrations', authMiddleware, async (c) => {
   const user = c.get('user');
   if (user.role === 'client') return c.json({ error: 'Staff only' }, 403);
-  const click2mailOn = !!(c.env.CLICK2MAIL_USERNAME && c.env.CLICK2MAIL_AUTH_BASIC);
+  const lob = lobPublicStatus(c.env);
   return c.json({
+    mailing: lob,
+    lob,
     click2mail: {
-      configured: click2mailOn,
-      status: click2mailOn ? 'connected' : 'not_configured',
-      label: click2mailOn ? 'CONNECTED' : 'NOT CONFIGURED',
+      configured: false,
+      status: 'replaced_by_lob',
+      label: 'REPLACED BY LOB',
     },
     stripe: {
       configured: stripeConfigured(c.env),
@@ -8100,7 +8107,8 @@ app.get('/api/health/ready', async (c) => {
     mfsn: !!resolvePartnerMfsnCredentials(c.env as any),
         mfsnAffiliateOffers: listPublicAffiliateOffers().length,
         mfsnAffiliateId: MFSN_AFFILIATE_ID,
-    click2mail: !!(c.env.CLICK2MAIL_USERNAME && c.env.CLICK2MAIL_AUTH_BASIC),
+    lob: lobConfigured(c.env),
+    click2mail: false,
     twilioSms: !!(c.env.TWILIO_ACCOUNT_SID && c.env.TWILIO_AUTH_TOKEN && c.env.TWILIO_PHONE_NUMBER),
     ghl: ghlConfigured(c.env),
     tradelineMaster: tradelineMasterConfigured(c.env),
@@ -9847,23 +9855,35 @@ app.get('/api/documents/:id/pdf', authMiddleware, async (c) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// CLICK2MAIL DOCUMENT SENDING
+// LOB DOCUMENT SENDING (Print & Mail)
 // ═══════════════════════════════════════════════════════════════
 app.post('/api/documents/:id/send', authMiddleware, async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
-  const { recipientName, recipientAddress, recipientCity, recipientState, recipientZip, mailClass: bodyMailClass, fromAddressId } = await c.req.json();
+  const { recipientName, recipientAddress, recipientCity, recipientState, recipientZip, mailClass: bodyMailClass } = await c.req.json();
 
   const doc = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
   if (!doc) return c.json({ error: 'Document not found' }, 404);
+  if (!lobConfigured(c.env)) {
+    return c.json({ error: 'Mail vendor is not configured. Set LOB_SECRET_KEY on the Pages project before sending.' }, 503);
+  }
 
-  const orgRow = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+  const orgRow = await c.env.DB.prepare('SELECT name, settings FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
   const orgSettings = typeof orgRow?.settings === 'string' ? JSON.parse(orgRow.settings || '{}') : (orgRow?.settings || {});
   const mailClass = resolveMailClass({ bodyMailClass, orgDefault: orgSettings.default_mail_class });
+  const lh = orgSettings.letterhead || {};
+  const from = {
+    name: String(lh.attorneyName || lh.firmName || orgRow?.name || c.env.COMPANY_OWNER || 'Smart FCRA Operator'),
+    company: String(lh.firmName || orgRow?.name || c.env.COMPANY_NAME || 'Smart FCRA'),
+    address1: String(lh.address || '1342 NM 333'),
+    city: String(lh.city || 'Tijeras'),
+    state: String(lh.state || 'NM'),
+    zip: String(lh.zip || '87059'),
+  };
 
   let mailing;
   try {
-    mailing = await sendLetterViaClick2Mail(c.env, {
+    mailing = await sendLetterViaLob(c.env, {
       title: doc.title || 'FCRA Legal Document',
       content: doc.content || '',
       recipient: {
@@ -9873,8 +9893,9 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
         state: recipientState || '',
         zip: recipientZip || '',
       },
+      from,
       mailClass,
-      fromAddressId,
+      metadata: { org_id: user.org_id, document_id: id, client_id: String(doc.client_id || '') },
     });
   } catch (err: any) {
     return c.json({ error: err.message || 'Mail send failed' }, err.status || 502);
@@ -9908,7 +9929,7 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
     deliverableId: id,
   });
 
-  await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, doc.client_id, id, user.id, 'document_mailed', `Mailed "${doc.title}" to ${recipientName || doc.recipient_name || 'recipient'} · ${mailing.mailClass} · FCRA 611 clock ${clock.statutoryTarget}`).run();
+  await c.env.DB.prepare('INSERT INTO activity_log (id, org_id, client_id, document_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(generateId(), user.org_id, doc.client_id, id, user.id, 'document_mailed', `Mailed via Lob "${doc.title}" to ${recipientName || doc.recipient_name || 'recipient'} · ${mailing.mailClass} · ${mailing.mailingId} · FCRA 611 clock ${clock.statutoryTarget}`).run();
 
   emitOrgWebhook(c.env.DB, {
     orgId: user.org_id,
@@ -9918,6 +9939,7 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
       clientId: doc.client_id,
       mailingId: mailing.mailingId,
       mailClass: mailing.mailClass,
+      provider: 'lob',
       title: doc.title,
     },
   }).catch(() => null);
@@ -9948,8 +9970,12 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
     success: true,
     mailingId: mailing.mailingId,
     mailClass: mailing.mailClass,
+    provider: mailing.provider || 'lob',
+    mode: mailing.mode,
+    expectedDeliveryDate: mailing.expectedDeliveryDate,
+    trackingNumber: mailing.trackingNumber || null,
     investigationClock: clock,
-    message: 'Document mailed. FCRA § 611 30-day investigation clock started (35-day operational due date includes mail transit).',
+    message: 'Document mailed via Lob. FCRA § 611 30-day investigation clock started (35-day operational due date includes mail transit).',
   });
 });
 
@@ -11846,7 +11872,7 @@ function getAppHtml(mode: 'login' | 'app' = 'app'): string {
   </script>
   <script src="/static/demo-experience.js?v=20260819-stripe-live"></script>
   <script src="/static/platform-guide.js?v=20260819-platform-guide"></script>
-  <script src="/static/app.js?v=20260820-session-fix"></script>
+  <script src="/static/app.js?v=20260821-lob-mail"></script>
 </body>
 </html>`;
 }

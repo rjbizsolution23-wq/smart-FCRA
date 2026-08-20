@@ -30,7 +30,7 @@ import {
 } from '../engine/report-sandbox';
 import { persistInvestigationClock, craAddressForRecipient } from './investigation-clocks';
 import { recordServiceCompleted } from './service-ledger';
-import { sendLetterViaClick2Mail, click2mailConfigured, resolveMailClass } from './click2mail';
+import { sendLetterViaLob, lobConfigured, resolveMailClass } from './lob';
 
 const CONSENT_CATALOG = [
   { type: 'ELECTRONIC_COMMUNICATIONS', version: '1.0', label: 'Electronic communications' },
@@ -701,11 +701,11 @@ export function registerClientIntelligenceRoutes(
     if (!dispute.approved_at || dispute.status !== 'READY_TO_SEND') {
       return c.json({ error: 'Dispute must be approved before mailing. Opening a report or drafting a letter is not a mailing.' }, 400);
     }
-    if (!click2mailConfigured(c.env)) {
-      return c.json({ error: 'Mail vendor is not configured. Set Click2Mail secrets on the Pages project before sending.' }, 503);
+    if (!lobConfigured(c.env)) {
+      return c.json({ error: 'Mail vendor is not configured. Set LOB_SECRET_KEY on the Pages project before sending.' }, 503);
     }
     const sendBody = await c.req.json().catch(() => ({}));
-    const orgRow = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+    const orgRow = await c.env.DB.prepare('SELECT name, settings FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
     const orgSettings = typeof orgRow?.settings === 'string' ? JSON.parse(orgRow.settings || '{}') : (orgRow?.settings || {});
     const mailClass = resolveMailClass({ bodyMailClass: sendBody.mailClass, orgDefault: orgSettings.default_mail_class });
     const cra = craAddressForRecipient(dispute.recipient || dispute.recipient_type);
@@ -736,14 +736,25 @@ export function registerClientIntelligenceRoutes(
        VALUES (?, ?, ?, 'bureau-dispute', 'portal', ?, ?, ?, ?, 'draft', ?)`
     ).bind(docId, user.org_id, client.id, title, cra.name, cra.block, letterBody, user.id).run();
 
+    const lh = orgSettings.letterhead || {};
+    const from = {
+      name: String(lh.attorneyName || lh.firmName || `${client.first_name || ''} ${client.last_name || ''}`.trim() || 'Consumer'),
+      company: String(lh.firmName || orgRow?.name || ''),
+      address1: String(lh.address || client.address_line1 || '1342 NM 333'),
+      city: String(lh.city || client.city || 'Tijeras'),
+      state: String(lh.state || client.state || 'NM'),
+      zip: String(lh.zip || client.zip || '87059'),
+    };
+
     let mailing;
     try {
-      mailing = await sendLetterViaClick2Mail(c.env, {
+      mailing = await sendLetterViaLob(c.env, {
         title,
         content: letterBody,
         recipient: { name: cra.name, address1: cra.address1, city: cra.city, state: cra.state, zip: cra.zip },
+        from,
         mailClass,
-        fromAddressId: sendBody.fromAddressId,
+        metadata: { org_id: user.org_id, dispute_id: id, document_id: docId, client_id: client.id },
       });
     } catch (err: any) {
       return c.json({ error: err.message || 'Mail send failed' }, err.status || 502);

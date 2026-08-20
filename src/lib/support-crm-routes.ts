@@ -12,6 +12,7 @@ import {
   type WebhookEventType,
 } from './outbound-webhooks';
 import { startWorkflowRun } from './crm-workflow-engine';
+import { lobConfigured, lobPublicStatus, verifyUsAddress } from './lob';
 import { getClick2MailAccountAddresses, click2mailConfigured } from './click2mail';
 import {
   detectRedFlagTerms,
@@ -312,18 +313,44 @@ export function registerSupportCrmRoutes(app: Hono<any>, opts: RegisterOpts) {
     return c.json({ reviews: rows.results || [] });
   });
 
-  // ── Click2Mail addresses ────────────────────────────────
+  // ── Lob mailing (primary) ───────────────────────────────
+  app.get('/api/integrations/lob/status', authMiddleware, async (c) => {
+    const user = c.get('user');
+    if (staffOnly(user)) return c.json({ error: 'Staff access required' }, 403);
+    return c.json(lobPublicStatus(c.env));
+  });
+
+  app.post('/api/integrations/lob/verify-address', authMiddleware, async (c) => {
+    const user = c.get('user');
+    if (staffOnly(user)) return c.json({ error: 'Staff access required' }, 403);
+    if (!lobConfigured(c.env)) return c.json({ error: 'Lob is not configured' }, 503);
+    const body = await c.req.json().catch(() => ({}));
+    try {
+      const result = await verifyUsAddress(c.env, {
+        primary_line: String(body.primary_line || body.address1 || body.address_line1 || ''),
+        secondary_line: body.secondary_line || body.address2 || body.address_line2 || undefined,
+        city: body.city || body.address_city || undefined,
+        state: body.state || body.address_state || undefined,
+        zip_code: body.zip_code || body.zip || body.address_zip || undefined,
+      });
+      return c.json({ ok: true, verification: result });
+    } catch (err: any) {
+      return c.json({ error: err.message || 'Address verification failed' }, err.status || 502);
+    }
+  });
+
+  // ── Click2Mail addresses (legacy) ───────────────────────
   app.get('/api/integrations/click2mail/addresses', authMiddleware, async (c) => {
     const user = c.get('user');
     if (staffOnly(user)) return c.json({ error: 'Staff access required' }, 403);
     if (!click2mailConfigured(c.env)) {
-      return c.json({ configured: false, addresses: [] });
+      return c.json({ configured: false, addresses: [], replacedBy: 'lob' });
     }
     try {
       const addresses = await getClick2MailAccountAddresses(c.env);
-      return c.json({ configured: true, addresses });
+      return c.json({ configured: true, addresses, replacedBy: 'lob' });
     } catch (err: any) {
-      return c.json({ configured: true, error: err.message, addresses: [] }, 502);
+      return c.json({ configured: true, error: err.message, addresses: [], replacedBy: 'lob' }, 502);
     }
   });
 
