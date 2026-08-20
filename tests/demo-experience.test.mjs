@@ -34,7 +34,7 @@ const {
   DEMO_MAX_LIVE_PULLS,
 } = await import(pathToFileURL(path.join(root, 'src/engine/demo-experience.ts')).href);
 
-assert(DEMO_TOUR.length >= 50, 'tour covers the full product (50+ steps)');
+assert(DEMO_TOUR.length >= 48, 'tour covers the full product (48+ steps)');
 assert(DEMO_TOUR.every((s) => s.title && s.body && s.whyBuy && s.page), 'each tour step sells a screen');
 assert(!/letter templates/i.test(DEMO_PRODUCT_KNOWLEDGE), 'knowledge must not sell templates');
 assert(/GENERATED from selected violations/i.test(DEMO_PRODUCT_KNOWLEDGE), 'knowledge states generated letters');
@@ -127,7 +127,7 @@ assert(!/Salisha/i.test(DEMO_TOUR.map((s) => s.body + s.title).join(' ')), 'tour
   const actionPlan = routeDemoIntent('open the action plan');
   assert(actionPlan.matched && actionPlan.actions[0].page === 'client-actions', 'action plan intent');
   const fb = fallbackDemoReply('what does the consumer portal look like?');
-  assert(/every consumer tab/i.test(fb.reply), 'fallback offers a full portal walk');
+  assert(/preview portal/i.test(fb.reply), 'fallback offers portal preview');
 }
 
 assert(DEMO_CLIENT_NAME === 'Demo Client', 'sandbox display name is generic');

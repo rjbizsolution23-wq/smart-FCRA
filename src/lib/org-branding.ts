@@ -56,7 +56,7 @@ const DEFAULTS: OrgBrand = {
   owner: 'Rick Jefferson',
   address: '1342 NM 333, Tijeras, New Mexico 87059',
   website: 'https://rjbusinesssolutions.org',
-  supportEmail: 'support@rjbusinesssolutions.org',
+  supportEmail: 'support@smartfcra.com',
   logoUrl: 'https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg',
   fromName: 'RJ Business Solutions',
 };

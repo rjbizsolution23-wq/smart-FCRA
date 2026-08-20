@@ -85,16 +85,27 @@
     const card = document.getElementById('sf-demo-tour');
     if (!card || !tour.length) return;
     const s = tour[step] || tour[0];
-    card.innerHTML = `
-      <div class="sf-kicker">Guided tour ${step + 1} / ${tour.length}</div>
-      <h3>${esc(s.title)}</h3>
-      <p>${esc(s.body)}</p>
-      <p class="sf-why"><strong>Why firms buy this:</strong> ${esc(s.whyBuy)}</p>
-      <div class="sf-tour-nav">
-        <button type="button" data-tour="prev" ${step === 0 ? 'disabled' : ''}>Back</button>
-        <button type="button" data-tour="next">${step >= tour.length - 1 ? 'Finish' : 'Next'}</button>
-        <button type="button" data-tour="hide">Hide</button>
-      </div>`;
+    const silent = true;
+    if (silent) {
+      card.innerHTML = `
+        <div class="sf-kicker">Live preview · ${step + 1} / ${tour.length}</div>
+        <div class="sf-tour-nav mt-2">
+          <button type="button" data-tour="prev" ${step === 0 ? 'disabled' : ''}>Back</button>
+          <button type="button" data-tour="next">${step >= tour.length - 1 ? 'Finish' : 'Next'}</button>
+          <button type="button" data-tour="hide">Hide</button>
+        </div>`;
+    } else {
+      card.innerHTML = `
+        <div class="sf-kicker">Guided tour ${step + 1} / ${tour.length}</div>
+        <h3>${esc(s.title)}</h3>
+        <p>${esc(s.body)}</p>
+        <p class="sf-why"><strong>Why firms buy this:</strong> ${esc(s.whyBuy)}</p>
+        <div class="sf-tour-nav">
+          <button type="button" data-tour="prev" ${step === 0 ? 'disabled' : ''}>Back</button>
+          <button type="button" data-tour="next">${step >= tour.length - 1 ? 'Finish' : 'Next'}</button>
+          <button type="button" data-tour="hide">Hide</button>
+        </div>`;
+    }
     card.querySelector('[data-tour="prev"]').onclick = () => goTour(step - 1);
     card.querySelector('[data-tour="next"]').onclick = () => {
       if (step >= tour.length - 1) { card.classList.add('sf-hidden'); return; }

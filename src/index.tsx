@@ -78,7 +78,9 @@ import {
   demoSessionExpiryIso,
   livePullBlocked,
   buildDemoConvertUrl,
+  sanitizeDemoAgentOutput,
 } from './engine/demo-experience';
+import { resolveSupportEmail, resolveEscalationEmail, shouldEscalateSupport } from './lib/support-config';
 import { fillSixMonthSeries, sparklinePath } from './lib/overview-metrics';
 import { resolveTenantTheme } from './lib/tenant-theme';
 import { FOUNDER_TEMPLATES } from './engine/founder-templates';
@@ -233,9 +235,13 @@ async function encryptPII(c: any, text: string): Promise<string> {
 }
 
 async function decryptPII(c: any, text: string): Promise<string> {
-  const key = c.env.PII_ENCRYPTION_KEY && c.env.PII_ENCRYPTION_KEY.length >= 32
-    ? c.env.PII_ENCRYPTION_KEY
-    : (isSandboxDemoOrg(c.get('user')?.org_id) ? resolveOrgEncryptionKey(undefined, c.get('user')?.org_id) : undefined);
+  const orgId = c.get('user')?.org_id;
+  let key: string | undefined;
+  try {
+    key = resolveOrgEncryptionKey(c.env.PII_ENCRYPTION_KEY, orgId);
+  } catch {
+    key = undefined;
+  }
   return decryptTextSafe(text, key);
 }
 
@@ -1289,7 +1295,7 @@ app.post('/api/public/lead/:formId', async (c) => {
   }
 
   // Soft: email ops + sync GHL contact
-  const opsEmail = c.env.TRADELINE_OPS_EMAIL || c.env.COMPANY_EMAIL || 'support@rjbusinesssolutions.org';
+  const opsEmail = resolveSupportEmail(c.env);
   let emailResult: any = null;
   try {
     emailResult = await sendAppEmail(c.env, {
@@ -1343,6 +1349,39 @@ app.post('/api/public/lead/:formId', async (c) => {
     ghlContactId: ghl?.contactId || null,
     message: 'Thanks — a specialist will follow up shortly.',
   }, 201);
+});
+
+app.post('/api/public/support/contact', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const email = String(body.email || '').trim().toLowerCase();
+  const subject = String(body.subject || 'Smart FCRA support').trim().slice(0, 200);
+  const message = String(body.message || body.body || '').trim().slice(0, 8000);
+  if (!email || message.length < 8) return c.json({ error: 'Valid email and message (8+ chars) required' }, 400);
+  const escalated = shouldEscalateSupport(`${subject} ${message}`);
+  const supportTo = resolveSupportEmail(c.env);
+  const id = generateId();
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO platform_support_intake (id, org_id, user_email, subject, body, category, escalated, status)
+       VALUES (?, NULL, ?, ?, ?, ?, ?, 'new')`,
+    ).bind(id, email, subject, message, String(body.category || 'general'), escalated ? 1 : 0).run();
+  } catch { /* table optional until migration */ }
+  await sendAppEmail(c.env, {
+    to: supportTo,
+    subject: escalated ? `[ESCALATION] ${subject}` : `[Support] ${subject}`,
+    text: `From: ${email}\n\n${message}`,
+    html: `<p><strong>From:</strong> ${email}</p><pre>${message.replace(/</g, '&lt;')}</pre>`,
+    purpose: 'onboarding',
+  }).catch(() => {});
+  if (escalated) {
+    await sendAppEmail(c.env, {
+      to: resolveEscalationEmail(c.env),
+      subject: `[ESCALATION] Smart FCRA support — ${subject}`,
+      text: `Escalated intake ${id}\nFrom: ${email}\n\n${message}`,
+      purpose: 'onboarding',
+    }).catch(() => {});
+  }
+  return c.json({ ok: true, id, escalated, message: 'Message received — Smart FCRA Support will respond at support@smartfcra.com.' });
 });
 
 async function lookupDemoSession(c: any) {
@@ -1459,7 +1498,7 @@ app.post('/api/public/demo/start', async (c) => {
   } catch { /* brand_leads optional if 0020 missing */ }
 
   try {
-    const opsEmail = c.env.TRADELINE_OPS_EMAIL || c.env.COMPANY_EMAIL || 'support@rjbusinesssolutions.org';
+    const opsEmail = resolveSupportEmail(c.env);
     await sendAppEmail(c.env, {
       to: opsEmail,
       from: c.env.CLOUDFLARE_EMAIL_FROM_ONBOARDING || c.env.CLOUDFLARE_EMAIL_FROM_NOREPLY || 'welcome@onboarding.smartfcra.com',
@@ -1755,6 +1794,9 @@ Keep reply under 180 words. No legal advice. No internals.`,
     actions = fb.actions.length ? fb.actions : actions;
   }
   if (!reply) reply = fallbackDemoReply(message).reply;
+  const sanitized = sanitizeDemoAgentOutput(message, reply, actions);
+  reply = sanitized.reply;
+  actions = sanitized.actions;
 
   try {
     await c.env.DB.prepare(
@@ -9527,7 +9569,7 @@ app.get('/api/company', async (c) => {
   return c.json({
     name: 'Smart FCRA',
     website: c.env.COMPANY_WEBSITE || 'https://smartfcra.com',
-    email: c.env.COMPANY_EMAIL || 'support@rjbusinesssolutions.org',
+    email: resolveSupportEmail(c.env),
   });
 });
 
@@ -10450,6 +10492,67 @@ app.post('/api/admin/backup/trigger', authMiddleware, adminGateMiddleware, async
 
 const DEMO_PORTAL_PASSWORD = 'demo123456';
 
+async function demoReportsDecryptOk(c: any, orgId: string, clientId: string): Promise<boolean> {
+  const row = await c.env.DB.prepare(
+    `SELECT parsed_data FROM credit_reports WHERE client_id = ? AND org_id = ? ORDER BY created_at DESC LIMIT 1`,
+  ).bind(clientId, orgId).first() as any;
+  if (!row?.parsed_data) return true;
+  try {
+    const dec = await decryptPII(c, row.parsed_data);
+    if (!dec || dec.startsWith('[encrypted')) return false;
+    JSON.parse(dec);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function seedDemoPortalRichData(c: any, orgId: string, clientId: string, staffUserId: string) {
+  const flag = await c.env.DB.prepare(
+    `SELECT id FROM activity_log WHERE org_id = ? AND client_id = ? AND action = 'demo_portal_seeded' LIMIT 1`,
+  ).bind(orgId, clientId).first().catch(() => null);
+  if (flag) return { skipped: true };
+
+  const msgId = generateId();
+  await c.env.DB.prepare(
+    `INSERT INTO portal_messages (id, org_id, client_id, sender_user_id, sender_role, channel, subject, body)
+     VALUES (?, ?, ?, ?, 'staff', 'portal', ?, ?)`,
+  ).bind(msgId, orgId, clientId, staffUserId, 'Welcome to your portal', 'Hi — your tri-bureau sample case is loaded. Review My Credit, confirm facts on any account you want disputed, and message us here anytime.').run().catch(() => {});
+
+  const dispId = generateId();
+  await c.env.DB.prepare(
+    `INSERT INTO portal_disputes (id, org_id, client_id, bureau, account_name, recipient_type, status, dispute_basis_json, created_at)
+     VALUES (?, ?, ?, 'TransUnion', 'Sample revolving account — review only', 'CRA', 'CLIENT_REVIEW', ?, datetime('now'))`,
+  ).bind(dispId, orgId, clientId, JSON.stringify({ basis: 'Sample demo dispute draft — attest facts before submit.' })).run().catch(() => {});
+
+  const packetStatus = {
+    croa_disclosure: 'signed',
+    croa_contract: 'signed',
+    federal_cancellation: 'delivered',
+    state_rider: 'signed',
+    limited_poa: 'signed',
+    report_authorization: 'signed',
+    dispute_attestation: 'required',
+    identity_theft_attestation: 'n/a',
+    electronic_comms_consent: 'signed',
+    marketing_telephone_consent: 'signed',
+    payment_authorization: 'not_required',
+    service_completion: 'n/a',
+    cancellation_form: 'delivered',
+    privacy_notice: 'delivered',
+    dispute_auth_history: 'n/a',
+  };
+  await c.env.DB.prepare(
+    `UPDATE clients SET signature_packet_json = ?, updated_at = datetime('now') WHERE id = ? AND org_id = ?`,
+  ).bind(JSON.stringify(packetStatus), clientId, orgId).run().catch(() => {});
+
+  await c.env.DB.prepare(
+    `INSERT INTO activity_log (id, org_id, client_id, user_id, action, description) VALUES (?, ?, ?, ?, ?, ?)`,
+  ).bind(generateId(), orgId, clientId, staffUserId, 'demo_portal_seeded', 'Demo portal sample messages and dispute draft seeded').run().catch(() => {});
+
+  return { ok: true };
+}
+
 async function loadDemoSampleCase(
   c: any,
   orgId: string,
@@ -10571,14 +10674,17 @@ async function ensureDemoClientAndPortal(
 
   let sampleCase: any = null;
   if (opts.loadCase !== false) {
+    const decryptOk = await demoReportsDecryptOk(c, orgId, client.id);
+    const forceReload = !!opts.forceReload || !decryptOk;
     try {
       sampleCase = await loadDemoSampleCase(c, orgId, client.id, {
-        forceReload: !!opts.forceReload,
+        forceReload,
         actingUser: opts.actingUser || c.get('user') || { id: 'usr_demo_001', org_id: orgId },
       });
     } catch (e: any) {
       sampleCase = { skipped: true, error: String(e?.message || e) };
     }
+    await seedDemoPortalRichData(c, orgId, client.id, (opts.actingUser || c.get('user') || { id: 'usr_demo_001' }).id).catch(() => {});
   }
 
   return { clientId: client.id as string, email, portalPassword: DEMO_PORTAL_PASSWORD, sampleCase };

@@ -165,7 +165,7 @@ export async function sendTransactionalEmail(
   apiKey: string | undefined,
   opts: { to: string; subject: string; html: string; from?: string; sendgridKey?: string }
 ): Promise<{ sent: boolean; simulated: boolean; provider?: string }> {
-  const from = opts.from || 'Smart FCRA <support@rjbusinesssolutions.org>';
+  const from = opts.from || 'Smart FCRA <support@smartfcra.com>';
 
   if (apiKey) {
     const res = await fetch('https://api.resend.com/emails', {

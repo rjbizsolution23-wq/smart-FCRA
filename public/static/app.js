@@ -110,6 +110,62 @@
     });
   };
 
+  /** Branded modal prompt — replaces window.prompt() for integrations and settings. */
+  function promptDialog(opts) {
+    return new Promise((resolve) => {
+      const id = opts.id || 'branded-prompt';
+      const fields = opts.fields || [{ name: 'value', label: opts.label || '', placeholder: opts.placeholder || '', defaultValue: opts.defaultValue || '', type: opts.type || 'text', required: opts.required !== false }];
+      const title = opts.title || t('modal.enterDetails');
+      const submitLabel = opts.submitLabel || t('common.continue');
+      const cancelLabel = opts.cancelLabel || t('common.cancel');
+      const fieldsHtml = fields.map((f) => `
+        <div class="mb-3">
+          <label class="block text-xs font-semibold text-gray-300 mb-1.5" for="pf-${f.name}">${escapeHtml(f.label || f.name)}</label>
+          ${f.type === 'textarea'
+            ? `<textarea id="pf-${f.name}" rows="4" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="${escapeHtml(f.placeholder || '')}">${escapeHtml(f.defaultValue || '')}</textarea>`
+            : `<input id="pf-${f.name}" type="${f.type === 'password' ? 'password' : 'text'}" value="${escapeHtml(f.defaultValue || '')}" placeholder="${escapeHtml(f.placeholder || '')}" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" autocomplete="off">`}
+        </div>`).join('');
+      window._openModal(`
+        <div class="bg-gray-900 border border-sky-500/30 rounded-2xl max-w-md w-full p-5 shadow-2xl" role="document">
+          <div class="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <div class="text-[10px] uppercase tracking-wider font-bold text-sky-300 mb-1">Smart FCRA</div>
+              <h2 class="text-lg font-bold text-white font-display">${escapeHtml(title)}</h2>
+              ${opts.description ? `<p class="text-xs text-gray-400 mt-1">${escapeHtml(opts.description)}</p>` : ''}
+            </div>
+            <button type="button" data-modal-close class="text-gray-400 hover:text-white" aria-label="${t('common.close')}"><i class="fas fa-times"></i></button>
+          </div>
+          ${fieldsHtml}
+          <div class="flex gap-2 mt-4">
+            <button type="button" id="pf-cancel" class="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg py-2.5 text-sm font-semibold">${escapeHtml(cancelLabel)}</button>
+            <button type="button" id="pf-submit" class="flex-1 btn-rj rounded-lg py-2.5 text-sm font-semibold">${escapeHtml(submitLabel)}</button>
+          </div>
+        </div>`, id);
+      const wrap = document.getElementById(id);
+      const finish = (val) => { if (wrap) { releaseFocusTrap(wrap); wrap.remove(); } resolve(val); };
+      document.getElementById('pf-cancel')?.addEventListener('click', () => finish(null));
+      wrap?.querySelector('[data-modal-close]')?.addEventListener('click', () => finish(null));
+      document.getElementById('pf-submit')?.addEventListener('click', () => {
+        const out = {};
+        for (const f of fields) {
+          const el = document.getElementById('pf-' + f.name);
+          out[f.name] = el ? el.value.trim() : '';
+          if (f.required !== false && !out[f.name]) { toast(t('modal.fieldRequired'), 'error'); return; }
+        }
+        finish(fields.length === 1 && fields[0].name === 'value' ? out.value : out);
+      });
+    });
+  }
+  window._promptDialog = promptDialog;
+
+  async function brandedPrompt(label, defaultValue, opts) {
+    return window._promptDialog(Object.assign({ label, defaultValue: defaultValue || '' }, opts || {}));
+  }
+
+  async function brandedPromptForm(title, fields, opts) {
+    return window._promptDialog(Object.assign({ title, fields }, opts || {}));
+  }
+
   async function previewVaultPdf(uploadId, fileName) {
     const qs = portalClientQs();
     const res = await fetch('/api/client-portal/uploads/' + uploadId + '/download' + qs, {
@@ -1686,6 +1742,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
   };
 
   function prependPortalWalkthrough(el, page) {
+    if (state.demoSession) return;
     if (!el) return;
     const preview = !!state.impersonateClientId;
     const dedicated = String(page || '').startsWith('client-') && page !== 'client-detail';
@@ -1992,18 +2049,19 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     const btnEdit = document.getElementById('btn-edit-client');
     const btnEmail = document.getElementById('btn-email-client');
     if (btnEmail) btnEmail.onclick = async () => {
-      const subject = prompt('Email subject', 'Update from your Smart FCRA credit team');
-      if (subject === null) return;
-      const body = prompt('Message to client');
-      if (!body) return;
+      const fields = await brandedPromptForm('Email client', [
+        { name: 'subject', label: 'Email subject', defaultValue: 'Update from your Smart FCRA credit team' },
+        { name: 'body', label: 'Message to client', type: 'textarea', placeholder: 'Write your message…' },
+      ], { submitLabel: 'Send email' });
+      if (!fields || !fields.body) return;
       try {
-        const r = await api('/clients/' + c.id + '/email', { method: 'POST', body: JSON.stringify({ subject, body }) });
+        const r = await api('/clients/' + c.id + '/email', { method: 'POST', body: JSON.stringify({ subject: fields.subject, body: fields.body }) });
         toast(r.email?.sent ? 'Emailed + logged to portal' : (r.email?.simulated ? 'Simulated email + portal log' : 'Logged to portal'), 'success');
       } catch (err) { toast(err.message, 'error'); }
     };
     const btnInvite = document.getElementById('btn-portal-invite');
     if (btnInvite) btnInvite.onclick = async () => {
-      const email = prompt('Client email for portal login', c.email || '');
+      const email = await brandedPrompt('Client email for portal login', c.email || '', { title: 'Portal invite', submitLabel: 'Send invite' });
       if (!email) return;
       try {
         const r = await api('/clients/' + c.id + '/portal-invite', { method: 'POST', body: JSON.stringify({ email }) });
@@ -2031,7 +2089,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     };
     const btnSms = document.getElementById('btn-sms-client');
     if (btnSms) btnSms.onclick = async () => {
-      const message = prompt('SMS message to client', 'Hi — this is your Smart FCRA credit team. Please check your portal for updates.');
+      const message = await brandedPrompt('SMS message to client', 'Hi — this is your Smart FCRA credit team. Please check your portal for updates.', { title: 'Send SMS', type: 'textarea', submitLabel: 'Send SMS' });
       if (!message) return;
       try {
         const r = await api('/clients/' + c.id + '/sms', { method: 'POST', body: JSON.stringify({ message }) });
@@ -4579,7 +4637,10 @@ Status: Discharged`;
       const clientRes = await api(`/clients/${r.client_id}`).catch(() => null);
       const client = clientRes?.client || {};
       
-      const parsed = res.parsed || (r.parsed_data ? JSON.parse(r.parsed_data) : {});
+      const parsed = res.parsed || (() => {
+        if (!r.parsed_data || String(r.parsed_data).startsWith('[encrypted')) return {};
+        try { return JSON.parse(r.parsed_data); } catch { return {}; }
+      })();
       const scores = res.scores || parsed.scores || {};
       const rawPayload = res.rawPayload;
       const rawPayloadType = res.rawPayloadType || 'text';
@@ -5945,7 +6006,7 @@ Status: Discharged`;
       toast('Client address incomplete — please fill address in client profile first','error');
       return;
     }
-    const mailClass = (prompt('USPS mail class: STANDARD, FIRST_CLASS, or CERTIFIED', 'FIRST_CLASS') || 'FIRST_CLASS').trim().toUpperCase();
+    const mailClass = (await brandedPrompt('USPS mail class', 'FIRST_CLASS', { title: 'Mail document', description: 'STANDARD, FIRST_CLASS, or CERTIFIED', submitLabel: 'Continue' }) || 'FIRST_CLASS').trim().toUpperCase();
     if (!confirm(`Mail document?\n\nTo: ${recipientName}\n${recipientAddress}\n${recipientCity}, ${recipientState} ${recipientZip}\n\nClass: ${mailClass}\n\nSent via Click2Mail with FCRA §611 clock.`)) return;
     try {
       const data = await api(`/documents/${id}/send`, {
@@ -7126,7 +7187,7 @@ Status: Discharged`;
       renderWebhooks();
       const btnCreateKey = $('#btn-create-api-key');
       if (btnCreateKey) btnCreateKey.onclick = async () => {
-        const name = prompt('API key name (e.g. Zapier production)', 'Zapier') || 'Integration';
+        const name = await brandedPrompt('API key name (e.g. Zapier production)', 'Zapier', { title: 'Create API key', description: 'Name this key for your integration (Zapier, Make, custom app).', submitLabel: 'Create key' }) || 'Integration';
         try {
           const d = await api('/integrations/api-keys', { method: 'POST', body: JSON.stringify({ name, scopes: ['read', 'write', 'webhooks'] }) });
           alert(`Save this key now — it will not be shown again:\n\n${d.key}`);
@@ -7135,11 +7196,13 @@ Status: Discharged`;
       };
       const btnCreateWebhook = $('#btn-create-webhook');
       if (btnCreateWebhook) btnCreateWebhook.onclick = async () => {
-        const label = prompt('Webhook label', 'Zapier') || 'Webhook';
-        const url = prompt('Target URL (HTTPS)', '');
-        if (!url) return;
+        const fields = await brandedPromptForm('Create webhook', [
+          { name: 'label', label: 'Webhook label', defaultValue: 'Zapier' },
+          { name: 'url', label: 'Target URL (HTTPS)', placeholder: 'https://hooks.zapier.com/…' },
+        ], { submitLabel: 'Create webhook' });
+        if (!fields || !fields.url) return;
         try {
-          const d = await api('/integrations/webhooks', { method: 'POST', body: JSON.stringify({ label, url, events: ['client.created', 'letter.sent', 'report.imported', 'ticket.created'] }) });
+          const d = await api('/integrations/webhooks', { method: 'POST', body: JSON.stringify({ label: fields.label || 'Webhook', url: fields.url, events: ['client.created', 'letter.sent', 'report.imported', 'ticket.created'] }) });
           alert(`Webhook secret (for signature verification):\n\n${d.secret}`);
           await renderWebhooks();
         } catch (err) { toast(err.message, 'error'); }
@@ -7219,7 +7282,7 @@ Status: Discharged`;
           </label>`).join('');
         $('#btn-save-ai-provider')?.addEventListener('click', async () => {
           const pick = document.querySelector('input[name="aiProviderPick"]:checked')?.value;
-          const apiKey = prompt('Paste API key (encrypted vault — never shown again)');
+          const apiKey = await brandedPrompt('Paste API key', '', { title: 'Save AI provider', description: 'Encrypted vault — never shown again.', type: 'password', submitLabel: 'Save key' });
           if (!pick || !apiKey) return;
           try {
             await api('/platform-extensions/ai/providers/' + pick, { method: 'PUT', body: JSON.stringify({ apiKey, enabled: true }) });
@@ -7242,16 +7305,18 @@ Status: Discharged`;
             btn.onclick = async () => {
               const id = btn.dataset.gw;
               if (id === 'authorize_net') {
-                const loginId = prompt('Authorize.net API Login ID');
-                const transactionKey = prompt('Authorize.net Transaction Key');
-                if (!loginId || !transactionKey) return;
-                await api('/platform-extensions/payment-gateways/authorize_net', { method: 'PUT', body: JSON.stringify({ loginId, transactionKey }) });
+                const creds = await brandedPromptForm('Authorize.net', [
+                  { name: 'loginId', label: 'API Login ID' },
+                  { name: 'transactionKey', label: 'Transaction Key', type: 'password' },
+                ], { submitLabel: 'Save gateway' });
+                if (!creds?.loginId || !creds?.transactionKey) return;
+                await api('/platform-extensions/payment-gateways/authorize_net', { method: 'PUT', body: JSON.stringify({ loginId: creds.loginId, transactionKey: creds.transactionKey }) });
               } else if (id === 'nmi') {
-                const securityKey = prompt('NMI Security Key');
+                const securityKey = await brandedPrompt('NMI Security Key', '', { title: 'NMI gateway', type: 'password', submitLabel: 'Save gateway' });
                 if (!securityKey) return;
                 await api('/platform-extensions/payment-gateways/nmi', { method: 'PUT', body: JSON.stringify({ securityKey }) });
               } else if (id === 'stripe_connect') {
-                const accountId = prompt('Stripe Connect account ID (acct_…)');
+                const accountId = await brandedPrompt('Stripe Connect account ID', 'acct_', { title: 'Stripe Connect', placeholder: 'acct_…', submitLabel: 'Save gateway' });
                 if (!accountId) return;
                 await api('/platform-extensions/payment-gateways/stripe_connect', { method: 'PUT', body: JSON.stringify({ accountId }) });
               }
@@ -11731,7 +11796,7 @@ async function pgAdminConsole(el) {
       } catch (err) { toast(err.message, 'error'); }
     };
     document.getElementById('mfa-disable').onclick = async () => {
-      const code = prompt('Enter current MFA code to disable');
+      const code = await brandedPrompt('Enter current MFA code to disable', '', { title: 'Disable MFA', submitLabel: 'Disable' });
       if (!code) return;
       try { await api('/auth/mfa/disable', { method: 'POST', body: JSON.stringify({ code }) }); toast('MFA disabled', 'success'); pgClientSettings(el); }
       catch (err) { toast(err.message, 'error'); }
@@ -13103,9 +13168,9 @@ async function pgAdminConsole(el) {
               </div>
             </form>
           </div>` : ''}
-          <div class="rounded-xl border border-amber-500/20 bg-amber-950/15 p-4 text-xs text-amber-100/90">
-            <strong class="text-amber-300">Preview Portal</strong> opens the consumer shell for that client. Walk Dashboard → Get Started → My Credit → Report → Case → Confirm Facts → Disputes → Action Plan → Progress → Rights → Journey → Messages → Documents → Readiness → Boost Tools → AU Tradelines → Tutor → Letters → Legal &amp; Notary → Video → Academy → Billing → Consents → Privacy → Cancel Services → AI Mentors. Signatures stay blocked while you preview.
-          </div>
+          ${state.demoSession ? '' : `<div class="rounded-xl border border-amber-500/20 bg-amber-950/15 p-4 text-xs text-amber-100/90">
+            <strong class="text-amber-300">Preview Portal</strong> opens the consumer shell for that client. Signatures stay blocked while you preview.
+          </div>`}
 
           <!-- Filters Bar -->
           <div class="flex flex-col md:flex-row gap-4 items-center bg-gray-900/40 border border-gray-800 rounded-2xl p-4">
@@ -13765,19 +13830,21 @@ async function pgAdminConsole(el) {
         } catch (err) { toast(err.message, 'error'); }
       });
       el.querySelector('#ih-zoom-config')?.addEventListener('click', async () => {
-        const clientId = prompt('Zoom Server-to-Server OAuth Client ID');
-        const clientSecret = prompt('Zoom Client Secret');
-        const accountId = prompt('Zoom Account ID');
-        if (!clientId || !clientSecret) return;
+        const creds = await brandedPromptForm('Zoom Server-to-Server OAuth', [
+          { name: 'clientId', label: 'Client ID' },
+          { name: 'clientSecret', label: 'Client Secret', type: 'password' },
+          { name: 'accountId', label: 'Account ID' },
+        ], { submitLabel: 'Save Zoom credentials' });
+        if (!creds?.clientId || !creds?.clientSecret) return;
         try {
-          await api('/platform-extensions/zoom/credentials', { method: 'PUT', body: JSON.stringify({ clientId, clientSecret, accountId }) });
+          await api('/platform-extensions/zoom/credentials', { method: 'PUT', body: JSON.stringify({ clientId: creds.clientId, clientSecret: creds.clientSecret, accountId: creds.accountId }) });
           toast('Zoom credentials saved', 'success');
           await pgIntegrationHub(el);
         } catch (err) { toast(err.message, 'error'); }
       });
       el.querySelectorAll('.ih-resolve-btn').forEach((btn) => {
         btn.onclick = async () => {
-          const clientId = prompt('Link to Smart FCRA client ID');
+          const clientId = await brandedPrompt('Smart FCRA client ID', '', { title: 'Link identity', description: 'Paste the client ID to attach this inbound record.', submitLabel: 'Link client' });
           if (!clientId) return;
           try {
             await api(`/integration-os/identity-queue/${btn.dataset.id}/resolve`, { method: 'POST', body: JSON.stringify({ clientId }) });
@@ -13970,13 +14037,15 @@ async function pgAdminConsole(el) {
   async function pgComplianceOs(el) {
     el.innerHTML = `<div class="flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-3xl text-emerald-400"></i></div>`;
     try {
-      const [overview, workflows, actions, leads, catalog, automations] = await Promise.all([
+      const [overview, workflows, actions, leads, catalog, automations, sigCatalog, commsLib] = await Promise.all([
         api('/compliance-os/overview'),
         api('/compliance-os/workflows'),
         api('/compliance-os/actions').catch(() => ({ actions: [] })),
         api('/leads').catch(() => ({ leads: [] })),
         api('/compliance-os/automation-catalog').catch(() => ({ triggers: [], stepTypes: [] })),
         api('/compliance-os/automations').catch(() => ({ automations: [] })),
+        api('/compliance-os/signature-packet/catalog').catch(() => ({ documents: [] })),
+        api('/compliance-os/comms/library').catch(() => ({ templates: [] })),
       ]);
       const lanes = overview.lanes || ['marketing', 'transactional', 'compliance'];
       const wfList = workflows.workflows || [];
@@ -13984,6 +14053,8 @@ async function pgAdminConsole(el) {
       const leadRows = leads.leads || [];
       const autoList = automations.automations || [];
       const triggers = catalog.triggers || [];
+      const sigDocs = sigCatalog.documents || [];
+      const commsTemplates = commsLib.templates || [];
 
       el.innerHTML = `
         <div class="fade-in space-y-6">
@@ -14049,6 +14120,37 @@ async function pgAdminConsole(el) {
             <p class="text-[10px] text-gray-500 mt-2">New leads auto-start <strong class="text-white">new_lead</strong> + follow-up workflows. Use Run on client to start any library workflow on a specific file.</p>
           </div>
 
+          <div class="glass rounded-xl p-5 border border-rose-900/30">
+            <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-file-signature text-rose-400 mr-2"></i>Client signature packet (CROA spine)</h2>
+            <p class="text-[11px] text-gray-400 mb-3">Federal disclosure → contract → limited POA → dispute attestation. Missing required docs block workflows server-side.</p>
+            <div class="flex flex-wrap gap-2 mb-3 text-xs">
+              <input id="sig-packet-client-id" placeholder="Client ID (e.g. cli_demo_001)" class="flex-1 min-w-[180px] bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white">
+              <button type="button" id="sig-packet-load" class="bg-rose-800 hover:bg-rose-700 text-white px-4 py-2 rounded-lg font-semibold">Load checklist</button>
+            </div>
+            <div id="sig-packet-gates" class="grid md:grid-cols-2 lg:grid-cols-3 gap-2 mb-3 text-[10px]"></div>
+            <div id="sig-packet-checklist" class="space-y-1 max-h-64 overflow-y-auto text-[10px] font-mono"></div>
+            <details class="mt-3 text-[10px] text-gray-400">
+              <summary class="cursor-pointer text-rose-300 font-semibold">Locked CROA §1679c disclosure (verbatim)</summary>
+              <pre class="mt-2 whitespace-pre-wrap bg-gray-950/60 border border-gray-800 rounded-lg p-3 text-gray-300 max-h-48 overflow-y-auto">${escapeHtml(sigCatalog.statutoryDisclosure || '')}</pre>
+            </details>
+          </div>
+
+          <div class="glass rounded-xl p-5 border border-sky-900/30">
+            <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-envelope-open-text text-sky-400 mr-2"></i>Branded email &amp; SMS library</h2>
+            <p class="text-[11px] text-gray-400 mb-3">Pre-built transactional, compliance, and engagement starters — three-lane gated on send.</p>
+            <div class="grid md:grid-cols-2 gap-2 max-h-56 overflow-y-auto text-xs mb-4">${commsTemplates.map((t) => `
+              <div class="bg-gray-950/40 border border-gray-800 rounded-lg p-3">
+                <div class="font-semibold text-white">${escapeHtml(t.name)}</div>
+                <div class="text-gray-500">${escapeHtml(t.id)} · ${escapeHtml(t.channel)} · ${escapeHtml(t.lane)}</div>
+                <p class="text-[10px] text-gray-400 mt-1">${escapeHtml(t.description || '')}</p>
+              </div>`).join('')}</div>
+            <form id="comms-ai-setup-form" class="flex flex-wrap gap-2 text-xs">
+              <input name="prompt" placeholder="Describe workflow — e.g. welcome + 3-day attestation nudge" class="flex-1 min-w-[220px] bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white" required>
+              <button type="submit" class="bg-sky-700 hover:bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold"><i class="fas fa-wand-magic-sparkles mr-1"></i>AI setup</button>
+            </form>
+            <div id="comms-ai-setup-result" class="mt-2 text-[10px] text-gray-400"></div>
+          </div>
+
           <div class="glass rounded-xl p-5 border border-sky-900/30">
             <h2 class="text-sm font-bold text-white mb-3"><i class="fas fa-project-diagram text-sky-400 mr-2"></i>Visual Automation Builder (WHEN → IF → THEN)</h2>
             <form id="automation-visual-form" class="space-y-4 text-xs">
@@ -14107,7 +14209,7 @@ async function pgAdminConsole(el) {
 
       el.querySelectorAll('.wf-run-client').forEach((btn) => {
         btn.onclick = async () => {
-          const clientId = prompt('Client ID to start workflow on (or open Demo Client from Clients list)');
+          const clientId = await brandedPrompt('Client ID', state.demoSession?.sampleClientId || 'cli_demo_001', { title: 'Run workflow on client', description: 'Open Demo Client from Clients list or paste a client ID.', submitLabel: 'Start workflow' });
           if (!clientId) return;
           try {
             await api('/compliance-os/workflows/' + btn.dataset.key + '/start', { method: 'POST', body: JSON.stringify({ clientId }) });
@@ -14154,13 +14256,49 @@ async function pgAdminConsole(el) {
       initVisualAutomationBuilder(el, catalog, () => pgComplianceOs(el));
       el.querySelectorAll('.auto-run-btn').forEach((btn) => {
         btn.onclick = async () => {
-          const clientId = prompt('Client ID for test run (optional)', '') || undefined;
+          const clientId = await brandedPrompt('Client ID for test run (optional)', '', { title: 'Run automation test', required: false, submitLabel: 'Run test' }) || undefined;
           try {
             await api(`/compliance-os/automations/${btn.dataset.id}/run`, { method: 'POST', body: JSON.stringify({ clientId, context: {} }) });
             toast('Automation run queued', 'success');
           } catch (err) { toast(err.message, 'error'); }
         };
       });
+      const sigLoad = document.getElementById('sig-packet-load');
+      if (sigLoad) sigLoad.onclick = async () => {
+        const clientId = document.getElementById('sig-packet-client-id')?.value?.trim() || state.demoSession?.sampleClientId || 'cli_demo_001';
+        try {
+          const r = await api('/compliance-os/clients/' + encodeURIComponent(clientId) + '/signature-packet');
+          const gatesEl = document.getElementById('sig-packet-gates');
+          const listEl = document.getElementById('sig-packet-checklist');
+          if (gatesEl) {
+            gatesEl.innerHTML = Object.entries(r.gates || {}).map(([k, g]) => `
+              <div class="rounded-lg border p-2 ${g.blocked ? 'border-rose-500/40 bg-rose-950/20 text-rose-200' : 'border-emerald-500/30 bg-emerald-950/15 text-emerald-200'}">
+                <div class="font-bold uppercase">${escapeHtml(k)}</div>
+                <div>${g.blocked ? escapeHtml(g.message) : 'CLEAR'}</div>
+              </div>`).join('');
+          }
+          if (listEl) {
+            listEl.innerHTML = (r.checklist || []).map((row) => `
+              <div class="flex justify-between gap-2 border-b border-gray-800/60 py-1">
+                <span class="text-gray-300">${escapeHtml(row.label)}</span>
+                <span class="${row.status === 'signed' || row.status === 'delivered' ? 'text-emerald-400' : row.status === 'not_required' || row.status === 'n/a' ? 'text-gray-500' : 'text-amber-300'}">${escapeHtml(row.displayStatus)}</span>
+              </div>`).join('');
+          }
+          toast('Signature checklist loaded', 'success');
+        } catch (err) { toast(err.message, 'error'); }
+      };
+      const commsAiForm = document.getElementById('comms-ai-setup-form');
+      if (commsAiForm) commsAiForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const out = document.getElementById('comms-ai-setup-result');
+        try {
+          const r = await api('/compliance-os/comms/ai-setup', { method: 'POST', body: JSON.stringify({ prompt: fd.get('prompt') }) });
+          const plan = r.plan || {};
+          if (out) out.innerHTML = `<div class="text-sky-300 font-semibold">${escapeHtml(plan.workflowName || 'Suggested workflow')}</div><p>${escapeHtml(plan.summary || JSON.stringify(plan))}</p>`;
+          toast('AI comms plan ready — review templates above', 'success');
+        } catch (err) { toast(err.message, 'error'); }
+      };
     } catch (err) {
       el.innerHTML = `<div class="glass p-8 rounded-xl border border-red-500/30 text-center text-sm text-gray-300">${escapeHtml(err.message)}<br><span class="text-xs text-gray-500">Run migration 0028_compliance_os.sql</span></div>`;
     }

@@ -37,6 +37,16 @@ import {
   evaluateConditions,
   automationStepsToWorkflow,
 } from './automation-builder';
+import {
+  buildSignatureChecklist,
+  evaluateWorkflowGate,
+  defaultPacketStatus,
+  CLIENT_SIGNATURE_PACKET,
+  CROA_STATUTORY_DISCLOSURE_1679c,
+  type ClientPacketStatus,
+} from '../engine/client-signature-packet';
+import { COMMS_STARTER_LIBRARY, listCommsStarters } from '../data/comms-template-library';
+import { generateOrgAiText } from './platform-extensions';
 import { buildClientTimeline, appendTimelineEvent } from './client-timeline';
 import {
   getCommunicationPreferences,
@@ -745,6 +755,100 @@ export function registerComplianceOsRoutes(app: Hono<any>, opts: RegisterOpts) {
     }
 
     return c.json({ ok: true, ...result });
+  });
+
+  app.get('/api/compliance-os/signature-packet/catalog', authMiddleware, async (c) => {
+    const user = c.get('user');
+    if (staffOnly(user)) return c.json({ error: 'Staff only' }, 403);
+    return c.json({
+      documents: CLIENT_SIGNATURE_PACKET,
+      statutoryDisclosure: CROA_STATUTORY_DISCLOSURE_1679c,
+      gates: ['contract', 'service', 'dispute', 'identity_theft', 'payment'],
+    });
+  });
+
+  app.get('/api/compliance-os/clients/:clientId/signature-packet', authMiddleware, async (c) => {
+    const user = c.get('user');
+    if (staffOnly(user)) return c.json({ error: 'Staff only' }, 403);
+    const clientId = c.req.param('clientId');
+    const row = await c.env.DB.prepare(
+      'SELECT signature_packet_json FROM clients WHERE id = ? AND org_id = ?',
+    ).bind(clientId, user.org_id).first() as any;
+    if (!row) return c.json({ error: 'Client not found' }, 404);
+    let status: ClientPacketStatus = defaultPacketStatus();
+    try {
+      if (row.signature_packet_json) status = { ...status, ...JSON.parse(row.signature_packet_json) };
+    } catch { /* */ }
+    return c.json({
+      checklist: buildSignatureChecklist(status),
+      gates: {
+        contract: evaluateWorkflowGate('contract', status),
+        service: evaluateWorkflowGate('service', status),
+        dispute: evaluateWorkflowGate('dispute', status),
+        identity_theft: evaluateWorkflowGate('identity_theft', status),
+        payment: evaluateWorkflowGate('payment', status),
+      },
+      statutoryDisclosure: CROA_STATUTORY_DISCLOSURE_1679c,
+    });
+  });
+
+  app.patch('/api/compliance-os/clients/:clientId/signature-packet', authMiddleware, async (c) => {
+    const user = c.get('user');
+    if (staffOnly(user)) return c.json({ error: 'Staff only' }, 403);
+    const clientId = c.req.param('clientId');
+    const body = await c.req.json().catch(() => ({}));
+    const docId = String(body.documentId || '');
+    const statusVal = String(body.status || 'signed');
+    if (!docId) return c.json({ error: 'documentId required' }, 400);
+    const row = await c.env.DB.prepare(
+      'SELECT signature_packet_json FROM clients WHERE id = ? AND org_id = ?',
+    ).bind(clientId, user.org_id).first() as any;
+    if (!row) return c.json({ error: 'Client not found' }, 404);
+    let status: ClientPacketStatus = defaultPacketStatus();
+    try {
+      if (row.signature_packet_json) status = { ...status, ...JSON.parse(row.signature_packet_json) };
+    } catch { /* */ }
+    status[docId] = statusVal as any;
+    await c.env.DB.prepare(
+      'UPDATE clients SET signature_packet_json = ?, updated_at = datetime(\'now\') WHERE id = ? AND org_id = ?',
+    ).bind(JSON.stringify(status), clientId, user.org_id).run();
+    return c.json({ ok: true, checklist: buildSignatureChecklist(status) });
+  });
+
+  app.get('/api/compliance-os/comms/library', authMiddleware, async (c) => {
+    const user = c.get('user');
+    if (staffOnly(user)) return c.json({ error: 'Staff only' }, 403);
+    const category = c.req.query('category') || undefined;
+    return c.json({ templates: listCommsStarters(category) });
+  });
+
+  app.post('/api/compliance-os/comms/ai-setup', authMiddleware, async (c) => {
+    const user = c.get('user');
+    if (staffOnly(user)) return c.json({ error: 'Staff only' }, 403);
+    const body = await c.req.json().catch(() => ({}));
+    const prompt = String(body.prompt || body.message || '').trim();
+    if (!prompt) return c.json({ error: 'prompt required' }, 400);
+    const starters = COMMS_STARTER_LIBRARY.slice(0, 8).map((t) => `${t.id}: ${t.name} (${t.channel})`).join('\n');
+    try {
+      const result = await generateOrgAiText({
+        env: c.env,
+        orgId: user.org_id,
+        userId: user.id,
+        feature: 'comms_setup',
+        messages: [
+          { role: 'system', content: `Configure Smart FCRA branded email/SMS workflows. Starters:\n${starters}\nReturn JSON: {"workflowName":"","steps":[{"channel":"email|sms","templateId":"","delayHours":0}],"summary":""}` },
+          { role: 'user', content: prompt },
+        ],
+      });
+      let plan: any = { summary: result.text };
+      try {
+        const m = result.text.match(/\{[\s\S]*\}/);
+        if (m) plan = JSON.parse(m[0]);
+      } catch { /* keep text summary */ }
+      return c.json({ plan, provider: result.provider, templates: COMMS_STARTER_LIBRARY });
+    } catch (e: any) {
+      return c.json({ plan: { summary: 'Use the Communications Library templates below.' }, error: e.message, templates: COMMS_STARTER_LIBRARY });
+    }
   });
 
   // ── Inbound SMS opt-out webhook stub ─────────────────────
