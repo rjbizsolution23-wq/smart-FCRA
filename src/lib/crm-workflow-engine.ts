@@ -56,13 +56,17 @@ export async function startWorkflowRun(opts: {
 }
 
 function renderTemplate(tpl: string, vars: Record<string, string>): string {
-  return tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] || '');
+  let out = tpl;
+  for (const [k, v] of Object.entries(vars)) {
+    out = out.replace(new RegExp(`\\{\\{${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\}\\}`, 'g'), v || '');
+  }
+  out = out.replace(/\{(\w+)\}/g, (_, key) => vars[key] ?? `{${key}}`);
+  return out;
 }
 
-async function loadContext(db: D1Database, orgId: string, clientId?: string, leadId?: string, extra?: Record<string, string>): Promise<Record<string, string>> {
-  const vars: Record<string, string> = { ...extra };
-  const org = await db.prepare('SELECT name, settings FROM organizations WHERE id = ?').bind(orgId).first() as any;
-  vars.org_name = org?.name || 'Smart FCRA';
+async function loadContext(db: D1Database, orgId: string, clientId?: string, leadId?: string, extra?: Record<string, string>, env?: any): Promise<Record<string, string>> {
+  const { resolveTenantTemplateVars } = await import('./tenant-template-vars');
+  const vars = await resolveTenantTemplateVars({ DB: db, ...env }, orgId, extra || {});
   if (clientId) {
     const c = await db.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, orgId).first() as any;
     if (c) {
@@ -97,6 +101,7 @@ export async function executeWorkflowStep(opts: {
   const ctx = await loadContext(
     opts.db, opts.run.org_id, opts.run.client_id, opts.run.lead_id,
     JSON.parse(opts.run.context_json || '{}'),
+    opts.env,
   );
 
   if (action.action === 'freeze_marketing') {

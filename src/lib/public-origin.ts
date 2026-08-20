@@ -20,7 +20,20 @@ export function isPublicAliasHost(host: string): boolean {
   return ALIAS_HOSTS.has(String(host || '').split(':')[0].toLowerCase());
 }
 
-/** 301 www / pages.dev HTML to https://smartfcra.com (never used for /api/*). */
+/** True for tenant workspace hosts (*.smartfcra.com) — do not 301 to apex. */
+export function isTenantWorkspaceHost(host: string): boolean {
+  const h = String(host || '').split(':')[0].toLowerCase();
+  if (!h || h === 'localhost' || h === '127.0.0.1') return false;
+  if (h.endsWith('.pages.dev')) return false;
+  if (h === CANONICAL_HOST || h === `www.${CANONICAL_HOST}`) return false;
+  if (h.endsWith(`.${CANONICAL_HOST}`)) {
+    const sub = h.slice(0, -(CANONICAL_HOST.length + 1));
+    return !!sub && !sub.includes('.') && sub !== 'www';
+  }
+  return true;
+}
+
+/** 301 www / pages.dev HTML to https://smartfcra.com — never tenant subdomains or custom domains. */
 export function canonicalRedirectUrl(requestUrl: string, hostHeader?: string | null): string | null {
   let host = String(hostHeader || '').split(':')[0].toLowerCase();
   if (!host) {
@@ -30,6 +43,7 @@ export function canonicalRedirectUrl(requestUrl: string, hostHeader?: string | n
       return null;
     }
   }
+  if (isTenantWorkspaceHost(host)) return null;
   if (!ALIAS_HOSTS.has(host)) return null;
   try {
     const u = new URL(requestUrl);

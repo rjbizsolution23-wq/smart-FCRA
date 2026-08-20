@@ -22,6 +22,6 @@ preview_id = "7ac5ef480f90489ea0dbdbffb613a231"
 binding = "AI"
 
 # Local/dev defaults — OVERRIDE via `wrangler secret put` in production.
-# Never ship real Stripe/Resend/Click2Mail secrets in git.
+# Multi-tenant: DNS wildcard *.smartfcra.com → this Pages project (see docs/CLOUDFLARE_MULTITENANT_SETUP.md)
 # Do NOT put [vars] here — `wrangler pages deploy` overwrites Pages production env_vars.
 # Local defaults live in gitignored `.dev.vars` only.

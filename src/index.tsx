@@ -99,7 +99,6 @@ import {
 } from './lib/client-learned-intelligence';
 import { describeRealAiStack, listAiTasks } from './data/ai-model-registry';
 import { kaggleIntegrationGuide, KAGGLE_CREDIT_DATASETS } from './data/kaggle-credit-datasets';
-import { listConfiguredProviders } from './lib/ai-providers';
 import {
   parsePersonNameFromReport,
   parseAddressFromReport,
@@ -179,7 +178,8 @@ import { emitOrgWebhook } from './lib/outbound-webhooks';
 import { buildTradelineMatrix } from './lib/bureau-matrix';
 import { buildEscalationRecommendation, persistEscalation } from './lib/escalation-engine';
 import { queuePpdCharge } from './lib/ppd-billing';
-import { resolveOrgByCustomDomain } from './lib/custom-domain';
+import { resolveTenantByHost } from './lib/tenant-resolver';
+import { registerTenantRoutes } from './lib/tenant-provision-routes';
 import {
   ensureStripeCatalog,
   ensureStripeCatalogCached,
@@ -742,15 +742,18 @@ type Bindings = {
   MOONSHOT_KIMI_API_KEY?: string;
   NVIDIA_API_KEY?: string;
 };
-type Variables = { user?: any; org?: any; session?: any; tenantHostOrg?: any };
+type Variables = { user?: any; org?: any; session?: any; tenantHostOrg?: any; tenantContext?: any };
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 app.use('*', async (c, next) => {
   const host = c.req.header('host')?.split(':')[0];
   try {
-    const tenantOrg = await resolveOrgByCustomDomain(c.env.DB, host);
-    if (tenantOrg) c.set('tenantHostOrg', tenantOrg);
+    const tenant = await resolveTenantByHost(c.env.DB, host, c.env);
+    if (tenant) {
+      c.set('tenantHostOrg', tenant);
+      c.set('tenantContext', tenant);
+    }
   } catch { /* soft */ }
 
   const method = c.req.method;
@@ -11784,6 +11787,7 @@ registerClientIntelligenceRoutes(app, {
 registerSupportCrmRoutes(app, { authMiddleware });
 registerExternalIntegrationRoutes(app);
 registerRoadmapRoutes(app, { authMiddleware });
+registerTenantRoutes(app, { authMiddleware, adminGateMiddleware });
 registerComplianceOsRoutes(app, { authMiddleware });
 registerIntegrationOsRoutes(app, { authMiddleware });
 registerPlatformExtensionRoutes(app, { authMiddleware });

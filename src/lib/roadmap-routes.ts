@@ -10,7 +10,7 @@ import {
   clientBillingConfigured,
 } from './client-billing';
 import { queuePpdCharge, invoicePpdCharge, parsePpdSettings } from './ppd-billing';
-import { setOrgCustomDomain, resolveOrgByCustomDomain } from './custom-domain';
+import { setOrgCustomDomain } from './custom-domain';
 import { BUILTIN_SEGMENTS, STARTER_CAMPAIGNS, runCampaignDelivery } from './campaign-builder';
 import { buildClientProgressSummary, progressReportPlainText, generateProgressReportPdf } from './progress-report';
 import { sendBrandedOrgEmail } from './comms-branding';
@@ -149,12 +149,7 @@ export function registerRoadmapRoutes(app: Hono<any>, opts: RegisterOpts) {
     return c.json({ ok: true });
   });
 
-  app.get('/api/public/tenant-by-host', async (c) => {
-    const host = c.req.query('host') || c.req.header('host');
-    const org = await resolveOrgByCustomDomain(c.env.DB, host);
-    if (!org) return c.json({ found: false });
-    return c.json({ found: true, orgId: org.id, name: org.name });
-  });
+  // tenant-by-host registered in tenant-provision-routes.ts
 
   // ── Campaigns ───────────────────────────────────────────
   app.get('/api/campaigns/segments', authMiddleware, async (c) => {

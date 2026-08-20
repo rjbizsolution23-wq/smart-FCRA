@@ -16,7 +16,8 @@ export type DataCollection = {
 
 /** Every persisted collection the platform owns. */
 export const DATA_CATALOG: DataCollection[] = [
-  { table: 'organizations', store: 'd1', orgScoped: 'n/a', pii: false, purpose: 'Tenant root (plan, limits, Stripe, settings)', retention: 'Life of tenant + 7 years billing', backup: 'both' },
+  { table: 'organizations', store: 'd1', orgScoped: 'n/a', pii: false, purpose: 'Tenant root (plan, subdomain, branding, Stripe, settings)', retention: 'Life of tenant + 7 years billing', backup: 'both' },
+  { table: 'tenant_provision_log', store: 'd1', orgScoped: true, pii: false, purpose: 'CREATE BUSINESS and clone-config audit trail', retention: '7 years', backup: 'both' },
   { table: 'users', store: 'd1', orgScoped: true, pii: true, purpose: 'Staff and consumer logins, roles, MFA', retention: 'Account life; hashed passwords', backup: 'both' },
   { table: 'sessions', store: 'd1', orgScoped: true, pii: true, purpose: 'Opaque session tokens, IP/UA, last seen, demo isolation', retention: 'Rows kept after revoke/expiry for audit', backup: 'admin' },
   { table: 'session_events', store: 'd1', orgScoped: true, pii: true, purpose: 'Login, logout, MFA, demo enter, fingerprint mismatch', retention: '7 years security audit', backup: 'both' },

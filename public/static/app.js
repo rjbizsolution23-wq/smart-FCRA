@@ -24,7 +24,47 @@
     billingMode: null,
     mfaEnabled: null,
     demoSession: JSON.parse(localStorage.getItem('fcra_demo_session') || 'null'),
+    tenantHost: null,
   };
+
+  function applyTenantTheme(theme) {
+    if (!theme) return;
+    const root = document.documentElement;
+    const map = {
+      '--brand-primary': theme.primary,
+      '--brand-sky': theme.sky,
+      '--brand-navy': theme.navy,
+      '--brand-gold': theme.gold,
+    };
+    Object.entries(map).forEach(([k, v]) => { if (v) root.style.setProperty(k, v); });
+    if (theme.logoUrl) {
+      document.querySelectorAll('[data-tenant-logo]').forEach((el) => {
+        el.src = theme.logoUrl;
+        el.classList.remove('hidden');
+      });
+    }
+    const titleEl = document.querySelector('[data-tenant-company]');
+    if (titleEl && theme.companyName) titleEl.textContent = theme.companyName;
+  }
+
+  async function loadTenantByHost() {
+    try {
+      const res = await fetch('/api/public/tenant-by-host?host=' + encodeURIComponent(location.hostname));
+      const data = await res.json().catch(() => ({}));
+      if (data.found) {
+        state.tenantHost = data;
+        applyTenantTheme(data.theme);
+        if (data.name) document.title = (data.name + ' · Smart FCRA').slice(0, 80);
+      }
+    } catch { /* default branding */ }
+  }
+
+  function tenantPoweredByHtml() {
+    const t = state.tenantHost;
+    if (!t || !t.attribution || t.attribution.mode === 'hidden') return '';
+    const label = t.attribution.label || 'Powered by Smart FCRA';
+    return `<div class="text-[10px] text-gray-500 text-center mt-2" data-powered-by>${escapeHtml(label)}</div>`;
+  }
 
   // ── i18n (English + Spanish) ───────────────────────────────────
   async function loadLocale(locale) {
@@ -8527,15 +8567,21 @@ async function pgAdminConsole(el) {
             <div class="p-4 border-b border-gray-800 bg-gray-900/40 flex flex-wrap justify-between items-center gap-3">
               <div>
                 <h3 class="text-sm font-bold text-white">Companies in your system</h3>
-                <p class="text-[11px] text-gray-500 mt-0.5">Open a tenant to see its users and clients. Work in tenant to run the software as that company.</p>
+                <p class="text-[11px] text-gray-500 mt-0.5">One platform · <code class="text-cyan-400">*.smartfcra.com</code> subdomains · CREATE BUSINESS seeds blueprint automatically.</p>
               </div>
-              <input type="search" id="tenant-search" placeholder="Search company..." class="bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white w-56">
+              <div class="flex flex-wrap items-center gap-2">
+                <button type="button" onclick="window._adminCreateBusiness()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold transition">
+                  <i class="fas fa-plus mr-1"></i> CREATE BUSINESS
+                </button>
+                <input type="search" id="tenant-search" placeholder="Search company..." class="bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white w-56">
+              </div>
             </div>
             <div class="overflow-x-auto">
               <table class="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr class="border-b border-gray-800 text-gray-400 font-medium">
                     <th class="p-3">Company</th>
+                    <th class="p-3">Workspace</th>
                     <th class="p-3">Plan</th>
                     <th class="p-3 text-center">Users</th>
                     <th class="p-3 text-center">Clients</th>
@@ -8552,6 +8598,9 @@ async function pgAdminConsole(el) {
                         <td class="p-3">
                           <div class="font-bold text-white">${escapeHtml(o.name)}</div>
                           <div class="text-[10px] text-gray-500 font-mono">${escapeHtml(o.id)}</div>
+                        </td>
+                        <td class="p-3">
+                          ${o.subdomain ? `<a href="https://${escapeHtml(o.subdomain)}.smartfcra.com/app" target="_blank" rel="noopener" class="text-cyan-400 hover:text-cyan-300 font-mono text-[10px]">${escapeHtml(o.subdomain)}.smartfcra.com</a>` : '<span class="text-gray-600 text-[10px]">—</span>'}
                         </td>
                         <td class="p-3">
                           <span class="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase ${
@@ -9486,6 +9535,41 @@ async function pgAdminConsole(el) {
       } catch (err) {
         panel.innerHTML = `<div class="glass rounded-xl border border-red-500/30 p-4 text-sm text-red-300">${escapeHtml(err.message)}</div>`;
       }
+    };
+
+    window._adminCreateBusiness = () => {
+      brandedPromptForm('CREATE BUSINESS', [
+        { name: 'businessName', label: 'Business name', placeholder: 'New Credit Services', required: true },
+        { name: 'legalName', label: 'Legal name', placeholder: 'New Credit Services LLC' },
+        { name: 'subdomain', label: 'Subdomain', placeholder: 'newcreditservices', required: true },
+        { name: 'ownerName', label: 'Owner name', placeholder: 'Jane Smith', required: true },
+        { name: 'ownerEmail', label: 'Owner email', type: 'email', placeholder: 'jane@newcreditservices.com', required: true },
+        { name: 'phone', label: 'Phone', placeholder: '555-555-5555' },
+        { name: 'primaryColor', label: 'Primary color', placeholder: '#2563eb' },
+        { name: 'secondaryColor', label: 'Secondary color', placeholder: '#f59e0b' },
+        { name: 'plan', label: 'Plan', placeholder: 'professional', defaultValue: 'professional' },
+      ], {
+        description: 'Creates https://{subdomain}.smartfcra.com with blueprint CRM, campaigns, and portal branding.',
+        submitLabel: 'CREATE BUSINESS',
+      }).then(async (vals) => {
+        if (!vals) return;
+        try {
+          const res = await api('/admin/tenants/provision', { method: 'POST', body: JSON.stringify(vals) });
+          toast(`Created ${res.portalUrl} — ${res.campaignsCreated} campaigns seeded`, 'success');
+          if (res.temporaryPassword) {
+            await brandedPrompt('Owner temporary password (share securely)', res.temporaryPassword, {
+              title: 'Provision complete',
+              message: `Portal: ${res.portalUrl}/app\n\nTemporary password for ${vals.ownerEmail}:`,
+              okLabel: 'Done',
+            });
+          }
+          const updatedOrgs = await api('/admin/organizations');
+          orgsData.organizations = updatedOrgs.organizations || [];
+          renderTabContent();
+        } catch (err) {
+          toast(err.message || 'Provision failed', 'error');
+        }
+      });
     };
 
     window._adminEditOrg = (orgId) => {
@@ -15611,6 +15695,7 @@ async function pgAdminConsole(el) {
 
   (async () => {
     await loadLocale(localStorage.getItem('fcra_locale') || 'en');
+    await loadTenantByHost();
     if ('serviceWorker' in navigator) {
       try { await navigator.serviceWorker.register('/sw.js', { scope: '/' }); } catch {}
     }
