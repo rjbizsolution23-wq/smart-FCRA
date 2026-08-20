@@ -1,5 +1,5 @@
 /* Smart FCRA PWA service worker — cache the app shell, never cache API/PII. */
-const CACHE = 'smart-fcra-shell-v20260813';
+const CACHE = 'smart-fcra-shell-v20260820';
 const SHELL = ['/', '/manifest.webmanifest', '/static/brand/brand.css', '/static/brand/pwa-icon.jpg'];
 
 self.addEventListener('install', (event) => {

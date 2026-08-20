@@ -5,27 +5,40 @@
 (function() {
   'use strict';
 
+  function readJsonStorage(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      return JSON.parse(raw);
+    } catch {
+      try { localStorage.removeItem(key); } catch { /* */ }
+      return fallback;
+    }
+  }
+
   const state = {
     token: localStorage.getItem('fcra_token') || null,
-    user: JSON.parse(localStorage.getItem('fcra_user') || 'null'),
-    org: JSON.parse(localStorage.getItem('fcra_org') || 'null'),
+    user: readJsonStorage('fcra_user', null),
+    org: readJsonStorage('fcra_org', null),
     currentPage: 'dashboard-redirect',
     pageData: null,
     loading: false,
-    selectedDisputeItems: JSON.parse(localStorage.getItem('fcra_selected_dispute_items') || '{}'),
-    disputeStatus: JSON.parse(localStorage.getItem('fcra_dispute_status') || '{}'),
+    selectedDisputeItems: readJsonStorage('fcra_selected_dispute_items', {}),
+    disputeStatus: readJsonStorage('fcra_dispute_status', {}),
     impersonateClientId: localStorage.getItem('fcra_impersonate_client_id') || null,
     impersonateClientName: localStorage.getItem('fcra_impersonate_client_name') || null,
     actingOrgId: localStorage.getItem('fcra_acting_org_id') || null,
     actingOrgName: localStorage.getItem('fcra_acting_org_name') || null,
-    homeOrg: JSON.parse(localStorage.getItem('fcra_home_org') || 'null'),
+    homeOrg: readJsonStorage('fcra_home_org', null),
     locale: localStorage.getItem('fcra_locale') || 'en',
     i18nStrings: {},
     billingMode: null,
     mfaEnabled: null,
-    demoSession: JSON.parse(localStorage.getItem('fcra_demo_session') || 'null'),
+    demoSession: readJsonStorage('fcra_demo_session', null),
     tenantHost: null,
   };
+
+  let sessionExpiredNotified = false;
 
   function applyTenantTheme(theme) {
     if (!theme) return;
@@ -345,7 +358,8 @@
     navigate('client-detail', { clientId: prevId });
   };
 
-  function clearAuthSession(message) {
+  function clearAuthSession(message, opts) {
+    const silent = !!(opts && opts.silent);
     setState({
       token: null,
       user: null,
@@ -357,7 +371,14 @@
       actingOrgName: null,
       homeOrg: null,
     });
-    if (message) toast(message, 'warning');
+    if (message && !silent && !sessionExpiredNotified) {
+      sessionExpiredNotified = true;
+      toast(message, 'warning');
+    }
+  }
+
+  function hasAuthenticatedSession() {
+    return !!(state.token && state.user && state.user.id);
   }
 
   async function api(path, opts = {}) {
@@ -366,7 +387,7 @@
     if (isPlatformOwner(state.user) && state.actingOrgId) {
       headers['X-Acting-Org-Id'] = state.actingOrgId;
     }
-    const { headers: _ignored, ...rest } = opts;
+    const { headers: _ignored, silent401, ...rest } = opts;
     const res = await fetch(`/api${path}`, { ...rest, headers });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -375,7 +396,7 @@
       err.status = res.status;
       err.data = data;
       if (res.status === 401 && state.token && !String(path).startsWith('/auth/login')) {
-        clearAuthSession('Session expired — please sign in again');
+        clearAuthSession('Session expired — please sign in again', { silent: !!silent401 });
         render();
         err.sessionCleared = true;
       }
@@ -893,9 +914,14 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 
   function render() {
     const app = document.getElementById('app');
-    if (!state.token) { app.innerHTML = renderAuth(); bindAuth(); }
-    else {
-      app.innerHTML = renderShell();
+    if (!app) return;
+    if (!hasAuthenticatedSession()) {
+      if (state.token || state.user) clearAuthSession(null, { silent: true });
+      app.innerHTML = renderAuth();
+      bindAuth();
+      return;
+    }
+    app.innerHTML = renderShell();
       loadPage(state.currentPage);
       api('/settings/org').then((r) => { applyTenantBrand(r.theme); if (r.org) state.org = { ...(state.org || {}), ...r.org }; }).catch(() => {});
       (async () => {
@@ -935,7 +961,6 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           window.SmartFcraGuide.boot().catch(() => {});
         }
       })();
-    }
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -15754,7 +15779,7 @@ async function pgAdminConsole(el) {
     if (state.token) {
       syncSessionCookie(state.token);
       try {
-        const me = await api('/auth/me');
+        const me = await api('/auth/me', { silent401: true });
         if (me.user) {
           const nextUser = { ...(state.user || {}), ...me.user };
           const patch = { user: nextUser };
@@ -15766,10 +15791,14 @@ async function pgAdminConsole(el) {
             if (state.homeOrg) patch.org = me.org || state.homeOrg;
           }
           setState(patch);
+        } else {
+          clearAuthSession(null, { silent: true });
         }
       } catch (err) {
-        if (!err.sessionCleared && err.status === 401) clearAuthSession('Session expired — please sign in again');
+        if (err.status === 401 || err.sessionCleared) clearAuthSession(null, { silent: true });
       }
+    } else if (state.user) {
+      clearAuthSession(null, { silent: true });
     }
     render();
     if (state.token) maybeStartPendingCheckout();

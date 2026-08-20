@@ -972,8 +972,11 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // AUTH MIDDLEWARE
 // ═══════════════════════════════════════════════════════════════
 async function authMiddleware(c: any, next: any) {
-  const sessionId = c.req.header('Authorization')?.replace('Bearer ', '') ||
-    c.req.query('token');
+  const sessionId = sessionIdFromRequest({
+    authorization: c.req.header('Authorization'),
+    cookie: c.req.header('Cookie'),
+    queryToken: c.req.query('token'),
+  });
   if (!sessionId) return c.json({ error: 'Unauthorized' }, 401);
 
   const session = await lookupActiveSession(c.env.DB, sessionId);
@@ -11788,7 +11791,7 @@ function getAppHtml(mode: 'login' | 'app' = 'app'): string {
   </script>
   <script src="/static/demo-experience.js?v=20260819-stripe-live"></script>
   <script src="/static/platform-guide.js?v=20260819-platform-guide"></script>
-  <script src="/static/app.js?v=20260819-platform-guide"></script>
+  <script src="/static/app.js?v=20260820-session-fix"></script>
 </body>
 </html>`;
 }
