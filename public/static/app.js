@@ -163,6 +163,16 @@
     });
   };
 
+  /** Read a File as a data:*;base64,... URI (used by file-type promptDialog fields). */
+  function fileToDataUri(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Could not read file'));
+      reader.readAsDataURL(file);
+    });
+  }
+
   /** Branded modal prompt — replaces window.prompt() for integrations and settings. */
   function promptDialog(opts) {
     return new Promise((resolve) => {
@@ -171,15 +181,25 @@
       const title = opts.title || t('modal.enterDetails');
       const submitLabel = opts.submitLabel || t('common.continue');
       const cancelLabel = opts.cancelLabel || t('common.cancel');
+      // Holds base64 data-URIs captured from file inputs (keyed by field name) — file inputs
+      // can't carry a value attribute, so we stash the converted result here on change.
+      const fileData = {};
       const fieldsHtml = fields.map((f) => `
         <div class="mb-3">
-          <label class="block text-xs font-semibold text-gray-300 mb-1.5" for="pf-${f.name}">${escapeHtml(f.label || f.name)}</label>
+          <label class="block text-xs font-semibold text-gray-300 mb-1.5" for="pf-${f.name}">${escapeHtml(f.label || f.name)}${f.required === false ? ' <span class="text-gray-500 font-normal">(optional)</span>' : ''}</label>
           ${f.type === 'textarea'
             ? `<textarea id="pf-${f.name}" rows="4" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="${escapeHtml(f.placeholder || '')}">${escapeHtml(f.defaultValue || '')}</textarea>`
-            : `<input id="pf-${f.name}" type="${f.type === 'password' ? 'password' : 'text'}" value="${escapeHtml(f.defaultValue || '')}" placeholder="${escapeHtml(f.placeholder || '')}" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" autocomplete="off">`}
+            : f.type === 'select'
+            ? `<select id="pf-${f.name}" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white">
+                ${(f.options || []).map((o) => `<option value="${escapeHtml(o.value)}" ${o.value === f.defaultValue ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
+              </select>`
+            : f.type === 'file'
+            ? `<input id="pf-${f.name}" type="file" accept="${escapeHtml(f.accept || 'image/png,image/jpeg,image/webp,image/svg+xml')}" class="block w-full text-xs text-gray-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-sky-600 file:text-white">
+               <p id="pf-${f.name}-status" class="text-[10px] text-gray-500 mt-1">${escapeHtml(f.helpText || 'PNG, JPEG, WEBP, or SVG — under 1.5MB.')}</p>`
+            : `<input id="pf-${f.name}" type="${f.type === 'password' ? 'password' : (f.type === 'email' ? 'email' : 'text')}" value="${escapeHtml(f.defaultValue || '')}" placeholder="${escapeHtml(f.placeholder || '')}" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" autocomplete="off">`}
         </div>`).join('');
       window._openModal(`
-        <div class="bg-gray-900 border border-sky-500/30 rounded-2xl max-w-md w-full p-5 shadow-2xl" role="document">
+        <div class="bg-gray-900 border border-sky-500/30 rounded-2xl max-w-md w-full p-5 shadow-2xl max-h-[90vh] overflow-y-auto" role="document">
           <div class="flex items-start justify-between gap-3 mb-4">
             <div>
               <div class="text-[10px] uppercase tracking-wider font-bold text-sky-300 mb-1">Smart FCRA</div>
@@ -198,9 +218,35 @@
       const finish = (val) => { if (wrap) { releaseFocusTrap(wrap); wrap.remove(); } resolve(val); };
       document.getElementById('pf-cancel')?.addEventListener('click', () => finish(null));
       wrap?.querySelector('[data-modal-close]')?.addEventListener('click', () => finish(null));
+      for (const f of fields) {
+        if (f.type !== 'file') continue;
+        const input = document.getElementById('pf-' + f.name);
+        const status = document.getElementById('pf-' + f.name + '-status');
+        if (!input) continue;
+        input.addEventListener('change', async () => {
+          const file = input.files && input.files[0];
+          if (!file) { delete fileData[f.name]; return; }
+          const maxBytes = f.maxBytes || 1.5 * 1024 * 1024;
+          if (file.size > maxBytes) {
+            toast(`File must be under ${(maxBytes / (1024 * 1024)).toFixed(1)}MB`, 'error');
+            input.value = '';
+            delete fileData[f.name];
+            return;
+          }
+          try {
+            fileData[f.name] = await fileToDataUri(file);
+            if (status) status.textContent = `Ready: ${file.name}`;
+          } catch {
+            toast('Could not read file', 'error');
+            input.value = '';
+            delete fileData[f.name];
+          }
+        });
+      }
       document.getElementById('pf-submit')?.addEventListener('click', () => {
         const out = {};
         for (const f of fields) {
+          if (f.type === 'file') { out[f.name] = fileData[f.name] || ''; continue; }
           const el = document.getElementById('pf-' + f.name);
           out[f.name] = el ? el.value.trim() : '';
           if (f.required !== false && !out[f.name]) { toast(t('modal.fieldRequired'), 'error'); return; }
@@ -218,6 +264,32 @@
   async function brandedPromptForm(title, fields, opts) {
     return window._promptDialog(Object.assign({ title, fields }, opts || {}));
   }
+
+  /** Branded yes/no confirm modal — replaces window.confirm() for higher-stakes flows. */
+  function confirmDialog(opts) {
+    return new Promise((resolve) => {
+      const id = opts.id || 'branded-confirm';
+      const title = opts.title || 'Confirm';
+      const okLabel = opts.okLabel || 'Confirm';
+      const cancelLabel = opts.cancelLabel || 'Cancel';
+      window._openModal(`
+        <div class="bg-gray-900 border border-sky-500/30 rounded-2xl max-w-md w-full p-5 shadow-2xl" role="document">
+          <div class="text-[10px] uppercase tracking-wider font-bold text-sky-300 mb-1">Smart FCRA</div>
+          <h2 class="text-lg font-bold text-white font-display mb-2">${escapeHtml(title)}</h2>
+          <p class="text-xs text-gray-300 whitespace-pre-line">${escapeHtml(opts.message || '')}</p>
+          <div class="flex gap-2 mt-5">
+            <button type="button" id="cf-cancel" class="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg py-2.5 text-sm font-semibold">${escapeHtml(cancelLabel)}</button>
+            <button type="button" id="cf-ok" class="flex-1 btn-rj rounded-lg py-2.5 text-sm font-semibold">${escapeHtml(okLabel)}</button>
+          </div>
+        </div>`, id);
+      const wrap = document.getElementById(id);
+      const finish = (val) => { if (wrap) { releaseFocusTrap(wrap); wrap.remove(); } resolve(val); };
+      document.getElementById('cf-cancel')?.addEventListener('click', () => finish(false));
+      wrap?.querySelector('[data-modal-close]')?.addEventListener('click', () => finish(false));
+      document.getElementById('cf-ok')?.addEventListener('click', () => finish(true));
+    });
+  }
+  window._confirmDialog = confirmDialog;
 
   async function previewVaultPdf(uploadId, fileName) {
     const qs = portalClientQs();
@@ -8753,6 +8825,9 @@ async function pgAdminConsole(el) {
                 <button type="button" onclick="window._adminCreateBusiness()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold transition">
                   <i class="fas fa-plus mr-1"></i> CREATE BUSINESS
                 </button>
+                <button type="button" onclick="window._adminCloneConfig()" class="bg-indigo-700 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold transition">
+                  <i class="fas fa-clone mr-1"></i> Clone config
+                </button>
                 <input type="search" id="tenant-search" placeholder="Search company..." class="bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white w-56">
               </div>
             </div>
@@ -9718,36 +9793,93 @@ async function pgAdminConsole(el) {
     };
 
     window._adminCreateBusiness = () => {
+      const cloneOptions = [{ value: '', label: '— No clone, use defaults —' }].concat(
+        (orgsData.organizations || [])
+          .slice()
+          .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+          .map((o) => ({ value: o.id, label: o.name || o.id }))
+      );
       brandedPromptForm('CREATE BUSINESS', [
         { name: 'businessName', label: 'Business name', placeholder: 'New Credit Services', required: true },
         { name: 'legalName', label: 'Legal name', placeholder: 'New Credit Services LLC' },
         { name: 'subdomain', label: 'Subdomain', placeholder: 'newcreditservices', required: true },
         { name: 'ownerName', label: 'Owner name', placeholder: 'Jane Smith', required: true },
         { name: 'ownerEmail', label: 'Owner email', type: 'email', placeholder: 'jane@newcreditservices.com', required: true },
-        { name: 'phone', label: 'Phone', placeholder: '555-555-5555' },
-        { name: 'primaryColor', label: 'Primary color', placeholder: '#2563eb' },
-        { name: 'secondaryColor', label: 'Secondary color', placeholder: '#f59e0b' },
-        { name: 'plan', label: 'Plan', placeholder: 'professional', defaultValue: 'professional' },
+        { name: 'phone', label: 'Phone', placeholder: '555-555-5555', required: false },
+        { name: 'logoBase64', label: 'Business logo', type: 'file', accept: 'image/png,image/jpeg,image/webp,image/svg+xml', required: false, helpText: 'PNG, JPEG, WEBP, or SVG — under 1.5MB. Used on the portal, letterhead PDFs, and installation.' },
+        { name: 'primaryColor', label: 'Primary color', placeholder: '#2563eb', required: false },
+        { name: 'secondaryColor', label: 'Secondary color', placeholder: '#f59e0b', required: false },
+        { name: 'plan', label: 'Plan', type: 'select', defaultValue: 'professional', options: [
+          { value: 'free', label: 'Free (gated)' },
+          { value: 'professional', label: 'Professional ($497/mo)' },
+          { value: 'unlimited', label: 'Unlimited ($2500/mo)' },
+          { value: 'enterprise', label: 'Enterprise ($9997/mo)' },
+        ] },
+        { name: 'cloneFromOrgId', label: 'Clone branding & workflows from', type: 'select', defaultValue: '', required: false, options: cloneOptions },
       ], {
-        description: 'Creates https://{subdomain}.smartfcra.com with blueprint CRM, campaigns, and portal branding.',
+        description: 'Creates https://{subdomain}.smartfcra.com with blueprint CRM, campaigns, and portal branding — ready to install in one click.',
         submitLabel: 'CREATE BUSINESS',
       }).then(async (vals) => {
         if (!vals) return;
         try {
+          const cloneFromOrgId = vals.cloneFromOrgId;
+          delete vals.cloneFromOrgId;
+          if (!vals.logoBase64) delete vals.logoBase64;
           const res = await api('/admin/tenants/provision', { method: 'POST', body: JSON.stringify(vals) });
-          toast(`Created ${res.portalUrl} — ${res.campaignsCreated} campaigns seeded`, 'success');
-          if (res.temporaryPassword) {
-            await brandedPrompt('Owner temporary password (share securely)', res.temporaryPassword, {
-              title: 'Provision complete',
-              message: `Portal: ${res.portalUrl}/app\n\nTemporary password for ${vals.ownerEmail}:`,
-              okLabel: 'Done',
-            });
+          let cloneNote = '';
+          if (cloneFromOrgId) {
+            try {
+              const cloneRes = await api(`/admin/tenants/${encodeURIComponent(res.orgId)}/clone-config`, {
+                method: 'POST',
+                body: JSON.stringify({ sourceOrgId: cloneFromOrgId }),
+              });
+              cloneNote = ` · Cloned ${(cloneRes.clonedKeys || []).length} config section(s)`;
+            } catch (cloneErr) {
+              toast('Business created, but clone-config failed: ' + (cloneErr.message || 'unknown error'), 'warning');
+            }
           }
+          toast(`Created ${res.portalUrl} — ${res.campaignsCreated} campaigns seeded${cloneNote}`, 'success');
+          const updatedOrgs = await api('/admin/organizations');
+          orgsData.organizations = updatedOrgs.organizations || [];
+          renderTabContent();
+          const goPreview = await window._confirmDialog({
+            title: 'Provision complete',
+            message: `${vals.businessName} is live at ${res.portalUrl}${res.temporaryPassword ? `\n\nOwner temporary password for ${vals.ownerEmail}:\n${res.temporaryPassword}\n(share securely — this is shown once)` : ''}`,
+            okLabel: 'Preview as this tenant',
+            cancelLabel: 'Done',
+          });
+          if (goPreview) window._workInTenant(res.orgId, vals.businessName);
+        } catch (err) {
+          toast(err.message || 'Provision failed', 'error');
+        }
+      });
+    };
+
+    window._adminCloneConfig = () => {
+      const orgs = (orgsData.organizations || []).slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+      if (orgs.length < 2) { toast('Need at least two businesses to clone between', 'info'); return; }
+      const orgOptions = orgs.map((o) => ({ value: o.id, label: o.name || o.id }));
+      brandedPromptForm('Clone config between tenants', [
+        { name: 'sourceOrgId', label: 'Copy branding & workflows FROM', type: 'select', options: orgOptions, defaultValue: orgOptions[0].value },
+        { name: 'targetOrgId', label: 'Apply TO', type: 'select', options: orgOptions, defaultValue: orgOptions[1] ? orgOptions[1].value : orgOptions[0].value },
+      ], {
+        description: 'Copies letterhead, branding, portal theme, timezone, and blueprint config only — never secrets, integrations, or client data.',
+        submitLabel: 'Clone config',
+      }).then(async (vals) => {
+        if (!vals) return;
+        if (vals.sourceOrgId === vals.targetOrgId) { toast('Source and target must be different businesses', 'error'); return; }
+        try {
+          const res = await api(`/admin/tenants/${encodeURIComponent(vals.targetOrgId)}/clone-config`, {
+            method: 'POST',
+            body: JSON.stringify({ sourceOrgId: vals.sourceOrgId }),
+          });
+          const targetName = orgs.find((o) => o.id === vals.targetOrgId)?.name || vals.targetOrgId;
+          toast(`Cloned ${(res.clonedKeys || []).length} config section(s) into ${targetName}`, 'success');
           const updatedOrgs = await api('/admin/organizations');
           orgsData.organizations = updatedOrgs.organizations || [];
           renderTabContent();
         } catch (err) {
-          toast(err.message || 'Provision failed', 'error');
+          toast(err.message || 'Clone failed', 'error');
         }
       });
     };

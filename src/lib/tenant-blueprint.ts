@@ -23,6 +23,8 @@ export type BlueprintInput = {
   primaryColor?: string;
   secondaryColor?: string;
   logoUrl?: string;
+  /** Data-URI (data:image/png;base64,...) captured from the CREATE BUSINESS logo upload. Takes priority over logoUrl. */
+  logoBase64?: string;
   timezone?: string;
   plan?: string;
   attributionMode?: 'powered_by' | 'minimal' | 'hidden';
@@ -52,6 +54,7 @@ export function buildBlueprintSettings(input: BlueprintInput): Record<string, un
       state: input.state || '',
       zip: input.zip || '',
       logoUrl: input.logoUrl || '',
+      logoBase64: input.logoBase64 || '',
     },
     branding: {
       companyName: businessName,
@@ -61,7 +64,9 @@ export function buildBlueprintSettings(input: BlueprintInput): Record<string, un
       secondary: input.secondaryColor || '#f59e0b',
       gold: input.secondaryColor || '#f59e0b',
       sky: input.primaryColor || '#0ea5e9',
-      logoUrl: input.logoUrl || '',
+      // A data-URI logo (from upload) renders identically to a hosted URL in <img src>,
+      // so it doubles as the theming logoUrl when no hosted logoUrl was supplied.
+      logoUrl: input.logoUrl || input.logoBase64 || '',
     },
     portal: {
       welcomeTitle: `Welcome to ${businessName}`,
