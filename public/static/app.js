@@ -12957,153 +12957,9 @@ async function pgAdminConsole(el) {
     }
   }
 
-  const RICK_COURSES = [
-    {
-      id: 'course-1',
-      title: 'Website Systems That Convert',
-      desc: 'Build a clean business website that explains the offer, captures leads, and supports sales.',
-      icon: 'fa-globe',
-      modules: [
-        {
-          title: 'Core Fundamentals',
-          lessons: [
-            { title: 'The Anatomy of a High-Conversion Offer', steps: ['Define single conversion outcome', 'Strip out redundant navigation links', 'Map clear user flow pathways'], ricksRule: 'The website is not an art project. It is a sales machine.', quiz: { question: 'What is the primary objective of a conversion-focused website?', options: ['Expressive artistic freedom', 'To guide the visitor to a single, high-value business action', 'To maximize total page size and scripts'], answer: 1 } }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'course-2',
-      title: 'Landing Pages That Move People',
-      desc: 'Create focused landing pages with strong messaging, clean CTAs, and no wasted sections.',
-      icon: 'fa-rocket',
-      modules: [
-        {
-          title: 'Direct Response Copywriting',
-          lessons: [
-            { title: 'Headline Formulations that Hold Attention', steps: ['State specific, measurable outcome first', 'Address specific pain points in the sub-headline', 'Ensure CTA is action-oriented and explicit'], ricksRule: 'If the offer is messy, the funnel will expose it.', quiz: { question: 'What should be the main focal point of a direct response landing page?', options: ['A large interactive grid of miscellaneous links', 'The core headline and a singular CTA', 'An elaborate multi-page navigation tree'], answer: 1 } }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'course-3',
-      title: 'AI Automation For Operators',
-      desc: 'Use AI to remove repetitive work, route information, and support business execution.',
-      icon: 'fa-cogs',
-      modules: [
-        {
-          title: 'Operative Workflows',
-          lessons: [
-            { title: 'Automating the Repetitive Ingestion Pipelines', steps: ['Connect incoming webhooks cleanly', 'Map parameters to LLM prompt wrappers', 'Deliver outputs structured in JSON'], ricksRule: 'Clarity first. Automation second. Scale third.', quiz: { question: 'What is the golden rule of workflow automation?', options: ['Automate everything instantly before documenting', 'Ensure the manual system is clear and clean first', 'Always use the most expensive API available'], answer: 1 } }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'course-4',
-      title: 'AI Agent Systems',
-      desc: 'Design practical AI agents that take tasks, use tools, remember context, and report cleanly.',
-      icon: 'fa-robot',
-      modules: [
-        {
-          title: 'Agent Orchestrations',
-          lessons: [
-            { title: 'Defining the Scope & System Instructions', steps: ['Constrain variables to precise ranges', 'Equip with strict, functional single-task tools', 'Implement deterministic post-execution validation'], ricksRule: 'The tool does not save the business. The system does.', quiz: { question: 'What is the risk of giving an AI agent unrestricted wildcard tools?', options: ['It will complete tasks too quickly', 'Unpredictable, costly, and potentially destructive operations', 'None, LLMs are 100% deterministic'], answer: 1 } }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'course-5',
-      title: 'Funnel Building From Zero',
-      desc: 'Turn traffic into leads, leads into calls, and calls into revenue with a clean funnel path.',
-      icon: 'fa-funnel-dollar',
-      modules: [
-        {
-          title: 'Traffic & Conversion Bridges',
-          lessons: [
-            { title: 'The Value-Bridge Landing Protocol', steps: ['Offer immediately actionable lead magnet', 'Deliver high-value sequence in email auto-responders', 'Route qualified leads directly to Calendly'], ricksRule: 'Build the system before you chase the traffic.', quiz: { question: 'Why do most multi-step funnels leak leads?', options: ['Because traffic is inherently low-quality', 'Friction, cognitive load, and over-complicated steps', 'They do not feature enough flash animations'], answer: 1 } }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'course-6',
-      title: 'CRM And Follow-Up Systems',
-      desc: 'Build the pipeline, tags, automations, and follow-up flows that stop leads from leaking.',
-      icon: 'fa-address-card',
-      modules: [
-        {
-          title: 'Database & Pipeline Hygiene',
-          lessons: [
-            { title: 'Designing and Automating CRM States', steps: ['Map explicit stages to lead progression', 'Set automated reminders on idle leads', 'Use webhooks to sync cross-platform metrics'], ricksRule: 'Named right. Built right. Shipped clean.', quiz: { question: 'What stops leads from leaking in a sales pipeline?', options: ['Buying more lead lists', 'Automated state triggers and immediate, systematic follow-up', 'Calling leads once and never again'], answer: 1 } }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'course-7',
-      title: 'Prompt Engineering For Builders',
-      desc: 'Write prompts that make AI useful, structured, testable, and aligned with business outcomes.',
-      icon: 'fa-keyboard',
-      modules: [
-        {
-          title: 'Structured Prompt Formulations',
-          lessons: [
-            { title: 'Output Control & Few-Shot Engineering', steps: ['Supply high-quality input-output examples', 'Format outputs cleanly using JSON schemas', 'Enforce strict compliance gates in the prompt'], ricksRule: 'Structured prompts yield structured outcomes.', quiz: { question: 'What is the best way to enforce JSON outputs from an LLM?', options: ['Ask nicely in the prompt', 'Provide explicit schema and few-shot formatting examples', 'There is no way to control output structure'], answer: 1 } }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'course-8',
-      title: 'Digital Product Launch Systems',
-      desc: 'Package knowledge, build the offer, create the sales page, and launch without chaos.',
-      icon: 'fa-file-invoice-dollar',
-      modules: [
-        {
-          title: 'Launch Execution Frameworks',
-          lessons: [
-            { title: 'Constructing and Seeding High-Ticket Offers', steps: ['Package experience into structured SOP assets', 'Set up checkout flows via Stripe Integration', 'Deploy single-path product fulfillment email flows'], ricksRule: 'Ship the course before you write the textbook.', quiz: { question: 'What is the most effective launch validation method?', options: ['Spending months filming high-production videos', 'Securing pre-orders using a high-converting sales page', 'Relying entirely on organic word of mouth'], answer: 1 } }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'course-9',
-      title: 'Local Business Growth Infrastructure',
-      desc: 'Set up the pages, automations, offers, and tracking local businesses need to grow.',
-      icon: 'fa-map-marked-alt',
-      modules: [
-        {
-          title: 'Local Lead-Gen Bridges',
-          lessons: [
-            { title: 'The Reputation Loop & Automated Lead Response', steps: ['Set up immediate auto-reply on SMS/calls', 'Send automatic review invite triggers after jobs', 'Track lead sources precisely inside CRM'], ricksRule: 'Speed to lead is the only metric that matters locally.', quiz: { question: 'What is the optimal response time for local inbound leads?', options: ['Within 5 minutes', 'Within 24 to 48 hours', 'During the weekly business review'], answer: 1 } }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'course-10',
-      title: 'Founder Operating System',
-      desc: 'Build the personal workflow, dashboards, SOPs, and decision systems that keep execution clean.',
-      icon: 'fa-toolbox',
-      modules: [
-        {
-          title: 'Executive Systems & Dashboards',
-          lessons: [
-            { title: 'The Metric-Driven Morning Ritual', steps: ['Analyze cash flow, sales metrics, and project health', 'Identify single, critical leverage action for the day', 'Clear communication logs to optimize operator flow'], ricksRule: 'Control your inputs to dominate your outputs.', quiz: { question: 'What represents the core of a Founder Operating System?', options: ['Checking emails continuously', 'Metrics-driven execution checklists and systematic SOPs', 'delegating decisions without oversight'], answer: 1 } }
-          ]
-        }
-      ]
-    }
-  ];
-
   async function pgClientKnowledge(el) {
     let currentCourseId = null;
-    let currentLessonIndex = 0;
-    let selectedAnswer = null;
+    let currentLessonId = null;
     try {
       const edu = await api('/client-portal/education' + portalClientQs());
       window._portalLessons = edu.lessons || [];
@@ -13112,6 +12968,12 @@ async function pgAdminConsole(el) {
       window._portalLessons = [];
       window._portalProgress = [];
     }
+    let academy = { courses: [], progress: [], totalLessons: 0, completedLessons: 0, badges: [], allBadges: [] };
+    try {
+      academy = await api('/client-portal/academy' + portalClientQs());
+    } catch (_) { /* soft — academy may be unavailable */ }
+    window._academy = academy;
+
     window._openPortalLesson = async (lessonId) => {
       try {
         const { lesson } = await api('/client-portal/education/' + lessonId);
@@ -13158,53 +13020,50 @@ async function pgAdminConsole(el) {
       } catch (err) { toast(err.message,'error'); }
     };
 
-
-    window._openCoursePlayer = (id) => {
-      currentCourseId = id;
-      currentLessonIndex = 0;
-      selectedAnswer = null;
-      renderCoursePlayer();
+    window._openCoursePlayer = (courseId, lessonId) => {
+      currentCourseId = courseId;
+      const course = (academy.courses || []).find(c => c.id === courseId);
+      currentLessonId = lessonId || (course && course.lessons && course.lessons[0] && course.lessons[0].id) || null;
+      renderLessonPlayer();
     };
 
     window._closeCoursePlayer = () => {
       currentCourseId = null;
+      currentLessonId = null;
       renderCourseList();
     };
 
-    window._selectQuizOption = (idx) => {
-      selectedAnswer = idx;
-      const opts = document.querySelectorAll('.quiz-option-btn');
-      opts.forEach((opt, i) => {
-        if (i === idx) {
-          opt.className = 'quiz-option-btn w-full text-left p-3.5 rounded-xl border bg-blue-600/25 border-blue-500 text-white font-medium transition';
-        } else {
-          opt.className = 'quiz-option-btn w-full text-left p-3.5 rounded-xl border bg-gray-900/50 border-gray-800 text-gray-400 hover:bg-gray-800 transition';
-        }
-      });
-    };
+    async function refreshAcademy() {
+      try { academy = await api('/client-portal/academy' + portalClientQs()); window._academy = academy; } catch (_) { /* soft */ }
+    }
 
-    window._submitQuizAnswer = (correctAnswer) => {
-      if (selectedAnswer === null) {
-        toast('Please select an option first.', 'warning');
-        return;
-      }
-      if (selectedAnswer === correctAnswer) {
-        toast('Correct! Lesson completed.', 'success');
-        currentLessonIndex++;
-        selectedAnswer = null;
-        renderCoursePlayer();
-      } else {
-        toast('Incorrect answer. Try again.', 'error');
-      }
-    };
+    function badgeChip(b) {
+      return `<div class="flex items-center gap-2 bg-amber-500/10 border border-amber-500/25 rounded-lg px-2.5 py-1.5" title="${escapeHtml(b.description||'')}">
+        <i class="fas ${b.icon||'fa-medal'} text-amber-300 text-xs"></i>
+        <span class="text-[11px] font-semibold text-amber-200">${escapeHtml(b.label||b.id)}</span>
+      </div>`;
+    }
 
     function renderCourseList() {
+      const courses = academy.courses || [];
+      const earnedIds = new Set((academy.badges || []).map(b => b.id));
+      const pct = academy.totalLessons ? Math.round((academy.completedLessons / academy.totalLessons) * 100) : 0;
       el.innerHTML = `
         <div class="fade-in space-y-6">
           <div class="relative overflow-hidden bg-gradient-to-r from-gray-900 via-blue-950 to-gray-900 border border-blue-500/20 rounded-2xl p-6 shadow-2xl">
-            <h1 class="text-2xl font-bold text-white mb-1"><i class="fas fa-graduation-cap text-blue-400 mr-2"></i>Education Hub</h1>
-            <p class="text-sm text-gray-400">Financial literacy → credit expertise → fundability · compliance & workflows · Rick Jefferson systems courses</p>
-            ${(window._portalLessons||[]).length ? `<p class="text-xs text-cyan-300 mt-2">${(window._portalProgress||[]).filter(p=>p.status==='completed').length} / ${window._portalLessons.length} API lessons completed</p>` : ''}
+            <h1 class="text-2xl font-bold text-white mb-1"><i class="fas fa-graduation-cap text-blue-400 mr-2"></i>Academy</h1>
+            <p class="text-sm text-gray-400">Financial literacy → credit expertise → fundability · Rick Jefferson operator systems courses, gamified</p>
+            ${(window._portalLessons||[]).length ? `<p class="text-xs text-cyan-300 mt-2">${(window._portalProgress||[]).filter(p=>p.status==='completed').length} / ${window._portalLessons.length} fundability lessons completed</p>` : ''}
+            ${academy.totalLessons ? `
+              <div class="mt-4 max-w-md">
+                <div class="flex items-center justify-between text-[11px] text-gray-400 mb-1">
+                  <span>Systems &amp; Business progress</span>
+                  <span>${academy.completedLessons || 0} / ${academy.totalLessons} lessons</span>
+                </div>
+                <div class="h-2 rounded-full bg-gray-800 overflow-hidden"><div class="h-full bg-gradient-to-r from-blue-500 to-emerald-400" style="width:${pct}%"></div></div>
+              </div>
+            ` : ''}
+            ${(academy.badges||[]).length ? `<div class="flex flex-wrap gap-2 mt-4">${academy.badges.map(badgeChip).join('')}</div>` : ''}
           </div>
 
           ${(window._portalLessons||[]).length ? `
@@ -13224,134 +13083,161 @@ async function pgAdminConsole(el) {
             </div>
           </div>` : ''}
 
-          <h2 class="text-xs font-bold uppercase tracking-wider text-blue-300">Systems & Business Courses</h2>
+          <h2 class="text-xs font-bold uppercase tracking-wider text-blue-300">Systems &amp; Business Courses</h2>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            ${RICK_COURSES.map(c => `
-              <div class="glass rounded-2xl border border-gray-800 p-5 flex flex-col justify-between card-hover relative overflow-hidden group">
+            ${courses.map(c => {
+              const total = (c.lessons||[]).length;
+              const done = (c.lessons||[]).filter(l => l.completed).length;
+              const earned = earnedIds.has(c.badgeId);
+              return `
+              <div class="glass rounded-2xl border ${c.completed?'border-emerald-500/30':'border-gray-800'} p-5 flex flex-col justify-between card-hover relative overflow-hidden group">
                 <div class="absolute top-0 right-0 -mt-4 -mr-4 w-20 h-20 bg-blue-600/5 rounded-full blur-xl group-hover:bg-blue-600/10 transition"></div>
                 <div>
-                  <div class="w-12 h-12 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-4">
-                    <i class="fas ${c.icon} text-lg"></i>
+                  <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                      <i class="fas ${c.icon} text-lg"></i>
+                    </div>
+                    ${earned ? '<i class="fas fa-medal text-amber-400" title="Badge earned"></i>' : ''}
                   </div>
                   <h3 class="text-sm font-bold text-white mb-1.5">${escapeHtml(c.title)}</h3>
-                  <p class="text-xs text-gray-400 leading-relaxed mb-4">${escapeHtml(c.desc)}</p>
+                  <p class="text-xs text-gray-400 leading-relaxed mb-3">${escapeHtml(c.desc)}</p>
+                  <div class="text-[10px] text-gray-500 mb-3">${done} / ${total} lessons complete</div>
+                  <div class="h-1.5 rounded-full bg-gray-800 overflow-hidden mb-4"><div class="h-full bg-blue-500" style="width:${total?Math.round(done/total*100):0}%"></div></div>
                 </div>
                 <button onclick="window._openCoursePlayer('${c.id}')" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 shadow-lg shadow-blue-500/10">
                   <i class="fas fa-play"></i>
-                  <span>Start Learning</span>
+                  <span>${done>0 && done<total ? 'Continue' : (c.completed ? 'Review' : 'Start Learning')}</span>
                 </button>
               </div>
-            `).join('')}
+            `;}).join('')}
           </div>
+
+          ${(academy.allBadges||[]).length ? `
+          <div>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-amber-300 mb-3">Badges</h2>
+            <div class="flex flex-wrap gap-2">
+              ${academy.allBadges.map(b => `<div class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 border ${earnedIds.has(b.id) ? 'bg-amber-500/10 border-amber-500/25' : 'bg-gray-900/40 border-gray-800 opacity-50'}" title="${escapeHtml(b.description||'')}">
+                <i class="fas ${b.icon||'fa-medal'} text-xs ${earnedIds.has(b.id)?'text-amber-300':'text-gray-500'}"></i>
+                <span class="text-[11px] font-semibold ${earnedIds.has(b.id)?'text-amber-200':'text-gray-500'}">${escapeHtml(b.label||b.id)}</span>
+              </div>`).join('')}
+            </div>
+          </div>` : ''}
         </div>
       `;
     }
 
-    function renderCoursePlayer() {
-      const course = RICK_COURSES.find(c => c.id === currentCourseId);
-      if (!course) return;
+    function renderLessonPlayer() {
+      const course = (academy.courses || []).find(c => c.id === currentCourseId);
+      if (!course) { renderCourseList(); return; }
+      const lessonMeta = (course.lessons || []).find(l => l.id === currentLessonId);
+      if (!lessonMeta) { renderCourseList(); return; }
 
-      const totalLessons = course.modules[0].lessons.length;
+      el.innerHTML = '<div class="flex items-center justify-center h-40"><i class="fas fa-spinner fa-spin text-blue-400 text-xl"></i></div>';
+      const answers = [];
+      let submitted = null;
 
-      if (currentLessonIndex >= totalLessons) {
-        el.innerHTML = `
-          <div class="fade-in max-w-2xl mx-auto glass rounded-2xl border border-blue-500/20 p-8 text-center relative overflow-hidden shadow-2xl">
-            <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-600 to-emerald-500"></div>
-            <div class="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-blue-600/10 rounded-full blur-2xl"></div>
-            
-            <i class="fas fa-award text-6xl text-amber-400 mb-4 animate-bounce"></i>
-            <h2 class="text-xl font-bold text-white mb-1">Congratulations!</h2>
-            <p class="text-xs text-gray-400 mb-6">You have completed <strong>${escapeHtml(course.title)}</strong></p>
+      api(`/client-portal/academy/${course.id}/${lessonMeta.id}`).then(({ lesson }) => {
+        const idx = (course.lessons || []).findIndex(l => l.id === lessonMeta.id);
+        const total = (course.lessons || []).length;
 
-            <div class="border-2 border-dashed border-blue-500/30 rounded-xl p-6 bg-gray-950/40 relative mb-6">
-              <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-2">Certificate of Accomplishment</div>
-              <div class="text-xs text-gray-400">This is proudly awarded to</div>
-              <div class="text-lg font-serif font-bold text-white my-3 border-b border-gray-900 pb-2 max-w-xs mx-auto">${escapeHtml(state.user?.name || 'Valued Builder')}</div>
-              <div class="text-xs text-gray-400">for masterfully completing the practical systems curriculum inside</div>
-              <div class="text-sm font-bold text-blue-400 mt-2">${escapeHtml(course.title)}</div>
-              
-              <div class="flex items-end justify-between mt-8 pt-4 border-t border-gray-900">
-                <div class="text-left">
-                  <div class="text-[10px] text-gray-500">Issued On</div>
-                  <div class="text-xs font-bold text-white">${new Date().toLocaleDateString()}</div>
+        const paint = () => {
+          el.innerHTML = `
+            <div class="fade-in max-w-3xl mx-auto space-y-6">
+              <div class="flex items-center justify-between">
+                <button onclick="window._closeCoursePlayer()" class="text-xs text-gray-400 hover:text-white flex items-center gap-1.5 transition"><i class="fas fa-chevron-left"></i> Back to Academy</button>
+                <span class="text-xs text-gray-500 font-mono">Lesson ${idx + 1} of ${total} · ${lesson.minutes || 6} min</span>
+              </div>
+
+              <div class="glass rounded-2xl border border-gray-800 overflow-hidden shadow-2xl">
+                <div class="bg-gray-900 px-6 py-4 border-b border-gray-800">
+                  <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">${escapeHtml(course.title)}</span>
+                  <h2 class="text-base font-bold text-white mt-0.5">${escapeHtml(lesson.title)}</h2>
+                  <p class="text-xs text-gray-500 mt-1">${escapeHtml(lesson.summary || '')}</p>
                 </div>
-                <div class="text-right">
-                  <div class="text-[10px] text-gray-500">Authorized Issuer</div>
-                  <div class="text-xs font-bold text-blue-400 font-serif">Rick Jefferson</div>
-                </div>
-              </div>
-            </div>
 
-            <button onclick="window._closeCoursePlayer()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-6 py-2.5 rounded-xl transition">Return to Courses</button>
-          </div>
-        `;
-        return;
-      }
+                <div class="p-6 space-y-6">
+                  ${(lesson.objectives||[]).length ? `<div>
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3"><i class="fas fa-bullseye text-cyan-400 mr-2"></i>You will be able to</h3>
+                    <ul class="list-disc pl-5 text-sm text-gray-200 space-y-1">${lesson.objectives.map(o=>`<li>${escapeHtml(o)}</li>`).join('')}</ul>
+                  </div>` : ''}
 
-      const lesson = course.modules[0].lessons[currentLessonIndex];
-
-      el.innerHTML = `
-        <div class="fade-in max-w-3xl mx-auto space-y-6">
-          <div class="flex items-center justify-between">
-            <button onclick="window._closeCoursePlayer()" class="text-xs text-gray-400 hover:text-white flex items-center gap-1.5 transition"><i class="fas fa-chevron-left"></i> Back to Hub</button>
-            <span class="text-xs text-gray-500 font-mono">Lesson ${currentLessonIndex + 1} of ${totalLessons}</span>
-          </div>
-
-          <!-- Lesson Material Card -->
-          <div class="glass rounded-2xl border border-gray-800 overflow-hidden shadow-2xl">
-            <div class="bg-gray-900 px-6 py-4 border-b border-gray-800 flex items-center justify-between">
-              <div>
-                <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">${escapeHtml(course.title)}</span>
-                <h2 class="text-base font-bold text-white mt-0.5">${escapeHtml(lesson.title)}</h2>
-              </div>
-            </div>
-            
-            <div class="p-6 space-y-6">
-              <!-- Build Steps -->
-              <div>
-                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3"><i class="fas fa-tools text-blue-400 mr-2"></i>Actionable Build Steps</h3>
-                <div class="space-y-3">
-                  ${lesson.steps.map((step, idx) => `
-                    <div class="flex items-start gap-3 bg-gray-900/40 p-3 rounded-xl border border-gray-850">
-                      <span class="w-5 h-5 rounded-full bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-xs font-bold text-blue-400 shrink-0 mt-0.5">${idx + 1}</span>
-                      <p class="text-xs text-gray-300 leading-normal">${escapeHtml(step)}</p>
-                    </div>
-                  `).join('')}
-                </div>
-              </div>
-
-              <!-- Rick's Rule -->
-              <div class="border-l-4 border-blue-500 bg-blue-500/5 rounded-r-xl p-4">
-                <div class="text-[10px] text-blue-400 font-bold uppercase tracking-wider mb-1"><i class="fas fa-quote-left mr-1"></i> Rick's Rule</div>
-                <p class="text-xs text-gray-200 font-medium font-serif italic">"${escapeHtml(lesson.ricksRule)}"</p>
-              </div>
-
-              <!-- Interactive Quiz -->
-              ${lesson.quiz ? `
-                <div class="pt-4 border-t border-gray-850">
-                  <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3"><i class="fas fa-check-double text-purple-400 mr-2"></i>Immediate Action Check</h3>
-                  <div class="glass rounded-xl p-5 border border-purple-500/20 bg-purple-500/5 space-y-4">
-                    <p class="text-sm font-bold text-white">${escapeHtml(lesson.quiz.question)}</p>
-                    <div class="space-y-2">
-                      ${lesson.quiz.options.map((opt, oIdx) => `
-                        <button onclick="window._selectQuizOption(${oIdx})" class="quiz-option-btn w-full text-left p-3.5 rounded-xl border bg-gray-900/50 border-gray-800 text-gray-400 hover:bg-gray-800 transition">
-                          <span class="text-xs font-medium">${escapeHtml(opt)}</span>
-                        </button>
-                      `).join('')}
-                    </div>
-                    <div class="flex justify-end pt-2">
-                      <button onclick="window._submitQuizAnswer(${lesson.quiz.answer})" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-5 py-2.5 rounded-lg transition shadow-lg shadow-purple-500/10 flex items-center gap-1.5">
-                        <i class="fas fa-check"></i>
-                        <span>Verify Answer</span>
-                      </button>
-                    </div>
+                  <div>
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3"><i class="fas fa-book-open text-blue-400 mr-2"></i>Lesson</h3>
+                    <p class="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">${escapeHtml(lesson.content || '')}</p>
                   </div>
+
+                  ${(lesson.takeaways||[]).length ? `<div class="glass border border-emerald-500/20 rounded-xl p-4">
+                    <div class="text-[10px] uppercase font-bold text-emerald-300 mb-2">Takeaways</div>
+                    <ul class="list-disc pl-5 text-sm text-gray-200 space-y-1">${lesson.takeaways.map(o=>`<li>${escapeHtml(o)}</li>`).join('')}</ul>
+                  </div>` : ''}
+
+                  ${lesson.practice ? `<div class="glass border border-amber-500/20 rounded-xl p-4 text-sm text-amber-100"><strong class="text-amber-300">Practice:</strong> ${escapeHtml(lesson.practice)}</div>` : ''}
+
+                  ${lesson.platformAction ? `<button type="button" onclick="window._nav('${lesson.platformAction.page}')" class="text-xs font-semibold text-cyan-300 hover:text-cyan-200 inline-flex items-center gap-1.5"><i class="fas fa-arrow-up-right-from-square"></i>${escapeHtml(lesson.platformAction.label)}</button>` : ''}
+
+                  ${lesson.ricksRule ? `<div class="border-l-4 border-blue-500 bg-blue-500/5 rounded-r-xl p-4">
+                    <div class="text-[10px] text-blue-400 font-bold uppercase tracking-wider mb-1"><i class="fas fa-quote-left mr-1"></i> Rick's Rule</div>
+                    <p class="text-xs text-gray-200 font-medium font-serif italic">"${escapeHtml(lesson.ricksRule)}"</p>
+                  </div>` : ''}
+
+                  ${(lesson.quiz||[]).length ? `
+                    <div class="pt-4 border-t border-gray-850 space-y-4">
+                      <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest"><i class="fas fa-check-double text-purple-400 mr-2"></i>Check your understanding</h3>
+                      ${lesson.quiz.map((q, qi) => `
+                        <div class="glass rounded-xl p-4 border border-purple-500/20 bg-purple-500/5 space-y-2">
+                          <p class="text-sm font-bold text-white">${escapeHtml(q.q)}</p>
+                          <div class="space-y-2">${q.choices.map((ch, ci) => `
+                            <button type="button" onclick="window._academyPick(${qi},${ci})" class="academy-quiz-opt w-full text-left text-xs px-3 py-2.5 rounded-lg border ${answers[qi]===ci?'border-purple-500 bg-purple-500/15 text-white':'border-gray-800 text-gray-300 hover:bg-gray-800'} transition">${escapeHtml(ch)}</button>`).join('')}</div>
+                        </div>
+                      `).join('')}
+                      <div class="flex items-center justify-end gap-3">
+                        ${submitted ? `<span class="text-sm font-semibold ${submitted.passed?'text-emerald-300':'text-amber-300'}">${submitted.passed?'Passed':'Try again'} — ${submitted.score}/${submitted.total}</span>` : ''}
+                        <button id="btn-academy-submit" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-5 py-2.5 rounded-lg transition shadow-lg shadow-purple-500/10 flex items-center gap-1.5">
+                          <i class="fas fa-check"></i><span>Submit quiz</span>
+                        </button>
+                      </div>
+                    </div>
+                  ` : ''}
                 </div>
-              ` : ''}
+              </div>
+
+              <div class="flex items-center justify-between">
+                <button type="button" ${idx<=0?'disabled':''} onclick="window._academyGoto(${idx-1})" class="text-xs font-semibold ${idx<=0?'text-gray-600 cursor-not-allowed':'text-gray-300 hover:text-white'}"><i class="fas fa-chevron-left mr-1"></i>Previous lesson</button>
+                <button type="button" ${idx>=total-1?'disabled':''} onclick="window._academyGoto(${idx+1})" class="text-xs font-semibold ${idx>=total-1?'text-gray-600 cursor-not-allowed':'text-gray-300 hover:text-white'}">Next lesson<i class="fas fa-chevron-right ml-1"></i></button>
+              </div>
             </div>
-          </div>
-        </div>
-      `;
+          `;
+        };
+
+        window._academyPick = (qi, ci) => { answers[qi] = ci; paint(); };
+        window._academyGoto = (newIdx) => {
+          const target = (course.lessons || [])[newIdx];
+          if (!target) return;
+          currentLessonId = target.id;
+          renderLessonPlayer();
+        };
+
+        paint();
+
+        setTimeout(() => {
+          const btn = document.getElementById('btn-academy-submit');
+          if (!btn) return;
+          btn.onclick = async () => {
+            try {
+              const res = await api(`/client-portal/academy/${course.id}/${lesson.id}/complete`, {
+                method: 'POST', body: JSON.stringify(portalClientBody({ answers })),
+              });
+              submitted = res;
+              toast(res.passed ? `Lesson complete ${res.score}/${res.total}` : `Review again ${res.score}/${res.total}`, res.passed?'success':'warning');
+              await refreshAcademy();
+              if (res.badges && res.badges.length) {
+                res.badges.forEach(b => toast(`Badge earned: ${b.label}`, 'success'));
+              }
+              paint();
+            } catch (err) { toast(err.message, 'error'); }
+          };
+        }, 0);
+      }).catch((err) => { toast(err.message, 'error'); renderCourseList(); });
     }
 
     renderCourseList();

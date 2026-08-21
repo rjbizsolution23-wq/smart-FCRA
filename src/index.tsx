@@ -10,6 +10,7 @@ import { MENTORS, buildMentorContext, KNOWLEDGE_CORPUS_META, retrieveCaseLawKnow
 import { estimateViolationScoreLift } from './data/fundability-engine';
 import { sendPortalWelcomeEmail, computeAndStoreFundability, portalBaseUrl, isSyntheticPortalEmail, tradelineRecsForClient } from './lib/portal-services';
 import { EDUCATION_LIBRARY, getLessonById, TRADELINE_CATALOG } from './data/portal-education';
+import { ACADEMY_COURSES, ACADEMY_BADGES, getAcademyCourseById, getAcademyLesson, academyTotalLessons } from './data/operator-academy';
 import { matchLenders } from './data/funding/lender-matching';
 import { catalogStats, LENDER_CATALOG } from './data/funding/lenders-catalog';
 import { parseBankStatementText } from './data/bank-underwriting';
@@ -5237,6 +5238,140 @@ app.post('/api/client-portal/education/:lessonId/complete', authMiddleware, asyn
   } catch { /* soft */ }
 
   return c.json({ ok: true, score, total, passed, correctAnswers: lesson.quiz.map(q => q.answer) });
+});
+
+// ── Operator Academy (Systems & Business courses, gamified) ───
+function computeAcademyBadges(courseCompletion: Record<string, boolean>, rows: any[]): string[] {
+  const earned: string[] = [];
+  for (const course of ACADEMY_COURSES) {
+    if (courseCompletion[course.id]) earned.push(course.badgeId);
+  }
+  if (rows.length > 0) earned.push('badge-first-lesson');
+  if (rows.some((r: any) => r.quiz_total > 0 && r.quiz_score === r.quiz_total)) earned.push('badge-perfect-quiz');
+  const distinctDays = new Set(
+    rows.map((r: any) => String(r.completed_at || r.updated_at || '').slice(0, 10)).filter(Boolean)
+  );
+  if (distinctDays.size >= 3) earned.push('badge-streak-3');
+  const completedCourseCount = Object.values(courseCompletion).filter(Boolean).length;
+  if (completedCourseCount >= 5) earned.push('badge-halfway');
+  if (completedCourseCount >= ACADEMY_COURSES.length) earned.push('badge-all-courses');
+  return earned;
+}
+
+app.get('/api/client-portal/academy', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+  let progress: any[] = [];
+  if (client) {
+    try {
+      const rows = await c.env.DB.prepare(
+        `SELECT * FROM academy_progress WHERE client_id = ? AND org_id = ?`
+      ).bind(client.id, user.org_id).all();
+      progress = rows?.results || [];
+    } catch { /* soft — migration may not be applied yet */ }
+  }
+  const completedLessonIds = new Set(
+    progress.filter((r: any) => r.status === 'completed').map((r: any) => r.lesson_id)
+  );
+  const courseCompletion: Record<string, boolean> = {};
+  for (const course of ACADEMY_COURSES) {
+    courseCompletion[course.id] = course.lessons.length > 0 && course.lessons.every((l) => completedLessonIds.has(l.id));
+  }
+  const earnedBadgeIds = computeAcademyBadges(courseCompletion, progress);
+  return c.json({
+    courses: ACADEMY_COURSES.map((course) => ({
+      id: course.id,
+      track: course.track,
+      title: course.title,
+      desc: course.desc,
+      icon: course.icon,
+      badgeId: course.badgeId,
+      completed: courseCompletion[course.id],
+      lessons: course.lessons.map((l) => ({
+        id: l.id,
+        title: l.title,
+        summary: l.summary,
+        minutes: l.minutes,
+        quizCount: l.quiz.length,
+        hasPlatformAction: !!l.platformAction,
+        completed: completedLessonIds.has(l.id),
+      })),
+    })),
+    progress,
+    totalLessons: academyTotalLessons(),
+    completedLessons: completedLessonIds.size,
+    badges: earnedBadgeIds.map((id) => ({ id, ...ACADEMY_BADGES[id] })),
+    allBadges: Object.entries(ACADEMY_BADGES).map(([id, b]) => ({ id, ...b })),
+  });
+});
+
+app.get('/api/client-portal/academy/:courseId/:lessonId', authMiddleware, async (c) => {
+  const found = getAcademyLesson(c.req.param('courseId'), c.req.param('lessonId'));
+  if (!found) return c.json({ error: 'Lesson not found' }, 404);
+  const { course, lesson } = found;
+  return c.json({
+    course: { id: course.id, title: course.title, track: course.track, badgeId: course.badgeId },
+    lesson: {
+      ...lesson,
+      quiz: lesson.quiz.map((q, i) => ({ i, q: q.q, choices: q.choices })), // hide answers
+    },
+  });
+});
+
+app.post('/api/client-portal/academy/:courseId/:lessonId/complete', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  const client = await resolvePortalClientSafe(c, user, body.clientId);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const found = getAcademyLesson(c.req.param('courseId'), c.req.param('lessonId'));
+  if (!found) return c.json({ error: 'Lesson not found' }, 404);
+  const { course, lesson } = found;
+
+  const answers: number[] = Array.isArray(body.answers) ? body.answers : [];
+  let score = 0;
+  lesson.quiz.forEach((q, i) => { if (answers[i] === q.answer) score += 1; });
+  const total = lesson.quiz.length;
+  const passed = total === 0 || score === total;
+  const id = generateId();
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO academy_progress (id, org_id, client_id, course_id, lesson_id, status, quiz_score, quiz_total, completed_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+       ON CONFLICT(client_id, lesson_id) DO UPDATE SET
+         status = excluded.status,
+         quiz_score = excluded.quiz_score,
+         quiz_total = excluded.quiz_total,
+         completed_at = excluded.completed_at,
+         updated_at = datetime('now')`
+    ).bind(id, user.org_id, client.id, course.id, lesson.id, passed ? 'completed' : 'started', score, total).run();
+  } catch (e: any) {
+    return c.json({ error: 'Academy progress table unavailable — run migration 0040', detail: e.message }, 500);
+  }
+
+  let newBadges: string[] = [];
+  try {
+    const rows = await c.env.DB.prepare(
+      `SELECT * FROM academy_progress WHERE client_id = ? AND org_id = ?`
+    ).bind(client.id, user.org_id).all();
+    const progress = rows?.results || [];
+    const completedLessonIds = new Set(
+      progress.filter((r: any) => r.status === 'completed').map((r: any) => r.lesson_id)
+    );
+    const courseCompletion: Record<string, boolean> = {};
+    for (const co of ACADEMY_COURSES) {
+      courseCompletion[co.id] = co.lessons.length > 0 && co.lessons.every((l) => completedLessonIds.has(l.id));
+    }
+    newBadges = computeAcademyBadges(courseCompletion, progress);
+  } catch { /* soft */ }
+
+  return c.json({
+    ok: true,
+    score,
+    total,
+    passed,
+    correctAnswers: lesson.quiz.map(q => q.answer),
+    badges: newBadges.map((bid) => ({ id: bid, ...ACADEMY_BADGES[bid] })),
+  });
 });
 
 // ── Personal tutor (grows with client journey) ────────────────
