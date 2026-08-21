@@ -10935,12 +10935,27 @@ async function pgAdminConsole(el) {
     const qs = portalClientQs();
     let history = [];
     let growthCache = null;
+    let activeMentorId = null;
+    function mentorQs() {
+      if (!activeMentorId) return qs;
+      return qs ? `${qs}&mentorId=${encodeURIComponent(activeMentorId)}` : `?mentorId=${encodeURIComponent(activeMentorId)}`;
+    }
+    window._tutorSwitchMentor = async (mentorId) => {
+      if (mentorId === activeMentorId) return;
+      activeMentorId = mentorId;
+      history = [];
+      await paint();
+    };
+    let activeMentorName = 'Alex Rivera';
     async function paint() {
-      const meta = await api('/client-portal/tutor' + qs);
+      const meta = await api('/client-portal/tutor' + mentorQs());
       growthCache = meta.growth || growthCache;
+      activeMentorId = meta.mentor?.id || activeMentorId || 'personal-finance-tutor';
+      activeMentorName = meta.mentor?.name || activeMentorName || 'Alex Rivera';
       const g = growthCache;
+      const mentorRoster = meta.mentors || [];
       if (!history.length) {
-        history = [{ role: 'tutor', text: g?.greeting || 'Hi — I am Alex Rivera, your personal finance tutor. I grow with you as you learn and progress through your journey.' }];
+        history = [{ role: 'tutor', text: g?.greeting || `Hi — I am ${meta.mentor?.name || 'Alex Rivera'}, your personal finance tutor. I grow with you as you learn and progress through your journey.` }];
       }
       const prompts = (g?.suggestedPrompts || [
         { label: 'Quiz me', prompt: 'Quiz me on FICO basics' },
@@ -10963,6 +10978,9 @@ async function pgAdminConsole(el) {
                 <h1 class="text-xl font-bold text-white"><i class="fas fa-user-graduate text-violet-300 mr-2"></i>${escapeHtml(meta.mentor?.name || 'Alex Rivera')}</h1>
                 <p class="text-sm text-slate-400 mt-1">${escapeHtml(g?.curriculumFocus || meta.mentor?.blurb || '')}</p>
                 ${g?.nextUnlock ? `<p class="text-[11px] text-violet-200/70 mt-2"><i class="fas fa-lock-open mr-1"></i>${escapeHtml(g.nextUnlock)}</p>` : ''}
+                ${mentorRoster.length > 1 ? `<div class="flex flex-wrap gap-1.5 mt-3">
+                  ${mentorRoster.map(m => `<button type="button" class="tutor-mentor-switch text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition ${m.id===activeMentorId?'border-violet-400/60 bg-violet-500/20 text-violet-100':'border-white/10 text-gray-400 hover:border-violet-400/30 hover:text-violet-200'}" data-mentor-id="${escapeHtml(m.id)}" title="${escapeHtml(m.blurb||'')}">${escapeHtml(m.name)}</button>`).join('')}
+                </div>` : ''}
               </div>
               ${g ? `<div class="shrink-0 w-full sm:w-44">
                 <div class="flex justify-between text-[10px] font-mono text-gray-400 mb-1"><span>Growth XP</span><span>${g.xp}</span></div>
@@ -10981,7 +10999,7 @@ async function pgAdminConsole(el) {
           <div id="tutor-quiz-box" class="hidden glass rounded-xl border border-cyan-500/30 p-4 text-sm"></div>
           <form id="tutor-upload-form" class="glass rounded-xl border border-gray-800 p-3 flex flex-wrap gap-2 items-end text-xs">
             <div class="flex-1 min-w-[160px]">
-              <label class="text-[10px] text-gray-500 uppercase">Share a statement with Alex</label>
+              <label class="text-[10px] text-gray-500 uppercase">Share a statement with ${escapeHtml(meta.mentor?.name || 'Alex Rivera')}</label>
               <select id="tutor-upload-cat" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-2 py-2 text-white">
                 <option value="bank_statement">Bank statement</option>
                 <option value="paystub">Paystub</option>
@@ -11018,11 +11036,11 @@ async function pgAdminConsole(el) {
         try {
           const res = await api('/client-portal/tutor/chat', {
             method: 'POST',
-            body: JSON.stringify(portalClientBody({ message: msg })),
+            body: JSON.stringify(portalClientBody({ message: msg, mentorId: activeMentorId })),
           });
           history.push({ role: 'tutor', text: res.reply || '(no reply)' });
           if (res.growth) growthCache = res.growth;
-          if (res.leveledUp) toast(`Alex leveled up — now Level ${res.growth.level} (${res.growth.rankTitle})!`, 'success');
+          if (res.leveledUp) toast(`${activeMentorName} — you leveled up! Now Level ${res.growth.level} (${res.growth.rankTitle})!`, 'success');
         } catch (err) {
           history.push({ role: 'tutor', text: 'Error: ' + err.message });
         }
@@ -11038,6 +11056,9 @@ async function pgAdminConsole(el) {
       };
       document.querySelectorAll('.tutor-quick').forEach(btn => {
         btn.onclick = () => send(btn.getAttribute('data-q'));
+      });
+      document.querySelectorAll('.tutor-mentor-switch').forEach(btn => {
+        btn.onclick = () => window._tutorSwitchMentor(btn.getAttribute('data-mentor-id'));
       });
       const liveQuiz = document.getElementById('tutor-live-quiz');
       if (liveQuiz) liveQuiz.onclick = async () => {

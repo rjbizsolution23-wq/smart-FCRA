@@ -6,7 +6,7 @@ import { generateId, hashPassword, verifyPassword, needsPasswordRehash, createSe
 import { encryptText, decryptText, decryptTextSafe, requireEncryptionKey } from './lib/crypto';
 import { listConfiguredProviders, generateFreeImage } from './lib/ai-providers';
 import { sendAppEmail } from './lib/email';
-import { MENTORS, buildMentorContext, KNOWLEDGE_CORPUS_META, retrieveCaseLawKnowledge, type MentorId } from './lib/mentors';
+import { MENTORS, buildMentorContext, KNOWLEDGE_CORPUS_META, retrieveCaseLawKnowledge, CLIENT_TUTOR_MENTOR_IDS, type MentorId } from './lib/mentors';
 import { estimateViolationScoreLift } from './data/fundability-engine';
 import { sendPortalWelcomeEmail, computeAndStoreFundability, portalBaseUrl, isSyntheticPortalEmail, tradelineRecsForClient } from './lib/portal-services';
 import { EDUCATION_LIBRARY, getLessonById, TRADELINE_CATALOG } from './data/portal-education';
@@ -5375,6 +5375,11 @@ app.post('/api/client-portal/academy/:courseId/:lessonId/complete', authMiddlewa
 });
 
 // ── Personal tutor (grows with client journey) ────────────────
+function resolveTutorMentorId(requested: string | undefined | null, stored: string | undefined | null): MentorId {
+  const candidate = requested || stored || 'personal-finance-tutor';
+  return (CLIENT_TUTOR_MENTOR_IDS.includes(candidate as MentorId) ? candidate : 'personal-finance-tutor') as MentorId;
+}
+
 app.get('/api/client-portal/tutor', authMiddleware, async (c) => {
   const user = c.get('user');
   const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
@@ -5382,8 +5387,10 @@ app.get('/api/client-portal/tutor', authMiddleware, async (c) => {
   try {
     const companion = await loadTutorCompanion(c.env, client);
     const learned = await getLearnedIntelligenceSummary(c.env, user.org_id, client.id).catch(() => null);
+    const mentorId = resolveTutorMentorId(c.req.query('mentorId'), companion.memory?.active_mentor_id);
     return c.json({
-      mentor: MENTORS.find(m => m.id === 'personal-finance-tutor'),
+      mentor: MENTORS.find(m => m.id === mentorId),
+      mentors: MENTORS.filter(m => CLIENT_TUTOR_MENTOR_IDS.includes(m.id)),
       memory: companion.memory,
       progress: companion.progress,
       growth: companion.growth,
@@ -5404,6 +5411,7 @@ app.get('/api/client-portal/tutor', authMiddleware, async (c) => {
     console.error('[tutor] load failed', e);
     return c.json({
       mentor: MENTORS.find(m => m.id === 'personal-finance-tutor'),
+      mentors: MENTORS.filter(m => CLIENT_TUTOR_MENTOR_IDS.includes(m.id)),
       memory: null,
       progress: [],
       growth: null,
@@ -5472,11 +5480,12 @@ app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
 
   const companion = await loadTutorCompanion(c.env, client);
   const { growth, input, memory } = companion;
+  const mentorId = resolveTutorMentorId(body.mentorId, memory?.active_mentor_id);
 
   const memoryChunks = await retrieveClientMemory(c.env, user.org_id, client.id, message).catch(() => []);
   const learnedBlock = buildLearnedMemoryContext(memoryChunks);
 
-  const { mentor, knowledgeBlock } = buildMentorContext('personal-finance-tutor', message);
+  const { mentor, knowledgeBlock } = buildMentorContext(mentorId, message);
   const growthBlock = tutorChatSystemBlock(input, growth, memory?.summary, memory?.goals_json);
   const context = [
     `Client: ${client.first_name} ${client.last_name}`,
@@ -5516,8 +5525,8 @@ app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
   try {
     const summary = `${(memory?.summary || '').slice(0, 800)}\n[L${growth.level}/${growth.rank}] Q: ${message.slice(0, 200)}\nA: ${reply.slice(0, 400)}`.trim();
     await c.env.DB.prepare(
-      `INSERT INTO tutor_memory (id, org_id, client_id, summary, sessions_count, level, xp, rank_title, growth_json, updated_at)
-       VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, datetime('now'))
+      `INSERT INTO tutor_memory (id, org_id, client_id, summary, sessions_count, level, xp, rank_title, growth_json, active_mentor_id, updated_at)
+       VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT(client_id) DO UPDATE SET
          summary = excluded.summary,
          sessions_count = COALESCE(tutor_memory.sessions_count,0)+1,
@@ -5525,6 +5534,7 @@ app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
          xp = excluded.xp,
          rank_title = excluded.rank_title,
          growth_json = excluded.growth_json,
+         active_mentor_id = excluded.active_mentor_id,
          updated_at = datetime('now')`
     ).bind(
       generateId(),
@@ -5535,6 +5545,7 @@ app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
       growth.xp + 12,
       growth.rankTitle,
       JSON.stringify({ rank: growth.rank, curriculumFocus: growth.curriculumFocus, phase: input.journeyPhase }),
+      mentorId,
     ).run();
   } catch {
     try {
@@ -5551,7 +5562,7 @@ app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
     await c.env.DB.prepare(
       `INSERT INTO portal_messages (id, org_id, client_id, sender_user_id, sender_role, channel, subject, body, created_at)
        VALUES (?, ?, ?, ?, 'system', 'portal', 'Tutor session', ?, datetime('now'))`
-    ).bind(generateId(), user.org_id, client.id, user.id, `You: ${message}\n\nAlex: ${reply}`).run();
+    ).bind(generateId(), user.org_id, client.id, user.id, `You: ${message}\n\n${mentor.name}: ${reply}`).run();
   }
 
   recordTutorTurnMemory(c.env, {
