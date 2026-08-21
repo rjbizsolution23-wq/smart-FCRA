@@ -165,7 +165,7 @@ import { inspectUpload, decodeBase64Bytes, sanitizeFileName } from './lib/upload
 import { vaultOriginalFromBody } from './lib/report-vault';
 import { persistInvestigationClock, closeInvestigationClock, FCRA_611_OPERATIONAL_DAYS } from './lib/investigation-clocks';
 import { recordServiceCompleted, assertCoveredChargeAllowed, writeBillingLedger } from './lib/service-ledger';
-import { sendLetterViaLob, resolveMailClass, lobConfigured, lobPublicStatus, verifyUsAddress } from './lib/lob';
+import { sendLetterViaLob, resolveMailClass, lobConfigured, lobPublicStatus } from './lib/lob';
 import { chargeMailPostage } from './lib/mail-postage';
 import { registerMailPostageRoutes, fulfillMailPostageCheckout, chargeOrgSavedCardPostage, ensureOrgStripeCustomer } from './lib/mail-postage-routes';
 import { registerSupportCrmRoutes, registerExternalIntegrationRoutes } from './lib/support-crm-routes';

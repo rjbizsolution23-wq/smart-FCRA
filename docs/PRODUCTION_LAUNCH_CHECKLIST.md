@@ -61,6 +61,8 @@ wrangler pages secret put STAFF_MFA_REQUIRED_ALL  # optional: "true" to require 
 npx wrangler d1 migrations apply fcra-detector-v2 --remote
 # Includes 0009_roadmap_progress.sql for interactive fundability wizards
 # Includes 0038_mail_postage_billing.sql + 0039_mail_card_unlock.sql for Lob postage wallets/card unlock
+# Includes 0040_operator_academy.sql for the gamified Operator Academy (academy_progress table)
+# Includes 0041_tutor_mentor_family.sql for the multi-mentor client tutor family (active_mentor_id column)
 ```
 
 6. Deploy: `npm run deploy` → Pages project `smart-fcra-v2` only
