@@ -7785,7 +7785,7 @@ Status: Discharged`;
   async function pgBilling(el) {
     const fallbackPlans = [
       { id: 'professional', name: 'Professional', amountDisplay: '$497', color: 'blue', badge: 'MOST POPULAR', features: ['100 active clients', 'Unlimited report analyses', '15-category violation engine (FCRA/FDCPA/ECOA/Metro 2)', 'Litigation Vulnerability Score + damages', 'Generated dispute/demand letters from file facts', 'Case-law hooks + SOL calculator', 'Client portal: sandbox, tutors, CROA cancel', 'Priority email support'], paymentLink: null },
-      { id: 'unlimited', name: 'Unlimited', amountDisplay: '$2,500', color: 'amber', badge: 'UNLIMITED', features: ['Everything in Professional', 'Unlimited clients & scans', 'MFSN / monitoring imports', 'Click2Mail + FCRA § 611 investigation clocks', 'Full FCRA knowledge base & staff mentors', 'Team operator seats', 'Faster SLA + QBR available', 'Multi-org management'], paymentLink: null },
+      { id: 'unlimited', name: 'Unlimited', amountDisplay: '$2,500', color: 'amber', badge: 'UNLIMITED', features: ['Everything in Professional', 'Unlimited clients & scans', 'MFSN / monitoring imports', 'Lob certified mail + FCRA § 611 investigation clocks', 'Full FCRA knowledge base & staff mentors', 'Team operator seats', 'Faster SLA + QBR available', 'Multi-org management'], paymentLink: null },
       { id: 'enterprise', name: 'Enterprise', amountDisplay: '$9,997', color: 'purple', badge: 'TEAM/AGENCY', features: ['Unlimited seats, clients, analyses', 'Full generated litigation document pack (~45 letter types)', 'Full case-law database (300+)', 'White-label client portals', 'API access', 'Dedicated account manager', 'Expert legal-ops consultation add-on'], paymentLink: null }
     ];
     const featureMap = Object.fromEntries(fallbackPlans.map((p) => [p.id, p]));
@@ -10474,11 +10474,11 @@ async function pgAdminConsole(el) {
         ['Dashboard / Clients / Reports', 'Ops home, client list, report upload + history'],
         ['Violations / Documents', 'Org queue + generated letters/PDFs'],
         ['Compliance Hub', 'Consent, disclaimers, legal status'],
-        ['Mailing Campaigns', 'Click2Mail certified / first-class'],
+        ['Mailing Campaigns', 'Lob certified / first-class'],
         ['Founder OS / Sales / ROI', 'Owner OS, pitch tools, deal math'],
         ['Tradelines', 'TradelineMaster inventory, listed prices, filters, cart, smart match, order email'],
         ['Brand Library', 'Forms, color tokens, inbound leads'],
-        ['Team / Settings / Billing', 'Users, GHL/MFSN/Twilio/Stripe/Click2Mail, org Stripe'],
+        ['Team / Settings / Billing', 'Users, GHL/MFSN/Twilio/Stripe/Lob, org Stripe'],
         ['AI Studio / Legal / Admin', 'Mentors, in-app legal, super-admin console'],
       ]},
       { title: 'Client portal (Preview Portal walks every tab)', items: [
@@ -10498,7 +10498,7 @@ async function pgAdminConsole(el) {
         ['Readiness', 'Deterministic fundability education — not a lending promise'],
         ['Boost Tools', 'Educational authorized-user matching at listed prices'],
         ['AU Tradelines', 'Live TradelineMaster catalog the consumer can also see'],
-        ['Tutor', 'Alex Rivera literacy coaching — no fake FICO promises'],
+        ['Tutor', 'Alex / Maya / Jordan literacy coaching — no fake FICO promises'],
         ['Letters', 'Generated letters released to the consumer'],
         ['Legal & Notary', 'CROA/LPOA packs and RON when keys are live'],
         ['Video', 'Twilio Video when keys set, local camera preview otherwise'],
@@ -10515,7 +10515,7 @@ async function pgAdminConsole(el) {
         ['GoHighLevel', 'Full custom fields + tags; bulk CRM + MFSN sync'],
         ['MyFreeScoreNow', 'Affiliate portal → Users → API User → paste into API login, then member email + MAPIK# to fetch-3B-json'],
         ['TradelineMaster', 'Live inventory, listed prices, daily refresh cron job'],
-        ['Twilio / Email / Stripe / Click2Mail', 'SMS, Verify, Video tokens, transactional mail, org billing, certified mail'],
+        ['Twilio / Email / Stripe / Lob', 'SMS, Verify, Video tokens, transactional mail, org billing, certified mail'],
         ['AI cascade', 'Groq → Gemini → Workers AI → OpenAI free-only'],
       ]},
     ];
@@ -10523,7 +10523,7 @@ async function pgAdminConsole(el) {
       'Shipped: Twilio Video JS join (live room or local preview).',
       'Shipped: Cloudflare Turnstile on brand forms + /api/public/turnstile.',
       'Shipped: Executive Overview sparkline bound to last 6 months of paid orders (or pipeline).',
-      'Shipped: Click2Mail status from /api/settings/integrations.',
+      'Shipped: Lob mailing status from /api/settings/integrations.',
       'Shipped: Duplicate Clients / Report History removed from sidebar.',
       'Shipped: Client Stripe checkout POST /api/client-portal/unlock/checkout.',
       'Shipped: RON sandbox vs live vendor banner + Proof/BlueNotary ceremony URLs.',
@@ -13994,7 +13994,7 @@ async function pgAdminConsole(el) {
         </div>
         <div class="glass border border-gray-800 rounded-xl p-3.5 bg-gray-900/10">
           <div class="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">Mailing Service</div>
-          <div class="text-lg font-bold text-blue-400 flex items-center gap-1.5"><i class="fas fa-cloud text-sm"></i>Click2Mail</div>
+          <div class="text-lg font-bold text-blue-400 flex items-center gap-1.5"><i class="fas fa-cloud text-sm"></i>Lob</div>
         </div>
         <div class="glass border border-gray-800 rounded-xl p-3.5 bg-gray-900/10">
           <div class="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">USPS Delivery Class</div>
@@ -14055,7 +14055,7 @@ async function pgAdminConsole(el) {
                         <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                         <span>USPS Certified In Transit</span>
                       </div>
-                      <div class="text-[10px] text-gray-500 font-mono mt-0.5">Click2Mail Gateway Dispatched</div>
+                      <div class="text-[10px] text-gray-500 font-mono mt-0.5">Lob Gateway Dispatched</div>
                     </td>
                     <td class="p-3.5 text-right">
                       <div class="flex items-center justify-end gap-1.5">
@@ -15090,15 +15090,15 @@ async function pgAdminConsole(el) {
       const allDocs = d.documents || [];
       const sent = allDocs.filter(doc => doc.status === 'sent');
       const drafts = allDocs.filter(doc => doc.status === 'draft');
-      let c2m = { configured: false, status: 'unknown', label: 'CHECKING' };
+      let lobStatus = { configured: false, status: 'unknown', label: 'CHECKING' };
       try {
         const integ = await api('/settings/integrations');
-        c2m = integ.click2mail || c2m;
+        lobStatus = integ.lob || lobStatus;
       } catch { /* soft */ }
 
       const totalSent = sent.length;
       const totalPending = drafts.length;
-      const c2mOn = !!c2m.configured;
+      const lobOn = !!lobStatus.configured;
 
       el.innerHTML = `
         <div class="fade-in">
@@ -15108,7 +15108,7 @@ async function pgAdminConsole(el) {
               <h1 class="text-xl font-bold text-white flex items-center gap-2">
                 <i class="fas fa-mail-bulk text-blue-400"></i> Mailing Campaigns
               </h1>
-              <p class="text-sm text-gray-400">Central USPS Certified Mail Campaign & Click2Mail dispatch control center</p>
+              <p class="text-sm text-gray-400">Central USPS Certified Mail Campaign & Lob dispatch control center</p>
             </div>
             <button onclick="window._nav('clients')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 shadow-lg shadow-blue-600/15">
               <i class="fas fa-plus"></i> New Mailing Dispatch
@@ -15134,12 +15134,12 @@ async function pgAdminConsole(el) {
               <div class="text-[9px] text-gray-500 mt-1">Draft letters prepared for consumer signature</div>
             </div>
             <div class="glass border border-gray-800 rounded-2xl p-4 bg-gray-900/10">
-              <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">Click2Mail Service</div>
-              <div class="text-2xl font-black ${c2mOn ? 'text-blue-400' : 'text-amber-400'} flex items-center gap-2">
-                <i class="fas ${c2mOn ? 'fa-link' : 'fa-unlink'} text-lg"></i>
-                <span>${escapeHtml(c2m.label || (c2mOn ? 'CONNECTED' : 'NOT CONFIGURED'))}</span>
+              <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">Lob Service</div>
+              <div class="text-2xl font-black ${lobOn ? 'text-blue-400' : 'text-amber-400'} flex items-center gap-2">
+                <i class="fas ${lobOn ? 'fa-link' : 'fa-unlink'} text-lg"></i>
+                <span>${escapeHtml(lobStatus.label || (lobOn ? 'CONNECTED' : 'NOT CONFIGURED'))}</span>
               </div>
-              <div class="text-[9px] text-gray-500 mt-1">${c2mOn ? 'REST API credentials present' : 'Set CLICK2MAIL_USERNAME + CLICK2MAIL_AUTH_BASIC'}</div>
+              <div class="text-[9px] text-gray-500 mt-1">${lobOn ? 'REST API credentials present' : 'Set LOB_SECRET_KEY'}</div>
             </div>
             <div class="glass border border-gray-800 rounded-2xl p-4 bg-gray-900/10">
               <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">USPS Resolution SLA</div>
@@ -15203,7 +15203,7 @@ async function pgAdminConsole(el) {
                               <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping"></span>
                               <span>USPS Certified In Transit</span>
                             </div>
-                            <div class="text-[10px] text-gray-500 font-mono mt-0.5">Click2Mail Automated Mailroom</div>
+                            <div class="text-[10px] text-gray-500 font-mono mt-0.5">Lob Automated Mailroom</div>
                           </td>
                           <td class="p-3.5 text-right">
                             <button onclick="window._viewDoc('${doc.id}')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition"><i class="fas fa-eye"></i> View</button>
@@ -15288,7 +15288,7 @@ async function pgAdminConsole(el) {
                                 <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping"></span>
                                 <span>USPS Certified In Transit</span>
                               </div>
-                              <div class="text-[10px] text-gray-500 font-mono mt-0.5">Click2Mail Automated Mailroom</div>
+                              <div class="text-[10px] text-gray-500 font-mono mt-0.5">Lob Automated Mailroom</div>
                             </td>
                             <td class="p-3.5 text-right">
                               <button onclick="window._viewDoc('${doc.id}')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition"><i class="fas fa-eye"></i> View</button>
