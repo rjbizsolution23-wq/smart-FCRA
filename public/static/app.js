@@ -163,6 +163,16 @@
     });
   };
 
+  /** Read a File as a data:*;base64,... URI (used by file-type promptDialog fields). */
+  function fileToDataUri(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Could not read file'));
+      reader.readAsDataURL(file);
+    });
+  }
+
   /** Branded modal prompt — replaces window.prompt() for integrations and settings. */
   function promptDialog(opts) {
     return new Promise((resolve) => {
@@ -171,15 +181,25 @@
       const title = opts.title || t('modal.enterDetails');
       const submitLabel = opts.submitLabel || t('common.continue');
       const cancelLabel = opts.cancelLabel || t('common.cancel');
+      // Holds base64 data-URIs captured from file inputs (keyed by field name) — file inputs
+      // can't carry a value attribute, so we stash the converted result here on change.
+      const fileData = {};
       const fieldsHtml = fields.map((f) => `
         <div class="mb-3">
-          <label class="block text-xs font-semibold text-gray-300 mb-1.5" for="pf-${f.name}">${escapeHtml(f.label || f.name)}</label>
+          <label class="block text-xs font-semibold text-gray-300 mb-1.5" for="pf-${f.name}">${escapeHtml(f.label || f.name)}${f.required === false ? ' <span class="text-gray-500 font-normal">(optional)</span>' : ''}</label>
           ${f.type === 'textarea'
             ? `<textarea id="pf-${f.name}" rows="4" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" placeholder="${escapeHtml(f.placeholder || '')}">${escapeHtml(f.defaultValue || '')}</textarea>`
-            : `<input id="pf-${f.name}" type="${f.type === 'password' ? 'password' : 'text'}" value="${escapeHtml(f.defaultValue || '')}" placeholder="${escapeHtml(f.placeholder || '')}" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" autocomplete="off">`}
+            : f.type === 'select'
+            ? `<select id="pf-${f.name}" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white">
+                ${(f.options || []).map((o) => `<option value="${escapeHtml(o.value)}" ${o.value === f.defaultValue ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
+              </select>`
+            : f.type === 'file'
+            ? `<input id="pf-${f.name}" type="file" accept="${escapeHtml(f.accept || 'image/png,image/jpeg,image/webp,image/svg+xml')}" class="block w-full text-xs text-gray-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-sky-600 file:text-white">
+               <p id="pf-${f.name}-status" class="text-[10px] text-gray-500 mt-1">${escapeHtml(f.helpText || 'PNG, JPEG, WEBP, or SVG — under 1.5MB.')}</p>`
+            : `<input id="pf-${f.name}" type="${f.type === 'password' ? 'password' : (f.type === 'email' ? 'email' : 'text')}" value="${escapeHtml(f.defaultValue || '')}" placeholder="${escapeHtml(f.placeholder || '')}" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" autocomplete="off">`}
         </div>`).join('');
       window._openModal(`
-        <div class="bg-gray-900 border border-sky-500/30 rounded-2xl max-w-md w-full p-5 shadow-2xl" role="document">
+        <div class="bg-gray-900 border border-sky-500/30 rounded-2xl max-w-md w-full p-5 shadow-2xl max-h-[90vh] overflow-y-auto" role="document">
           <div class="flex items-start justify-between gap-3 mb-4">
             <div>
               <div class="text-[10px] uppercase tracking-wider font-bold text-sky-300 mb-1">Smart FCRA</div>
@@ -198,9 +218,35 @@
       const finish = (val) => { if (wrap) { releaseFocusTrap(wrap); wrap.remove(); } resolve(val); };
       document.getElementById('pf-cancel')?.addEventListener('click', () => finish(null));
       wrap?.querySelector('[data-modal-close]')?.addEventListener('click', () => finish(null));
+      for (const f of fields) {
+        if (f.type !== 'file') continue;
+        const input = document.getElementById('pf-' + f.name);
+        const status = document.getElementById('pf-' + f.name + '-status');
+        if (!input) continue;
+        input.addEventListener('change', async () => {
+          const file = input.files && input.files[0];
+          if (!file) { delete fileData[f.name]; return; }
+          const maxBytes = f.maxBytes || 1.5 * 1024 * 1024;
+          if (file.size > maxBytes) {
+            toast(`File must be under ${(maxBytes / (1024 * 1024)).toFixed(1)}MB`, 'error');
+            input.value = '';
+            delete fileData[f.name];
+            return;
+          }
+          try {
+            fileData[f.name] = await fileToDataUri(file);
+            if (status) status.textContent = `Ready: ${file.name}`;
+          } catch {
+            toast('Could not read file', 'error');
+            input.value = '';
+            delete fileData[f.name];
+          }
+        });
+      }
       document.getElementById('pf-submit')?.addEventListener('click', () => {
         const out = {};
         for (const f of fields) {
+          if (f.type === 'file') { out[f.name] = fileData[f.name] || ''; continue; }
           const el = document.getElementById('pf-' + f.name);
           out[f.name] = el ? el.value.trim() : '';
           if (f.required !== false && !out[f.name]) { toast(t('modal.fieldRequired'), 'error'); return; }
@@ -218,6 +264,32 @@
   async function brandedPromptForm(title, fields, opts) {
     return window._promptDialog(Object.assign({ title, fields }, opts || {}));
   }
+
+  /** Branded yes/no confirm modal — replaces window.confirm() for higher-stakes flows. */
+  function confirmDialog(opts) {
+    return new Promise((resolve) => {
+      const id = opts.id || 'branded-confirm';
+      const title = opts.title || 'Confirm';
+      const okLabel = opts.okLabel || 'Confirm';
+      const cancelLabel = opts.cancelLabel || 'Cancel';
+      window._openModal(`
+        <div class="bg-gray-900 border border-sky-500/30 rounded-2xl max-w-md w-full p-5 shadow-2xl" role="document">
+          <div class="text-[10px] uppercase tracking-wider font-bold text-sky-300 mb-1">Smart FCRA</div>
+          <h2 class="text-lg font-bold text-white font-display mb-2">${escapeHtml(title)}</h2>
+          <p class="text-xs text-gray-300 whitespace-pre-line">${escapeHtml(opts.message || '')}</p>
+          <div class="flex gap-2 mt-5">
+            <button type="button" id="cf-cancel" class="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg py-2.5 text-sm font-semibold">${escapeHtml(cancelLabel)}</button>
+            <button type="button" id="cf-ok" class="flex-1 btn-rj rounded-lg py-2.5 text-sm font-semibold">${escapeHtml(okLabel)}</button>
+          </div>
+        </div>`, id);
+      const wrap = document.getElementById(id);
+      const finish = (val) => { if (wrap) { releaseFocusTrap(wrap); wrap.remove(); } resolve(val); };
+      document.getElementById('cf-cancel')?.addEventListener('click', () => finish(false));
+      wrap?.querySelector('[data-modal-close]')?.addEventListener('click', () => finish(false));
+      document.getElementById('cf-ok')?.addEventListener('click', () => finish(true));
+    });
+  }
+  window._confirmDialog = confirmDialog;
 
   async function previewVaultPdf(uploadId, fileName) {
     const qs = portalClientQs();
@@ -422,6 +494,62 @@
     el.innerHTML = `<i class="fas ${icons[type]}"></i><span>${msg}</span>`;
     document.body.appendChild(el);
     setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 4000);
+  }
+
+  /** When Lob send returns 402 MAIL_POSTAGE_REQUIRED / MAIL_CARD_REQUIRED, offer Stripe checkout. */
+  async function offerMailPostageCheckout(err, opts = {}) {
+    const d = err?.data || {};
+    const code = err?.code || d.code;
+    if (code !== 'MAIL_POSTAGE_REQUIRED' && code !== 'MAIL_CARD_REQUIRED') return false;
+    if (code === 'MAIL_CARD_REQUIRED' || d.needsCard) {
+      if (!confirm(`${d.error || 'Add your firm card to unlock mailing.'}\n\nContinue to secure Stripe card setup?`)) return true;
+      try {
+        const r = await api('/mail-postage/org/add-card', { method: 'POST', body: '{}' });
+        if (r.url) { window.location.href = r.url; return true; }
+        toast(r.error || 'Card setup unavailable', 'error');
+      } catch (e) { toast(e.message, 'error'); }
+      return true;
+    }
+    const cost = ((d.costCents || 0) / 100).toFixed(2);
+    const orgBal = ((d.orgBalanceCents || 0) / 100).toFixed(2);
+    const clientBal = ((d.clientBalanceCents || 0) / 100).toFixed(2);
+    const choice = await brandedPrompt(
+      'Postage payment',
+      d.canPayClient ? 'letter' : 'org',
+      {
+        title: 'Postage required',
+        description: `Need $${cost} for ${d.mailClass || 'FIRST_CLASS'}. Firm wallet $${orgBal} · Client wallet $${clientBal}. Type: card (add/update firm card), org (buy firm pack), pack (client pack), or letter (pay this one letter).`,
+        submitLabel: 'Continue to card checkout',
+      },
+    );
+    if (!choice) return true;
+    const mode = String(choice).trim().toLowerCase();
+    try {
+      let r;
+      if (mode === 'card' || mode === 'add') {
+        r = await api('/mail-postage/org/add-card', { method: 'POST', body: '{}' });
+      } else if (mode === 'org' || mode === 'firm') {
+        r = await api('/mail-postage/org/credits/purchase', { method: 'POST', body: JSON.stringify({ packId: 'mail_starter' }) });
+      } else if (mode === 'pack' || mode === 'credits') {
+        r = await api('/mail-postage/client/credits/purchase', {
+          method: 'POST',
+          body: JSON.stringify({ packId: 'client_mail_5', clientId: opts.clientId }),
+        });
+      } else {
+        r = await api('/mail-postage/client/pay-letter', {
+          method: 'POST',
+          body: JSON.stringify({
+            clientId: opts.clientId,
+            mailClass: opts.mailClass || d.mailClass,
+            documentId: opts.documentId,
+            disputeId: opts.disputeId,
+          }),
+        });
+      }
+      if (r.url) { window.location.href = r.url; return true; }
+      toast(r.error || 'Checkout unavailable', 'error');
+    } catch (e) { toast(e.message, 'error'); }
+    return true;
   }
 
   function $(s) { return document.querySelector(s); }
@@ -6046,7 +6174,7 @@ Status: Discharged`;
     el.innerHTML = `<div class="fade-in">
       <button onclick="window._nav('documents')" class="text-gray-400 hover:text-white text-sm mb-4 inline-flex items-center gap-1.5 transition"><i class="fas fa-arrow-left text-xs"></i>Back</button>
       <div class="flex items-center justify-between mb-4"><h1 class="text-xl font-bold text-white">${dc.title}</h1>
-        <div class="flex gap-2"><button id="ai-rewrite-btn" onclick="window._aiRewrite('${dc.id}')" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-robot mr-1"></i>AI Rewrite</button><button onclick="window._copyDoc()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-copy mr-1"></i>Copy</button><button onclick="window._emailDoc()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-envelope mr-1"></i>Email</button><button onclick="window._mailDoc('${dc.id}','${encodeURIComponent(client.first_name||'')}','${encodeURIComponent(client.last_name||'')}','${encodeURIComponent(client.address_line1||'')}','${encodeURIComponent(client.city||'')}','${encodeURIComponent(client.state||'')}','${encodeURIComponent(client.zip||'')}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-paper-plane mr-1"></i>Mail</button><button onclick="window._printDoc()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-print mr-1"></i>Print</button></div>
+        <div class="flex gap-2"><button id="ai-rewrite-btn" onclick="window._aiRewrite('${dc.id}')" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-robot mr-1"></i>AI Rewrite</button><button onclick="window._copyDoc()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-copy mr-1"></i>Copy</button><button onclick="window._emailDoc()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-envelope mr-1"></i>Email</button><button onclick="window._mailDoc('${dc.id}','${encodeURIComponent(client.first_name||'')}','${encodeURIComponent(client.last_name||'')}','${encodeURIComponent(client.address_line1||'')}','${encodeURIComponent(client.city||'')}','${encodeURIComponent(client.state||'')}','${encodeURIComponent(client.zip||'')}','${encodeURIComponent(dc.client_id||'')}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-paper-plane mr-1"></i>Mail</button><button onclick="window._printDoc()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-print mr-1"></i>Print</button></div>
       </div>
       <div class="glass rounded-xl p-6"><pre id="doc-content" class="whitespace-pre-wrap text-sm text-gray-200 font-mono leading-relaxed">${dc.content}</pre></div>
     </div>`;
@@ -6084,25 +6212,30 @@ Status: Discharged`;
       btn.innerHTML = originalHtml;
     }
   };
-  window._mailDoc = async function(id, firstName, lastName, address, city, state, zip) {
+  window._mailDoc = async function(id, firstName, lastName, address, city, state, zip, clientIdEnc) {
     const recipientName = `${decodeURIComponent(firstName || '')} ${decodeURIComponent(lastName || '')}`.trim();
     const recipientAddress = decodeURIComponent(address || '');
     const recipientCity = decodeURIComponent(city || '');
     const recipientState = decodeURIComponent(state || '');
     const recipientZip = decodeURIComponent(zip || '');
+    const clientId = decodeURIComponent(clientIdEnc || '');
     if (!recipientAddress || !recipientCity || !recipientState || !recipientZip) {
       toast('Client address incomplete — please fill address in client profile first','error');
       return;
     }
     const mailClass = (await brandedPrompt('USPS mail class', 'FIRST_CLASS', { title: 'Mail document', description: 'STANDARD, FIRST_CLASS, or CERTIFIED', submitLabel: 'Continue' }) || 'FIRST_CLASS').trim().toUpperCase();
-    if (!confirm(`Mail document?\n\nTo: ${recipientName}\n${recipientAddress}\n${recipientCity}, ${recipientState} ${recipientZip}\n\nClass: ${mailClass}\n\nSent via Lob with FCRA §611 clock.`)) return;
+    if (!confirm(`Mail document?\n\nTo: ${recipientName}\n${recipientAddress}\n${recipientCity}, ${recipientState} ${recipientZip}\n\nClass: ${mailClass}\n\nPostage is deducted from your firm or client postage wallet. Sent via Lob with FCRA §611 clock.`)) return;
     try {
       const data = await api(`/documents/${id}/send`, {
         method: 'POST',
         body: JSON.stringify({ recipientName, recipientAddress, recipientCity, recipientState, recipientZip, mailClass }),
       });
-      toast(`Mailed (${data.mailClass || mailClass})! Mailing ID: ${data.mailingId}`, 'success');
-    } catch (err) { toast(err.message, 'error'); }
+      const paid = data.postage ? ` · postage $${((data.postage.costCents || 0) / 100).toFixed(2)} (${data.postage.payer})` : '';
+      toast(`Mailed (${data.mailClass || mailClass})! Mailing ID: ${data.mailingId}${paid}`, 'success');
+    } catch (err) {
+      if (await offerMailPostageCheckout(err, { clientId, mailClass, documentId: id })) return;
+      toast(err.message, 'error');
+    }
   };
 
   // ═══════════════════════════════════════════════════════════════
@@ -6801,8 +6934,28 @@ Status: Discharged`;
                 <option value="CERTIFIED" ${settings.default_mail_class === 'CERTIFIED' ? 'selected' : ''}>Certified (tracking)</option>
               </select>
             </div>
-            <div class="md:col-span-2 flex items-end"><button type="submit" class="bg-violet-700 hover:bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Save mail default</button></div>
+            <div><label class="block text-xs text-gray-400 mb-1">Who pays postage</label>
+              <select name="mailPostagePayer" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white">
+                <option value="org_then_client" ${(settings.mail_postage_payer || 'org_then_client') === 'org_then_client' ? 'selected' : ''}>Firm wallet first, then client</option>
+                <option value="client_then_org" ${settings.mail_postage_payer === 'client_then_org' ? 'selected' : ''}>Client wallet first, then firm</option>
+                <option value="org" ${settings.mail_postage_payer === 'org' ? 'selected' : ''}>Firm only (your card / credits)</option>
+                <option value="client" ${settings.mail_postage_payer === 'client' ? 'selected' : ''}>Client only (they buy credits)</option>
+              </select>
+            </div>
+            <div class="flex items-end"><button type="submit" class="bg-violet-700 hover:bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Save mail defaults</button></div>
           </form>
+          <div id="mail-postage-box" class="bg-gray-950/50 border border-violet-900/40 rounded-xl p-4 mb-4 text-xs text-gray-400">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <h3 class="text-xs font-bold text-white uppercase tracking-wider">Postage &amp; mailing unlock</h3>
+              <div class="flex gap-2">
+                <button type="button" id="btn-mail-add-card" class="bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg">Add your card · unlock mailing</button>
+                <button type="button" id="btn-mail-portal" class="text-[10px] text-sky-300 hover:text-sky-200 font-semibold">Manage card</button>
+              </div>
+            </div>
+            <div id="mail-postage-balance">Loading postage status…</div>
+            <div id="mail-postage-packs" class="flex flex-wrap gap-2 mt-3"></div>
+            <p class="text-[10px] text-gray-600 mt-2">You add the card yourself in Stripe — we never store card numbers in platform files or secrets. After unlock, each letter charges your card (or prepaid wallet). First Class $1.49 · Standard $0.99 · Certified $8.99.</p>
+          </div>
           <div id="c2m-addresses-box" class="text-xs text-gray-400 mb-4">Loading Lob mail status…</div>
           <div class="grid md:grid-cols-2 gap-4">
             <div class="bg-gray-950/40 border border-gray-800 rounded-xl p-4">
@@ -7239,10 +7392,64 @@ Status: Discharged`;
         e.preventDefault();
         const fd = new FormData(e.target);
         try {
-          await api('/settings/org', { method: 'PUT', body: JSON.stringify({ defaultMailClass: fd.get('defaultMailClass') }) });
-          toast('Default mail class saved', 'success');
+          await api('/settings/org', {
+            method: 'PUT',
+            body: JSON.stringify({
+              defaultMailClass: fd.get('defaultMailClass'),
+              mailPostagePayer: fd.get('mailPostagePayer'),
+            }),
+          });
+          toast('Mail defaults saved', 'success');
         } catch (err) { toast(err.message, 'error'); }
       };
+      const mailBal = $('#mail-postage-balance');
+      const mailPacks = $('#mail-postage-packs');
+      if (mailBal) {
+        api('/mail-postage/org').then((d) => {
+          const bal = ((d.credits?.balanceCents || 0) / 100).toFixed(2);
+          const mode = d.settings?.mailPostagePayer || 'org_then_client';
+          const unlocked = !!d.unlocked;
+          const card = d.card || {};
+          const cardLabel = card.onFile
+            ? `<span class="text-emerald-400">Card on file${card.brand ? ` · ${escapeHtml(String(card.brand).toUpperCase())}` : ''}${card.last4 ? ` ·•••• ${escapeHtml(card.last4)}` : ''}</span>`
+            : '<span class="text-amber-400">No card yet</span>';
+          const unlockBadge = unlocked
+            ? '<span class="ml-2 px-2 py-0.5 rounded bg-emerald-900/50 text-emerald-300 text-[10px] font-bold uppercase border border-emerald-700/40">Mailing unlocked</span>'
+            : '<span class="ml-2 px-2 py-0.5 rounded bg-amber-900/50 text-amber-200 text-[10px] font-bold uppercase border border-amber-700/40">Add card to unlock</span>';
+          mailBal.innerHTML = `${cardLabel}${unlockBadge}<div class="mt-1"><strong class="text-white">$${bal}</strong> prepaid wallet · payer <span class="text-violet-300">${escapeHtml(mode)}</span></div><p class="text-[10px] text-gray-500 mt-1">${escapeHtml(d.hint || '')}</p>`;
+          if (mailPacks) {
+            mailPacks.innerHTML = (d.packs || []).map((p) =>
+              `<button type="button" class="mail-pack-btn bg-violet-900/60 hover:bg-violet-800 text-violet-200 px-3 py-1.5 rounded-lg text-[10px] font-bold border border-violet-800" data-pack="${escapeHtml(p.id)}">Buy ${escapeHtml(p.label)}</button>`
+            ).join('');
+            mailPacks.querySelectorAll('.mail-pack-btn').forEach((btn) => {
+              btn.onclick = async () => {
+                try {
+                  const r = await api('/mail-postage/org/credits/purchase', { method: 'POST', body: JSON.stringify({ packId: btn.dataset.pack }) });
+                  if (r.url) window.location.href = r.url;
+                  else toast(r.error || 'Checkout unavailable', 'error');
+                } catch (err) { toast(err.message, 'error'); }
+              };
+            });
+          }
+        }).catch(() => { mailBal.textContent = 'Postage status unavailable (apply migrations 0038–0039).'; });
+      }
+      $('#btn-mail-add-card')?.addEventListener('click', async () => {
+        try {
+          const r = await api('/mail-postage/org/add-card', { method: 'POST', body: '{}' });
+          if (r.url) window.location.href = r.url;
+          else toast(r.error || 'Could not start card setup', 'error');
+        } catch (err) { toast(err.message, 'error'); }
+      });
+      $('#btn-mail-portal')?.addEventListener('click', async () => {
+        try {
+          const r = await api('/billing/portal', { method: 'POST', body: '{}' });
+          if (r.url) window.location.href = r.url;
+          else toast(r.error || 'Could not open card portal', 'warning');
+        } catch (err) { toast(err.message, 'error'); }
+      });
+      if (new URLSearchParams(location.search).get('mailCard') === 'unlocked') {
+        toast('Card saved — mailing unlocked', 'success');
+      }
       const c2mAddrBox = $('#c2m-addresses-box');
       if (c2mAddrBox) {
         api('/integrations/lob/status').then((d) => {
@@ -7578,7 +7785,7 @@ Status: Discharged`;
   async function pgBilling(el) {
     const fallbackPlans = [
       { id: 'professional', name: 'Professional', amountDisplay: '$497', color: 'blue', badge: 'MOST POPULAR', features: ['100 active clients', 'Unlimited report analyses', '15-category violation engine (FCRA/FDCPA/ECOA/Metro 2)', 'Litigation Vulnerability Score + damages', 'Generated dispute/demand letters from file facts', 'Case-law hooks + SOL calculator', 'Client portal: sandbox, tutors, CROA cancel', 'Priority email support'], paymentLink: null },
-      { id: 'unlimited', name: 'Unlimited', amountDisplay: '$2,500', color: 'amber', badge: 'UNLIMITED', features: ['Everything in Professional', 'Unlimited clients & scans', 'MFSN / monitoring imports', 'Click2Mail + FCRA § 611 investigation clocks', 'Full FCRA knowledge base & staff mentors', 'Team operator seats', 'Faster SLA + QBR available', 'Multi-org management'], paymentLink: null },
+      { id: 'unlimited', name: 'Unlimited', amountDisplay: '$2,500', color: 'amber', badge: 'UNLIMITED', features: ['Everything in Professional', 'Unlimited clients & scans', 'MFSN / monitoring imports', 'Lob certified mail + FCRA § 611 investigation clocks', 'Full FCRA knowledge base & staff mentors', 'Team operator seats', 'Faster SLA + QBR available', 'Multi-org management'], paymentLink: null },
       { id: 'enterprise', name: 'Enterprise', amountDisplay: '$9,997', color: 'purple', badge: 'TEAM/AGENCY', features: ['Unlimited seats, clients, analyses', 'Full generated litigation document pack (~45 letter types)', 'Full case-law database (300+)', 'White-label client portals', 'API access', 'Dedicated account manager', 'Expert legal-ops consultation add-on'], paymentLink: null }
     ];
     const featureMap = Object.fromEntries(fallbackPlans.map((p) => [p.id, p]));
@@ -8618,6 +8825,9 @@ async function pgAdminConsole(el) {
                 <button type="button" onclick="window._adminCreateBusiness()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold transition">
                   <i class="fas fa-plus mr-1"></i> CREATE BUSINESS
                 </button>
+                <button type="button" onclick="window._adminCloneConfig()" class="bg-indigo-700 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold transition">
+                  <i class="fas fa-clone mr-1"></i> Clone config
+                </button>
                 <input type="search" id="tenant-search" placeholder="Search company..." class="bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white w-56">
               </div>
             </div>
@@ -9583,36 +9793,93 @@ async function pgAdminConsole(el) {
     };
 
     window._adminCreateBusiness = () => {
+      const cloneOptions = [{ value: '', label: '— No clone, use defaults —' }].concat(
+        (orgsData.organizations || [])
+          .slice()
+          .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+          .map((o) => ({ value: o.id, label: o.name || o.id }))
+      );
       brandedPromptForm('CREATE BUSINESS', [
         { name: 'businessName', label: 'Business name', placeholder: 'New Credit Services', required: true },
         { name: 'legalName', label: 'Legal name', placeholder: 'New Credit Services LLC' },
         { name: 'subdomain', label: 'Subdomain', placeholder: 'newcreditservices', required: true },
         { name: 'ownerName', label: 'Owner name', placeholder: 'Jane Smith', required: true },
         { name: 'ownerEmail', label: 'Owner email', type: 'email', placeholder: 'jane@newcreditservices.com', required: true },
-        { name: 'phone', label: 'Phone', placeholder: '555-555-5555' },
-        { name: 'primaryColor', label: 'Primary color', placeholder: '#2563eb' },
-        { name: 'secondaryColor', label: 'Secondary color', placeholder: '#f59e0b' },
-        { name: 'plan', label: 'Plan', placeholder: 'professional', defaultValue: 'professional' },
+        { name: 'phone', label: 'Phone', placeholder: '555-555-5555', required: false },
+        { name: 'logoBase64', label: 'Business logo', type: 'file', accept: 'image/png,image/jpeg,image/webp,image/svg+xml', required: false, helpText: 'PNG, JPEG, WEBP, or SVG — under 1.5MB. Used on the portal, letterhead PDFs, and installation.' },
+        { name: 'primaryColor', label: 'Primary color', placeholder: '#2563eb', required: false },
+        { name: 'secondaryColor', label: 'Secondary color', placeholder: '#f59e0b', required: false },
+        { name: 'plan', label: 'Plan', type: 'select', defaultValue: 'professional', options: [
+          { value: 'free', label: 'Free (gated)' },
+          { value: 'professional', label: 'Professional ($497/mo)' },
+          { value: 'unlimited', label: 'Unlimited ($2500/mo)' },
+          { value: 'enterprise', label: 'Enterprise ($9997/mo)' },
+        ] },
+        { name: 'cloneFromOrgId', label: 'Clone branding & workflows from', type: 'select', defaultValue: '', required: false, options: cloneOptions },
       ], {
-        description: 'Creates https://{subdomain}.smartfcra.com with blueprint CRM, campaigns, and portal branding.',
+        description: 'Creates https://{subdomain}.smartfcra.com with blueprint CRM, campaigns, and portal branding — ready to install in one click.',
         submitLabel: 'CREATE BUSINESS',
       }).then(async (vals) => {
         if (!vals) return;
         try {
+          const cloneFromOrgId = vals.cloneFromOrgId;
+          delete vals.cloneFromOrgId;
+          if (!vals.logoBase64) delete vals.logoBase64;
           const res = await api('/admin/tenants/provision', { method: 'POST', body: JSON.stringify(vals) });
-          toast(`Created ${res.portalUrl} — ${res.campaignsCreated} campaigns seeded`, 'success');
-          if (res.temporaryPassword) {
-            await brandedPrompt('Owner temporary password (share securely)', res.temporaryPassword, {
-              title: 'Provision complete',
-              message: `Portal: ${res.portalUrl}/app\n\nTemporary password for ${vals.ownerEmail}:`,
-              okLabel: 'Done',
-            });
+          let cloneNote = '';
+          if (cloneFromOrgId) {
+            try {
+              const cloneRes = await api(`/admin/tenants/${encodeURIComponent(res.orgId)}/clone-config`, {
+                method: 'POST',
+                body: JSON.stringify({ sourceOrgId: cloneFromOrgId }),
+              });
+              cloneNote = ` · Cloned ${(cloneRes.clonedKeys || []).length} config section(s)`;
+            } catch (cloneErr) {
+              toast('Business created, but clone-config failed: ' + (cloneErr.message || 'unknown error'), 'warning');
+            }
           }
+          toast(`Created ${res.portalUrl} — ${res.campaignsCreated} campaigns seeded${cloneNote}`, 'success');
+          const updatedOrgs = await api('/admin/organizations');
+          orgsData.organizations = updatedOrgs.organizations || [];
+          renderTabContent();
+          const goPreview = await window._confirmDialog({
+            title: 'Provision complete',
+            message: `${vals.businessName} is live at ${res.portalUrl}${res.temporaryPassword ? `\n\nOwner temporary password for ${vals.ownerEmail}:\n${res.temporaryPassword}\n(share securely — this is shown once)` : ''}`,
+            okLabel: 'Preview as this tenant',
+            cancelLabel: 'Done',
+          });
+          if (goPreview) window._workInTenant(res.orgId, vals.businessName);
+        } catch (err) {
+          toast(err.message || 'Provision failed', 'error');
+        }
+      });
+    };
+
+    window._adminCloneConfig = () => {
+      const orgs = (orgsData.organizations || []).slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+      if (orgs.length < 2) { toast('Need at least two businesses to clone between', 'info'); return; }
+      const orgOptions = orgs.map((o) => ({ value: o.id, label: o.name || o.id }));
+      brandedPromptForm('Clone config between tenants', [
+        { name: 'sourceOrgId', label: 'Copy branding & workflows FROM', type: 'select', options: orgOptions, defaultValue: orgOptions[0].value },
+        { name: 'targetOrgId', label: 'Apply TO', type: 'select', options: orgOptions, defaultValue: orgOptions[1] ? orgOptions[1].value : orgOptions[0].value },
+      ], {
+        description: 'Copies letterhead, branding, portal theme, timezone, and blueprint config only — never secrets, integrations, or client data.',
+        submitLabel: 'Clone config',
+      }).then(async (vals) => {
+        if (!vals) return;
+        if (vals.sourceOrgId === vals.targetOrgId) { toast('Source and target must be different businesses', 'error'); return; }
+        try {
+          const res = await api(`/admin/tenants/${encodeURIComponent(vals.targetOrgId)}/clone-config`, {
+            method: 'POST',
+            body: JSON.stringify({ sourceOrgId: vals.sourceOrgId }),
+          });
+          const targetName = orgs.find((o) => o.id === vals.targetOrgId)?.name || vals.targetOrgId;
+          toast(`Cloned ${(res.clonedKeys || []).length} config section(s) into ${targetName}`, 'success');
           const updatedOrgs = await api('/admin/organizations');
           orgsData.organizations = updatedOrgs.organizations || [];
           renderTabContent();
         } catch (err) {
-          toast(err.message || 'Provision failed', 'error');
+          toast(err.message || 'Clone failed', 'error');
         }
       });
     };
@@ -10207,11 +10474,11 @@ async function pgAdminConsole(el) {
         ['Dashboard / Clients / Reports', 'Ops home, client list, report upload + history'],
         ['Violations / Documents', 'Org queue + generated letters/PDFs'],
         ['Compliance Hub', 'Consent, disclaimers, legal status'],
-        ['Mailing Campaigns', 'Click2Mail certified / first-class'],
+        ['Mailing Campaigns', 'Lob certified / first-class'],
         ['Founder OS / Sales / ROI', 'Owner OS, pitch tools, deal math'],
         ['Tradelines', 'TradelineMaster inventory, listed prices, filters, cart, smart match, order email'],
         ['Brand Library', 'Forms, color tokens, inbound leads'],
-        ['Team / Settings / Billing', 'Users, GHL/MFSN/Twilio/Stripe/Click2Mail, org Stripe'],
+        ['Team / Settings / Billing', 'Users, GHL/MFSN/Twilio/Stripe/Lob, org Stripe'],
         ['AI Studio / Legal / Admin', 'Mentors, in-app legal, super-admin console'],
       ]},
       { title: 'Client portal (Preview Portal walks every tab)', items: [
@@ -10231,7 +10498,7 @@ async function pgAdminConsole(el) {
         ['Readiness', 'Deterministic fundability education — not a lending promise'],
         ['Boost Tools', 'Educational authorized-user matching at listed prices'],
         ['AU Tradelines', 'Live TradelineMaster catalog the consumer can also see'],
-        ['Tutor', 'Alex Rivera literacy coaching — no fake FICO promises'],
+        ['Tutor', 'Alex / Maya / Jordan literacy coaching — no fake FICO promises'],
         ['Letters', 'Generated letters released to the consumer'],
         ['Legal & Notary', 'CROA/LPOA packs and RON when keys are live'],
         ['Video', 'Twilio Video when keys set, local camera preview otherwise'],
@@ -10248,7 +10515,7 @@ async function pgAdminConsole(el) {
         ['GoHighLevel', 'Full custom fields + tags; bulk CRM + MFSN sync'],
         ['MyFreeScoreNow', 'Affiliate portal → Users → API User → paste into API login, then member email + MAPIK# to fetch-3B-json'],
         ['TradelineMaster', 'Live inventory, listed prices, daily refresh cron job'],
-        ['Twilio / Email / Stripe / Click2Mail', 'SMS, Verify, Video tokens, transactional mail, org billing, certified mail'],
+        ['Twilio / Email / Stripe / Lob', 'SMS, Verify, Video tokens, transactional mail, org billing, certified mail'],
         ['AI cascade', 'Groq → Gemini → Workers AI → OpenAI free-only'],
       ]},
     ];
@@ -10256,7 +10523,7 @@ async function pgAdminConsole(el) {
       'Shipped: Twilio Video JS join (live room or local preview).',
       'Shipped: Cloudflare Turnstile on brand forms + /api/public/turnstile.',
       'Shipped: Executive Overview sparkline bound to last 6 months of paid orders (or pipeline).',
-      'Shipped: Click2Mail status from /api/settings/integrations.',
+      'Shipped: Lob mailing status from /api/settings/integrations.',
       'Shipped: Duplicate Clients / Report History removed from sidebar.',
       'Shipped: Client Stripe checkout POST /api/client-portal/unlock/checkout.',
       'Shipped: RON sandbox vs live vendor banner + Proof/BlueNotary ceremony URLs.',
@@ -10668,12 +10935,27 @@ async function pgAdminConsole(el) {
     const qs = portalClientQs();
     let history = [];
     let growthCache = null;
+    let activeMentorId = null;
+    function mentorQs() {
+      if (!activeMentorId) return qs;
+      return qs ? `${qs}&mentorId=${encodeURIComponent(activeMentorId)}` : `?mentorId=${encodeURIComponent(activeMentorId)}`;
+    }
+    window._tutorSwitchMentor = async (mentorId) => {
+      if (mentorId === activeMentorId) return;
+      activeMentorId = mentorId;
+      history = [];
+      await paint();
+    };
+    let activeMentorName = 'Alex Rivera';
     async function paint() {
-      const meta = await api('/client-portal/tutor' + qs);
+      const meta = await api('/client-portal/tutor' + mentorQs());
       growthCache = meta.growth || growthCache;
+      activeMentorId = meta.mentor?.id || activeMentorId || 'personal-finance-tutor';
+      activeMentorName = meta.mentor?.name || activeMentorName || 'Alex Rivera';
       const g = growthCache;
+      const mentorRoster = meta.mentors || [];
       if (!history.length) {
-        history = [{ role: 'tutor', text: g?.greeting || 'Hi — I am Alex Rivera, your personal finance tutor. I grow with you as you learn and progress through your journey.' }];
+        history = [{ role: 'tutor', text: g?.greeting || `Hi — I am ${meta.mentor?.name || 'Alex Rivera'}, your personal finance tutor. I grow with you as you learn and progress through your journey.` }];
       }
       const prompts = (g?.suggestedPrompts || [
         { label: 'Quiz me', prompt: 'Quiz me on FICO basics' },
@@ -10696,6 +10978,9 @@ async function pgAdminConsole(el) {
                 <h1 class="text-xl font-bold text-white"><i class="fas fa-user-graduate text-violet-300 mr-2"></i>${escapeHtml(meta.mentor?.name || 'Alex Rivera')}</h1>
                 <p class="text-sm text-slate-400 mt-1">${escapeHtml(g?.curriculumFocus || meta.mentor?.blurb || '')}</p>
                 ${g?.nextUnlock ? `<p class="text-[11px] text-violet-200/70 mt-2"><i class="fas fa-lock-open mr-1"></i>${escapeHtml(g.nextUnlock)}</p>` : ''}
+                ${mentorRoster.length > 1 ? `<div class="flex flex-wrap gap-1.5 mt-3">
+                  ${mentorRoster.map(m => `<button type="button" class="tutor-mentor-switch text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition ${m.id===activeMentorId?'border-violet-400/60 bg-violet-500/20 text-violet-100':'border-white/10 text-gray-400 hover:border-violet-400/30 hover:text-violet-200'}" data-mentor-id="${escapeHtml(m.id)}" title="${escapeHtml(m.blurb||'')}">${escapeHtml(m.name)}</button>`).join('')}
+                </div>` : ''}
               </div>
               ${g ? `<div class="shrink-0 w-full sm:w-44">
                 <div class="flex justify-between text-[10px] font-mono text-gray-400 mb-1"><span>Growth XP</span><span>${g.xp}</span></div>
@@ -10714,7 +10999,7 @@ async function pgAdminConsole(el) {
           <div id="tutor-quiz-box" class="hidden glass rounded-xl border border-cyan-500/30 p-4 text-sm"></div>
           <form id="tutor-upload-form" class="glass rounded-xl border border-gray-800 p-3 flex flex-wrap gap-2 items-end text-xs">
             <div class="flex-1 min-w-[160px]">
-              <label class="text-[10px] text-gray-500 uppercase">Share a statement with Alex</label>
+              <label class="text-[10px] text-gray-500 uppercase">Share a statement with ${escapeHtml(meta.mentor?.name || 'Alex Rivera')}</label>
               <select id="tutor-upload-cat" class="w-full bg-gray-950 border border-gray-800 rounded-lg px-2 py-2 text-white">
                 <option value="bank_statement">Bank statement</option>
                 <option value="paystub">Paystub</option>
@@ -10751,11 +11036,11 @@ async function pgAdminConsole(el) {
         try {
           const res = await api('/client-portal/tutor/chat', {
             method: 'POST',
-            body: JSON.stringify(portalClientBody({ message: msg })),
+            body: JSON.stringify(portalClientBody({ message: msg, mentorId: activeMentorId })),
           });
           history.push({ role: 'tutor', text: res.reply || '(no reply)' });
           if (res.growth) growthCache = res.growth;
-          if (res.leveledUp) toast(`Alex leveled up — now Level ${res.growth.level} (${res.growth.rankTitle})!`, 'success');
+          if (res.leveledUp) toast(`${activeMentorName} — you leveled up! Now Level ${res.growth.level} (${res.growth.rankTitle})!`, 'success');
         } catch (err) {
           history.push({ role: 'tutor', text: 'Error: ' + err.message });
         }
@@ -10771,6 +11056,9 @@ async function pgAdminConsole(el) {
       };
       document.querySelectorAll('.tutor-quick').forEach(btn => {
         btn.onclick = () => send(btn.getAttribute('data-q'));
+      });
+      document.querySelectorAll('.tutor-mentor-switch').forEach(btn => {
+        btn.onclick = () => window._tutorSwitchMentor(btn.getAttribute('data-mentor-id'));
       });
       const liveQuiz = document.getElementById('tutor-live-quiz');
       if (liveQuiz) liveQuiz.onclick = async () => {
@@ -11711,7 +11999,10 @@ async function pgAdminConsole(el) {
         const r = await api('/client-portal/disputes/' + id + '/send', { method: 'POST', body: '{}' });
         toast('Mailed · clock ' + (r.investigationClock && r.investigationClock.statutoryTarget), 'success');
         pgClientDisputes(el);
-      } catch (err) { toast(err.message, 'error'); }
+      } catch (err) {
+        if (await offerMailPostageCheckout(err, { disputeId: id, mailClass: 'FIRST_CLASS' })) return;
+        toast(err.message, 'error');
+      }
     };
     const createBtn = document.getElementById('btn-create-disp');
     if (createBtn) createBtn.onclick = async () => {
@@ -11766,11 +12057,22 @@ async function pgAdminConsole(el) {
 
   async function pgClientBilling(el) {
     const data = await api('/client-portal/billing-center' + portalClientQs());
+    const mp = data.mailPostage || {};
+    const bal = ((mp.credits?.balanceCents || 0) / 100).toFixed(2);
     el.innerHTML = `
       <div class="fade-in space-y-5 max-w-3xl">
         <h1 class="text-xl font-bold text-white font-display">Billing</h1>
         <p class="text-sm text-gray-400">${escapeHtml(data.croaNotice || data.notice || '')}</p>
         ${(data.currentServices||[]).map((s) => `<div class="glass rounded-xl p-4 text-sm text-white">${escapeHtml(s.type)} · ${escapeHtml(s.status)}</div>`).join('')}
+        <div class="glass rounded-xl p-4 border border-sky-900/40">
+          <h2 class="text-sm font-bold text-white mb-1">Mail postage</h2>
+          <p class="text-xs text-gray-400 mb-2">${escapeHtml(mp.notice || 'Buy postage credits or pay per letter when you mail a dispute.')}</p>
+          <div class="text-sm text-white mb-3">Wallet: <strong>$${bal}</strong>${mp.canPurchase === false ? ' · firm pays postage' : ''}</div>
+          <div id="client-mail-packs" class="flex flex-wrap gap-2 mb-2">
+            ${(mp.packs || []).map((p) => `<button type="button" class="client-mail-pack bg-sky-900/60 hover:bg-sky-800 text-sky-100 px-3 py-1.5 rounded-lg text-[10px] font-bold border border-sky-800" data-pack="${escapeHtml(p.id)}" ${mp.canPurchase === false ? 'disabled' : ''}>Buy ${escapeHtml(p.label)}</button>`).join('') || '<span class="text-xs text-gray-500">Packs unavailable</span>'}
+          </div>
+          <button type="button" id="btn-pay-one-letter" class="bg-sky-700 hover:bg-sky-600 text-white text-xs font-bold px-3 py-2 rounded-lg" ${mp.canPurchase === false ? 'disabled' : ''}>Pay for one First Class letter ($${(mp.ratesCents?.FIRST_CLASS || 149) / 100})</button>
+        </div>
         <div class="glass rounded-xl p-4">
           <h2 class="text-sm font-bold text-white mb-2">Completed services (required before covered charges)</h2>
           ${(data.completedServices||[]).map((s) => `<div class="text-xs text-gray-300 py-1">${escapeHtml(s.service_type)} · ${escapeHtml((s.performed_at||'').slice(0,16))} · ${escapeHtml(s.status)}</div>`).join('') || '<p class="text-xs text-gray-500">None recorded yet. Analysis unlock cannot be charged until a report is analyzed.</p>'}
@@ -11785,6 +12087,24 @@ async function pgAdminConsole(el) {
         </div>
         <button type="button" onclick="window._nav('client-cancel')" class="bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold px-3 py-2 rounded-lg">Cancel services</button>
       </div>`;
+    el.querySelectorAll('.client-mail-pack').forEach((btn) => {
+      btn.onclick = async () => {
+        if (portalStaffBlocked()) return;
+        try {
+          const r = await api('/mail-postage/client/credits/purchase', { method: 'POST', body: JSON.stringify({ packId: btn.dataset.pack }) });
+          if (r.url) window.location.href = r.url;
+          else toast(r.error || 'Checkout unavailable', 'error');
+        } catch (err) { toast(err.message, 'error'); }
+      };
+    });
+    $('#btn-pay-one-letter')?.addEventListener('click', async () => {
+      if (portalStaffBlocked()) return;
+      try {
+        const r = await api('/mail-postage/client/pay-letter', { method: 'POST', body: JSON.stringify({ mailClass: 'FIRST_CLASS' }) });
+        if (r.url) window.location.href = r.url;
+        else toast(r.error || 'Checkout unavailable', 'error');
+      } catch (err) { toast(err.message, 'error'); }
+    });
   }
 
   async function pgClientConsents(el) {
@@ -12658,153 +12978,9 @@ async function pgAdminConsole(el) {
     }
   }
 
-  const RICK_COURSES = [
-    {
-      id: 'course-1',
-      title: 'Website Systems That Convert',
-      desc: 'Build a clean business website that explains the offer, captures leads, and supports sales.',
-      icon: 'fa-globe',
-      modules: [
-        {
-          title: 'Core Fundamentals',
-          lessons: [
-            { title: 'The Anatomy of a High-Conversion Offer', steps: ['Define single conversion outcome', 'Strip out redundant navigation links', 'Map clear user flow pathways'], ricksRule: 'The website is not an art project. It is a sales machine.', quiz: { question: 'What is the primary objective of a conversion-focused website?', options: ['Expressive artistic freedom', 'To guide the visitor to a single, high-value business action', 'To maximize total page size and scripts'], answer: 1 } }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'course-2',
-      title: 'Landing Pages That Move People',
-      desc: 'Create focused landing pages with strong messaging, clean CTAs, and no wasted sections.',
-      icon: 'fa-rocket',
-      modules: [
-        {
-          title: 'Direct Response Copywriting',
-          lessons: [
-            { title: 'Headline Formulations that Hold Attention', steps: ['State specific, measurable outcome first', 'Address specific pain points in the sub-headline', 'Ensure CTA is action-oriented and explicit'], ricksRule: 'If the offer is messy, the funnel will expose it.', quiz: { question: 'What should be the main focal point of a direct response landing page?', options: ['A large interactive grid of miscellaneous links', 'The core headline and a singular CTA', 'An elaborate multi-page navigation tree'], answer: 1 } }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'course-3',
-      title: 'AI Automation For Operators',
-      desc: 'Use AI to remove repetitive work, route information, and support business execution.',
-      icon: 'fa-cogs',
-      modules: [
-        {
-          title: 'Operative Workflows',
-          lessons: [
-            { title: 'Automating the Repetitive Ingestion Pipelines', steps: ['Connect incoming webhooks cleanly', 'Map parameters to LLM prompt wrappers', 'Deliver outputs structured in JSON'], ricksRule: 'Clarity first. Automation second. Scale third.', quiz: { question: 'What is the golden rule of workflow automation?', options: ['Automate everything instantly before documenting', 'Ensure the manual system is clear and clean first', 'Always use the most expensive API available'], answer: 1 } }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'course-4',
-      title: 'AI Agent Systems',
-      desc: 'Design practical AI agents that take tasks, use tools, remember context, and report cleanly.',
-      icon: 'fa-robot',
-      modules: [
-        {
-          title: 'Agent Orchestrations',
-          lessons: [
-            { title: 'Defining the Scope & System Instructions', steps: ['Constrain variables to precise ranges', 'Equip with strict, functional single-task tools', 'Implement deterministic post-execution validation'], ricksRule: 'The tool does not save the business. The system does.', quiz: { question: 'What is the risk of giving an AI agent unrestricted wildcard tools?', options: ['It will complete tasks too quickly', 'Unpredictable, costly, and potentially destructive operations', 'None, LLMs are 100% deterministic'], answer: 1 } }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'course-5',
-      title: 'Funnel Building From Zero',
-      desc: 'Turn traffic into leads, leads into calls, and calls into revenue with a clean funnel path.',
-      icon: 'fa-funnel-dollar',
-      modules: [
-        {
-          title: 'Traffic & Conversion Bridges',
-          lessons: [
-            { title: 'The Value-Bridge Landing Protocol', steps: ['Offer immediately actionable lead magnet', 'Deliver high-value sequence in email auto-responders', 'Route qualified leads directly to Calendly'], ricksRule: 'Build the system before you chase the traffic.', quiz: { question: 'Why do most multi-step funnels leak leads?', options: ['Because traffic is inherently low-quality', 'Friction, cognitive load, and over-complicated steps', 'They do not feature enough flash animations'], answer: 1 } }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'course-6',
-      title: 'CRM And Follow-Up Systems',
-      desc: 'Build the pipeline, tags, automations, and follow-up flows that stop leads from leaking.',
-      icon: 'fa-address-card',
-      modules: [
-        {
-          title: 'Database & Pipeline Hygiene',
-          lessons: [
-            { title: 'Designing and Automating CRM States', steps: ['Map explicit stages to lead progression', 'Set automated reminders on idle leads', 'Use webhooks to sync cross-platform metrics'], ricksRule: 'Named right. Built right. Shipped clean.', quiz: { question: 'What stops leads from leaking in a sales pipeline?', options: ['Buying more lead lists', 'Automated state triggers and immediate, systematic follow-up', 'Calling leads once and never again'], answer: 1 } }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'course-7',
-      title: 'Prompt Engineering For Builders',
-      desc: 'Write prompts that make AI useful, structured, testable, and aligned with business outcomes.',
-      icon: 'fa-keyboard',
-      modules: [
-        {
-          title: 'Structured Prompt Formulations',
-          lessons: [
-            { title: 'Output Control & Few-Shot Engineering', steps: ['Supply high-quality input-output examples', 'Format outputs cleanly using JSON schemas', 'Enforce strict compliance gates in the prompt'], ricksRule: 'Structured prompts yield structured outcomes.', quiz: { question: 'What is the best way to enforce JSON outputs from an LLM?', options: ['Ask nicely in the prompt', 'Provide explicit schema and few-shot formatting examples', 'There is no way to control output structure'], answer: 1 } }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'course-8',
-      title: 'Digital Product Launch Systems',
-      desc: 'Package knowledge, build the offer, create the sales page, and launch without chaos.',
-      icon: 'fa-file-invoice-dollar',
-      modules: [
-        {
-          title: 'Launch Execution Frameworks',
-          lessons: [
-            { title: 'Constructing and Seeding High-Ticket Offers', steps: ['Package experience into structured SOP assets', 'Set up checkout flows via Stripe Integration', 'Deploy single-path product fulfillment email flows'], ricksRule: 'Ship the course before you write the textbook.', quiz: { question: 'What is the most effective launch validation method?', options: ['Spending months filming high-production videos', 'Securing pre-orders using a high-converting sales page', 'Relying entirely on organic word of mouth'], answer: 1 } }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'course-9',
-      title: 'Local Business Growth Infrastructure',
-      desc: 'Set up the pages, automations, offers, and tracking local businesses need to grow.',
-      icon: 'fa-map-marked-alt',
-      modules: [
-        {
-          title: 'Local Lead-Gen Bridges',
-          lessons: [
-            { title: 'The Reputation Loop & Automated Lead Response', steps: ['Set up immediate auto-reply on SMS/calls', 'Send automatic review invite triggers after jobs', 'Track lead sources precisely inside CRM'], ricksRule: 'Speed to lead is the only metric that matters locally.', quiz: { question: 'What is the optimal response time for local inbound leads?', options: ['Within 5 minutes', 'Within 24 to 48 hours', 'During the weekly business review'], answer: 1 } }
-          ]
-        }
-      ]
-    },
-    {
-      id: 'course-10',
-      title: 'Founder Operating System',
-      desc: 'Build the personal workflow, dashboards, SOPs, and decision systems that keep execution clean.',
-      icon: 'fa-toolbox',
-      modules: [
-        {
-          title: 'Executive Systems & Dashboards',
-          lessons: [
-            { title: 'The Metric-Driven Morning Ritual', steps: ['Analyze cash flow, sales metrics, and project health', 'Identify single, critical leverage action for the day', 'Clear communication logs to optimize operator flow'], ricksRule: 'Control your inputs to dominate your outputs.', quiz: { question: 'What represents the core of a Founder Operating System?', options: ['Checking emails continuously', 'Metrics-driven execution checklists and systematic SOPs', 'delegating decisions without oversight'], answer: 1 } }
-          ]
-        }
-      ]
-    }
-  ];
-
   async function pgClientKnowledge(el) {
     let currentCourseId = null;
-    let currentLessonIndex = 0;
-    let selectedAnswer = null;
+    let currentLessonId = null;
     try {
       const edu = await api('/client-portal/education' + portalClientQs());
       window._portalLessons = edu.lessons || [];
@@ -12813,6 +12989,12 @@ async function pgAdminConsole(el) {
       window._portalLessons = [];
       window._portalProgress = [];
     }
+    let academy = { courses: [], progress: [], totalLessons: 0, completedLessons: 0, badges: [], allBadges: [] };
+    try {
+      academy = await api('/client-portal/academy' + portalClientQs());
+    } catch (_) { /* soft — academy may be unavailable */ }
+    window._academy = academy;
+
     window._openPortalLesson = async (lessonId) => {
       try {
         const { lesson } = await api('/client-portal/education/' + lessonId);
@@ -12859,53 +13041,50 @@ async function pgAdminConsole(el) {
       } catch (err) { toast(err.message,'error'); }
     };
 
-
-    window._openCoursePlayer = (id) => {
-      currentCourseId = id;
-      currentLessonIndex = 0;
-      selectedAnswer = null;
-      renderCoursePlayer();
+    window._openCoursePlayer = (courseId, lessonId) => {
+      currentCourseId = courseId;
+      const course = (academy.courses || []).find(c => c.id === courseId);
+      currentLessonId = lessonId || (course && course.lessons && course.lessons[0] && course.lessons[0].id) || null;
+      renderLessonPlayer();
     };
 
     window._closeCoursePlayer = () => {
       currentCourseId = null;
+      currentLessonId = null;
       renderCourseList();
     };
 
-    window._selectQuizOption = (idx) => {
-      selectedAnswer = idx;
-      const opts = document.querySelectorAll('.quiz-option-btn');
-      opts.forEach((opt, i) => {
-        if (i === idx) {
-          opt.className = 'quiz-option-btn w-full text-left p-3.5 rounded-xl border bg-blue-600/25 border-blue-500 text-white font-medium transition';
-        } else {
-          opt.className = 'quiz-option-btn w-full text-left p-3.5 rounded-xl border bg-gray-900/50 border-gray-800 text-gray-400 hover:bg-gray-800 transition';
-        }
-      });
-    };
+    async function refreshAcademy() {
+      try { academy = await api('/client-portal/academy' + portalClientQs()); window._academy = academy; } catch (_) { /* soft */ }
+    }
 
-    window._submitQuizAnswer = (correctAnswer) => {
-      if (selectedAnswer === null) {
-        toast('Please select an option first.', 'warning');
-        return;
-      }
-      if (selectedAnswer === correctAnswer) {
-        toast('Correct! Lesson completed.', 'success');
-        currentLessonIndex++;
-        selectedAnswer = null;
-        renderCoursePlayer();
-      } else {
-        toast('Incorrect answer. Try again.', 'error');
-      }
-    };
+    function badgeChip(b) {
+      return `<div class="flex items-center gap-2 bg-amber-500/10 border border-amber-500/25 rounded-lg px-2.5 py-1.5" title="${escapeHtml(b.description||'')}">
+        <i class="fas ${b.icon||'fa-medal'} text-amber-300 text-xs"></i>
+        <span class="text-[11px] font-semibold text-amber-200">${escapeHtml(b.label||b.id)}</span>
+      </div>`;
+    }
 
     function renderCourseList() {
+      const courses = academy.courses || [];
+      const earnedIds = new Set((academy.badges || []).map(b => b.id));
+      const pct = academy.totalLessons ? Math.round((academy.completedLessons / academy.totalLessons) * 100) : 0;
       el.innerHTML = `
         <div class="fade-in space-y-6">
           <div class="relative overflow-hidden bg-gradient-to-r from-gray-900 via-blue-950 to-gray-900 border border-blue-500/20 rounded-2xl p-6 shadow-2xl">
-            <h1 class="text-2xl font-bold text-white mb-1"><i class="fas fa-graduation-cap text-blue-400 mr-2"></i>Education Hub</h1>
-            <p class="text-sm text-gray-400">Financial literacy → credit expertise → fundability · compliance & workflows · Rick Jefferson systems courses</p>
-            ${(window._portalLessons||[]).length ? `<p class="text-xs text-cyan-300 mt-2">${(window._portalProgress||[]).filter(p=>p.status==='completed').length} / ${window._portalLessons.length} API lessons completed</p>` : ''}
+            <h1 class="text-2xl font-bold text-white mb-1"><i class="fas fa-graduation-cap text-blue-400 mr-2"></i>Academy</h1>
+            <p class="text-sm text-gray-400">Financial literacy → credit expertise → fundability · Rick Jefferson operator systems courses, gamified</p>
+            ${(window._portalLessons||[]).length ? `<p class="text-xs text-cyan-300 mt-2">${(window._portalProgress||[]).filter(p=>p.status==='completed').length} / ${window._portalLessons.length} fundability lessons completed</p>` : ''}
+            ${academy.totalLessons ? `
+              <div class="mt-4 max-w-md">
+                <div class="flex items-center justify-between text-[11px] text-gray-400 mb-1">
+                  <span>Systems &amp; Business progress</span>
+                  <span>${academy.completedLessons || 0} / ${academy.totalLessons} lessons</span>
+                </div>
+                <div class="h-2 rounded-full bg-gray-800 overflow-hidden"><div class="h-full bg-gradient-to-r from-blue-500 to-emerald-400" style="width:${pct}%"></div></div>
+              </div>
+            ` : ''}
+            ${(academy.badges||[]).length ? `<div class="flex flex-wrap gap-2 mt-4">${academy.badges.map(badgeChip).join('')}</div>` : ''}
           </div>
 
           ${(window._portalLessons||[]).length ? `
@@ -12925,134 +13104,161 @@ async function pgAdminConsole(el) {
             </div>
           </div>` : ''}
 
-          <h2 class="text-xs font-bold uppercase tracking-wider text-blue-300">Systems & Business Courses</h2>
+          <h2 class="text-xs font-bold uppercase tracking-wider text-blue-300">Systems &amp; Business Courses</h2>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            ${RICK_COURSES.map(c => `
-              <div class="glass rounded-2xl border border-gray-800 p-5 flex flex-col justify-between card-hover relative overflow-hidden group">
+            ${courses.map(c => {
+              const total = (c.lessons||[]).length;
+              const done = (c.lessons||[]).filter(l => l.completed).length;
+              const earned = earnedIds.has(c.badgeId);
+              return `
+              <div class="glass rounded-2xl border ${c.completed?'border-emerald-500/30':'border-gray-800'} p-5 flex flex-col justify-between card-hover relative overflow-hidden group">
                 <div class="absolute top-0 right-0 -mt-4 -mr-4 w-20 h-20 bg-blue-600/5 rounded-full blur-xl group-hover:bg-blue-600/10 transition"></div>
                 <div>
-                  <div class="w-12 h-12 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-4">
-                    <i class="fas ${c.icon} text-lg"></i>
+                  <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                      <i class="fas ${c.icon} text-lg"></i>
+                    </div>
+                    ${earned ? '<i class="fas fa-medal text-amber-400" title="Badge earned"></i>' : ''}
                   </div>
                   <h3 class="text-sm font-bold text-white mb-1.5">${escapeHtml(c.title)}</h3>
-                  <p class="text-xs text-gray-400 leading-relaxed mb-4">${escapeHtml(c.desc)}</p>
+                  <p class="text-xs text-gray-400 leading-relaxed mb-3">${escapeHtml(c.desc)}</p>
+                  <div class="text-[10px] text-gray-500 mb-3">${done} / ${total} lessons complete</div>
+                  <div class="h-1.5 rounded-full bg-gray-800 overflow-hidden mb-4"><div class="h-full bg-blue-500" style="width:${total?Math.round(done/total*100):0}%"></div></div>
                 </div>
                 <button onclick="window._openCoursePlayer('${c.id}')" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 shadow-lg shadow-blue-500/10">
                   <i class="fas fa-play"></i>
-                  <span>Start Learning</span>
+                  <span>${done>0 && done<total ? 'Continue' : (c.completed ? 'Review' : 'Start Learning')}</span>
                 </button>
               </div>
-            `).join('')}
+            `;}).join('')}
           </div>
+
+          ${(academy.allBadges||[]).length ? `
+          <div>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-amber-300 mb-3">Badges</h2>
+            <div class="flex flex-wrap gap-2">
+              ${academy.allBadges.map(b => `<div class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 border ${earnedIds.has(b.id) ? 'bg-amber-500/10 border-amber-500/25' : 'bg-gray-900/40 border-gray-800 opacity-50'}" title="${escapeHtml(b.description||'')}">
+                <i class="fas ${b.icon||'fa-medal'} text-xs ${earnedIds.has(b.id)?'text-amber-300':'text-gray-500'}"></i>
+                <span class="text-[11px] font-semibold ${earnedIds.has(b.id)?'text-amber-200':'text-gray-500'}">${escapeHtml(b.label||b.id)}</span>
+              </div>`).join('')}
+            </div>
+          </div>` : ''}
         </div>
       `;
     }
 
-    function renderCoursePlayer() {
-      const course = RICK_COURSES.find(c => c.id === currentCourseId);
-      if (!course) return;
+    function renderLessonPlayer() {
+      const course = (academy.courses || []).find(c => c.id === currentCourseId);
+      if (!course) { renderCourseList(); return; }
+      const lessonMeta = (course.lessons || []).find(l => l.id === currentLessonId);
+      if (!lessonMeta) { renderCourseList(); return; }
 
-      const totalLessons = course.modules[0].lessons.length;
+      el.innerHTML = '<div class="flex items-center justify-center h-40"><i class="fas fa-spinner fa-spin text-blue-400 text-xl"></i></div>';
+      const answers = [];
+      let submitted = null;
 
-      if (currentLessonIndex >= totalLessons) {
-        el.innerHTML = `
-          <div class="fade-in max-w-2xl mx-auto glass rounded-2xl border border-blue-500/20 p-8 text-center relative overflow-hidden shadow-2xl">
-            <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-600 to-emerald-500"></div>
-            <div class="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-blue-600/10 rounded-full blur-2xl"></div>
-            
-            <i class="fas fa-award text-6xl text-amber-400 mb-4 animate-bounce"></i>
-            <h2 class="text-xl font-bold text-white mb-1">Congratulations!</h2>
-            <p class="text-xs text-gray-400 mb-6">You have completed <strong>${escapeHtml(course.title)}</strong></p>
+      api(`/client-portal/academy/${course.id}/${lessonMeta.id}`).then(({ lesson }) => {
+        const idx = (course.lessons || []).findIndex(l => l.id === lessonMeta.id);
+        const total = (course.lessons || []).length;
 
-            <div class="border-2 border-dashed border-blue-500/30 rounded-xl p-6 bg-gray-950/40 relative mb-6">
-              <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-2">Certificate of Accomplishment</div>
-              <div class="text-xs text-gray-400">This is proudly awarded to</div>
-              <div class="text-lg font-serif font-bold text-white my-3 border-b border-gray-900 pb-2 max-w-xs mx-auto">${escapeHtml(state.user?.name || 'Valued Builder')}</div>
-              <div class="text-xs text-gray-400">for masterfully completing the practical systems curriculum inside</div>
-              <div class="text-sm font-bold text-blue-400 mt-2">${escapeHtml(course.title)}</div>
-              
-              <div class="flex items-end justify-between mt-8 pt-4 border-t border-gray-900">
-                <div class="text-left">
-                  <div class="text-[10px] text-gray-500">Issued On</div>
-                  <div class="text-xs font-bold text-white">${new Date().toLocaleDateString()}</div>
+        const paint = () => {
+          el.innerHTML = `
+            <div class="fade-in max-w-3xl mx-auto space-y-6">
+              <div class="flex items-center justify-between">
+                <button onclick="window._closeCoursePlayer()" class="text-xs text-gray-400 hover:text-white flex items-center gap-1.5 transition"><i class="fas fa-chevron-left"></i> Back to Academy</button>
+                <span class="text-xs text-gray-500 font-mono">Lesson ${idx + 1} of ${total} · ${lesson.minutes || 6} min</span>
+              </div>
+
+              <div class="glass rounded-2xl border border-gray-800 overflow-hidden shadow-2xl">
+                <div class="bg-gray-900 px-6 py-4 border-b border-gray-800">
+                  <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">${escapeHtml(course.title)}</span>
+                  <h2 class="text-base font-bold text-white mt-0.5">${escapeHtml(lesson.title)}</h2>
+                  <p class="text-xs text-gray-500 mt-1">${escapeHtml(lesson.summary || '')}</p>
                 </div>
-                <div class="text-right">
-                  <div class="text-[10px] text-gray-500">Authorized Issuer</div>
-                  <div class="text-xs font-bold text-blue-400 font-serif">Rick Jefferson</div>
-                </div>
-              </div>
-            </div>
 
-            <button onclick="window._closeCoursePlayer()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-6 py-2.5 rounded-xl transition">Return to Courses</button>
-          </div>
-        `;
-        return;
-      }
+                <div class="p-6 space-y-6">
+                  ${(lesson.objectives||[]).length ? `<div>
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3"><i class="fas fa-bullseye text-cyan-400 mr-2"></i>You will be able to</h3>
+                    <ul class="list-disc pl-5 text-sm text-gray-200 space-y-1">${lesson.objectives.map(o=>`<li>${escapeHtml(o)}</li>`).join('')}</ul>
+                  </div>` : ''}
 
-      const lesson = course.modules[0].lessons[currentLessonIndex];
-
-      el.innerHTML = `
-        <div class="fade-in max-w-3xl mx-auto space-y-6">
-          <div class="flex items-center justify-between">
-            <button onclick="window._closeCoursePlayer()" class="text-xs text-gray-400 hover:text-white flex items-center gap-1.5 transition"><i class="fas fa-chevron-left"></i> Back to Hub</button>
-            <span class="text-xs text-gray-500 font-mono">Lesson ${currentLessonIndex + 1} of ${totalLessons}</span>
-          </div>
-
-          <!-- Lesson Material Card -->
-          <div class="glass rounded-2xl border border-gray-800 overflow-hidden shadow-2xl">
-            <div class="bg-gray-900 px-6 py-4 border-b border-gray-800 flex items-center justify-between">
-              <div>
-                <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">${escapeHtml(course.title)}</span>
-                <h2 class="text-base font-bold text-white mt-0.5">${escapeHtml(lesson.title)}</h2>
-              </div>
-            </div>
-            
-            <div class="p-6 space-y-6">
-              <!-- Build Steps -->
-              <div>
-                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3"><i class="fas fa-tools text-blue-400 mr-2"></i>Actionable Build Steps</h3>
-                <div class="space-y-3">
-                  ${lesson.steps.map((step, idx) => `
-                    <div class="flex items-start gap-3 bg-gray-900/40 p-3 rounded-xl border border-gray-850">
-                      <span class="w-5 h-5 rounded-full bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-xs font-bold text-blue-400 shrink-0 mt-0.5">${idx + 1}</span>
-                      <p class="text-xs text-gray-300 leading-normal">${escapeHtml(step)}</p>
-                    </div>
-                  `).join('')}
-                </div>
-              </div>
-
-              <!-- Rick's Rule -->
-              <div class="border-l-4 border-blue-500 bg-blue-500/5 rounded-r-xl p-4">
-                <div class="text-[10px] text-blue-400 font-bold uppercase tracking-wider mb-1"><i class="fas fa-quote-left mr-1"></i> Rick's Rule</div>
-                <p class="text-xs text-gray-200 font-medium font-serif italic">"${escapeHtml(lesson.ricksRule)}"</p>
-              </div>
-
-              <!-- Interactive Quiz -->
-              ${lesson.quiz ? `
-                <div class="pt-4 border-t border-gray-850">
-                  <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3"><i class="fas fa-check-double text-purple-400 mr-2"></i>Immediate Action Check</h3>
-                  <div class="glass rounded-xl p-5 border border-purple-500/20 bg-purple-500/5 space-y-4">
-                    <p class="text-sm font-bold text-white">${escapeHtml(lesson.quiz.question)}</p>
-                    <div class="space-y-2">
-                      ${lesson.quiz.options.map((opt, oIdx) => `
-                        <button onclick="window._selectQuizOption(${oIdx})" class="quiz-option-btn w-full text-left p-3.5 rounded-xl border bg-gray-900/50 border-gray-800 text-gray-400 hover:bg-gray-800 transition">
-                          <span class="text-xs font-medium">${escapeHtml(opt)}</span>
-                        </button>
-                      `).join('')}
-                    </div>
-                    <div class="flex justify-end pt-2">
-                      <button onclick="window._submitQuizAnswer(${lesson.quiz.answer})" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-5 py-2.5 rounded-lg transition shadow-lg shadow-purple-500/10 flex items-center gap-1.5">
-                        <i class="fas fa-check"></i>
-                        <span>Verify Answer</span>
-                      </button>
-                    </div>
+                  <div>
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3"><i class="fas fa-book-open text-blue-400 mr-2"></i>Lesson</h3>
+                    <p class="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">${escapeHtml(lesson.content || '')}</p>
                   </div>
+
+                  ${(lesson.takeaways||[]).length ? `<div class="glass border border-emerald-500/20 rounded-xl p-4">
+                    <div class="text-[10px] uppercase font-bold text-emerald-300 mb-2">Takeaways</div>
+                    <ul class="list-disc pl-5 text-sm text-gray-200 space-y-1">${lesson.takeaways.map(o=>`<li>${escapeHtml(o)}</li>`).join('')}</ul>
+                  </div>` : ''}
+
+                  ${lesson.practice ? `<div class="glass border border-amber-500/20 rounded-xl p-4 text-sm text-amber-100"><strong class="text-amber-300">Practice:</strong> ${escapeHtml(lesson.practice)}</div>` : ''}
+
+                  ${lesson.platformAction ? `<button type="button" onclick="window._nav('${lesson.platformAction.page}')" class="text-xs font-semibold text-cyan-300 hover:text-cyan-200 inline-flex items-center gap-1.5"><i class="fas fa-arrow-up-right-from-square"></i>${escapeHtml(lesson.platformAction.label)}</button>` : ''}
+
+                  ${lesson.ricksRule ? `<div class="border-l-4 border-blue-500 bg-blue-500/5 rounded-r-xl p-4">
+                    <div class="text-[10px] text-blue-400 font-bold uppercase tracking-wider mb-1"><i class="fas fa-quote-left mr-1"></i> Rick's Rule</div>
+                    <p class="text-xs text-gray-200 font-medium font-serif italic">"${escapeHtml(lesson.ricksRule)}"</p>
+                  </div>` : ''}
+
+                  ${(lesson.quiz||[]).length ? `
+                    <div class="pt-4 border-t border-gray-850 space-y-4">
+                      <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest"><i class="fas fa-check-double text-purple-400 mr-2"></i>Check your understanding</h3>
+                      ${lesson.quiz.map((q, qi) => `
+                        <div class="glass rounded-xl p-4 border border-purple-500/20 bg-purple-500/5 space-y-2">
+                          <p class="text-sm font-bold text-white">${escapeHtml(q.q)}</p>
+                          <div class="space-y-2">${q.choices.map((ch, ci) => `
+                            <button type="button" onclick="window._academyPick(${qi},${ci})" class="academy-quiz-opt w-full text-left text-xs px-3 py-2.5 rounded-lg border ${answers[qi]===ci?'border-purple-500 bg-purple-500/15 text-white':'border-gray-800 text-gray-300 hover:bg-gray-800'} transition">${escapeHtml(ch)}</button>`).join('')}</div>
+                        </div>
+                      `).join('')}
+                      <div class="flex items-center justify-end gap-3">
+                        ${submitted ? `<span class="text-sm font-semibold ${submitted.passed?'text-emerald-300':'text-amber-300'}">${submitted.passed?'Passed':'Try again'} — ${submitted.score}/${submitted.total}</span>` : ''}
+                        <button id="btn-academy-submit" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-5 py-2.5 rounded-lg transition shadow-lg shadow-purple-500/10 flex items-center gap-1.5">
+                          <i class="fas fa-check"></i><span>Submit quiz</span>
+                        </button>
+                      </div>
+                    </div>
+                  ` : ''}
                 </div>
-              ` : ''}
+              </div>
+
+              <div class="flex items-center justify-between">
+                <button type="button" ${idx<=0?'disabled':''} onclick="window._academyGoto(${idx-1})" class="text-xs font-semibold ${idx<=0?'text-gray-600 cursor-not-allowed':'text-gray-300 hover:text-white'}"><i class="fas fa-chevron-left mr-1"></i>Previous lesson</button>
+                <button type="button" ${idx>=total-1?'disabled':''} onclick="window._academyGoto(${idx+1})" class="text-xs font-semibold ${idx>=total-1?'text-gray-600 cursor-not-allowed':'text-gray-300 hover:text-white'}">Next lesson<i class="fas fa-chevron-right ml-1"></i></button>
+              </div>
             </div>
-          </div>
-        </div>
-      `;
+          `;
+        };
+
+        window._academyPick = (qi, ci) => { answers[qi] = ci; paint(); };
+        window._academyGoto = (newIdx) => {
+          const target = (course.lessons || [])[newIdx];
+          if (!target) return;
+          currentLessonId = target.id;
+          renderLessonPlayer();
+        };
+
+        paint();
+
+        setTimeout(() => {
+          const btn = document.getElementById('btn-academy-submit');
+          if (!btn) return;
+          btn.onclick = async () => {
+            try {
+              const res = await api(`/client-portal/academy/${course.id}/${lesson.id}/complete`, {
+                method: 'POST', body: JSON.stringify(portalClientBody({ answers })),
+              });
+              submitted = res;
+              toast(res.passed ? `Lesson complete ${res.score}/${res.total}` : `Review again ${res.score}/${res.total}`, res.passed?'success':'warning');
+              await refreshAcademy();
+              if (res.badges && res.badges.length) {
+                res.badges.forEach(b => toast(`Badge earned: ${b.label}`, 'success'));
+              }
+              paint();
+            } catch (err) { toast(err.message, 'error'); }
+          };
+        }, 0);
+      }).catch((err) => { toast(err.message, 'error'); renderCourseList(); });
     }
 
     renderCourseList();
@@ -13788,7 +13994,7 @@ async function pgAdminConsole(el) {
         </div>
         <div class="glass border border-gray-800 rounded-xl p-3.5 bg-gray-900/10">
           <div class="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">Mailing Service</div>
-          <div class="text-lg font-bold text-blue-400 flex items-center gap-1.5"><i class="fas fa-cloud text-sm"></i>Click2Mail</div>
+          <div class="text-lg font-bold text-blue-400 flex items-center gap-1.5"><i class="fas fa-cloud text-sm"></i>Lob</div>
         </div>
         <div class="glass border border-gray-800 rounded-xl p-3.5 bg-gray-900/10">
           <div class="text-[10px] text-gray-500 uppercase tracking-wider font-bold mb-1">USPS Delivery Class</div>
@@ -13849,7 +14055,7 @@ async function pgAdminConsole(el) {
                         <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                         <span>USPS Certified In Transit</span>
                       </div>
-                      <div class="text-[10px] text-gray-500 font-mono mt-0.5">Click2Mail Gateway Dispatched</div>
+                      <div class="text-[10px] text-gray-500 font-mono mt-0.5">Lob Gateway Dispatched</div>
                     </td>
                     <td class="p-3.5 text-right">
                       <div class="flex items-center justify-end gap-1.5">
@@ -14884,15 +15090,15 @@ async function pgAdminConsole(el) {
       const allDocs = d.documents || [];
       const sent = allDocs.filter(doc => doc.status === 'sent');
       const drafts = allDocs.filter(doc => doc.status === 'draft');
-      let c2m = { configured: false, status: 'unknown', label: 'CHECKING' };
+      let lobStatus = { configured: false, status: 'unknown', label: 'CHECKING' };
       try {
         const integ = await api('/settings/integrations');
-        c2m = integ.click2mail || c2m;
+        lobStatus = integ.lob || lobStatus;
       } catch { /* soft */ }
 
       const totalSent = sent.length;
       const totalPending = drafts.length;
-      const c2mOn = !!c2m.configured;
+      const lobOn = !!lobStatus.configured;
 
       el.innerHTML = `
         <div class="fade-in">
@@ -14902,7 +15108,7 @@ async function pgAdminConsole(el) {
               <h1 class="text-xl font-bold text-white flex items-center gap-2">
                 <i class="fas fa-mail-bulk text-blue-400"></i> Mailing Campaigns
               </h1>
-              <p class="text-sm text-gray-400">Central USPS Certified Mail Campaign & Click2Mail dispatch control center</p>
+              <p class="text-sm text-gray-400">Central USPS Certified Mail Campaign & Lob dispatch control center</p>
             </div>
             <button onclick="window._nav('clients')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 shadow-lg shadow-blue-600/15">
               <i class="fas fa-plus"></i> New Mailing Dispatch
@@ -14928,12 +15134,12 @@ async function pgAdminConsole(el) {
               <div class="text-[9px] text-gray-500 mt-1">Draft letters prepared for consumer signature</div>
             </div>
             <div class="glass border border-gray-800 rounded-2xl p-4 bg-gray-900/10">
-              <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">Click2Mail Service</div>
-              <div class="text-2xl font-black ${c2mOn ? 'text-blue-400' : 'text-amber-400'} flex items-center gap-2">
-                <i class="fas ${c2mOn ? 'fa-link' : 'fa-unlink'} text-lg"></i>
-                <span>${escapeHtml(c2m.label || (c2mOn ? 'CONNECTED' : 'NOT CONFIGURED'))}</span>
+              <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">Lob Service</div>
+              <div class="text-2xl font-black ${lobOn ? 'text-blue-400' : 'text-amber-400'} flex items-center gap-2">
+                <i class="fas ${lobOn ? 'fa-link' : 'fa-unlink'} text-lg"></i>
+                <span>${escapeHtml(lobStatus.label || (lobOn ? 'CONNECTED' : 'NOT CONFIGURED'))}</span>
               </div>
-              <div class="text-[9px] text-gray-500 mt-1">${c2mOn ? 'REST API credentials present' : 'Set CLICK2MAIL_USERNAME + CLICK2MAIL_AUTH_BASIC'}</div>
+              <div class="text-[9px] text-gray-500 mt-1">${lobOn ? 'REST API credentials present' : 'Set LOB_SECRET_KEY'}</div>
             </div>
             <div class="glass border border-gray-800 rounded-2xl p-4 bg-gray-900/10">
               <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1.5">USPS Resolution SLA</div>
@@ -14997,7 +15203,7 @@ async function pgAdminConsole(el) {
                               <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping"></span>
                               <span>USPS Certified In Transit</span>
                             </div>
-                            <div class="text-[10px] text-gray-500 font-mono mt-0.5">Click2Mail Automated Mailroom</div>
+                            <div class="text-[10px] text-gray-500 font-mono mt-0.5">Lob Automated Mailroom</div>
                           </td>
                           <td class="p-3.5 text-right">
                             <button onclick="window._viewDoc('${doc.id}')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition"><i class="fas fa-eye"></i> View</button>
@@ -15082,7 +15288,7 @@ async function pgAdminConsole(el) {
                                 <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping"></span>
                                 <span>USPS Certified In Transit</span>
                               </div>
-                              <div class="text-[10px] text-gray-500 font-mono mt-0.5">Click2Mail Automated Mailroom</div>
+                              <div class="text-[10px] text-gray-500 font-mono mt-0.5">Lob Automated Mailroom</div>
                             </td>
                             <td class="p-3.5 text-right">
                               <button onclick="window._viewDoc('${doc.id}')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition"><i class="fas fa-eye"></i> View</button>

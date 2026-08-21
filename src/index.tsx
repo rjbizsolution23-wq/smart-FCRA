@@ -6,10 +6,11 @@ import { generateId, hashPassword, verifyPassword, needsPasswordRehash, createSe
 import { encryptText, decryptText, decryptTextSafe, requireEncryptionKey } from './lib/crypto';
 import { listConfiguredProviders, generateFreeImage } from './lib/ai-providers';
 import { sendAppEmail } from './lib/email';
-import { MENTORS, buildMentorContext, KNOWLEDGE_CORPUS_META, retrieveCaseLawKnowledge, type MentorId } from './lib/mentors';
+import { MENTORS, buildMentorContext, KNOWLEDGE_CORPUS_META, retrieveCaseLawKnowledge, CLIENT_TUTOR_MENTOR_IDS, type MentorId } from './lib/mentors';
 import { estimateViolationScoreLift } from './data/fundability-engine';
 import { sendPortalWelcomeEmail, computeAndStoreFundability, portalBaseUrl, isSyntheticPortalEmail, tradelineRecsForClient } from './lib/portal-services';
 import { EDUCATION_LIBRARY, getLessonById, TRADELINE_CATALOG } from './data/portal-education';
+import { ACADEMY_COURSES, ACADEMY_BADGES, getAcademyCourseById, getAcademyLesson, academyTotalLessons } from './data/operator-academy';
 import { matchLenders } from './data/funding/lender-matching';
 import { catalogStats, LENDER_CATALOG } from './data/funding/lenders-catalog';
 import { parseBankStatementText } from './data/bank-underwriting';
@@ -164,7 +165,9 @@ import { inspectUpload, decodeBase64Bytes, sanitizeFileName } from './lib/upload
 import { vaultOriginalFromBody } from './lib/report-vault';
 import { persistInvestigationClock, closeInvestigationClock, FCRA_611_OPERATIONAL_DAYS } from './lib/investigation-clocks';
 import { recordServiceCompleted, assertCoveredChargeAllowed, writeBillingLedger } from './lib/service-ledger';
-import { sendLetterViaLob, resolveMailClass, lobConfigured, lobPublicStatus, verifyUsAddress } from './lib/lob';
+import { sendLetterViaLob, resolveMailClass, lobConfigured, lobPublicStatus } from './lib/lob';
+import { chargeMailPostage } from './lib/mail-postage';
+import { registerMailPostageRoutes, fulfillMailPostageCheckout, chargeOrgSavedCardPostage, ensureOrgStripeCustomer } from './lib/mail-postage-routes';
 import { registerSupportCrmRoutes, registerExternalIntegrationRoutes } from './lib/support-crm-routes';
 import { registerRoadmapRoutes, handleClientBillingWebhook } from './lib/roadmap-routes';
 import { registerComplianceOsRoutes } from './lib/compliance-os-routes';
@@ -5237,7 +5240,146 @@ app.post('/api/client-portal/education/:lessonId/complete', authMiddleware, asyn
   return c.json({ ok: true, score, total, passed, correctAnswers: lesson.quiz.map(q => q.answer) });
 });
 
+// ── Operator Academy (Systems & Business courses, gamified) ───
+function computeAcademyBadges(courseCompletion: Record<string, boolean>, rows: any[]): string[] {
+  const earned: string[] = [];
+  for (const course of ACADEMY_COURSES) {
+    if (courseCompletion[course.id]) earned.push(course.badgeId);
+  }
+  if (rows.length > 0) earned.push('badge-first-lesson');
+  if (rows.some((r: any) => r.quiz_total > 0 && r.quiz_score === r.quiz_total)) earned.push('badge-perfect-quiz');
+  const distinctDays = new Set(
+    rows.map((r: any) => String(r.completed_at || r.updated_at || '').slice(0, 10)).filter(Boolean)
+  );
+  if (distinctDays.size >= 3) earned.push('badge-streak-3');
+  const completedCourseCount = Object.values(courseCompletion).filter(Boolean).length;
+  if (completedCourseCount >= 5) earned.push('badge-halfway');
+  if (completedCourseCount >= ACADEMY_COURSES.length) earned.push('badge-all-courses');
+  return earned;
+}
+
+app.get('/api/client-portal/academy', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
+  let progress: any[] = [];
+  if (client) {
+    try {
+      const rows = await c.env.DB.prepare(
+        `SELECT * FROM academy_progress WHERE client_id = ? AND org_id = ?`
+      ).bind(client.id, user.org_id).all();
+      progress = rows?.results || [];
+    } catch { /* soft — migration may not be applied yet */ }
+  }
+  const completedLessonIds = new Set(
+    progress.filter((r: any) => r.status === 'completed').map((r: any) => r.lesson_id)
+  );
+  const courseCompletion: Record<string, boolean> = {};
+  for (const course of ACADEMY_COURSES) {
+    courseCompletion[course.id] = course.lessons.length > 0 && course.lessons.every((l) => completedLessonIds.has(l.id));
+  }
+  const earnedBadgeIds = computeAcademyBadges(courseCompletion, progress);
+  return c.json({
+    courses: ACADEMY_COURSES.map((course) => ({
+      id: course.id,
+      track: course.track,
+      title: course.title,
+      desc: course.desc,
+      icon: course.icon,
+      badgeId: course.badgeId,
+      completed: courseCompletion[course.id],
+      lessons: course.lessons.map((l) => ({
+        id: l.id,
+        title: l.title,
+        summary: l.summary,
+        minutes: l.minutes,
+        quizCount: l.quiz.length,
+        hasPlatformAction: !!l.platformAction,
+        completed: completedLessonIds.has(l.id),
+      })),
+    })),
+    progress,
+    totalLessons: academyTotalLessons(),
+    completedLessons: completedLessonIds.size,
+    badges: earnedBadgeIds.map((id) => ({ id, ...ACADEMY_BADGES[id] })),
+    allBadges: Object.entries(ACADEMY_BADGES).map(([id, b]) => ({ id, ...b })),
+  });
+});
+
+app.get('/api/client-portal/academy/:courseId/:lessonId', authMiddleware, async (c) => {
+  const found = getAcademyLesson(c.req.param('courseId'), c.req.param('lessonId'));
+  if (!found) return c.json({ error: 'Lesson not found' }, 404);
+  const { course, lesson } = found;
+  return c.json({
+    course: { id: course.id, title: course.title, track: course.track, badgeId: course.badgeId },
+    lesson: {
+      ...lesson,
+      quiz: lesson.quiz.map((q, i) => ({ i, q: q.q, choices: q.choices })), // hide answers
+    },
+  });
+});
+
+app.post('/api/client-portal/academy/:courseId/:lessonId/complete', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  const client = await resolvePortalClientSafe(c, user, body.clientId);
+  if (!client) return c.json({ error: 'Client not found' }, 404);
+  const found = getAcademyLesson(c.req.param('courseId'), c.req.param('lessonId'));
+  if (!found) return c.json({ error: 'Lesson not found' }, 404);
+  const { course, lesson } = found;
+
+  const answers: number[] = Array.isArray(body.answers) ? body.answers : [];
+  let score = 0;
+  lesson.quiz.forEach((q, i) => { if (answers[i] === q.answer) score += 1; });
+  const total = lesson.quiz.length;
+  const passed = total === 0 || score === total;
+  const id = generateId();
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO academy_progress (id, org_id, client_id, course_id, lesson_id, status, quiz_score, quiz_total, completed_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+       ON CONFLICT(client_id, lesson_id) DO UPDATE SET
+         status = excluded.status,
+         quiz_score = excluded.quiz_score,
+         quiz_total = excluded.quiz_total,
+         completed_at = excluded.completed_at,
+         updated_at = datetime('now')`
+    ).bind(id, user.org_id, client.id, course.id, lesson.id, passed ? 'completed' : 'started', score, total).run();
+  } catch (e: any) {
+    return c.json({ error: 'Academy progress table unavailable — run migration 0040', detail: e.message }, 500);
+  }
+
+  let newBadges: string[] = [];
+  try {
+    const rows = await c.env.DB.prepare(
+      `SELECT * FROM academy_progress WHERE client_id = ? AND org_id = ?`
+    ).bind(client.id, user.org_id).all();
+    const progress = rows?.results || [];
+    const completedLessonIds = new Set(
+      progress.filter((r: any) => r.status === 'completed').map((r: any) => r.lesson_id)
+    );
+    const courseCompletion: Record<string, boolean> = {};
+    for (const co of ACADEMY_COURSES) {
+      courseCompletion[co.id] = co.lessons.length > 0 && co.lessons.every((l) => completedLessonIds.has(l.id));
+    }
+    newBadges = computeAcademyBadges(courseCompletion, progress);
+  } catch { /* soft */ }
+
+  return c.json({
+    ok: true,
+    score,
+    total,
+    passed,
+    correctAnswers: lesson.quiz.map(q => q.answer),
+    badges: newBadges.map((bid) => ({ id: bid, ...ACADEMY_BADGES[bid] })),
+  });
+});
+
 // ── Personal tutor (grows with client journey) ────────────────
+function resolveTutorMentorId(requested: string | undefined | null, stored: string | undefined | null): MentorId {
+  const candidate = requested || stored || 'personal-finance-tutor';
+  return (CLIENT_TUTOR_MENTOR_IDS.includes(candidate as MentorId) ? candidate : 'personal-finance-tutor') as MentorId;
+}
+
 app.get('/api/client-portal/tutor', authMiddleware, async (c) => {
   const user = c.get('user');
   const client = await resolvePortalClientSafe(c, user, c.req.query('clientId') || undefined);
@@ -5245,8 +5387,10 @@ app.get('/api/client-portal/tutor', authMiddleware, async (c) => {
   try {
     const companion = await loadTutorCompanion(c.env, client);
     const learned = await getLearnedIntelligenceSummary(c.env, user.org_id, client.id).catch(() => null);
+    const mentorId = resolveTutorMentorId(c.req.query('mentorId'), companion.memory?.active_mentor_id);
     return c.json({
-      mentor: MENTORS.find(m => m.id === 'personal-finance-tutor'),
+      mentor: MENTORS.find(m => m.id === mentorId),
+      mentors: MENTORS.filter(m => CLIENT_TUTOR_MENTOR_IDS.includes(m.id)),
       memory: companion.memory,
       progress: companion.progress,
       growth: companion.growth,
@@ -5267,6 +5411,7 @@ app.get('/api/client-portal/tutor', authMiddleware, async (c) => {
     console.error('[tutor] load failed', e);
     return c.json({
       mentor: MENTORS.find(m => m.id === 'personal-finance-tutor'),
+      mentors: MENTORS.filter(m => CLIENT_TUTOR_MENTOR_IDS.includes(m.id)),
       memory: null,
       progress: [],
       growth: null,
@@ -5335,11 +5480,12 @@ app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
 
   const companion = await loadTutorCompanion(c.env, client);
   const { growth, input, memory } = companion;
+  const mentorId = resolveTutorMentorId(body.mentorId, memory?.active_mentor_id);
 
   const memoryChunks = await retrieveClientMemory(c.env, user.org_id, client.id, message).catch(() => []);
   const learnedBlock = buildLearnedMemoryContext(memoryChunks);
 
-  const { mentor, knowledgeBlock } = buildMentorContext('personal-finance-tutor', message);
+  const { mentor, knowledgeBlock } = buildMentorContext(mentorId, message);
   const growthBlock = tutorChatSystemBlock(input, growth, memory?.summary, memory?.goals_json);
   const context = [
     `Client: ${client.first_name} ${client.last_name}`,
@@ -5379,8 +5525,8 @@ app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
   try {
     const summary = `${(memory?.summary || '').slice(0, 800)}\n[L${growth.level}/${growth.rank}] Q: ${message.slice(0, 200)}\nA: ${reply.slice(0, 400)}`.trim();
     await c.env.DB.prepare(
-      `INSERT INTO tutor_memory (id, org_id, client_id, summary, sessions_count, level, xp, rank_title, growth_json, updated_at)
-       VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, datetime('now'))
+      `INSERT INTO tutor_memory (id, org_id, client_id, summary, sessions_count, level, xp, rank_title, growth_json, active_mentor_id, updated_at)
+       VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT(client_id) DO UPDATE SET
          summary = excluded.summary,
          sessions_count = COALESCE(tutor_memory.sessions_count,0)+1,
@@ -5388,6 +5534,7 @@ app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
          xp = excluded.xp,
          rank_title = excluded.rank_title,
          growth_json = excluded.growth_json,
+         active_mentor_id = excluded.active_mentor_id,
          updated_at = datetime('now')`
     ).bind(
       generateId(),
@@ -5398,6 +5545,7 @@ app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
       growth.xp + 12,
       growth.rankTitle,
       JSON.stringify({ rank: growth.rank, curriculumFocus: growth.curriculumFocus, phase: input.journeyPhase }),
+      mentorId,
     ).run();
   } catch {
     try {
@@ -5414,7 +5562,7 @@ app.post('/api/client-portal/tutor/chat', authMiddleware, async (c) => {
     await c.env.DB.prepare(
       `INSERT INTO portal_messages (id, org_id, client_id, sender_user_id, sender_role, channel, subject, body, created_at)
        VALUES (?, ?, ?, ?, 'system', 'portal', 'Tutor session', ?, datetime('now'))`
-    ).bind(generateId(), user.org_id, client.id, user.id, `You: ${message}\n\nAlex: ${reply}`).run();
+    ).bind(generateId(), user.org_id, client.id, user.id, `You: ${message}\n\n${mentor.name}: ${reply}`).run();
   }
 
   recordTutorTurnMemory(c.env, {
@@ -7668,11 +7816,21 @@ app.post('/api/billing/portal', authMiddleware, async (c) => {
   const blocked = productionStripeBlockReason(c.env);
   if (blocked) return c.json({ error: blocked, code: 'STRIPE_LIVE_REQUIRED' }, 503);
   const stripe = getStripe(c.env);
-  const org = await c.env.DB.prepare('SELECT stripe_customer_id FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
-  if (!org?.stripe_customer_id) return c.json({ error: 'Subscribe first' }, 400);
+  let org = await c.env.DB.prepare('SELECT name, stripe_customer_id FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+  let customerId = org?.stripe_customer_id as string | undefined;
+  if (!customerId) {
+    // Self-serve: create Stripe customer so firm can add a card without a SaaS subscribe first
+    customerId = await ensureOrgStripeCustomer({
+      stripe,
+      db: c.env.DB,
+      orgId: user.org_id,
+      email: user.email,
+      name: org?.name,
+    });
+  }
   const session = await stripe.billingPortal.sessions.create({
-    customer: org.stripe_customer_id,
-    return_url: `${resolveFrontendUrl(c.env, c.req.url)}/app`,
+    customer: customerId,
+    return_url: `${resolveFrontendUrl(c.env, c.req.url)}/app?page=settings`,
   });
   return c.json({ url: session.url });
 });
@@ -7827,6 +7985,17 @@ app.post('/api/billing/webhook', async (c) => {
             ).run().catch(() => {});
           }
         } catch (e) { console.warn('[ai credit webhook]', e); }
+        break;
+      }
+      if (
+        sessionObj?.metadata?.type === 'mail_postage_pack'
+        || sessionObj?.metadata?.type === 'mail_postage_client_pack'
+        || sessionObj?.metadata?.type === 'mail_postage_letter'
+        || sessionObj?.metadata?.type === 'mail_postage_card_setup'
+      ) {
+        try {
+          await fulfillMailPostageCheckout(c.env.DB, sessionObj);
+        } catch (e) { console.warn('[mail postage webhook]', e); }
         break;
       }
 
@@ -8038,6 +8207,11 @@ app.put('/api/settings/org', authMiddleware, async (c) => {
   }
   if (body.defaultMailClass) {
     settings.default_mail_class = String(body.defaultMailClass).toUpperCase();
+  }
+  if (body.mailPostagePayer || body.mail_postage_payer) {
+    const mode = String(body.mailPostagePayer || body.mail_postage_payer).toLowerCase();
+    const allowed = ['org', 'client', 'org_then_client', 'client_then_org'];
+    if (allowed.includes(mode)) settings.mail_postage_payer = mode;
   }
   // Re-normalize after branding/advocate flags so flat keys stay in sync
   settings = mergeLetterheadIntoSettings(settings, settings.letterhead || {}, displayName);
@@ -9864,7 +10038,11 @@ app.get('/api/documents/:id/pdf', authMiddleware, async (c) => {
 app.post('/api/documents/:id/send', authMiddleware, async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
-  const { recipientName, recipientAddress, recipientCity, recipientState, recipientZip, mailClass: bodyMailClass } = await c.req.json();
+  const sendBody = await c.req.json().catch(() => ({}));
+  const {
+    recipientName, recipientAddress, recipientCity, recipientState, recipientZip,
+    mailClass: bodyMailClass, paidBy: preferredPayer,
+  } = sendBody;
 
   const doc = await c.env.DB.prepare('SELECT * FROM documents WHERE id = ? AND org_id = ?').bind(id, user.org_id).first() as any;
   if (!doc) return c.json({ error: 'Document not found' }, 404);
@@ -9875,6 +10053,56 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
   const orgRow = await c.env.DB.prepare('SELECT name, settings FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
   const orgSettings = typeof orgRow?.settings === 'string' ? JSON.parse(orgRow.settings || '{}') : (orgRow?.settings || {});
   const mailClass = resolveMailClass({ bodyMailClass, orgDefault: orgSettings.default_mail_class });
+
+  const postage = await chargeMailPostage({
+    db: c.env.DB,
+    orgId: user.org_id,
+    clientId: doc.client_id || null,
+    mailClass,
+    preferredPayer,
+    orgSettingsRaw: orgSettings,
+    actorUserId: user.id,
+    documentId: id,
+    chargeOrgCard: async ({ costCents, mailClass: cls }) => {
+      if (!stripeConfigured(c.env) || !c.env.STRIPE_API_KEY) return { ok: false, error: 'Stripe not configured' };
+      const blocked = productionStripeBlockReason(c.env);
+      if (blocked) return { ok: false, error: blocked };
+      const orgBill = await c.env.DB.prepare('SELECT stripe_customer_id FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+      if (!orgBill?.stripe_customer_id) return { ok: false, error: 'Add your firm card to unlock mailing' };
+      const credits = await c.env.DB.prepare(
+        'SELECT default_payment_method_id FROM org_mail_credits WHERE org_id = ?',
+      ).bind(user.org_id).first() as any;
+      return chargeOrgSavedCardPostage({
+        stripe: getStripe(c.env),
+        customerId: orgBill.stripe_customer_id,
+        amountCents: costCents,
+        mailClass: cls,
+        orgId: user.org_id,
+        paymentMethodId: credits?.default_payment_method_id || null,
+        documentId: id,
+      });
+    },
+  });
+  if (!postage.ok) {
+    return c.json({
+      error: postage.error,
+      code: postage.code,
+      costCents: postage.costCents,
+      mailClass: postage.mailClass,
+      orgBalanceCents: postage.orgBalanceCents,
+      clientBalanceCents: postage.clientBalanceCents,
+      payerMode: postage.payerMode,
+      canPayOrg: postage.canPayOrg,
+      canPayClient: postage.canPayClient,
+      needsCard: postage.needsCard,
+      mailUnlocked: postage.mailUnlocked,
+      cardOnFile: postage.cardOnFile,
+      addCardPath: '/api/mail-postage/org/add-card',
+      purchaseOrgPath: '/api/mail-postage/org/credits/purchase',
+      payLetterPath: '/api/mail-postage/client/pay-letter',
+    }, 402);
+  }
+
   const lh = orgSettings.letterhead || {};
   const from = {
     name: String(lh.attorneyName || lh.firmName || orgRow?.name || c.env.COMPANY_OWNER || 'Smart FCRA Operator'),
@@ -9979,6 +10207,12 @@ app.post('/api/documents/:id/send', authMiddleware, async (c) => {
     expectedDeliveryDate: mailing.expectedDeliveryDate,
     trackingNumber: mailing.trackingNumber || null,
     investigationClock: clock,
+    postage: {
+      payer: postage.payer,
+      costCents: postage.costCents,
+      orgBalanceCents: postage.orgBalanceCents,
+      clientBalanceCents: postage.clientBalanceCents,
+    },
     message: 'Document mailed via Lob. FCRA § 611 30-day investigation clock started (35-day operational due date includes mail transit).',
   });
 });
@@ -11526,6 +11760,7 @@ registerTenantRoutes(app, { authMiddleware, adminGateMiddleware });
 registerComplianceOsRoutes(app, { authMiddleware });
 registerIntegrationOsRoutes(app, { authMiddleware });
 registerPlatformExtensionRoutes(app, { authMiddleware });
+registerMailPostageRoutes(app, { authMiddleware });
 registerPlatformGuideRoutes(app, { authMiddleware });
 
 // ═══════════════════════════════════════════════════════════════
@@ -11876,7 +12111,7 @@ function getAppHtml(mode: 'login' | 'app' = 'app'): string {
   </script>
   <script src="/static/demo-experience.js?v=20260819-stripe-live"></script>
   <script src="/static/platform-guide.js?v=20260819-platform-guide"></script>
-  <script src="/static/app.js?v=20260821-lob-mail"></script>
+  <script src="/static/app.js?v=20260821-mail-card-unlock"></script>
 </body>
 </html>`;
 }

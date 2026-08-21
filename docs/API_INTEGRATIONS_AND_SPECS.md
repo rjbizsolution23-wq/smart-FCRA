@@ -27,7 +27,7 @@ graph TD
     
     Hono -->|billing & monetization| Stripe[Stripe Checkout & Webhooks]
     Hono -->|3B credit reports| SC[SmartCredit / MyFreeScoreNow API]
-    Hono -->|legal mail dispatch| C2M[Click2Mail API Integration]
+    Hono -->|legal mail dispatch| Lob[Lob Print & Mail API Integration]
 ```
 
 ---
@@ -416,18 +416,20 @@ Our mapping engine [src/engine/mfsn-mapper.ts](file:///c:/Users/ricky/Downloads/
 
 ---
 
-## 📯 Click2Mail Automated Mailing Spec
+## 📯 Lob Print & Mail Automated Mailing Spec
 
-Automated physical mailing uses Click2Mail's secure REST endpoints to print and Certified-mail legal letters directly to credit bureaus and furnishers.
+Automated physical mailing uses [Lob](https://docs.lob.com/)'s secure REST endpoints (HTTP Basic auth, secret key as username) to print and mail legal letters directly to credit bureaus and furnishers. Lob is the **primary** mailing vendor (`src/lib/lob.ts`); Click2Mail (`src/lib/click2mail.ts`) is kept only as a legacy/fallback integration and is no longer used by the default send paths.
 
-* **API Endpoint:** `POST /api/documents/:id/send`
+* **API Endpoints:**
+  * `POST /api/documents/:id/send` — staff document mailing (`src/index.tsx`)
+  * `POST /api/client-portal/disputes/:id/send` — client-portal dispute mailing (`src/lib/client-intelligence-routes.ts`)
+  * `GET /api/integrations/lob/status` / `POST /api/integrations/lob/verify-address` — connection status + address verification (`src/lib/support-crm-routes.ts`)
 * **Workflow:**
-  1. Retrieves the generated document PDF.
-  2. Submits a document creation job to Click2Mail:
-     `POST /rest/v1/documents`
-  3. Configures delivery boundaries (Certified Mail with Return Receipt Requested) and submits the shipping address payload:
-     `POST /rest/v1/jobs`
-  4. Triggers print dispatch and records the routing transit numbers to the database activity log.
+  1. Postage is charged first via `chargeMailPostage()` (`src/lib/mail-postage.ts`) — org wallet, client wallet, comped org, or org saved card, in the org's configured payer order. If postage can't be charged, the send is blocked (`MAIL_POSTAGE_REQUIRED` / `MAIL_CARD_REQUIRED`) before Lob is ever called.
+  2. Renders the letter body to HTML (`letterHtmlFromPlainText`) or accepts a pre-rendered HTML/PDF payload.
+  3. Submits the letter to Lob: `POST /v1/letters` with `to`, `from`, `file`, `mail_type` (`usps_first_class` / `usps_standard`), and optional `extra_service: certified_return_receipt` for certified mail.
+  4. Lob's response (`letter.id`, `expected_delivery_date`, `tracking_number`) is persisted to `documents.mailing_id` / `documents.mail_class`, and an `investigation_clocks` row (FCRA § 611 30-day statutory / 35-day operational) is created.
+  5. `POST /api/billing/mailing-callback` remains available as a generic mailing status webhook (any vendor) guarded by `MAILING_WEBHOOK_SECRET`; `LOB_WEBHOOK_SECRET` is reserved for a future Lob-specific delivery-tracking webhook (not yet implemented — Lob status today is push-only from the initial send response).
 
 ---
 

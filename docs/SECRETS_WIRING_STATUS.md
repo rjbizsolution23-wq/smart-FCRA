@@ -19,7 +19,7 @@ Operator secrets live in **gitignored** `.dev.vars` / `secrets.env` only (never 
 | **Cloudflare Email Sending** | **LIVE** — `noreply` / `onboarding.smartfcra.com` |
 | **NVIDIA NIM free models** | **LIVE** — free-only cascade |
 | Groq / OpenRouter `:free` / Gemini / Together / HF / Workers AI | Wired |
-| Stripe / Click2Mail / company branding | Wired |
+| Stripe / Lob mail (primary) + Click2Mail (legacy fallback) / company branding | Wired |
 | Demo login | `demo@example.com` / `demo123456` |
 | Platform bootstrap | env-based `PLATFORM_BOOTSTRAP_*` (super_admin) |
 | AI Mentors + case-law retrieval | Wired |
@@ -54,6 +54,22 @@ Interactive forms POST to `POST /api/public/lead/:formId` → D1 `brand_leads` +
 Staff nav → **Brand Library** lists forms, tokens, and recent leads. Assets live under `public/static/brand/` (forms, marketing, legal, ops, founder).
 
 Design tokens: RJ Blue `#2563eb`, Sky `#0ea5e9`, Space Grotesk + Inter (`public/static/brand/brand.css`).
+
+## Lob Print & Mail (wired — primary mailing vendor)
+
+| Secret | Purpose |
+|--------|---------|
+| `LOB_SECRET_KEY` | Primary secret key (HTTP Basic username); prefix `test_`/`live_` selects mode automatically |
+| `LOB_TEST_SECRET_KEY` / `LOB_TEST_PUBLISHABLE_KEY` | Optional explicit test-mode pair |
+| `LOB_LIVE_SECRET_KEY` / `LOB_LIVE_PUBLISHABLE_KEY` | Optional explicit live-mode pair |
+| `LOB_MODE` | `test` or `live` — used when key has no prefix |
+| `LOB_WEBHOOK_SECRET` | Reserved for a future Lob delivery-tracking webhook (not yet wired to a route) |
+
+Every mail send is gated by postage billing (`src/lib/mail-postage.ts`) **before** Lob is called — org/client prepaid wallets or a Stripe-held org card (`org_mail_credits.card_on_file` / `mail_unlocked`). No card numbers are ever stored in repo/env secrets; Stripe holds the payment method.
+
+Routes: `GET /api/integrations/lob/status`, `POST /api/integrations/lob/verify-address`, `POST /api/documents/:id/send`, `POST /api/client-portal/disputes/:id/send`, plus `registerMailPostageRoutes` (`src/lib/mail-postage-routes.ts`) for wallet purchase/card-unlock endpoints.
+
+Click2Mail (`CLICK2MAIL_USERNAME` / `CLICK2MAIL_AUTH_BASIC` / `CLICK2MAIL_API_URL`) is kept wired only as a legacy fallback — `GET /api/integrations/click2mail/addresses` now reports `replacedBy: 'lob'` and is not used by either default send path.
 
 ## TradelineMaster (wired)
 

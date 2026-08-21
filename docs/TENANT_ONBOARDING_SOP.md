@@ -1,5 +1,5 @@
 # SmartFCRA Supreme — B2B Tenant Onboarding SOP (v1.0)
-## Multi-Tenant Setup, Cloudflare Pages, D1 Database, Stripe Webhooks, & Click2Mail Integrations
+## Multi-Tenant Setup, Cloudflare Pages, D1 Database, Stripe Webhooks, & Lob Print & Mail Integrations
 
 ---
 
@@ -48,9 +48,13 @@ Navigate to **Settings** -> **Environment Variables** in the Cloudflare Pages pr
 | `ENVIRONMENT` | Text | `production` or `staging` |
 | `STRIPE_SECRET_KEY` | Secret | Private API key for managing tenant subscription verification. |
 | `STRIPE_WEBHOOK_SECRET` | Secret | Cryptographic signing secret for verifying inbound webhook events. |
-| `CLICK2MAIL_USERNAME` | Secret | Tenant-specific Click2Mail account username. |
-| `CLICK2MAIL_PASSWORD` | Secret | Tenant-specific Click2Mail account password / token. |
-| `CLICK2MAIL_XML_URL` | Text | `https://xml.click2mail.com` (Production API endpoint) |
+| `LOB_SECRET_KEY` | Secret | Tenant/platform Lob API secret key (HTTP Basic username; `test_`/`live_` prefix selects mode). Primary mailing vendor — required for any certified/first-class send. |
+| `LOB_MODE` | Text | `test` or `live` (only needed if the key has no prefix). |
+| `LOB_WEBHOOK_SECRET` | Secret | Reserved for a future Lob delivery-tracking webhook. |
+| `MAILING_WEBHOOK_SECRET` | Secret | Generic mailing-status callback guard (`POST /api/billing/mailing-callback`) — vendor-agnostic. |
+| `CLICK2MAIL_USERNAME` | Secret | **Legacy fallback only** — no longer used by default send paths. |
+| `CLICK2MAIL_PASSWORD` | Secret | **Legacy fallback only.** |
+| `CLICK2MAIL_XML_URL` | Text | **Legacy fallback only** — `https://xml.click2mail.com` |
 | `JWT_ACCESS_SECRET` | Secret | High-entropy signing key for user session and auth tokens. |
 | `PRIMARY_OWNER_CONTACT` | Text | `support@rjbusinesssolutions.org` (Compliance escalation point) |
 
@@ -106,7 +110,7 @@ Monetization is tightly wired into the onboarding path. Tenant spaces are dynami
 1. Set up three main subscription tiers in the tenant's Stripe Dashboard:
    * **Starter Plan**: Standard consumer file analysis (capped at 5 reports/month).
    * **Operator Plan**: Professional B2B credit repair dashboard with dispute letter templates (up to 50 reports/month).
-   * **Enterprise Plan**: Unlimited ingestion, private-labeled dispute letters, API integrations, and direct Click2Mail automated workflows.
+   * **Enterprise Plan**: Unlimited ingestion, private-labeled dispute letters, API integrations, and direct Lob-automated mailing workflows.
 
 ### 4.2 Webhook Routing Configuration
 1. Configure a new Stripe Webhook Endpoint pointing to:
@@ -121,38 +125,51 @@ Ensure the Stripe Customer Portal is enabled so that business tenants can manage
 
 ---
 
-## 5. Click2Mail API Integration & Certified Mail Callback
+## 5. Lob Print & Mail Integration, Postage Billing & Certified Mail Callback
 
-Automating the delivery of certified dispute letters is a core value proposition of SmartFCRA™ Supreme. Click2Mail allows edge-native delivery of physically printed and USPS certified letters with dynamic return-receipt tracking.
+Automating the delivery of certified dispute letters is a core value proposition of SmartFCRA™ Supreme. **Lob** (`src/lib/lob.ts`) is the primary mailing vendor — it provides edge-native delivery of physically printed and USPS certified letters with return-receipt tracking, dispatched over a standard JSON REST API (HTTP Basic auth, secret key as username). Click2Mail is retained only as a legacy fallback integration and is not called by either default send path.
 
 ### 5.1 Automated Document Compilation
-When an operator approves a letter inside the **Dispute Cockpit Workspace**:
-1. The backend compiles the HTML template into a high-fidelity, black-and-white, standard letter-size PDF (using standard margins to fit double-window envelopes).
-2. The sender address is mapped strictly to the tenant's physical business address, and the recipient is set to the credit bureau's designated dispute address (Equifax, Experian, or TransUnion).
+When an operator (or the client, from the portal) approves a letter for mailing:
+1. The backend renders the letter to HTML (`letterHtmlFromPlainText`) or uses a pre-branded PDF/HTML body, formatted to fit standard letter-size double-window envelopes.
+2. The sender address is mapped strictly to the tenant's firm letterhead settings (or a sensible default), and the recipient is set to the credit bureau's or furnisher's designated dispute address.
 
-### 5.2 Click2Mail XML API Dispatch
-A POST request containing Click2Mail formatting XML and the compiled document is dispatched to:
-`https://xml.click2mail.com/xml/api/documents`
+### 5.2 Postage billing gate (before Lob is ever called)
+Every send first runs through `chargeMailPostage()` (`src/lib/mail-postage.ts`), which resolves postage from, in the org's configured payer order:
+1. **Org prepaid wallet** (`org_mail_credits.balance_cents`) — funded via Stripe Checkout postage packs ($25/$100/$500 tiers, with bonus credit on larger packs).
+2. **Client prepaid wallet** (`client_mail_credits.balance_cents`) — funded the same way, per client.
+3. **Org saved card** — if the org has completed self-serve card unlock (Stripe Checkout setup mode), the letter is auto-charged to the saved payment method. Card data is held by Stripe only; it is never written to repo files or environment secrets.
+4. **Comped** — orgs flagged `billing_comped` / `postage_comped` mail for free (used for demo/sandbox tenants).
 
-Example payload structure for USPS Certified Mail with Return Receipt:
-```xml
-<document>
-  <username>${CLICK2MAIL_USERNAME}</username>
-  <password>${CLICK2MAIL_PASSWORD}</password>
-  <documentClass>Certified Mail</documentClass>
-  <layoutName>Letter 8.5 x 11</layoutName>
-  <productionType>Print and Mail</productionType>
-  <envelopeType>Double Window</envelopeType>
-  <deliveryType>Certified Mail with Electronic Return Receipt</deliveryType>
-</document>
+If none of the above can cover the cost, the send is blocked with `MAIL_POSTAGE_REQUIRED` (no funds, no card) or `MAIL_CARD_REQUIRED` (org policy requires org-pay and no card is on file) — the API returns this **before** any request reaches Lob. Every charge, purchase, and comped send writes an entry to `mail_postage_ledger`.
+
+### 5.3 Lob API Dispatch
+Once postage clears, the compiled letter is dispatched via `sendLetterViaLob()`:
+
+```
+POST https://api.lob.com/v1/letters
+Authorization: Basic base64(LOB_SECRET_KEY:)
+Content-Type: application/json
+
+{
+  "description": "FCRA § 611 dispute — <account>",
+  "to": { "name": "...", "address_line1": "...", "address_city": "...", "address_state": "...", "address_zip": "...", "address_country": "US" },
+  "from": { "name": "...", "company": "...", "address_line1": "...", ... },
+  "file": "<rendered letter HTML>",
+  "color": false,
+  "double_sided": true,
+  "mail_type": "usps_first_class",
+  "extra_service": "certified_return_receipt",
+  "use_type": "operational"
+}
 ```
 
-### 5.3 Click2Mail Tracking & Certified Callback Route
-To feed the tracking status back into the tenant's active dashboard, click2mail triggers webhook notifications upon delivery milestones.
-1. The tenant system registers a callback URL:
-   `https://[tenant-subdomain].pages.dev/api/v1/disputes/callback-tracker`
-2. When USPS scans the certified barcode, Click2Mail POSTs status updates (e.g., `In Transit`, `Out for Delivery`, `Delivered`).
-3. The system captures this payload, updates the `disputes` table, records the digital return receipt, and highlights the successful delivery in green inside the client's timeline.
+`mail_type` maps from the resolved mail class (`usps_first_class` / `usps_standard`); `extra_service: certified_return_receipt` is added only for certified mail. Address verification is available via `POST /api/integrations/lob/verify-address` → Lob's `POST /v1/us_verifications`.
+
+### 5.4 Tracking, Investigation Clocks & Callback Route
+1. Lob's synchronous response (`letter.id`, `expected_delivery_date`, `tracking_number`) is written to `documents.mailing_id` / `documents.mail_class` immediately — no polling required to know the send succeeded.
+2. An `investigation_clocks` row is created in the same request: FCRA § 611 30-day statutory deadline + 35-day operational (mail-buffer) deadline.
+3. A generic, vendor-agnostic status callback remains available for any mailing vendor (including Lob, once a delivery-tracking webhook is wired) at `POST /api/billing/mailing-callback`, guarded by `MAILING_WEBHOOK_SECRET`. Payloads are persisted to `mailing_webhook_events` and update `documents.usps_tracking_number` / `response_due_date`. `LOB_WEBHOOK_SECRET` is reserved for a Lob-specific signed webhook once that route is implemented — today Lob status is push-only from the initial send response.
 
 ---
 

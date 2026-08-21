@@ -15,7 +15,7 @@ The complete, master technical single-source-of-truth (SSOT) specifying all plat
 - **Authentication**: MFA TOTP setups, session validations, zero-trust deactivation checks.
 - **B2B Tenant Isolation**: Automatic `org_id` scoped queries preventing data leakages.
 - **Client & Reports**: PII encrypted fields, 3B MyFreeScoreNow (MFSN) report mappings.
-- **Legal Document Generation**: Standardized template compilation, automated Click2Mail mailing dispatch.
+- **Legal Document Generation**: Standardized template compilation, automated Lob Print & Mail dispatch (Click2Mail retained as legacy fallback only).
 - **Platform Control Center**: Super admin overrides, telemetry statistics, tenant limit configurations, suspension toggles.
 
 ---

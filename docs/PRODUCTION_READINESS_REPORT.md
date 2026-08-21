@@ -37,10 +37,10 @@ Check: `GET /api/health/ready`
 | `db` + `encryptionKey` | Required for `ready: true` |
 | `stripe` / email providers | Billing + client email |
 | `mfsn` / `smartcredit` | Live credit pulls (operator secrets) |
-| `click2mail` | Certified mail send |
+| `lob` | Certified / first-class / standard mail send (primary vendor; Click2Mail retained as legacy fallback) |
 | `letterBranding` / `letterStrategy` / `bureauReplyIntel` | Feature flags for this release |
 
-Production D1 has migrations **0001–0015** applied (verified via Wrangler).
+Production D1 has migrations **0001–0039** applied (verified via Wrangler), including `0038_mail_postage_billing.sql` and `0039_mail_card_unlock.sql`.
 
 ---
 
@@ -58,7 +58,7 @@ Flow: Upload/API → Parse → Violations + Factcheck → Letter Strategy → Fi
 2. **Settings → Firm Letterhead** — firm name, address, logo, hired-advocate flags (once per org).  
 3. **Ingest** ACR PDFs and/or MFSN (and SmartCredit when keys are set).  
 4. **Review** violations + LVS; run **Launch Workflow** (intelligent pack) or `POST /api/documents/recommend`.  
-5. **Send** branded PDFs / Click2Mail; track dispute rounds.  
+5. **Send** branded PDFs via Lob (postage charged from org/client wallet or saved card first); track dispute rounds.  
 6. **Upload bureau replies** (category: Creditor/Bureau Reply) with OCR text — file auto-updates.  
 7. **Daily** motivation + ops crons keep clients engaged while rounds run.
 
@@ -72,7 +72,8 @@ Demo staff login: `demo@example.com` / `demo123456`
 
 1. **Wire live MFSN org credentials** if selling MFSN pull as a feature (`MFSN_EMAIL`, `MFSN_PASSWORD`, `MFSN_CLIENT_TOKEN`).  
 2. **Wire SmartCredit client key/secret** for non-PDF SmartCredit imports (`smartcredit: false` on ready probe today).  
-3. **Rotate any Cloudflare/API tokens pasted in chat.**
+3. **Set `LOB_SECRET_KEY`** (or `LOB_TEST_SECRET_KEY`/`LOB_LIVE_SECRET_KEY` + `LOB_MODE`) on the Pages project — mailing is unusable without it.  
+4. **Rotate any Cloudflare/API tokens pasted in chat.**
 
 ### High
 
@@ -105,7 +106,8 @@ Run: `npm run test:unit`
 - [ ] Seed first real client with complete profile  
 - [ ] Ingest one ACR or MFSN tri-bureau pull  
 - [ ] Launch workflow — verify firm name on PDF  
-- [ ] Send one Click2Mail test (or download PDF)  
+- [ ] Set `LOB_SECRET_KEY` (test or live) and send one Lob test (or download PDF)  
+- [ ] Fund an org postage wallet or add a firm card so mail sends aren't blocked by `MAIL_POSTAGE_REQUIRED` / `MAIL_CARD_REQUIRED`  
 - [ ] Upload a sample bureau reply with text — confirm classification  
 - [ ] Confirm daily motivation cron secret + GitHub Actions enabled  
 - [ ] Set `ENVIRONMENT=production` (already) and rotate secrets

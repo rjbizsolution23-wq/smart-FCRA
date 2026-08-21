@@ -76,6 +76,7 @@ export function registerTenantRoutes(
         primaryColor: body.primaryColor || body.primary_color,
         secondaryColor: body.secondaryColor || body.secondary_color,
         logoUrl: body.logoUrl || body.logo_url,
+        logoBase64: body.logoBase64 || body.logo_base64,
         timezone: body.timezone,
         plan: body.plan || 'professional',
         attributionMode: body.attributionMode || body.attribution_mode || 'powered_by',

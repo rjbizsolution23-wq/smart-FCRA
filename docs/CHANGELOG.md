@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.9.0] - 2026-08-20
+### Added
+- **Lob Print & Mail replaces Click2Mail as the primary mailing vendor.** `src/lib/lob.ts` — HTTP Basic auth, test/live key normalization, `POST /v1/letters`, `POST /v1/us_verifications` address verification, mail-class mapping (first-class / standard / certified + return receipt). Click2Mail (`src/lib/click2mail.ts`) is kept only as a legacy fallback (`GET /api/integrations/click2mail/addresses` now reports `replacedBy: 'lob'`).
+- `GET /api/integrations/lob/status` and `POST /api/integrations/lob/verify-address` (`src/lib/support-crm-routes.ts`).
+- Both mailing send paths — staff `POST /api/documents/:id/send` and client-portal `POST /api/client-portal/disputes/:id/send` — now call `sendLetterViaLob()`.
+- **Mail postage billing**: prepaid org/client wallets (`org_mail_credits`, `client_mail_credits`, `mail_postage_ledger`; migration `0038`). `chargeMailPostage()` (`src/lib/mail-postage.ts`) gates every Lob send — org-first / client-first / comped payer modes, Stripe Checkout to fund packs.
+- **Self-serve card unlock**: orgs can attach a Stripe card (Checkout setup mode) to auto-pay postage per letter with no card data stored in repo/env secrets (`card_on_file`, `mail_unlocked`, `default_payment_method_id`; migration `0039`).
+- `LOB_SECRET_KEY` / `LOB_API_KEY` / `LOB_PUBLISHABLE_KEY` / `LOB_TEST_*` / `LOB_LIVE_*` / `LOB_MODE` / `LOB_WEBHOOK_SECRET` env bindings.
+
 ## [3.8.0] - 2026-08-14
 ### Added
 - Migration `0024_tenant_session_compliance.sql`: session last-seen / last-path / demo isolation / revoke-without-delete, `session_events`, demo + lead IP/UA, org indexes.

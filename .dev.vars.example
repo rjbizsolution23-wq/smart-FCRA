@@ -23,6 +23,18 @@ FREE_AI_ONLY=true
 # GoHighLevel CRM sync
 # GHL_PIT_TOKEN=pit-xxxxxxxx
 # GHL_LOCATION_ID=
+# Lob Print & Mail — PRIMARY mailing vendor (https://dashboard.lob.com/settings/api-keys)
+# LOB_SECRET_KEY=test_xxxxxxxx
+# LOB_MODE=test
+# LOB_TEST_SECRET_KEY=
+# LOB_TEST_PUBLISHABLE_KEY=
+# LOB_LIVE_SECRET_KEY=
+# LOB_LIVE_PUBLISHABLE_KEY=
+# LOB_WEBHOOK_SECRET=
+# MAILING_WEBHOOK_SECRET=
+# Click2Mail — legacy fallback only, not used by default send paths
+# CLICK2MAIL_USERNAME=
+# CLICK2MAIL_AUTH_BASIC=
 # TradelineMaster (RJ Business Solutions — 12.5% markup)
 # TRADELINEMASTER_USER_KEY=
 # TRADELINEMASTER_PASS_KEY=

@@ -22,6 +22,7 @@ export type ProvisionTenantInput = {
   primaryColor?: string;
   secondaryColor?: string;
   logoUrl?: string;
+  logoBase64?: string;
   timezone?: string;
   plan?: string;
   attributionMode?: 'powered_by' | 'minimal' | 'hidden';
@@ -43,6 +44,18 @@ export type ProvisionTenantResult = {
 
 function slugFromName(name: string, orgId: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40) + '-' + orgId.slice(0, 8);
+}
+
+/** Guard against oversized/malformed logo data-URIs before they land in org settings JSON. */
+const LOGO_DATA_URI_RE = /^data:image\/(png|jpe?g|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/;
+const MAX_LOGO_DATA_URI_LENGTH = 2_100_000; // ~1.5MB binary, base64-inflated + headroom
+
+function validateLogoBase64(logoBase64?: string): string | undefined {
+  const v = String(logoBase64 || '').trim();
+  if (!v) return undefined;
+  if (v.length > MAX_LOGO_DATA_URI_LENGTH) throw new Error('Logo image is too large (max ~1.5MB)');
+  if (!LOGO_DATA_URI_RE.test(v)) throw new Error('Logo must be a PNG, JPEG, WEBP, or SVG data URI');
+  return v;
 }
 
 export async function provisionTenant(
@@ -89,6 +102,7 @@ export async function provisionTenant(
     primaryColor: input.primaryColor,
     secondaryColor: input.secondaryColor,
     logoUrl: input.logoUrl,
+    logoBase64: validateLogoBase64(input.logoBase64),
     timezone: input.timezone,
     plan,
     attributionMode: input.attributionMode,
