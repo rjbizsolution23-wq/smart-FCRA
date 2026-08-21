@@ -19,7 +19,7 @@ graph TD
     Worker --> Stripe[Stripe]
     Worker --> MFSN[MyFreeScoreNow]
     Worker --> SC[SmartCredit]
-    Worker --> C2M[Click2Mail]
+    Worker --> Lob[Lob Print & Mail]
     Worker --> Email[CF Email / Resend / SendGrid]
     Worker --> AI[Free AI cascade]
 ```
@@ -30,7 +30,7 @@ graph TD
 2. **Analyze** — `detectViolations` + Metro 2 + fact-check → LVS  
 3. **Strategize** — `letter-strategy` picks the right letter pack  
 4. **Brand** — org letterhead on letter body + PDF  
-5. **Act** — Click2Mail / download / e-sign  
+5. **Act** — Lob mail (postage-gated) / download / e-sign  
 6. **Learn** — bureau reply upload classification updates the file  
 7. **Engage** — daily motivation + ops cron packs  
 

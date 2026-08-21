@@ -4,7 +4,7 @@
 **Operator:** RJ Business Solutions  
 **Stores:** Cloudflare D1 (system of record), R2 `DOCS` (binaries + backups), Workers KV (rate-limit counters only), browser `localStorage` (session pointer, not the record)  
 **Live inventory API:** `GET /api/compliance/data-inventory` (staff)  
-**Source of truth in code:** `src/lib/data-compliance.ts` + `migrations/0001`–`0024`
+**Source of truth in code:** `src/lib/data-compliance.ts` + `migrations/0001`–`0039`
 
 This document lists **every collection the platform stores**, **how tenants and sessions are isolated**, and **which laws those records satisfy**. It is an operator map, not marketing copy.
 
@@ -47,7 +47,10 @@ Apply D1 migration **`0024_tenant_session_compliance.sql`** (after 0021–0023) 
 | `email_verification_tokens` | D1 | via user | yes | Email verify secrets | Until used/expired (deleted) |
 | `password_reset_tokens` | D1 | via user | yes | Reset secrets | Until used/expired (deleted) |
 | `mfa_challenges` | D1 | via user | yes | Short MFA login challenges | Minutes (deleted) |
-| `mailing_webhook_events` | D1 | no | possible | Click2Mail webhooks | 2 years |
+| `mailing_webhook_events` | D1 | no | possible | Mailing vendor (Lob primary, Click2Mail legacy) status webhooks | 2 years |
+| `org_mail_credits` | D1 | yes | no | Org prepaid postage wallet, comped flag, card-on-file/unlock state | Life of tenant |
+| `client_mail_credits` | D1 | yes | no | Client prepaid postage wallet | Case life |
+| `mail_postage_ledger` | D1 | yes | light | Postage purchase/charge audit trail (payer, mail class, amount, balance after) | 7 years billing |
 | `portal_messages` | D1 | yes | yes | Staff ↔ consumer messages | Case life |
 | `portal_uploads` | D1 | yes | **heavy** | Vault metadata + R2 key | Case life; R2 deleted on purge |
 | `education_progress` | D1 | yes | light | Lessons | Case life |
@@ -110,7 +113,7 @@ There are **no** tables named `credit_accounts`, `consent_records`, `mfsn_member
 | Control | Law / rule | What is stored | Status |
 |---|---|---|---|
 | Permissible purpose | FCRA § 604 / 15 U.S.C. § 1681b | `clients.permissible_purpose_consent`, `client_consents` | Enforced at ingest |
-| Reinvestigation clocks | FCRA § 611 / 15 U.S.C. § 1681i | `investigation_clocks` 30-day statutory + 35-day operational | Enforced on Click2Mail |
+| Reinvestigation clocks | FCRA § 611 / 15 U.S.C. § 1681i | `investigation_clocks` 30-day statutory + 35-day operational | Enforced on every Lob send (Click2Mail legacy fallback) |
 | Obsolete / DOFD education | FCRA § 605 / 15 U.S.C. § 1681c | Report sandbox education; **no guaranteed-deletion copy** | Enforced |
 | File disclosure | FCRA § 609 | Portal report sandbox + privacy export | Enforced |
 | Credit repair contract + cancel | CROA 15 U.S.C. § 1679 | `legal_contracts`, `service_cancellations`, `service_records`, `billing_ledger` | Enforced |

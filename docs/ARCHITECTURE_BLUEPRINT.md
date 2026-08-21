@@ -43,7 +43,10 @@ flowchart TB
 
   subgraph outbound [Outbound]
     Email[Cloudflare Email / Resend / SendGrid]
-    C2M[Click2Mail certified]
+    Postage[Postage wallet gate
+org / client / card]
+    Lob[Lob Print & Mail
+first-class / standard / certified]
     SMS[Twilio SMS optional]
     Cron[Ops + daily motivation crons]
   end
@@ -60,7 +63,7 @@ flowchart TB
   Brand --> PDF
   Docs --> D1
   Docs --> PDF
-  Docs --> C2M
+  Docs --> Postage --> Lob
   Pages --> R2
   Consumer -->|upload reply| Reply --> D1
   Pages --> Email
@@ -93,7 +96,7 @@ sequenceDiagram
   App->>Brand: Load firm letterhead
   Brand-->>App: Firm header + PDF logo
   App-->>Staff: Branded draft letters
-  Staff->>App: Send via Click2Mail / download PDF
+  Staff->>App: Send via Lob (postage charged first) / download PDF
   Bureau-->>Client: Investigation results
   Client->>App: Upload reply (OCR text)
   App->>App: classifyBureauReply → update file
@@ -151,13 +154,26 @@ Mentors (`lib/mentors.ts`) are AI explainers — the production pipeline is dete
 
 ---
 
+## 6.5 Mailing & postage billing (Lob)
+
+Lob (`src/lib/lob.ts`) is the **primary** mailing vendor — Click2Mail (`src/lib/click2mail.ts`) is retained only as a legacy fallback and is no longer called by either default send path.
+
+1. Staff or client approves a document/dispute for mailing.
+2. `chargeMailPostage()` (`src/lib/mail-postage.ts`) charges postage **before** Lob is called: org wallet → client wallet → org saved card → comped, per the org's `mail_postage_payer` setting. Insufficient funds/no card returns `MAIL_POSTAGE_REQUIRED` / `MAIL_CARD_REQUIRED` and blocks the send.
+3. `sendLetterViaLob()` posts the letter to Lob (`POST /v1/letters`), selecting `usps_first_class` / `usps_standard` and optional `certified_return_receipt`.
+4. Response (`mailing_id`, `mail_class`, tracking) is written to `documents`; an `investigation_clocks` row starts the FCRA § 611 30-day statutory / 35-day operational clock.
+5. Org/client postage wallets are funded via Stripe Checkout (prepaid packs) or auto-charged to a Stripe-held card (`card_on_file` / `mail_unlocked` on `org_mail_credits` — card data lives only in Stripe, never in repo/env secrets). Every charge/credit writes `mail_postage_ledger`.
+
+---
+
 ## 7. Data model (core)
 
 `organizations` (settings JSON = branding) → `users` / `sessions` → `clients` → `credit_reports` → `violations` → `documents`  
 Portal: `portal_uploads`, `portal_messages`, `portal_alerts`, journey/tutor tables  
 Comms: `email_delivery_log`, `scheduled_job_runs`  
+Mailing/postage: `org_mail_credits`, `client_mail_credits`, `mail_postage_ledger`  
 Vault: R2 keys on `portal_uploads`  
-Migrations: `0001`–`0015` (all applied on production D1).
+Migrations: `0001`–`0039` (all applied on production D1).
 
 ---
 
@@ -165,13 +181,15 @@ Migrations: `0001`–`0015` (all applied on production D1).
 
 | Gate | Status |
 |------|--------|
-| D1 migrations 0001–0015 | Applied remotely |
+| D1 migrations 0001–0039 | Applied remotely |
 | `/api/health` + `/api/health/ready` | Live |
 | Firm letterhead → PDF/body | Wired |
 | Intelligent letter pack | Wired (`letter-strategy` + workflow) |
 | Bureau reply classify | Wired |
 | SmartCredit sandbox in prod | Blocked |
 | MFSN / SmartCredit secrets | Operator — see readiness probe |
+| Lob mailing (`LOB_SECRET_KEY`) | Operator — set on Pages project |
+| Mail postage billing (Stripe packs + card unlock) | Wired (`src/lib/mail-postage*.ts`) |
 | Twilio SMS / RON vendor | Optional |
 | Stripe webhook secret | Optional but recommended |
 

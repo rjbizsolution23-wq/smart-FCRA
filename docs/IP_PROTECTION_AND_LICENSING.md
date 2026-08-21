@@ -103,8 +103,8 @@ graph TD
 * **The Mechanism**: An atomic ledger records processed Stripe webhook event IDs in the database. Duplicate events are silently caught and ignored, preventing subscription bypass attacks.
 
 ### 📬 Layer D: Secure Webhook Handshakes
-* **The Protection**: Protects automated mailing channels (Click2Mail integration) from spoofing attacks.
-* **The Mechanism**: Click2Mail callback trackers require explicit secret verification parameters to execute, ensuring only legitimate postal tracking logs can update legal case clocks.
+* **The Protection**: Protects automated mailing channels (Lob Print & Mail integration, primary; Click2Mail retained as legacy fallback only) from spoofing attacks.
+* **The Mechanism**: Mailing callback trackers require explicit secret verification parameters (`MAILING_WEBHOOK_SECRET`) to execute, ensuring only legitimate postal tracking logs can update legal case clocks. Postage is charged from a prepaid org/client wallet or a Stripe-held card **before** any letter is dispatched to Lob — no card numbers are ever stored in platform secrets or files.
 
 ---
 

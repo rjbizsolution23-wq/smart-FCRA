@@ -67,7 +67,7 @@ Defined in `window._nav` in `public/static/app.js`.
 | `violations` | Violations | Org-wide violation queue |
 | `documents` | Documents | Generated letters / PDFs |
 | `compliance` | Compliance Hub | Disclaimers, consent, legal status |
-| `mailing` | Mailing Campaigns | Click2Mail / certified campaigns |
+| `mailing` | Mailing Campaigns | Lob first-class / standard / certified campaigns (postage-gated); Click2Mail legacy fallback |
 | `founder-os` | Founder OS | Owner operating system |
 | `sales-tools` | Sales Tools | ROI, pitch, close tools |
 | `tradelines` | Tradelines | TradelineMaster inventory, filters, cart, order, smart match, GHL sync |
@@ -75,7 +75,7 @@ Defined in `window._nav` in `public/static/app.js`.
 | `product-map` | Product map | In-app catalog of every feature + finish-up list |
 | `roi-calculator` | ROI Calculator | Deal math |
 | `team` | Team | Users, roles, invites |
-| `settings` | Settings | Integrations (GHL, MFSN, Twilio, Stripe, Click2Mail, TradelineMaster), security, brand |
+| `settings` | Settings | Integrations (GHL, MFSN, Twilio, Stripe, Lob Mail, TradelineMaster), security, brand |
 | `ai-studio` | AI Studio | Mentors, prompts, usage |
 | `billing` | Billing | Org Stripe, plans, invoices |
 | `legal` | Legal | In-app terms / privacy / disclaimers |
@@ -97,7 +97,7 @@ Shown when `isClient` is true. Analysis / letters stay **locked** until staff ru
 | `client-report` | Report sandbox | Scrollable paper copy in a scriptless iframe; original PDF tab when vaulted; jump to accounts; payment-history legend; hard/soft inquiries; print; Confirm facts. Owner-only. |
 | `client-case` | My Credit Case | Disputes, findings (not auto-labeled as FCRA violations), action receipts |
 | `client-attest` | Confirm Facts | Structured interview; immutable attestations; identity-theft gate |
-| `client-disputes` | Disputes | Evidence-first drafts; client approval; **mail via Click2Mail** starts the 30-day FCRA § 611 clock |
+| `client-disputes` | Disputes | Evidence-first drafts; client approval; **mail via Lob** (postage charged first) starts the 30-day FCRA § 611 clock |
 | `client-actions` | Action Plan | One primary consumer action |
 | `client-progress` | Progress | Measured report-to-report changes |
 | `client-rights` | Consumer Rights | FCRA / CROA / TSR / FDCPA / identity-theft education |
@@ -149,7 +149,7 @@ Shown when `isClient` is true. Analysis / letters stay **locked** until staff ru
 | `scoring.ts` | Internal scores |
 | `consent.ts` `gdpr.ts` `retention.ts` | Privacy / retention |
 
-Staff flow: upload → parse → detect → **QA review** (`violation-review`) → generate letters → mail (Click2Mail) or client download.
+Staff flow: upload → parse → detect → **QA review** (`violation-review`) → generate letters → mail (Lob, postage-gated) or client download.
 
 ---
 
@@ -162,8 +162,9 @@ Staff flow: upload → parse → detect → **QA review** (`violation-review`) �
 | **TradelineMaster** | Live inventory `GET https://api.tradeline.master/v1/inventory`. **12.5% markup** on client price. Filters (bureau, slots, price, age, limit). Cart + `POST /api/tradelines/orders` + email `tradelines@smartfcra.com` / from `welcome@tradelines.smartfcra.com`. Daily `tradeline_inventory_refresh` job. |
 | **Twilio** | SMS notifications, Verify OTP, Video **tokens**, webhook signature checks. |
 | **Cloudflare Email / Email Routing** | Transactional mail (`src/lib/email.ts`). Ops alerts to `opsEmail`. |
-| **Stripe** | Org billing, checkout, portal, invoices. **No client self-serve unlock checkout yet.** |
-| **Click2Mail** | Certified / first-class letter campaigns. |
+| **Stripe** | Org billing, checkout, portal, invoices. Also powers postage-wallet top-ups and self-serve card-on-file for mail postage. **No client self-serve analysis-unlock checkout yet.** |
+| **Lob** | Primary mailing vendor — certified / first-class / standard letter sends (`src/lib/lob.ts`), gated by prepaid org/client postage wallets or a saved org card (`src/lib/mail-postage.ts`). `GET /api/integrations/lob/status`, `POST /api/integrations/lob/verify-address`. |
+| **Click2Mail (legacy)** | Retained as a fallback integration only; no longer used by default send paths. `GET /api/integrations/click2mail/addresses` reports `replacedBy: 'lob'`. |
 | **Proof (RON)** | Remote online notarization sessions — sandbox unless live keys. |
 | **Cloudflare Turnstile** | Login / register captcha when keys present. Brand forms currently show a **placeholder**, not a live widget. |
 | **Sentry** | Optional error reporting. |
@@ -214,13 +215,13 @@ Migrations live in `migrations/` (`0001`–`0024`). Newest: `0024_tenant_session
 - GHL custom fields + tags + CRM/MFSN bulk sync
 - TradelineMaster marketplace (markup, filters, match, order, email, daily refresh)
 - RJ brand kit at `/brand` + 8 interactive forms + `brand_leads` API
-- Twilio / Email / Stripe org billing / Click2Mail wiring
+- Twilio / Email / Stripe org billing / Lob mail + postage wallet wiring
 - Free-only AI cascade
 - Demo staff + Salisha client
 - **Twilio Video JS** on client Video (live room when keys set; local preview otherwise)
 - **Cloudflare Turnstile** on brand forms (`GET /api/public/turnstile` + siteverify when secret set)
 - **Executive Overview sparkline** bound to last 6 months of paid tradeline orders (falls back to estimated pipeline)
-- **Click2Mail** status from `GET /api/settings/integrations`
+- **Lob** status from `GET /api/integrations/lob/status` (legacy Click2Mail status from `GET /api/settings/integrations`)
 - **Nav** — duplicate Clients + Report History removed from sidebar (history lives on Reports)
 - **Client Stripe checkout** `POST /api/client-portal/unlock/checkout` + webhook `analysis_unlock`
 - **RON sandbox vs live** banners on Legal + Compliance Hub
@@ -233,7 +234,8 @@ Migrations live in `migrations/` (`0001`–`0024`). Newest: `0024_tenant_session
 - **Client intelligence portal** — evidence-first disputes, immutable attestations, hallucination firewall, credit event ledger, CROA in-portal cancellation, named score models, mobile Home/Credit/Case/Actions/More nav. Removed FICO deletion simulator / guaranteed-lift copy.
 - **Report sandbox** — scrollable paper copy of the imported report in a scriptless iframe; original file tab when stored in R2; owner-only API; SSN redacted; payment-history grid + legend; hard vs soft inquiries; FCRA § 605 DOFD education; print paper copy; Confirm facts from a tradeline. Viewing is not a dispute.
 - **Upload hygiene + original vault** — magic-byte malware gates; original PDF/JSON stored on R2 `DOCS`; blocked files are not downloadable.
-- **FCRA § 611 clocks** — every Click2Mail send writes `investigation_clocks` (30-day statutory / 35-day operational).
+- **FCRA § 611 clocks** — every Lob send writes `investigation_clocks` (30-day statutory / 35-day operational).
+- **Postage billing** — org/client prepaid wallets + self-serve card-on-file gate every Lob send (`org_mail_credits`, `client_mail_credits`, `mail_postage_ledger`).
 - **CROA ledger** — `service_records` on analysis and mailing; Stripe analysis-unlock blocked until completion.
 - **Tenant + session persistence (0024)** — every session kept after logout (`revoked_at`, last-seen, IP/UA); demo visitors isolated; brand leads org-scoped; full privacy export/purge + R2 delete; legal hold setter; catalog at `docs/DATA_AND_COMPLIANCE.md` / `GET /api/compliance/data-inventory`.
 
@@ -249,7 +251,7 @@ Production notarization, Turnstile, and Stripe unlock need Cloudflare Pages secr
 2. Collect ID / SSN / proof in vault; pull or upload credit report (MFSN or PDF).
 3. Staff **unlocks analysis**.
 4. Engine runs → staff QA on Violation Review.
-5. Generate letters → mail via Click2Mail and/or portal download.
+5. Generate letters → mail via Lob (postage charged first) and/or portal download.
 6. Journey moves New → Onboarding → Analysis → Disputes → Fundability → Funded.
 7. Optional: match AU tradelines (educational), send order email to TradelineMaster.
 8. Optional: business funding qualify via brand form + fundability engine.

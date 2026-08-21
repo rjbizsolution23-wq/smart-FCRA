@@ -42,9 +42,12 @@ wrangler secret put STRIPE_ENTERPRISE_PRICE_ID
 wrangler secret put RESEND_API_KEY
 wrangler secret put SMARTCREDIT_CLIENT_KEY
 wrangler secret put SMARTCREDIT_CLIENT_SECRET
-wrangler secret put CLICK2MAIL_USERNAME
-wrangler secret put CLICK2MAIL_AUTH_BASIC
+wrangler secret put LOB_SECRET_KEY          # primary mailing vendor — required for any mail send
+wrangler secret put LOB_MODE                # "test" or "live" (skip if key has test_/live_ prefix)
 wrangler secret put MAILING_WEBHOOK_SECRET
+# Legacy fallback only — no longer used by default send paths, safe to skip on new deploys
+# wrangler secret put CLICK2MAIL_USERNAME
+# wrangler secret put CLICK2MAIL_AUTH_BASIC
 wrangler secret put PLATFORM_BOOTSTRAP_EMAIL   # optional
 wrangler secret put PLATFORM_BOOTSTRAP_PASSWORD # optional
 wrangler secret put SENTRY_DSN                 # optional
@@ -57,6 +60,7 @@ wrangler pages secret put STAFF_MFA_REQUIRED_ALL  # optional: "true" to require 
 ```bash
 npx wrangler d1 migrations apply fcra-detector-v2 --remote
 # Includes 0009_roadmap_progress.sql for interactive fundability wizards
+# Includes 0038_mail_postage_billing.sql + 0039_mail_card_unlock.sql for Lob postage wallets/card unlock
 ```
 
 6. Deploy: `npm run deploy` → Pages project `smart-fcra-v2` only
@@ -72,6 +76,10 @@ npx wrangler d1 migrations apply fcra-detector-v2 --remote
 - [x] Upload hygiene (magic bytes / executable block / OCR gate)
 - [x] FCRA § 611 investigation clocks on every mailing
 - [x] CROA completion ledger gating Stripe analysis-unlock
+- [x] Lob Print & Mail is the primary mailing vendor (`src/lib/lob.ts`); Click2Mail kept only as legacy fallback
+- [x] Mail postage billing: org/client prepaid wallets + self-serve card unlock gate every Lob send (`src/lib/mail-postage.ts`)
+- [ ] **Operator action:** set `LOB_SECRET_KEY` on the Pages project — without it every mail send returns 503 "Mail vendor is not configured"
+- [ ] **Operator action:** fund an org postage wallet (Settings → Lob Mail) or add a firm card, or mail sends return `MAIL_POSTAGE_REQUIRED` / `MAIL_CARD_REQUIRED`
 
 ## GitHub Actions secrets (required to publish)
 
