@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Start Your Branded Platform — Smart FCRA by RJ Business Solutions</title>
+<link rel="stylesheet" href="../brand.css">
+<link rel="stylesheet" href="forms.css">
+<style>
+  .live-preview{border-radius:14px;overflow:hidden;border:1px solid var(--rj-line);box-shadow:var(--rj-shadow);margin-bottom:22px}
+  .live-preview .lp-bar{display:flex;align-items:center;gap:10px;padding:12px 16px;color:#fff;font-family:var(--font-head);font-weight:600}
+  .live-preview .lp-bar img{width:30px;height:30px;border-radius:8px;object-fit:contain;background:rgba(255,255,255,0.9);padding:2px}
+  .live-preview .lp-bar .lp-logo-fallback{width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:12px}
+  .live-preview .lp-body{padding:14px 16px;background:#0f172a0d;font-size:12px;color:var(--rj-muted-text)}
+  .live-preview .lp-url{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--rj-blue)}
+  .logo-drop{border:1.5px dashed var(--rj-border);border-radius:10px;padding:16px;text-align:center;cursor:pointer;background:var(--rj-light)}
+  .logo-drop:hover{border-color:var(--rj-blue)}
+  .logo-drop img{max-height:60px;max-width:100%;object-fit:contain}
+  .color-row{display:flex;gap:14px}
+  .color-field{display:flex;flex-direction:column;gap:6px;flex:1}
+  .color-field input[type="color"]{width:100%;height:44px;border-radius:10px;border:1px solid var(--rj-line);cursor:pointer;padding:2px}
+  .plan-tiles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .plan-tile{border:2px solid var(--rj-line);border-radius:12px;padding:16px;cursor:pointer;text-align:center}
+  .plan-tile.selected{border-color:var(--rj-blue);background:var(--rj-light)}
+  .plan-tile .amt{font-family:var(--font-head);font-weight:700;font-size:1.3rem;color:var(--rj-navy)}
+  .plan-tile .name{font-family:var(--font-head);font-weight:600;margin-bottom:4px}
+  .plan-tile .desc{font-size:11px;color:var(--rj-muted-text);margin-top:6px;line-height:1.4}
+  .sub-avail{font-size:11px;margin-top:4px;font-weight:600}
+  .sub-avail.ok{color:var(--rj-success)}
+  .sub-avail.bad{color:var(--rj-danger)}
+  .subdomain-row{display:flex;align-items:center;gap:6px}
+  .subdomain-row .suffix{font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--rj-muted-text);white-space:nowrap}
+  .submit-err{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:10px;padding:12px 14px;font-size:13px;margin-bottom:14px;display:none}
+  .submit-err.show{display:block}
+  @media (max-width:700px){.plan-tiles{grid-template-columns:1fr}.color-row{flex-direction:column}}
+</style>
+</head>
+<body class="forms-page">
+
+<div class="form-shell" id="app">
+  <div class="form-header">
+    <div class="brand">
+      <img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" alt=""/>
+      <div><div class="n">Smart FCRA</div><div class="t">Start Your Branded Platform</div></div>
+    </div>
+    <div class="save-tag">Auto-saving</div>
+  </div>
+
+  <div class="form-title-block">
+    <div class="kicker">● Self-Serve · Pay → Instant Branded Portal</div>
+    <h1>Your platform,<br/><span>live in minutes.</span></h1>
+    <div class="sub">Pick a plan, tell us your brand, and pay. We auto-build your fully branded tenant — logo, colors, your own subdomain, and an admin login — the moment checkout completes. No waiting on us.</div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-steps">
+      <div class="fill-line" id="fill-line" style="width:0%"></div>
+      <div class="pstep active" data-step="1"><div class="circ">1</div><div class="lbl">Plan</div></div>
+      <div class="pstep" data-step="2"><div class="circ">2</div><div class="lbl">Business</div></div>
+      <div class="pstep" data-step="3"><div class="circ">3</div><div class="lbl">Branding</div></div>
+      <div class="pstep" data-step="4"><div class="circ">4</div><div class="lbl">Your login</div></div>
+    </div>
+  </div>
+
+  <form onsubmit="return false">
+
+    <div class="step-panel active" data-panel="1">
+      <h2><span class="step-of">Step 01 of 04</span>Choose your plan</h2>
+      <div class="step-sub">Billed monthly. Cancel anytime from your portal.</div>
+      <div class="plan-tiles">
+        <div class="plan-tile" data-plan="professional">
+          <div class="name">Professional</div>
+          <div class="amt">$497<span style="font-size:11px;font-weight:500">/mo</span></div>
+          <div class="desc">Up to 100 clients · full violation engine · client portal</div>
+        </div>
+        <div class="plan-tile" data-plan="unlimited">
+          <div class="name">Unlimited</div>
+          <div class="amt">$2,500<span style="font-size:11px;font-weight:500">/mo</span></div>
+          <div class="desc">Unlimited clients · mailing + monitoring imports</div>
+        </div>
+        <div class="plan-tile" data-plan="enterprise">
+          <div class="name">Enterprise</div>
+          <div class="amt">$9,997<span style="font-size:11px;font-weight:500">/mo</span></div>
+          <div class="desc">Full document pack · white-label · API access</div>
+        </div>
+      </div>
+      <div class="error" id="plan-error" style="display:none;color:var(--rj-danger);font-size:11px;font-weight:600;margin-top:10px">Select a plan to continue</div>
+    </div>
+
+    <div class="step-panel" data-panel="2">
+      <h2><span class="step-of">Step 02 of 04</span>Your business</h2>
+      <div class="step-sub">This becomes the name and address on your branded portal and client letters.</div>
+      <div class="field-row">
+        <div class="field"><label>Business Name <span class="req">*</span></label><input type="text" name="businessName" required/><div class="error">Required</div></div>
+        <div class="field"><label>Legal Name (if different)</label><input type="text" name="legalName"/></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Support Phone</label><input type="tel" name="phone"/></div>
+        <div class="field"><label>Support Email</label><input type="email" name="supportEmail"/></div>
+      </div>
+      <div class="field"><label>Street Address</label><input type="text" name="address"/></div>
+      <div class="field-row three">
+        <div class="field"><label>City</label><input type="text" name="city"/></div>
+        <div class="field"><label>State</label><input type="text" name="state" maxlength="2" placeholder="NM"/></div>
+        <div class="field"><label>ZIP</label><input type="text" name="zip"/></div>
+      </div>
+    </div>
+
+    <div class="step-panel" data-panel="3">
+      <h2><span class="step-of">Step 03 of 04</span>Branding &amp; your portal address</h2>
+      <div class="step-sub">This is exactly what you and your clients will see the second checkout completes.</div>
+      <div class="live-preview">
+        <div class="lp-bar" id="lp-bar" style="background:linear-gradient(120deg,#2563eb,#f59e0b)">
+          <div class="lp-logo-fallback" id="lp-logo-fallback">LOGO</div>
+          <img id="lp-logo-img" style="display:none" alt="Logo preview"/>
+          <span id="lp-name">Your Business Name</span>
+        </div>
+        <div class="lp-body">Portal preview · <span class="lp-url" id="lp-url">yourbrand.smartfcra.com</span></div>
+      </div>
+      <div class="field">
+        <label>Company logo (PNG/JPG/WEBP/SVG, max ~1.5MB)</label>
+        <div class="logo-drop" id="logo-drop">
+          <div id="logo-drop-text">Click to upload your logo</div>
+          <input type="file" id="logo-file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display:none"/>
+        </div>
+      </div>
+      <div class="color-row">
+        <div class="color-field"><label>Primary color</label><input type="color" id="primary-color" name="primaryColor" value="#2563eb"/></div>
+        <div class="color-field"><label>Secondary color</label><input type="color" id="secondary-color" name="secondaryColor" value="#f59e0b"/></div>
+      </div>
+      <div class="field">
+        <label>Choose your subdomain <span class="req">*</span></label>
+        <div class="subdomain-row">
+          <input type="text" name="subdomain" id="subdomain-input" required placeholder="yourbrand"/>
+          <span class="suffix">.smartfcra.com</span>
+        </div>
+        <div class="sub-avail" id="sub-avail"></div>
+      </div>
+    </div>
+
+    <div class="step-panel" data-panel="4">
+      <h2><span class="step-of">Step 04 of 04</span>Your admin login</h2>
+      <div class="step-sub">Your temporary password + login link are emailed here the instant payment completes.</div>
+      <div class="field-row">
+        <div class="field"><label>Your Full Name <span class="req">*</span></label><input type="text" name="ownerName" required/><div class="error">Required</div></div>
+        <div class="field"><label>Your Email <span class="req">*</span></label><input type="email" name="ownerEmail" required/><div class="error">Valid email required</div></div>
+      </div>
+      <div class="turnstile-placeholder"></div>
+      <div class="submit-err" id="submit-err"></div>
+      <p style="font-size:11px;color:var(--rj-muted-text);line-height:1.5">By continuing you'll be sent to a secure Stripe checkout. On successful payment, your branded tenant account (organization, portal, and admin login) is created automatically — usually within a few seconds.</p>
+    </div>
+
+    <div class="form-actions" id="actions">
+      <button type="button" class="btn ghost" id="backBtn" style="visibility:hidden">← Back</button>
+      <button type="button" class="btn primary" id="nextBtn">Next Step →</button>
+    </div>
+  </form>
+
+  <div class="backend-note"><b>// Backend</b> · POST /api/public/tenant-signup/start → Stripe Checkout → webhook auto-provisions your tenant via the same engine platform staff use internally.</div>
+</div>
+
+<script>
+(() => {
+  const FORM_ID='tenant-signup'; const TOTAL=4; let step=1;
+  const state={form:FORM_ID, plan:'', logoBase64:'', primaryColor:'#2563eb', secondaryColor:'#f59e0b'};
+  try{Object.assign(state,JSON.parse(localStorage.getItem('rj-'+FORM_ID)||'{}'));}catch(e){}
+  try{
+    const qp = new URLSearchParams(window.location.search);
+    const qPlan = qp.get('plan');
+    if (qPlan && ['professional','unlimited','enterprise'].includes(qPlan)) state.plan = qPlan;
+  }catch(e){}
+  const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
+  const save=()=>{ try{ localStorage.setItem('rj-'+FORM_ID,JSON.stringify(state)); }catch(e){} };
+
+  function updatePreview(){
+    $('#lp-bar').style.background = 'linear-gradient(120deg,' + state.primaryColor + ',' + state.secondaryColor + ')';
+    $('#lp-name').textContent = state.businessName || 'Your Business Name';
+    const sub = (state.subdomain || 'yourbrand').toLowerCase().replace(/[^a-z0-9-]/g,'');
+    $('#lp-url').textContent = (sub || 'yourbrand') + '.smartfcra.com';
+    if (state.logoBase64) {
+      $('#lp-logo-img').src = state.logoBase64;
+      $('#lp-logo-img').style.display = 'block';
+      $('#lp-logo-fallback').style.display = 'none';
+    } else {
+      $('#lp-logo-img').style.display = 'none';
+      $('#lp-logo-fallback').style.display = 'flex';
+    }
+  }
+
+  function goStep(n){
+    step=Math.max(1,Math.min(TOTAL,n));
+    $$('.step-panel').forEach(p=>p.classList.toggle('active',+p.dataset.panel===step));
+    $$('.pstep').forEach(ps=>{const s=+ps.dataset.step;ps.classList.toggle('active',s===step);ps.classList.toggle('done',s<step);});
+    $('#fill-line').style.width=((step-1)/(TOTAL-1))*100+'%';
+    $('#backBtn').style.visibility=step===1?'hidden':'visible';
+    $('#nextBtn').textContent=step===TOTAL?'Continue to secure checkout →':'Next Step →';
+    if (step===3) updatePreview();
+  }
+
+  function validate(){
+    let ok=true;
+    const panel=document.querySelector(`.step-panel[data-panel="${step}"]`);
+    panel.querySelectorAll('input[required],select[required]').forEach(el=>{
+      const f=el.closest('.field');
+      if(!el.value?.trim()||(el.type==='email'&&!/^\S+@\S+\.\S+$/.test(el.value))){f?.classList.add('err');ok=false;}
+      else f?.classList.remove('err');
+    });
+    if(step===1){
+      $('#plan-error').style.display = state.plan ? 'none' : 'block';
+      if(!state.plan) ok=false;
+    }
+    if(step===3){
+      const sub = String(state.subdomain||'').trim();
+      if(!sub || sub.length<3) ok=false;
+      if($('#sub-avail').classList.contains('bad')) ok=false;
+    }
+    return ok;
+  }
+
+  $('#nextBtn').onclick=()=>{
+    const panel=document.querySelector(`.step-panel[data-panel="${step}"]`);
+    panel.querySelectorAll('input,select,textarea').forEach(el=>{
+      if(el.type==='checkbox')state[el.name]=el.checked;
+      else if(el.name)state[el.name]=el.value;
+    });
+    save();
+    if(!validate())return;
+    if(step===TOTAL) submit(); else goStep(step+1);
+  };
+  $('#backBtn').onclick=()=>goStep(step-1);
+
+  // Plan tiles
+  document.addEventListener('click',e=>{
+    const tile=e.target.closest('.plan-tile');
+    if(tile){
+      $$('.plan-tile').forEach(t=>t.classList.toggle('selected',t===tile));
+      state.plan=tile.dataset.plan; save();
+      $('#plan-error').style.display='none';
+    }
+  });
+
+  // Colors
+  $('#primary-color').oninput=(e)=>{ state.primaryColor=e.target.value; save(); updatePreview(); };
+  $('#secondary-color').oninput=(e)=>{ state.secondaryColor=e.target.value; save(); updatePreview(); };
+
+  // Subdomain input + live availability check
+  let subTimer=null;
+  $('#subdomain-input').oninput=(e)=>{
+    state.subdomain = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,''); e.target.value = state.subdomain;
+    save(); updatePreview();
+    const el = $('#sub-avail');
+    el.textContent='Checking…'; el.className='sub-avail';
+    clearTimeout(subTimer);
+    subTimer=setTimeout(()=>{
+      if(!state.subdomain || state.subdomain.length<3){ el.textContent='At least 3 characters'; el.className='sub-avail bad'; return; }
+      fetch('/api/public/tenant-signup/subdomain-check?subdomain='+encodeURIComponent(state.subdomain))
+        .then(r=>r.json())
+        .then(d=>{
+          if(d.available){ el.textContent='✓ Available — '+(d.normalized||state.subdomain)+'.smartfcra.com'; el.className='sub-avail ok'; }
+          else { el.textContent='✗ '+(d.error||'Already taken — try another'); el.className='sub-avail bad'; }
+        })
+        .catch(()=>{ el.textContent=''; });
+    },450);
+  };
+
+  // Logo upload
+  $('#logo-drop').onclick=()=>$('#logo-file').click();
+  $('#logo-file').onchange=(e)=>{
+    const file=e.target.files && e.target.files[0];
+    if(!file) return;
+    if(file.size > 1.5*1024*1024){ alert('Logo must be under ~1.5MB'); return; }
+    const reader=new FileReader();
+    reader.onload=()=>{ state.logoBase64=reader.result; save(); updatePreview(); $('#logo-drop-text').textContent='Logo uploaded — click to replace'; };
+    reader.readAsDataURL(file);
+  };
+
+  function submit(){
+    const btn = $('#nextBtn');
+    btn.disabled = true; btn.textContent = 'Starting secure checkout…';
+    const errBox = $('#submit-err');
+    errBox.classList.remove('show'); errBox.textContent='';
+    const payload = Object.assign({}, state);
+    if (typeof window.rjGetTurnstileToken === 'function') {
+      payload.cfTurnstileToken = window.rjGetTurnstileToken() || '';
+    }
+    fetch('/api/public/tenant-signup/start', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    })
+      .then(r => r.json().then(d => ({ status: r.status, body: d })))
+      .then(({ status, body }) => {
+        if (status >= 200 && status < 300 && body.url) {
+          try { localStorage.removeItem('rj-'+FORM_ID); } catch(e){}
+          window.location.href = body.url;
+        } else {
+          errBox.textContent = body.error || 'Something went wrong. Please try again.';
+          errBox.classList.add('show');
+          btn.disabled = false; btn.textContent = 'Continue to secure checkout →';
+        }
+      })
+      .catch(() => {
+        errBox.textContent = 'Network error — please try again.';
+        errBox.classList.add('show');
+        btn.disabled = false; btn.textContent = 'Continue to secure checkout →';
+      });
+  }
+
+  // Restore saved state into inputs
+  document.querySelectorAll('input[name],select[name],textarea[name]').forEach(el=>{
+    if(state[el.name]!==undefined && el.type!=='file'){
+      if(el.type==='checkbox')el.checked=!!state[el.name];
+      else el.value=state[el.name];
+    }
+  });
+  if (state.plan) {
+    document.querySelectorAll('.plan-tile').forEach(t=>t.classList.toggle('selected', t.dataset.plan===state.plan));
+  }
+  if (state.primaryColor) $('#primary-color').value = state.primaryColor;
+  if (state.secondaryColor) $('#secondary-color').value = state.secondaryColor;
+  if (state.logoBase64) $('#logo-drop-text').textContent = 'Logo uploaded — click to replace';
+  updatePreview();
+  goStep(step);
+})();
+</script>
+
+<script src="/static/brand/turnstile.js"></script>
+</body>
+</html>
