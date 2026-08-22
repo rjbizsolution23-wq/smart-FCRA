@@ -40,6 +40,40 @@
 
   let sessionExpiredNotified = false;
 
+  // ── Device identity (device/IP lock — "no password sharing") ──────
+  // Persistent per-browser/device ID, generated once and kept in localStorage
+  // (survives logout/login on the SAME device; a different browser/computer
+  // gets a different ID). Sent with every login so orgs that enable device
+  // lock (Settings -> Security & Devices) can cap concurrent devices per user.
+  function getDeviceId() {
+    try {
+      let id = localStorage.getItem('fcra_device_id');
+      if (!id) {
+        id = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : ('dev_' + Date.now() + '_' + Math.random().toString(36).slice(2));
+        localStorage.setItem('fcra_device_id', id);
+      }
+      return id;
+    } catch { return 'dev_unknown'; }
+  }
+
+  function getDeviceLabel() {
+    try {
+      const ua = navigator.userAgent || '';
+      let os = 'Unknown OS';
+      if (/Windows/i.test(ua)) os = 'Windows';
+      else if (/Mac OS X|Macintosh/i.test(ua)) os = 'Mac';
+      else if (/Android/i.test(ua)) os = 'Android';
+      else if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
+      else if (/Linux/i.test(ua)) os = 'Linux';
+      let browser = 'Browser';
+      if (/Edg\//i.test(ua)) browser = 'Edge';
+      else if (/Chrome\//i.test(ua)) browser = 'Chrome';
+      else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+      else if (/Safari\//i.test(ua)) browser = 'Safari';
+      return `${browser} on ${os}`;
+    } catch { return 'Unknown device'; }
+  }
+
   function applyTenantTheme(theme) {
     if (!theme) return;
     const root = document.documentElement;
@@ -1464,7 +1498,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     }
     async function demoLogin(email, password) {
       try {
-        const d = await api('/auth/login', { method:'POST', body:JSON.stringify({ email, password })});
+        const d = await api('/auth/login', { method:'POST', body:JSON.stringify({ email, password, deviceId: getDeviceId(), deviceLabel: getDeviceLabel() })});
         if (d.requiresMfa) {
           const uid = document.getElementById('mfa-user-id');
           const tt = document.getElementById('mfa-temp-token');
@@ -1537,7 +1571,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       e.preventDefault();
       const fd = new FormData(e.target);
       try {
-        const d = await api('/auth/login', { method:'POST', body:JSON.stringify({email:fd.get('email'),password:fd.get('password')})});
+        const d = await api('/auth/login', { method:'POST', body:JSON.stringify({email:fd.get('email'),password:fd.get('password'),deviceId:getDeviceId(),deviceLabel:getDeviceLabel()})});
         if (d.mfaRequired) {
           $('#mfa-user-id').value = d.userId;
           $('#mfa-temp-token').value = d.tempToken;
@@ -1554,6 +1588,9 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           const msg = $('#verify-pending-msg');
           if (msg) msg.textContent = err.message;
           window._switchAuthPanel('verify');
+        } else if (err.code === 'DEVICE_LIMIT_REACHED' || err.code === 'ACCOUNT_LOCKED') {
+          toast(err.message, 'error');
+          return;
         }
         toast(err.message,'error');
       }
@@ -1562,7 +1599,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       e.preventDefault();
       const fd = new FormData(e.target);
       try {
-        const d = await api('/auth/mfa/challenge', { method:'POST', body:JSON.stringify({ userId: fd.get('userId'), tempToken: fd.get('tempToken'), code: fd.get('code') })});
+        const d = await api('/auth/mfa/challenge', { method:'POST', body:JSON.stringify({ userId: fd.get('userId'), tempToken: fd.get('tempToken'), code: fd.get('code'), deviceId:getDeviceId(), deviceLabel:getDeviceLabel() })});
         setState({token:d.token,user:d.user,org:d.org});
         toast('MFA verified','success');
         history.replaceState({}, '', '/app');
@@ -1668,6 +1705,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         { id: 'mailing-campaigns', icon: 'fa-mail-bulk', label: 'Mailing Campaigns' },
         { id: 'tradelines', icon: 'fa-layer-group', label: 'Tradelines' },
         { id: 'team', icon: 'fa-user-friends', label: 'Team' },
+        ...((state.user?.role === 'admin' || state.user?.role === 'super_admin') ? [{ id: 'security-devices', icon: 'fa-shield-halved', label: 'Security & Devices' }] : []),
         { id: 'settings', icon: 'fa-cog', label: 'Settings' },
         { id: 'ai-studio', icon: 'fa-robot', label: 'AI Studio' },
         { id: 'billing', icon: 'fa-credit-card', label: 'Billing' },
@@ -1839,6 +1877,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
         case 'product-map': await pgProductMap(el); break;
         case 'roi-calculator': await pgROICalculator(el); break;
         case 'team': await pgTeam(el); break;
+        case 'security-devices': await pgSecurityDevices(el); break;
         case 'settings': await pgSettings(el); break;
         case 'ai-studio': await pgAiStudio(el); break;
         case 'billing': await pgBilling(el); break;
@@ -6547,6 +6586,168 @@ Status: Discharged`;
       if (f) f.onsubmit = async (e) => { e.preventDefault(); const fd = new FormData(e.target); try { await api('/team/invite',{method:'POST',body:JSON.stringify({name:fd.get('name'),email:fd.get('email'),password:fd.get('password'),role:fd.get('role')})}); toast('Member added!','success'); await pgTeam(el); } catch(err) { toast(err.message,'error'); } };
     } catch(err) {
       el.innerHTML = `<div class="fade-in"><div class="glass rounded-xl p-8 border border-red-500/30 text-center"><i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i><h3 class="text-lg font-bold text-white mb-1">Failed to load team</h3><p class="text-sm text-gray-400">${err.message}</p><button onclick="window._nav('team')" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Retry</button></div></div>`;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // SECURITY & DEVICES — device/IP lock policy, per-user device list,
+  // pause/lockout controls. Admin-only page.
+  // ═══════════════════════════════════════════════════════════════
+  function timeAgo(iso) {
+    if (!iso) return '—';
+    try {
+      const then = new Date(iso.replace(' ', 'T') + (iso.includes('Z') ? '' : 'Z')).getTime();
+      const diffMs = Date.now() - then;
+      const mins = Math.round(diffMs / 60000);
+      if (mins < 1) return 'just now';
+      if (mins < 60) return mins + 'm ago';
+      const hrs = Math.round(mins / 60);
+      if (hrs < 24) return hrs + 'h ago';
+      const days = Math.round(hrs / 24);
+      return days + 'd ago';
+    } catch { return iso; }
+  }
+
+  async function pgSecurityDevices(el) {
+    el.innerHTML = `<div class="flex items-center justify-center py-20"><div class="text-center"><i class="fas fa-spinner fa-spin text-3xl text-blue-400 mb-3"></i><div class="text-sm text-gray-400">Loading device security...</div></div></div>`;
+    try {
+      const d = await api('/team/devices');
+      const policy = d.policy || { enabled: false, maxDevices: 1 };
+      const members = d.members || [];
+
+      el.innerHTML = `<div class="fade-in space-y-6">
+        <div>
+          <h1 class="text-xl font-bold text-white">Security &amp; Devices</h1>
+          <p class="text-sm text-gray-400">Control device/location sharing. Strictly enforce one login per paid seat — no password sharing.</p>
+        </div>
+
+        <div class="glass rounded-xl p-5 border border-gray-700">
+          <div class="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h2 class="text-sm font-semibold text-white mb-1"><i class="fas fa-lock mr-1.5 text-amber-400"></i>Device / Location Lock</h2>
+              <p class="text-xs text-gray-400 max-w-xl">When enabled, each team member can only be signed in on <strong>${policy.maxDevices}</strong> device${policy.maxDevices > 1 ? 's' : ''} at a time. A login attempt from a new device/location beyond that limit is blocked until you raise the limit here or the user signs out elsewhere. Additional devices or seats require upgrading — contact billing to add more.</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <span class="text-xs text-gray-400">${policy.enabled ? 'Enabled' : 'Disabled'}</span>
+                <input type="checkbox" id="device-lock-toggle" class="sr-only peer" ${policy.enabled ? 'checked' : ''}>
+                <span onclick="document.getElementById('device-lock-toggle').click()" class="relative inline-block w-11 h-6 rounded-full transition cursor-pointer ${policy.enabled ? 'bg-emerald-600' : 'bg-gray-700'}"><span class="absolute top-0.5 ${policy.enabled ? 'right-0.5' : 'left-0.5'} w-5 h-5 rounded-full bg-white transition"></span></span>
+              </label>
+            </div>
+          </div>
+          <div class="mt-4 flex items-center gap-3 flex-wrap">
+            <label class="text-xs text-gray-400">Max concurrent devices per user</label>
+            <input type="number" id="device-lock-max" min="1" max="50" value="${policy.maxDevices}" class="w-20 bg-gray-800/80 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-sm outline-none">
+            <button id="device-lock-save" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-xs font-semibold transition">Save Policy</button>
+          </div>
+        </div>
+
+        <div>
+          <h2 class="text-sm font-semibold text-white mb-3">Team member devices <span class="text-gray-500">(${members.length})</span></h2>
+          <div class="space-y-3">
+            ${members.map((m) => `
+              <div class="glass rounded-xl p-4 border ${m.locked_at ? 'border-red-500/40 bg-red-950/10' : 'border-gray-700'}">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                  <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-full ${m.locked_at ? 'bg-red-700' : 'bg-gray-700'} flex items-center justify-center text-white font-bold text-sm">${(m.name || '?')[0].toUpperCase()}</div>
+                    <div>
+                      <div class="text-sm font-medium text-white">${escapeHtml(m.name)} ${m.locked_at ? '<span class="text-[10px] text-red-400 font-bold ml-1"><i class="fas fa-ban mr-0.5"></i>PAUSED</span>' : ''}</div>
+                      <div class="text-xs text-gray-400">${escapeHtml(m.email)} &bull; ${m.role}</div>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="px-2 py-0.5 rounded text-[10px] font-medium ${m.deviceCount > (policy.enabled ? policy.maxDevices : 1) ? 'bg-amber-900/30 text-amber-400' : 'bg-gray-700 text-gray-300'}">${m.deviceCount} device${m.deviceCount === 1 ? '' : 's'} active</span>
+                    ${m.locked_at
+                      ? `<button data-unpause="${m.id}" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition"><i class="fas fa-unlock mr-1"></i>Reinstate</button>`
+                      : `<button data-pause="${m.id}" class="bg-red-700 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition"><i class="fas fa-pause mr-1"></i>Pause account</button>`}
+                  </div>
+                </div>
+                ${m.locked_at ? `<div class="mt-2 text-xs text-red-300/90 pl-12"><i class="fas fa-info-circle mr-1"></i>Locked ${timeAgo(m.locked_at)} — ${escapeHtml(m.locked_reason || 'No reason given')}. They must contact you to be reinstated.</div>` : ''}
+                ${m.devices && m.devices.length ? `
+                  <div class="mt-3 pl-12 space-y-1.5">
+                    ${m.devices.map((dv) => `
+                      <div class="flex items-center justify-between gap-2 text-xs bg-gray-950/50 rounded-lg px-3 py-2">
+                        <div class="flex items-center gap-2 min-w-0">
+                          <i class="fas fa-desktop text-gray-500"></i>
+                          <span class="text-gray-300 truncate">${escapeHtml(dv.deviceLabel || 'Unknown device')}</span>
+                          <span class="text-gray-500">&bull; ${escapeHtml(dv.ipAddress || 'unknown IP')}</span>
+                          <span class="text-gray-600">&bull; last active ${timeAgo(dv.lastSeenAt || dv.createdAt)}</span>
+                        </div>
+                        <button data-revoke-user="${m.id}" data-revoke-session="${dv.sessionId}" class="text-gray-500 hover:text-red-400 shrink-0"><i class="fas fa-times-circle"></i></button>
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : `<div class="mt-2 pl-12 text-xs text-gray-600">No active devices</div>`}
+              </div>
+            `).join('') || '<div class="glass rounded-xl p-8 text-center border border-gray-700"><i class="fas fa-users text-3xl text-gray-600 mb-3"></i><p class="text-sm text-gray-500">No team members yet</p></div>'}
+          </div>
+        </div>
+
+        <div class="p-3 bg-amber-900/20 border border-amber-600/30 rounded-lg">
+          <p class="text-[10px] text-amber-300 leading-relaxed"><strong>Enforcement:</strong> No sharing of login credentials. If a device/location beyond the allowed limit needs access, add a seat or raise the device limit above. Pausing an account immediately revokes all of that user's active sessions — they must contact you to be reinstated.</p>
+        </div>
+      </div>`;
+
+      const saveBtn = $('#device-lock-save');
+      if (saveBtn) saveBtn.onclick = async () => {
+        const enabled = $('#device-lock-toggle').checked;
+        const maxDevices = Number($('#device-lock-max').value) || 1;
+        saveBtn.disabled = true;
+        try {
+          await api('/team/devices/policy', { method: 'PUT', body: JSON.stringify({ enabled, maxDevices }) });
+          toast('Device policy saved', 'success');
+          await pgSecurityDevices(el);
+        } catch (err) {
+          toast(err.message, 'error');
+        } finally {
+          saveBtn.disabled = false;
+        }
+      };
+      const toggle = $('#device-lock-toggle');
+      if (toggle) toggle.onchange = () => {
+        const dot = toggle.nextElementSibling;
+        if (dot) {
+          dot.classList.toggle('bg-emerald-600', toggle.checked);
+          dot.classList.toggle('bg-gray-700', !toggle.checked);
+          const knob = dot.querySelector('span');
+          if (knob) { knob.classList.toggle('right-0.5', toggle.checked); knob.classList.toggle('left-0.5', !toggle.checked); }
+        }
+      };
+
+      el.querySelectorAll('[data-pause]').forEach((btn) => {
+        btn.onclick = async () => {
+          const userId = btn.getAttribute('data-pause');
+          if (!confirm('Pause this account? All active devices will be signed out immediately and the user must contact you to regain access.')) return;
+          try {
+            await api(`/team/devices/${userId}/pause`, { method: 'POST', body: JSON.stringify({ reason: 'Paused by administrator' }) });
+            toast('Account paused', 'success');
+            await pgSecurityDevices(el);
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      });
+      el.querySelectorAll('[data-unpause]').forEach((btn) => {
+        btn.onclick = async () => {
+          const userId = btn.getAttribute('data-unpause');
+          try {
+            await api(`/team/devices/${userId}/unpause`, { method: 'POST' });
+            toast('Account reinstated', 'success');
+            await pgSecurityDevices(el);
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      });
+      el.querySelectorAll('[data-revoke-session]').forEach((btn) => {
+        btn.onclick = async () => {
+          const userId = btn.getAttribute('data-revoke-user');
+          const sessionId = btn.getAttribute('data-revoke-session');
+          try {
+            await api(`/team/devices/${userId}/revoke/${sessionId}`, { method: 'POST' });
+            toast('Device signed out', 'success');
+            await pgSecurityDevices(el);
+          } catch (err) { toast(err.message, 'error'); }
+        };
+      });
+    } catch (err) {
+      el.innerHTML = `<div class="fade-in"><div class="glass rounded-xl p-8 border border-red-500/30 text-center"><i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i><h3 class="text-lg font-bold text-white mb-1">Failed to load Security &amp; Devices</h3><p class="text-sm text-gray-400">${err.message}</p><button onclick="window._nav('security-devices')" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Retry</button></div></div>`;
     }
   }
 
