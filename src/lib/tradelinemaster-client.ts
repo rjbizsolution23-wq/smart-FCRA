@@ -4,6 +4,8 @@
  */
 
 export const TRADELINE_MARKUP_RATE = 0.125;
+/** Flat per-line margin added on top of the percentage markup, on every tradeline (AU spot), every time. Never disclosed in the product UI. */
+export const TRADELINE_FLAT_FEE = 100;
 export const TRADELINE_API_BASE = 'https://www.tradelinemaster.com/api';
 export const TRADELINE_OPS_EMAIL_DEFAULT = 'tradelines@smartfcra.com';
 export const TRADELINE_FROM_EMAIL_DEFAULT = 'welcome@tradelines.smartfcra.com';
@@ -16,6 +18,8 @@ export type TradelineMasterEnv = {
   TRADELINEMASTER_REFERER?: string;
   TRADELINEMASTER_API_VERSION?: string;
   TRADELINE_MARKUP_RATE?: string;
+  /** Flat $ added per line on top of the percentage markup (default 100). */
+  TRADELINE_FLAT_FEE?: string;
   TRADELINE_OPS_EMAIL?: string;
   TRADELINE_FROM_EMAIL?: string;
   FRONTEND_URL?: string;
@@ -48,10 +52,11 @@ export type EnrichedTradeline = {
   cardholderAddressId: number | null;
   /** Wholesale cost from TradelineMaster */
   wholesalePrice: number;
-  /** Client-facing price (wholesale × 1.125) */
+  /** Client-facing price (wholesale × (1 + markupRate) + flatFee) */
   retailPrice: number;
   markupRate: number;
   markupAmount: number;
+  flatFee: number;
   statementDay: number;
   postingDay: number;
   postingWindowStart: string;
@@ -107,25 +112,39 @@ export function markupRate(env?: TradelineMasterEnv): number {
   return Number.isFinite(n) && n >= 0 ? n : TRADELINE_MARKUP_RATE;
 }
 
-export function applyMarkup(wholesale: number, rate = TRADELINE_MARKUP_RATE): {
+/** Flat $ margin added on top of the percentage markup, on every tradeline (AU spot), every time. */
+export function flatFee(env?: TradelineMasterEnv): number {
+  const raw = env?.TRADELINE_FLAT_FEE;
+  if (raw === undefined || raw === '') return TRADELINE_FLAT_FEE;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : TRADELINE_FLAT_FEE;
+}
+
+export function applyMarkup(
+  wholesale: number,
+  rate = TRADELINE_MARKUP_RATE,
+  flat = TRADELINE_FLAT_FEE,
+): {
   wholesalePrice: number;
   retailPrice: number;
   markupAmount: number;
   markupRate: number;
+  flatFee: number;
 } {
   const w = round2(Number(wholesale) || 0);
-  const retail = round2(w * (1 + rate));
+  const retail = round2(w * (1 + rate) + flat);
   return {
     wholesalePrice: w,
     retailPrice: retail,
     markupAmount: round2(retail - w),
     markupRate: rate,
+    flatFee: flat,
   };
 }
 
-/** Retail-only tradeline payload — never expose markup or wholesale in the product UI. */
-export function toPublicTradeline<T extends Record<string, any>>(t: T): Omit<T, 'wholesalePrice' | 'markupAmount' | 'markupRate'> {
-  const { wholesalePrice: _w, markupAmount: _m, markupRate: _r, ...rest } = t;
+/** Retail-only tradeline payload — never expose markup, flat fee, or wholesale in the product UI. */
+export function toPublicTradeline<T extends Record<string, any>>(t: T): Omit<T, 'wholesalePrice' | 'markupAmount' | 'markupRate' | 'flatFee'> {
+  const { wholesalePrice: _w, markupAmount: _m, markupRate: _r, flatFee: _f, ...rest } = t;
   return rest;
 }
 
@@ -229,8 +248,8 @@ export function accountAgeParts(dateOpened: string, now = new Date()): {
   return { years, months: rem, label };
 }
 
-export function enrichTradeline(raw: RawTradeline, rate = TRADELINE_MARKUP_RATE): EnrichedTradeline {
-  const money = applyMarkup(Number(raw.Price), rate);
+export function enrichTradeline(raw: RawTradeline, rate = TRADELINE_MARKUP_RATE, flat = TRADELINE_FLAT_FEE): EnrichedTradeline {
+  const money = applyMarkup(Number(raw.Price), rate, flat);
   const statement = parseDate(raw.StatementDate);
   const posting = parseDate(raw.PostingDate);
   const postingStart = statement ? addDays(statement, 7) : null;
@@ -279,6 +298,7 @@ export async function fetchTradelines(env: TradelineMasterEnv): Promise<{
   fetchedAt: string;
 }> {
   const rate = markupRate(env);
+  const flat = flatFee(env);
   const res = await tlmFetch(env, '/Tradeline');
   const fetchedAt = new Date().toISOString();
   if (!res.ok) {
@@ -287,7 +307,7 @@ export async function fetchTradelines(env: TradelineMasterEnv): Promise<{
   const rows = Array.isArray(res.data) ? res.data : [];
   return {
     ok: true,
-    tradelines: rows.map((r: RawTradeline) => enrichTradeline(r, rate)),
+    tradelines: rows.map((r: RawTradeline) => enrichTradeline(r, rate, flat)),
     fetchedAt,
   };
 }
@@ -297,10 +317,11 @@ export async function fetchTradelineById(
   id: number,
 ): Promise<{ ok: boolean; tradeline?: EnrichedTradeline; error?: string }> {
   const rate = markupRate(env);
+  const flat = flatFee(env);
   const res = await tlmFetch(env, `/Tradeline/${id}`);
   if (!res.ok) return { ok: false, error: res.text?.slice(0, 200) || `tlm_${res.status}` };
   if (!res.data?.Id) return { ok: false, error: 'not_found' };
-  return { ok: true, tradeline: enrichTradeline(res.data as RawTradeline, rate) };
+  return { ok: true, tradeline: enrichTradeline(res.data as RawTradeline, rate, flat) };
 }
 
 export async function submitTradelineOrder(

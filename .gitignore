@@ -34,3 +34,4 @@ logs/
 playwright-report/
 test-results/
 src/generated/
+.backups/
