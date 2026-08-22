@@ -1103,11 +1103,11 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
       return `<div class="min-h-screen flex items-center justify-center p-4">
         <div class="w-full max-w-lg">
           <div class="text-center mb-6">
-            <div class="inline-flex items-center justify-center mb-4"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-16 w-auto rounded-2xl border border-blue-500/40 object-cover shadow-[0_0_24px_rgba(37,99,235,0.35)]" alt="RJ Business Solutions"></div>
+            <div class="inline-flex items-center justify-center mb-4"><img data-tenant-logo src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-16 w-auto rounded-2xl border border-blue-500/40 object-cover shadow-[0_0_24px_rgba(37,99,235,0.35)]" alt="RJ Business Solutions"></div>
             <div class="rounded-2xl bg-white px-4 py-3 mb-3 inline-block">
               <img src="/static/logos/mfsn-logo.png" alt="My Free Score Now" class="h-14 w-auto max-w-full object-contain mx-auto">
             </div>
-            <div class="text-[10px] uppercase tracking-[0.18em] font-bold text-sky-300 mb-2">RJ Business Solutions</div>
+            <div data-tenant-company class="text-[10px] uppercase tracking-[0.18em] font-bold text-sky-300 mb-2">RJ Business Solutions</div>
             <h1 class="text-2xl font-bold text-white font-display">Start with MyFreeScoreNow</h1>
             <p class="text-gray-400 mt-1 text-sm">Empowering Generational Wealth — enroll under our affiliate, then open your Smart FCRA portal.</p>
             <div class="mt-3 flex flex-wrap justify-center gap-2 text-[11px]">
@@ -1180,8 +1180,8 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     return `<div class="min-h-screen flex items-center justify-center p-4">
       <div class="w-full max-w-lg">
         <div class="text-center mb-8">
-          <div class="inline-flex items-center justify-center mb-4"><img src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-16 w-auto rounded-2xl border border-blue-500/40 object-cover shadow-[0_0_24px_rgba(37,99,235,0.35)]" alt="RJ Business Solutions"></div>
-          <div class="text-[10px] uppercase tracking-[0.18em] font-bold text-sky-300 mb-2">by RJ Business Solutions</div>
+          <div class="inline-flex items-center justify-center mb-4"><img data-tenant-logo src="https://storage.googleapis.com/msgsndr/qQnxRHDtyx0uydPd5sRl/media/67eb83c5e519ed689430646b.jpeg" class="h-16 w-auto rounded-2xl border border-blue-500/40 object-cover shadow-[0_0_24px_rgba(37,99,235,0.35)]" alt="RJ Business Solutions"></div>
+          <div data-tenant-company class="text-[10px] uppercase tracking-[0.18em] font-bold text-sky-300 mb-2">by RJ Business Solutions</div>
           <h1 class="text-2xl font-bold text-white font-display">Smart FCRA</h1>
           <p class="text-gray-400 mt-1 text-sm">Empowering Generational Wealth · Credit advocacy CRM</p>
           <div class="mt-3 flex flex-wrap justify-center gap-2 text-[11px]">
