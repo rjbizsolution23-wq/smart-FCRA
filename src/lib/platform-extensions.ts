@@ -27,6 +27,8 @@ export const AI_CREDIT_PACKS = [
   { id: 'starter', credits: 5000, amountCents: 4900, label: '5,000 AI credits — $49' },
   { id: 'growth', credits: 25000, amountCents: 19900, label: '25,000 AI credits — $199' },
   { id: 'scale', credits: 100000, amountCents: 69900, label: '100,000 AI credits — $699' },
+  /** "AI tokens" tier — 1 token = 1 AI action (same unit/engine as credits, just relabeled + repriced for token-tier tenants). Repeatable one-time top-up, not an auto-recurring subscription. */
+  { id: 'tokens_100', credits: 100, amountCents: 2500, label: '100 AI tokens — $25' },
 ] as const;
 
 /** Demo sandbox uses deterministic vault key when platform PII key missing (preview only). */

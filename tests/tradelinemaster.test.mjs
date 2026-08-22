@@ -19,6 +19,7 @@ const {
   filterTradelines,
   toPublicTradeline,
   TRADELINE_MARKUP_RATE,
+  TRADELINE_FLAT_FEE,
   accountAgeParts,
 } = await import(pathToFileURL(path.join(root, 'src/lib/tradelinemaster-client.ts')).href);
 
@@ -27,9 +28,11 @@ const { matchTradelinesForClient } = await import(
 );
 
 assert(TRADELINE_MARKUP_RATE === 0.125, 'markup rate');
+assert(TRADELINE_FLAT_FEE === 100, 'flat fee');
 const m = applyMarkup(400);
-assert(m.retailPrice === 450, '12.5% of 400 = 450');
-assert(m.markupAmount === 50, 'markup amount');
+assert(m.retailPrice === 550, '12.5% of 400 (=450) + $100 flat = 550');
+assert(m.markupAmount === 150, 'markup amount (percent + flat)');
+assert(m.flatFee === 100, 'flat fee on result');
 
 const enriched = enrichTradeline({
   Id: 1,
@@ -42,10 +45,11 @@ const enriched = enrichTradeline({
   StatementDate: '2026-08-10T00:00:00',
   PostingDate: '2026-08-25T00:00:00',
 });
-assert(enriched.retailPrice === 450, 'enriched retail');
+assert(enriched.retailPrice === 550, 'enriched retail (12.5% + $100 flat)');
 assert(!('wholesalePrice' in toPublicTradeline(enriched)), 'public payload hides wholesale');
 assert(!('markupRate' in toPublicTradeline(enriched)), 'public payload hides markup rate');
-assert(toPublicTradeline(enriched).retailPrice === 450, 'public still has retail');
+assert(!('flatFee' in toPublicTradeline(enriched)), 'public payload hides flat fee');
+assert(toPublicTradeline(enriched).retailPrice === 550, 'public still has retail');
 assert(enriched.lender === 'BARCLAYS', 'lender');
 assert(enriched.statementDay === 10, 'statement day');
 assert(enriched.postingWindowLabel.includes('Aug'), 'posting window');
