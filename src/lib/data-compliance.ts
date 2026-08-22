@@ -247,7 +247,7 @@ export function sessionsListScope(session: { demo_session_id?: string | null }) 
 /** ISO expires_at compares incorrectly to datetime('now') when the date matches (T > space). */
 export const SQL_EXPIRES_FUTURE = `datetime(replace(substr(expires_at, 1, 19), 'T', ' ')) > datetime('now')`;
 
-export const SQL_ACTIVE_SESSION = `SELECT s.*, u.id as user_id, u.name as user_name, u.email as user_email, u.role as user_role, u.is_active, u.org_id, COALESCE(u.must_change_password, 0) as must_change_password, COALESCE(u.mfa_enabled, 0) as mfa_enabled FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND datetime(replace(substr(s.expires_at, 1, 19), 'T', ' ')) > datetime('now') AND s.revoked_at IS NULL`;
+export const SQL_ACTIVE_SESSION = `SELECT s.*, u.id as user_id, u.name as user_name, u.email as user_email, u.role as user_role, u.is_active, u.org_id, COALESCE(u.must_change_password, 0) as must_change_password, COALESCE(u.mfa_enabled, 0) as mfa_enabled, u.locked_at as locked_at FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND datetime(replace(substr(s.expires_at, 1, 19), 'T', ' ')) > datetime('now') AND s.revoked_at IS NULL`;
 
 export const SQL_ACTIVE_SESSION_LEGACY = `SELECT s.*, u.id as user_id, u.name as user_name, u.email as user_email, u.role as user_role, u.is_active, u.org_id, COALESCE(u.must_change_password, 0) as must_change_password, COALESCE(u.mfa_enabled, 0) as mfa_enabled FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND datetime(replace(substr(s.expires_at, 1, 19), 'T', ' ')) > datetime('now')`;
 
@@ -272,17 +272,80 @@ export function normalizeExpiresAt(value: string | Date): string {
 
 export async function insertSessionRow(
   db: SessionDb,
-  row: { id: string; userId: string; orgId: string; expires: string; ip: string; ua: string; demoSessionId?: string | null },
+  row: {
+    id: string; userId: string; orgId: string; expires: string; ip: string; ua: string;
+    demoSessionId?: string | null; deviceId?: string | null; deviceLabel?: string | null;
+  },
 ) {
   const expiresAt = normalizeExpiresAt(row.expires);
   try {
     await db.prepare(
-      `INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent, last_seen_at, demo_session_id) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?)`,
-    ).bind(row.id, row.userId, row.orgId, expiresAt, row.ip, row.ua, row.demoSessionId || null).run();
+      `INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent, last_seen_at, demo_session_id, device_id, device_label) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?)`,
+    ).bind(row.id, row.userId, row.orgId, expiresAt, row.ip, row.ua, row.demoSessionId || null, row.deviceId || null, row.deviceLabel || null).run();
   } catch {
-    await db.prepare(
-      `INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)`,
-    ).bind(row.id, row.userId, row.orgId, expiresAt, row.ip, row.ua).run();
+    try {
+      await db.prepare(
+        `INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent, last_seen_at, demo_session_id) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), ?)`,
+      ).bind(row.id, row.userId, row.orgId, expiresAt, row.ip, row.ua, row.demoSessionId || null).run();
+    } catch {
+      await db.prepare(
+        `INSERT INTO sessions (id, user_id, org_id, expires_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)`,
+      ).bind(row.id, row.userId, row.orgId, expiresAt, row.ip, row.ua).run();
+    }
+  }
+}
+
+/** Device-lock policy read from organizations.settings.device_lock. Default OFF. */
+export type DeviceLockPolicy = { enabled: boolean; maxDevices: number };
+export function resolveDeviceLockPolicy(settings: any): DeviceLockPolicy {
+  const dl = settings && typeof settings === 'object' ? settings.device_lock : null;
+  const enabled = !!(dl && dl.enabled);
+  const maxDevices = enabled ? Math.max(1, Number(dl.maxDevices) || 1) : 0;
+  return { enabled, maxDevices };
+}
+
+/**
+ * Enforce "N concurrent devices max" for a user at login time. Revokes the oldest
+ * active sessions on OTHER devices beyond the allowed count is NOT done here —
+ * per owner instruction we instead BLOCK the new login when the limit is already
+ * reached by a different device, so an existing signed-in user is never silently
+ * kicked. Returns null if login may proceed, or a conflict descriptor if blocked.
+ */
+export async function checkDeviceLimit(
+  db: SessionDb,
+  opts: { userId: string; deviceId: string; maxDevices: number },
+): Promise<{ blocked: true; activeDevices: number } | null> {
+  let rows: any;
+  try {
+    rows = await db.prepare(
+      `SELECT DISTINCT device_id FROM sessions
+       WHERE user_id = ? AND revoked_at IS NULL
+         AND datetime(replace(substr(expires_at, 1, 19), 'T', ' ')) > datetime('now')
+         AND device_id IS NOT NULL AND device_id != ?`,
+    ).bind(opts.userId, opts.deviceId).all();
+  } catch {
+    return null; // device_id column not migrated yet — soft no-op
+  }
+  const otherDevices = (rows?.results || []).length;
+  if (otherDevices >= opts.maxDevices) {
+    return { blocked: true, activeDevices: otherDevices };
+  }
+  return null;
+}
+
+/** List active (non-revoked, non-expired) device sessions for a user, most recent first. */
+export async function listUserDevices(db: SessionDb, userId: string) {
+  try {
+    const rows = await db.prepare(
+      `SELECT id, device_id, device_label, ip_address, user_agent, created_at, last_seen_at, last_path, expires_at
+       FROM sessions
+       WHERE user_id = ? AND revoked_at IS NULL
+         AND datetime(replace(substr(expires_at, 1, 19), 'T', ' ')) > datetime('now')
+       ORDER BY last_seen_at DESC, created_at DESC`,
+    ).bind(userId).all();
+    return rows?.results || [];
+  } catch {
+    return [];
   }
 }
 

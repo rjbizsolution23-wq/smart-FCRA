@@ -235,6 +235,9 @@ import {
   sessionsListScope,
   touchSessionActivity,
   writeSessionEvent,
+  resolveDeviceLockPolicy,
+  checkDeviceLimit,
+  listUserDevices,
 } from './lib/data-compliance';
 import { evaluateIdentityTheftGate } from './engine/dispute-attestation';
 
@@ -1000,6 +1003,14 @@ async function authMiddleware(c: any, next: any) {
   // Active Suspension Enforcement
   if (session.is_active === 0) {
     return c.json({ error: 'User account suspended' }, 403);
+  }
+  // Admin-triggered device/account lockout (Security & Devices panel) — distinct from
+  // is_active and org suspension. User must contact the org admin to be reinstated.
+  if (session.locked_at) {
+    return c.json({
+      error: 'This account has been paused by your administrator. Contact your organization admin to regain access.',
+      code: 'ACCOUNT_LOCKED',
+    }, 403);
   }
   // Enterprise: forced password rotation gate
   if (session.must_change_password === 1) {
@@ -2682,7 +2693,7 @@ app.post('/api/auth/register', async (c) => {
 });
 
 app.post('/api/auth/login', async (c) => {
-  const { email, password } = await c.req.json();
+  const { email, password, deviceId, deviceLabel } = await c.req.json();
   if (!email || !password) return c.json({ error: 'Email and password required' }, 400);
 
   // Optional env-based platform bootstrap (NEVER hardcode credentials in source)
@@ -2771,11 +2782,44 @@ app.post('/api/auth/login', async (c) => {
     }
   }
 
-  // Org suspension gate
+  // Org suspension gate + device-lock policy resolution
+  let orgSettings: any = {};
   try {
-    const settings = typeof user.org_settings === 'string' ? JSON.parse(user.org_settings || '{}') : (user.org_settings || {});
-    if (settings.suspended) return c.json({ error: 'Organization suspended. Contact support.' }, 403);
-  } catch { /* ignore */ }
+    orgSettings = typeof user.org_settings === 'string' ? JSON.parse(user.org_settings || '{}') : (user.org_settings || {});
+    if (orgSettings.suspended) return c.json({ error: 'Organization suspended. Contact support.' }, 403);
+  } catch { orgSettings = {}; }
+
+  // Admin-triggered account lockout — must contact org admin to be reinstated.
+  if (user.locked_at) {
+    return c.json({
+      error: 'This account has been paused by your administrator. Contact your organization admin to regain access.',
+      code: 'ACCOUNT_LOCKED',
+    }, 403);
+  }
+
+  const ip = c.req.header('CF-Connecting-IP') || 'unknown';
+  const ua = c.req.header('User-Agent') || 'unknown';
+
+  // Device/IP lock — "no password sharing" enforcement. Default OFF; org opts in via
+  // Settings -> Security & Devices. Blocks a NEW device from logging in once the org's
+  // max-concurrent-devices limit is already held by other device(s) for this user.
+  const devicePolicy = resolveDeviceLockPolicy(orgSettings);
+  const effectiveDeviceId = String(deviceId || '').slice(0, 120) || null;
+  if (devicePolicy.enabled && effectiveDeviceId && !isBootstrap) {
+    const conflict = await checkDeviceLimit(c.env.DB, {
+      userId: user.id, deviceId: effectiveDeviceId, maxDevices: devicePolicy.maxDevices,
+    });
+    if (conflict) {
+      await writeSessionEvent(c.env, {
+        orgId: user.org_id, userId: user.id, eventType: 'device_lock_blocked', ip, ua, path: '/api/auth/login',
+        detail: { activeDevices: conflict.activeDevices, maxDevices: devicePolicy.maxDevices },
+      });
+      return c.json({
+        error: 'This account is already signed in on another device or location. Only one active device is allowed on your plan. Ask your administrator to allow more devices, or sign out there first.',
+        code: 'DEVICE_LIMIT_REACHED',
+      }, 403);
+    }
+  }
 
   if (user.mfa_enabled === 1) {
     const tempToken = createSessionToken();
@@ -2788,9 +2832,10 @@ app.post('/api/auth/login', async (c) => {
 
   const token = createSessionToken();
   const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-  const ip = c.req.header('CF-Connecting-IP') || 'unknown';
-  const ua = c.req.header('User-Agent') || 'unknown';
-  await insertSessionRow(c.env.DB, { id: token, userId: user.id, orgId: user.org_id, expires, ip, ua });
+  await insertSessionRow(c.env.DB, {
+    id: token, userId: user.id, orgId: user.org_id, expires, ip, ua,
+    deviceId: effectiveDeviceId, deviceLabel: (deviceLabel ? String(deviceLabel).slice(0, 120) : null),
+  });
   await c.env.DB.prepare('UPDATE users SET last_login = datetime("now") WHERE id = ?').bind(user.id).run();
   await writeSessionEvent(c.env, {
     sessionId: token, orgId: user.org_id, userId: user.id, eventType: 'login', ip, ua, path: '/api/auth/login',
@@ -2807,7 +2852,7 @@ app.post('/api/auth/login', async (c) => {
 });
 
 app.post('/api/auth/mfa/challenge', async (c) => {
-  const { userId, code, tempToken } = await c.req.json();
+  const { userId, code, tempToken, deviceId, deviceLabel } = await c.req.json();
   if (!userId || !code || !tempToken) return c.json({ error: 'All fields required' }, 400);
 
   const challenge = await c.env.DB.prepare(
@@ -2816,20 +2861,40 @@ app.post('/api/auth/mfa/challenge', async (c) => {
   if (!challenge) return c.json({ error: 'Invalid or expired MFA challenge' }, 401);
 
   const user = await c.env.DB.prepare(
-    'SELECT u.*, o.name as org_name, o.plan as org_plan FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.id = ? AND u.is_active = 1'
+    'SELECT u.*, o.name as org_name, o.plan as org_plan, o.settings as org_settings FROM users u JOIN organizations o ON u.org_id = o.id WHERE u.id = ? AND u.is_active = 1'
   ).bind(userId).first() as any;
   if (!user) return c.json({ error: 'User not found' }, 404);
+  if (user.locked_at) {
+    return c.json({ error: 'This account has been paused by your administrator. Contact your organization admin to regain access.', code: 'ACCOUNT_LOCKED' }, 403);
+  }
 
   const isValid = await verifyTOTP(user.mfa_secret, code);
   if (!isValid) return c.json({ error: 'Invalid 6-digit MFA code' }, 401);
+
+  const ip = c.req.header('CF-Connecting-IP') || 'unknown';
+  const ua = c.req.header('User-Agent') || 'unknown';
+  let mfaOrgSettings: any = {};
+  try { mfaOrgSettings = typeof user.org_settings === 'string' ? JSON.parse(user.org_settings || '{}') : (user.org_settings || {}); } catch { mfaOrgSettings = {}; }
+  const mfaDevicePolicy = resolveDeviceLockPolicy(mfaOrgSettings);
+  const mfaDeviceId = String(deviceId || '').slice(0, 120) || null;
+  if (mfaDevicePolicy.enabled && mfaDeviceId) {
+    const conflict = await checkDeviceLimit(c.env.DB, { userId: user.id, deviceId: mfaDeviceId, maxDevices: mfaDevicePolicy.maxDevices });
+    if (conflict) {
+      return c.json({
+        error: 'This account is already signed in on another device or location. Only one active device is allowed on your plan. Ask your administrator to allow more devices, or sign out there first.',
+        code: 'DEVICE_LIMIT_REACHED',
+      }, 403);
+    }
+  }
 
   await c.env.DB.prepare('UPDATE mfa_challenges SET consumed = 1 WHERE id = ?').bind(challenge.id).run();
 
   const token = createSessionToken();
   const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-  const ip = c.req.header('CF-Connecting-IP') || 'unknown';
-  const ua = c.req.header('User-Agent') || 'unknown';
-  await insertSessionRow(c.env.DB, { id: token, userId: user.id, orgId: user.org_id, expires, ip, ua });
+  await insertSessionRow(c.env.DB, {
+    id: token, userId: user.id, orgId: user.org_id, expires, ip, ua,
+    deviceId: mfaDeviceId, deviceLabel: (deviceLabel ? String(deviceLabel).slice(0, 120) : null),
+  });
   await c.env.DB.prepare('UPDATE users SET last_login = datetime("now") WHERE id = ?').bind(user.id).run();
   await writeSessionEvent(c.env, {
     sessionId: token, orgId: user.org_id, userId: user.id, eventType: 'mfa_login', ip, ua, path: '/api/auth/mfa/challenge',
@@ -10271,6 +10336,146 @@ app.post('/api/team/invite', authMiddleware, async (c) => {
   }
 
   return c.json({ id, message: 'Team member added', emailStatus }, 201);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// SECURITY & DEVICES — device/IP lock policy, per-user device visibility,
+// admin pause/lockout. Org-scoped admin feature (role === 'admin' | 'super_admin').
+// ═══════════════════════════════════════════════════════════════
+
+/** GET the org's device-lock policy + a device-count summary per team member. */
+app.get('/api/team/devices', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role !== 'admin' && user.role !== 'super_admin') return c.json({ error: 'Admin only' }, 403);
+
+  const org = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+  let settings: any = {};
+  try { settings = JSON.parse(org?.settings || '{}'); } catch { settings = {}; }
+  const policy = resolveDeviceLockPolicy(settings);
+
+  const members = await c.env.DB.prepare(
+    'SELECT id, name, email, role, is_active, locked_at, locked_reason, last_login FROM users WHERE org_id = ? ORDER BY name',
+  ).bind(user.org_id).all();
+
+  const memberList = members?.results || [];
+  const withDevices = await Promise.all(memberList.map(async (m: any) => {
+    const devices = await listUserDevices(c.env.DB, m.id);
+    return {
+      ...m,
+      deviceCount: devices.length,
+      devices: devices.map((d: any) => ({
+        sessionId: d.id,
+        deviceId: d.device_id,
+        deviceLabel: d.device_label,
+        ipAddress: d.ip_address,
+        userAgent: d.user_agent,
+        createdAt: d.created_at,
+        lastSeenAt: d.last_seen_at,
+        lastPath: d.last_path,
+      })),
+    };
+  }));
+
+  return c.json({
+    policy: { enabled: policy.enabled, maxDevices: policy.enabled ? policy.maxDevices : (settings.device_lock?.maxDevices || 1) },
+    members: withDevices,
+  });
+});
+
+/** PUT to toggle device-lock enabled/maxDevices for this org. Admin only. */
+app.put('/api/team/devices/policy', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role !== 'admin' && user.role !== 'super_admin') return c.json({ error: 'Admin only' }, 403);
+
+  const body = await c.req.json().catch(() => ({}));
+  const enabled = !!body.enabled;
+  const maxDevices = Math.max(1, Math.min(50, Number(body.maxDevices) || 1));
+
+  const org = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+  let settings: any = {};
+  try { settings = JSON.parse(org?.settings || '{}'); } catch { settings = {}; }
+  settings.device_lock = { enabled, maxDevices };
+
+  await c.env.DB.prepare('UPDATE organizations SET settings = ?, updated_at = datetime("now") WHERE id = ?')
+    .bind(JSON.stringify(settings), user.org_id).run();
+
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'device_lock_policy_updated',
+    ip: c.req.header('CF-Connecting-IP'), detail: { enabled, maxDevices },
+  });
+
+  return c.json({ ok: true, policy: { enabled, maxDevices } });
+});
+
+/** POST to revoke a single device/session for a team member. Admin only (or self). */
+app.post('/api/team/devices/:userId/revoke/:sessionId', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const targetUserId = c.req.param('userId');
+  const sessionId = c.req.param('sessionId');
+  if (user.role !== 'admin' && user.role !== 'super_admin' && user.id !== targetUserId) {
+    return c.json({ error: 'Admin only' }, 403);
+  }
+  const target = await c.env.DB.prepare('SELECT id FROM users WHERE id = ? AND org_id = ?').bind(targetUserId, user.org_id).first();
+  if (!target) return c.json({ error: 'User not found in this organization' }, 404);
+
+  await revokeSessions(c.env.DB, { userId: targetUserId, sessionId });
+  await writeSessionEvent(c.env, {
+    sessionId, orgId: user.org_id, userId: targetUserId, eventType: 'admin_device_revoked',
+    ip: c.req.header('CF-Connecting-IP'), detail: { revokedBy: user.id },
+  });
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'device_revoked',
+    resourceType: 'session', resourceId: sessionId, ip: c.req.header('CF-Connecting-IP'),
+  });
+  return c.json({ ok: true });
+});
+
+/** POST to pause/lock a team member's account. Requires them to contact admin to reinstate. */
+app.post('/api/team/devices/:userId/pause', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role !== 'admin' && user.role !== 'super_admin') return c.json({ error: 'Admin only' }, 403);
+  const targetUserId = c.req.param('userId');
+  if (targetUserId === user.id) return c.json({ error: 'Cannot pause your own account' }, 400);
+
+  const target = await c.env.DB.prepare('SELECT id, role FROM users WHERE id = ? AND org_id = ?').bind(targetUserId, user.org_id).first() as any;
+  if (!target) return c.json({ error: 'User not found in this organization' }, 404);
+
+  const body = await c.req.json().catch(() => ({}));
+  const reason = String(body.reason || 'Paused by administrator').slice(0, 300);
+
+  await c.env.DB.prepare('UPDATE users SET locked_at = datetime("now"), locked_reason = ? WHERE id = ?').bind(reason, targetUserId).run();
+  // Revoke all active sessions immediately — pausing should not wait for token expiry.
+  await revokeSessions(c.env.DB, { userId: targetUserId, allForUser: true });
+  await writeSessionEvent(c.env, {
+    orgId: user.org_id, userId: targetUserId, eventType: 'admin_account_locked',
+    ip: c.req.header('CF-Connecting-IP'), detail: { reason, lockedBy: user.id },
+  });
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'account_locked',
+    resourceType: 'user', resourceId: targetUserId, ip: c.req.header('CF-Connecting-IP'), detail: { reason },
+  });
+  return c.json({ ok: true });
+});
+
+/** POST to reinstate a paused team member's account. Admin only. */
+app.post('/api/team/devices/:userId/unpause', authMiddleware, async (c) => {
+  const user = c.get('user');
+  if (user.role !== 'admin' && user.role !== 'super_admin') return c.json({ error: 'Admin only' }, 403);
+  const targetUserId = c.req.param('userId');
+
+  const target = await c.env.DB.prepare('SELECT id FROM users WHERE id = ? AND org_id = ?').bind(targetUserId, user.org_id).first();
+  if (!target) return c.json({ error: 'User not found in this organization' }, 404);
+
+  await c.env.DB.prepare('UPDATE users SET locked_at = NULL, locked_reason = NULL WHERE id = ?').bind(targetUserId).run();
+  await writeSessionEvent(c.env, {
+    orgId: user.org_id, userId: targetUserId, eventType: 'admin_account_unlocked',
+    ip: c.req.header('CF-Connecting-IP'), detail: { unlockedBy: user.id },
+  });
+  await writeSecurityAudit(c.env, {
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'account_unlocked',
+    resourceType: 'user', resourceId: targetUserId, ip: c.req.header('CF-Connecting-IP'),
+  });
+  return c.json({ ok: true });
 });
 
 // ═══════════════════════════════════════════════════════════════
