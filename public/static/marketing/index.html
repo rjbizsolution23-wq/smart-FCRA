@@ -487,8 +487,8 @@
             <li>CROA in-portal cancel + completion ledger gates</li>
             <li>Priority email support</li>
           </ul>
-          <a class="btn btn-primary" id="cta-professional" href="/login?mode=register&amp;plan=professional">Start Professional</a>
-          <a class="btn btn-ghost" id="pay-professional" href="/login?mode=register&amp;plan=professional">Pay with Stripe</a>
+          <a class="btn btn-primary" id="cta-professional" href="/get-started?plan=professional">Start Professional</a>
+          <a class="btn btn-ghost" id="pay-professional" href="/login?mode=register&amp;plan=professional">Already have an account?</a>
         </article>
         <article class="price">
           <h3>Unlimited</h3>
@@ -504,8 +504,8 @@
             <li>Faster support SLA; quarterly business review available</li>
             <li>Multi-org management for agencies running more than one brand</li>
           </ul>
-          <a class="btn btn-primary" id="cta-unlimited" href="/login?mode=register&amp;plan=unlimited">Start Unlimited</a>
-          <a class="btn btn-ghost" id="pay-unlimited" href="/login?mode=register&amp;plan=unlimited">Pay with Stripe</a>
+          <a class="btn btn-primary" id="cta-unlimited" href="/get-started?plan=unlimited">Start Unlimited</a>
+          <a class="btn btn-ghost" id="pay-unlimited" href="/login?mode=register&amp;plan=unlimited">Already have an account?</a>
         </article>
         <article class="price">
           <h3>Enterprise</h3>
@@ -521,8 +521,8 @@
             <li>Dedicated account manager</li>
             <li>Expert legal-ops consultation add-on</li>
           </ul>
-          <a class="btn btn-primary" id="cta-enterprise" href="/login?mode=register&amp;plan=enterprise">Start Enterprise</a>
-          <a class="btn btn-ghost" id="pay-enterprise" href="/login?mode=register&amp;plan=enterprise">Pay with Stripe</a>
+          <a class="btn btn-primary" id="cta-enterprise" href="/get-started?plan=enterprise">Start Enterprise</a>
+          <a class="btn btn-ghost" id="pay-enterprise" href="/login?mode=register&amp;plan=enterprise">Already have an account?</a>
           <p class="who" style="margin-top:0.75rem"><a href="#demo">Talk to sales</a> if you need a custom SLA first.</p>
         </article>
       </div>
@@ -614,19 +614,18 @@
             if (loggedIn) {
               btn.setAttribute('href', '/app?plan=' + encodeURIComponent(p.id));
               btn.textContent = 'Subscribe ' + (p.name || p.id);
-            } else if (p.subscribeUrl) {
-              btn.setAttribute('href', p.subscribeUrl);
+            } else {
+              // Pay-first flow: capture branding, then Stripe checkout auto-builds the tenant.
+              btn.setAttribute('href', '/get-started?plan=' + encodeURIComponent(p.id));
             }
           }
           if (pay && p) {
             if (loggedIn) {
               pay.setAttribute('href', '/app?plan=' + encodeURIComponent(p.id));
               pay.textContent = 'Open checkout';
-            } else if (chargesReal && p.paymentLink) {
-              pay.setAttribute('href', p.paymentLink);
-              pay.setAttribute('rel', 'noopener');
             } else if (p.subscribeUrl) {
               pay.setAttribute('href', p.subscribeUrl);
+              pay.textContent = 'Already have an account?';
             }
           }
         });
@@ -634,7 +633,7 @@
         if (badge) {
           if (chargesReal) {
             badge.hidden = false;
-            badge.textContent = 'Live Stripe checkout is on. Create your organization, then pay Professional, Unlimited, or Enterprise — cards are charged.';
+            badge.textContent = 'Live Stripe checkout is on. Pick a plan, brand it, and pay — your portal is created automatically.';
           } else if (payload && (payload.productionBlocked || payload.mode === 'test')) {
             badge.hidden = false;
             badge.textContent = 'Checkout is not live yet. Production needs Cloudflare Pages secrets STRIPE_API_KEY=sk_live_… and STRIPE_PUBLISHABLE_KEY=pk_live_…';

@@ -34,7 +34,9 @@ export type TemplateId =
   | 'client_newsletter'
   | 'privacy_sla_alert'
   | 'bureau_followup_staff'
-  | 'ops_health_alert';
+  | 'ops_health_alert'
+  | 'tenant_signup_welcome'
+  | 'platform_new_tenant_alert';
 
 export type EmailTemplate = {
   id: TemplateId;
@@ -335,6 +337,33 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
     html: (v) => shell(v.title || 'Ops alert', `<pre style="white-space:pre-wrap;font-family:system-ui;color:#cbd5e1">${esc(v.body || '')}</pre>`, v),
     text: (v) => v.body || '',
   },
+  {
+    id: 'tenant_signup_welcome',
+    name: 'New tenant — paid signup welcome',
+    description: 'Login credentials for a self-serve tenant just auto-provisioned after Stripe checkout',
+    eventType: 'tenant_signup_welcome',
+    subject: (v) => `${v.businessName || v.brandName || 'Your account'} is ready — here's your login`,
+    html: (v) => shell(
+      'Your account is ready',
+      `<p>Hi ${esc(v.name || '')},</p><p>Thanks for subscribing to the <strong>${esc(v.plan || '')}</strong> plan. Your fully branded tenant account has been created automatically — no waiting required.</p><p><strong>Portal:</strong> <a href="${esc(v.loginUrl || '#')}" style="color:#22d3ee">${esc(v.loginUrl || '')}</a><br/><strong>Email:</strong> ${esc(v.email || '')}<br/><strong>Temporary password:</strong> ${esc(v.temporaryPassword || '')}</p><p>Sign in and change your password on first login. Your logo, brand colors, and business information are already live in your portal.</p>`,
+      v,
+    ),
+    text: (v) => `Your account is ready. Portal: ${v.loginUrl} Email: ${v.email} Temporary password: ${v.temporaryPassword}`,
+  },
+  {
+    id: 'platform_new_tenant_alert',
+    name: 'Platform owner — new paid tenant alert',
+    description: 'Notifies the platform owner whenever a self-serve checkout auto-provisions a new tenant',
+    eventType: 'platform_new_tenant_alert',
+    lane: 'transactional',
+    subject: (v) => `New tenant onboarded: ${v.businessName || ''} (${v.plan || ''})`,
+    html: (v) => shell(
+      'New tenant auto-provisioned',
+      `<p>A new paid tenant just came online automatically — no manual work needed.</p><ul style="padding-left:18px;line-height:1.7"><li><strong>Business:</strong> ${esc(v.businessName || '')}</li><li><strong>Owner:</strong> ${esc(v.ownerName || '')} — ${esc(v.ownerEmail || '')}</li><li><strong>Plan:</strong> ${esc(v.plan || '')}</li><li><strong>Subdomain:</strong> ${esc(v.subdomain || '')}</li><li><strong>Portal:</strong> <a href="${esc(v.portalUrl || '#')}" style="color:#22d3ee">${esc(v.portalUrl || '')}</a></li></ul>`,
+      v,
+    ),
+    text: (v) => `New tenant: ${v.businessName} (${v.plan}) — ${v.portalUrl}`,
+  },
 ];
 
 export function getEmailTemplate(id: TemplateId): EmailTemplate | undefined {
@@ -462,7 +491,7 @@ export async function sendTemplatedClientMessage(
         subject: title,
         html,
         text: body,
-        purpose: opts.templateId === 'portal_welcome' || opts.templateId === 'account_verify' || opts.templateId === 'team_invite'
+        purpose: opts.templateId === 'portal_welcome' || opts.templateId === 'account_verify' || opts.templateId === 'team_invite' || opts.templateId === 'tenant_signup_welcome'
           ? 'onboarding'
           : 'noreply',
         fromName: brand.fromName,

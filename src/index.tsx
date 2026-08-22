@@ -185,6 +185,7 @@ import { resolveTenantByHost, validateSubdomain } from './lib/tenant-resolver';
 import { registerTenantRoutes } from './lib/tenant-provision-routes';
 import { suggestSubdomainFromName } from './lib/tenant-provision';
 import { buildBlueprintSettings, BLUEPRINT_VERSION } from './lib/tenant-blueprint';
+import { registerTenantSignupRoutes, fulfillTenantSignupCheckout } from './lib/tenant-signup-routes';
 import {
   ensureStripeCatalog,
   ensureStripeCatalogCached,
@@ -840,6 +841,7 @@ async function rateLimiter(c: any, next: any) {
 app.use('/api/auth/login', rateLimiter);
 app.use('/api/auth/register', rateLimiter);
 app.use('/api/public/mfsn-signup', rateLimiter);
+app.use('/api/public/tenant-signup/start', rateLimiter);
 app.use('/api/public/lead/*', rateLimiter);
 app.use('/api/public/demo/*', rateLimiter);
 app.use('/api/public/plans', rateLimiter);
@@ -2117,6 +2119,8 @@ app.get('/app', (c) => c.html(getAppHtml('app')));
 /** Friendly short URLs into the brand library — owner SPA only (static hub is gated). */
 app.get('/brand', (c) => c.redirect('/login', 302));
 app.get('/brand/', (c) => c.redirect('/login', 302));
+app.get('/get-started', (c) => c.redirect('/static/brand/forms/tenant-signup.html', 302));
+app.get('/start-trial', (c) => c.redirect('/static/brand/forms/tenant-signup.html', 302));
 app.get('/forms', (c) => c.redirect('/forms/credit-qualify', 302));
 app.get('/forms/:slug', (c) => {
   const slug = c.req.param('slug');
@@ -2131,6 +2135,8 @@ app.get('/forms/:slug', (c) => {
     'whitelabel-application': 'whitelabel-application.html',
     'partnership': 'partnership-application.html',
     'podcast-guest': 'podcast-guest.html',
+    'get-started': 'tenant-signup.html',
+    'tenant-signup': 'tenant-signup.html',
   };
   const file = map[slug];
   if (!file) return c.redirect('/', 302);
@@ -8078,6 +8084,12 @@ app.post('/api/billing/webhook', async (c) => {
         } catch (e) { console.warn('[mail postage webhook]', e); }
         break;
       }
+      if (sessionObj?.metadata?.type === 'tenant_signup' && sessionObj?.metadata?.pendingSignupId) {
+        try {
+          await fulfillTenantSignupCheckout(c.env, sessionObj);
+        } catch (e) { console.warn('[tenant signup webhook]', e); }
+        break;
+      }
 
       const orgIdHint = session.client_reference_id || session.metadata?.orgId || null;
       const stripeCustomerId = session.customer as string;
@@ -11977,6 +11989,7 @@ registerSupportCrmRoutes(app, { authMiddleware });
 registerExternalIntegrationRoutes(app);
 registerRoadmapRoutes(app, { authMiddleware });
 registerTenantRoutes(app, { authMiddleware, adminGateMiddleware });
+registerTenantSignupRoutes(app);
 registerComplianceOsRoutes(app, { authMiddleware });
 registerIntegrationOsRoutes(app, { authMiddleware });
 registerPlatformExtensionRoutes(app, { authMiddleware });
