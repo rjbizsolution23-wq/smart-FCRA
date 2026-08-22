@@ -9993,6 +9993,8 @@ async function pgAdminConsole(el) {
       }
     };
 
+    /** New Tenant Wizard — CREATE BUSINESS with live logo preview, real color pickers,
+     *  live subdomain availability checking, and a live-rendered branded preview card. */
     window._adminCreateBusiness = () => {
       const cloneOptions = [{ value: '', label: '— No clone, use defaults —' }].concat(
         (orgsData.organizations || [])
@@ -10000,39 +10002,270 @@ async function pgAdminConsole(el) {
           .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
           .map((o) => ({ value: o.id, label: o.name || o.id }))
       );
-      brandedPromptForm('CREATE BUSINESS', [
-        { name: 'businessName', label: 'Business name', placeholder: 'New Credit Services', required: true },
-        { name: 'legalName', label: 'Legal name', placeholder: 'New Credit Services LLC' },
-        { name: 'subdomain', label: 'Subdomain', placeholder: 'newcreditservices', required: true },
-        { name: 'ownerName', label: 'Owner name', placeholder: 'Jane Smith', required: true },
-        { name: 'ownerEmail', label: 'Owner email', type: 'email', placeholder: 'jane@newcreditservices.com', required: true },
-        { name: 'phone', label: 'Phone', placeholder: '555-555-5555', required: false },
-        { name: 'logoBase64', label: 'Business logo', type: 'file', accept: 'image/png,image/jpeg,image/webp,image/svg+xml', required: false, helpText: 'PNG, JPEG, WEBP, or SVG — under 1.5MB. Used on the portal, letterhead PDFs, and installation.' },
-        { name: 'primaryColor', label: 'Primary color', placeholder: '#2563eb', required: false },
-        { name: 'secondaryColor', label: 'Secondary color', placeholder: '#f59e0b', required: false },
-        { name: 'plan', label: 'Plan', type: 'select', defaultValue: 'professional', options: [
-          { value: 'free', label: 'Free (gated)' },
-          { value: 'professional', label: 'Professional ($497/mo)' },
-          { value: 'unlimited', label: 'Unlimited ($2500/mo)' },
-          { value: 'enterprise', label: 'Enterprise ($9997/mo)' },
-        ] },
-        { name: 'cloneFromOrgId', label: 'Clone branding & workflows from', type: 'select', defaultValue: '', required: false, options: cloneOptions },
-      ], {
-        description: 'Creates https://{subdomain}.smartfcra.com with blueprint CRM, campaigns, and portal branding — ready to install in one click.',
-        submitLabel: 'CREATE BUSINESS',
-      }).then(async (vals) => {
-        if (!vals) return;
+      const modalId = 'new-tenant-wizard';
+      const wiz = {
+        businessName: '', legalName: '', subdomain: '', ownerName: '', ownerEmail: '',
+        phone: '', primaryColor: '#2563eb', secondaryColor: '#f59e0b',
+        plan: 'professional', cloneFromOrgId: '', logoBase64: '',
+      };
+      const planLabels = {
+        free: 'Free (gated)',
+        professional: 'Professional — $497/mo',
+        unlimited: 'Unlimited — $2,500/mo',
+        enterprise: 'Enterprise — $9,997/mo',
+      };
+      const slugify = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 32);
+
+      const renderPreview = () => {
+        const name = wiz.businessName.trim() || 'Your New Business';
+        const sub = wiz.subdomain.trim() || 'yourbusiness';
+        const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || 'NB';
+        return `
+          <div class="rounded-xl overflow-hidden border border-gray-700 shadow-lg" style="background:${escapeHtml(wiz.primaryColor)}0d">
+            <div class="flex items-center gap-3 px-4 py-3" style="background:linear-gradient(120deg, ${escapeHtml(wiz.primaryColor)}, ${escapeHtml(wiz.secondaryColor)})">
+              ${wiz.logoBase64
+                ? `<img src="${wiz.logoBase64}" alt="Logo preview" class="w-9 h-9 rounded-lg object-contain bg-white/90 p-0.5" />`
+                : `<div class="w-9 h-9 rounded-lg bg-white/25 flex items-center justify-center text-white font-black text-sm">${escapeHtml(initials)}</div>`}
+              <div class="min-w-0">
+                <div class="text-white font-bold text-sm truncate">${escapeHtml(name)}</div>
+                <div class="text-white/80 text-[10px] truncate">${escapeHtml(sub)}.smartfcra.com</div>
+              </div>
+            </div>
+            <div class="px-4 py-3 bg-gray-950/60">
+              <div class="text-[10px] text-gray-500 mb-2">Portal preview</div>
+              <div class="flex gap-1.5 mb-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-semibold text-white" style="background:${escapeHtml(wiz.primaryColor)}">Dashboard</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-semibold text-white" style="background:${escapeHtml(wiz.secondaryColor)}">${escapeHtml(planLabels[wiz.plan] || wiz.plan)}</span>
+              </div>
+              <div class="h-1.5 rounded-full bg-gray-800 overflow-hidden">
+                <div class="h-full" style="width:62%;background:${escapeHtml(wiz.primaryColor)}"></div>
+              </div>
+            </div>
+          </div>`;
+      };
+
+      const stepHtml = `
+        <div class="bg-gray-900 border border-sky-500/30 rounded-2xl max-w-3xl w-full p-5 shadow-2xl max-h-[92vh] overflow-y-auto" role="document">
+          <div class="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <div class="text-[10px] uppercase tracking-wider font-bold text-sky-300 mb-1">Smart FCRA · Platform Command Center</div>
+              <h2 class="text-lg font-bold text-white font-display">New Tenant Wizard</h2>
+              <p class="text-xs text-gray-400 mt-1">Type in the business, upload their logo and colors, click Create — we'll generate the full sub-account, portal, and starter CRM automatically.</p>
+            </div>
+            <button type="button" data-modal-close class="text-gray-400 hover:text-white" aria-label="Close"><i class="fas fa-times"></i></button>
+          </div>
+          <div class="grid md:grid-cols-2 gap-5">
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs font-semibold text-gray-300 mb-1.5" for="nt-businessName">Business name <span class="text-red-400">*</span></label>
+                <input id="nt-businessName" type="text" placeholder="New Credit Services" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" autocomplete="off">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-gray-300 mb-1.5" for="nt-legalName">Legal name <span class="text-gray-500 font-normal">(optional)</span></label>
+                <input id="nt-legalName" type="text" placeholder="New Credit Services LLC" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" autocomplete="off">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-gray-300 mb-1.5" for="nt-subdomain">Subdomain <span class="text-red-400">*</span></label>
+                <div class="flex items-center gap-0 bg-gray-950 border border-gray-700 rounded-lg overflow-hidden focus-within:border-sky-500">
+                  <input id="nt-subdomain" type="text" placeholder="newcreditservices" class="flex-1 bg-transparent px-3 py-2 text-sm text-white outline-none" autocomplete="off">
+                  <span class="text-[11px] text-gray-500 pr-3 whitespace-nowrap">.smartfcra.com</span>
+                </div>
+                <p id="nt-subdomain-status" class="text-[10px] text-gray-500 mt-1">3+ characters, lowercase letters/numbers only.</p>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-semibold text-gray-300 mb-1.5" for="nt-ownerName">Owner name <span class="text-red-400">*</span></label>
+                  <input id="nt-ownerName" type="text" placeholder="Jane Smith" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" autocomplete="off">
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-gray-300 mb-1.5" for="nt-phone">Phone <span class="text-gray-500 font-normal">(optional)</span></label>
+                  <input id="nt-phone" type="text" placeholder="555-555-5555" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" autocomplete="off">
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-gray-300 mb-1.5" for="nt-ownerEmail">Owner email <span class="text-red-400">*</span></label>
+                <input id="nt-ownerEmail" type="email" placeholder="jane@newcreditservices.com" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" autocomplete="off">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-gray-300 mb-1.5" for="nt-plan">Plan</label>
+                <select id="nt-plan" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white">
+                  <option value="free">Free (gated)</option>
+                  <option value="professional" selected>Professional — $497/mo</option>
+                  <option value="unlimited">Unlimited — $2,500/mo</option>
+                  <option value="enterprise">Enterprise — $9,997/mo</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-gray-300 mb-1.5" for="nt-clone">Clone branding &amp; workflows from <span class="text-gray-500 font-normal">(optional)</span></label>
+                <select id="nt-clone" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white">
+                  ${cloneOptions.map((o) => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs font-semibold text-gray-300 mb-1.5">Business logo <span class="text-gray-500 font-normal">(optional)</span></label>
+                <div class="flex items-center gap-3">
+                  <div id="nt-logo-thumb" class="w-14 h-14 rounded-lg bg-gray-950 border border-gray-700 flex items-center justify-center text-gray-600 text-[10px] shrink-0 overflow-hidden">No logo</div>
+                  <div class="flex-1">
+                    <input id="nt-logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" class="block w-full text-xs text-gray-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-sky-600 file:text-white file:cursor-pointer">
+                    <p id="nt-logo-status" class="text-[10px] text-gray-500 mt-1">PNG, JPEG, WEBP, or SVG — under 1.5MB. Used on the portal, letterhead PDFs, and installation.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-semibold text-gray-300 mb-1.5" for="nt-primary">Primary color</label>
+                  <div class="flex items-center gap-2">
+                    <input id="nt-primary" type="color" value="#2563eb" class="h-10 w-14 bg-gray-950 border border-gray-700 rounded-lg cursor-pointer">
+                    <input id="nt-primary-hex" type="text" value="#2563eb" class="flex-1 bg-gray-950 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white" autocomplete="off">
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-gray-300 mb-1.5" for="nt-secondary">Secondary color</label>
+                  <div class="flex items-center gap-2">
+                    <input id="nt-secondary" type="color" value="#f59e0b" class="h-10 w-14 bg-gray-950 border border-gray-700 rounded-lg cursor-pointer">
+                    <input id="nt-secondary-hex" type="text" value="#f59e0b" class="flex-1 bg-gray-950 border border-gray-700 rounded-lg px-2 py-2 text-xs text-white" autocomplete="off">
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div class="text-xs font-semibold text-gray-300 mb-1.5">Live preview</div>
+                <div id="nt-preview">${renderPreview()}</div>
+              </div>
+              <div class="bg-sky-950/40 border border-sky-800/50 rounded-lg p-3 text-[11px] text-sky-200 leading-relaxed">
+                <i class="fas fa-bolt mr-1"></i> Creating this business automatically provisions <strong>https://{subdomain}.smartfcra.com</strong>, seeds the starter CRM campaigns &amp; compliance workflow library, sets up the owner's admin login, and applies this branding to their portal and letterhead — no code required.
+              </div>
+            </div>
+          </div>
+          <div class="flex gap-2 mt-5 pt-4 border-t border-gray-800">
+            <button type="button" id="nt-cancel" class="flex-1 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg py-2.5 text-sm font-semibold">Cancel</button>
+            <button type="button" id="nt-submit" class="flex-1 btn-rj rounded-lg py-2.5 text-sm font-semibold"><i class="fas fa-plus mr-1"></i> CREATE BUSINESS</button>
+          </div>
+        </div>`;
+
+      window._openModal(stepHtml, modalId);
+      const wrap = document.getElementById(modalId);
+      const finish = () => { if (wrap) { releaseFocusTrap(wrap); wrap.remove(); } };
+      document.getElementById('nt-cancel')?.addEventListener('click', finish);
+
+      const preview = () => { const el = document.getElementById('nt-preview'); if (el) el.innerHTML = renderPreview(); };
+
+      document.getElementById('nt-businessName')?.addEventListener('input', (e) => {
+        wiz.businessName = e.target.value;
+        const subInput = document.getElementById('nt-subdomain');
+        if (subInput && !subInput.dataset.touched) subInput.value = slugify(e.target.value);
+        wiz.subdomain = subInput ? subInput.value : wiz.subdomain;
+        preview();
+        checkSubdomain();
+      });
+      document.getElementById('nt-legalName')?.addEventListener('input', (e) => { wiz.legalName = e.target.value; });
+      document.getElementById('nt-ownerName')?.addEventListener('input', (e) => { wiz.ownerName = e.target.value; });
+      document.getElementById('nt-ownerEmail')?.addEventListener('input', (e) => { wiz.ownerEmail = e.target.value; });
+      document.getElementById('nt-phone')?.addEventListener('input', (e) => { wiz.phone = e.target.value; });
+      document.getElementById('nt-plan')?.addEventListener('change', (e) => { wiz.plan = e.target.value; preview(); });
+      document.getElementById('nt-clone')?.addEventListener('change', (e) => { wiz.cloneFromOrgId = e.target.value; });
+
+      let subdomainCheckTimer = null;
+      let subdomainOk = false;
+      const checkSubdomain = () => {
+        clearTimeout(subdomainCheckTimer);
+        const status = document.getElementById('nt-subdomain-status');
+        const val = String(wiz.subdomain || '').trim();
+        if (!val) { subdomainOk = false; if (status) { status.textContent = '3+ characters, lowercase letters/numbers only.'; status.className = 'text-[10px] text-gray-500 mt-1'; } return; }
+        if (status) { status.textContent = 'Checking availability…'; status.className = 'text-[10px] text-gray-500 mt-1'; }
+        subdomainCheckTimer = setTimeout(async () => {
+          try {
+            const res = await api(`/admin/tenants/subdomain-check?subdomain=${encodeURIComponent(val)}`);
+            if (!status) return;
+            if (res.available) {
+              subdomainOk = true;
+              status.textContent = `Available — portal will be ${res.portalUrl || (res.normalized + '.smartfcra.com')}`;
+              status.className = 'text-[10px] text-emerald-400 mt-1';
+            } else {
+              subdomainOk = false;
+              status.textContent = res.error || `Taken${res.takenBy ? ' by ' + res.takenBy : ''} — try another.`;
+              status.className = 'text-[10px] text-red-400 mt-1';
+            }
+          } catch {
+            subdomainOk = true; // don't block submit if the check endpoint itself failed — server validates again on submit
+          }
+        }, 400);
+      };
+      document.getElementById('nt-subdomain')?.addEventListener('input', (e) => {
+        e.target.dataset.touched = '1';
+        wiz.subdomain = slugify(e.target.value);
+        e.target.value = wiz.subdomain;
+        preview();
+        checkSubdomain();
+      });
+
+      const syncColor = (colorId, hexId, key) => {
+        const colorEl = document.getElementById(colorId);
+        const hexEl = document.getElementById(hexId);
+        colorEl?.addEventListener('input', (e) => { wiz[key] = e.target.value; if (hexEl) hexEl.value = e.target.value; preview(); });
+        hexEl?.addEventListener('input', (e) => {
+          const v = e.target.value.trim();
+          if (/^#[0-9a-fA-F]{6}$/.test(v)) { wiz[key] = v; if (colorEl) colorEl.value = v; preview(); }
+        });
+      };
+      syncColor('nt-primary', 'nt-primary-hex', 'primaryColor');
+      syncColor('nt-secondary', 'nt-secondary-hex', 'secondaryColor');
+
+      document.getElementById('nt-logo')?.addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        const status = document.getElementById('nt-logo-status');
+        const thumb = document.getElementById('nt-logo-thumb');
+        if (!file) { wiz.logoBase64 = ''; preview(); return; }
+        if (file.size > 1.5 * 1024 * 1024) {
+          toast('Logo must be under 1.5MB', 'error');
+          e.target.value = '';
+          return;
+        }
         try {
-          const cloneFromOrgId = vals.cloneFromOrgId;
-          delete vals.cloneFromOrgId;
-          if (!vals.logoBase64) delete vals.logoBase64;
-          const res = await api('/admin/tenants/provision', { method: 'POST', body: JSON.stringify(vals) });
+          wiz.logoBase64 = await fileToDataUri(file);
+          if (status) status.textContent = `Ready: ${file.name}`;
+          if (thumb) thumb.innerHTML = `<img src="${wiz.logoBase64}" alt="Logo" class="w-full h-full object-contain bg-white/90" />`;
+          preview();
+        } catch {
+          toast('Could not read logo file', 'error');
+          e.target.value = '';
+        }
+      });
+
+      document.getElementById('nt-submit')?.addEventListener('click', async () => {
+        wiz.businessName = document.getElementById('nt-businessName')?.value.trim() || '';
+        wiz.ownerName = document.getElementById('nt-ownerName')?.value.trim() || '';
+        wiz.ownerEmail = document.getElementById('nt-ownerEmail')?.value.trim() || '';
+        wiz.subdomain = document.getElementById('nt-subdomain')?.value.trim() || '';
+        if (!wiz.businessName) { toast('Business name is required', 'error'); return; }
+        if (!wiz.subdomain || wiz.subdomain.length < 3) { toast('Subdomain must be at least 3 characters', 'error'); return; }
+        if (!wiz.ownerName) { toast('Owner name is required', 'error'); return; }
+        if (!wiz.ownerEmail || !wiz.ownerEmail.includes('@')) { toast('A valid owner email is required', 'error'); return; }
+        if (!subdomainOk) { toast('Please choose an available subdomain first', 'error'); return; }
+
+        const submitBtn = document.getElementById('nt-submit');
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creating business…'; }
+        try {
+          const payload = {
+            businessName: wiz.businessName,
+            legalName: wiz.legalName || undefined,
+            subdomain: wiz.subdomain,
+            ownerName: wiz.ownerName,
+            ownerEmail: wiz.ownerEmail,
+            phone: wiz.phone || undefined,
+            primaryColor: wiz.primaryColor,
+            secondaryColor: wiz.secondaryColor,
+            plan: wiz.plan,
+          };
+          if (wiz.logoBase64) payload.logoBase64 = wiz.logoBase64;
+          const res = await api('/admin/tenants/provision', { method: 'POST', body: JSON.stringify(payload) });
           let cloneNote = '';
-          if (cloneFromOrgId) {
+          if (wiz.cloneFromOrgId) {
             try {
               const cloneRes = await api(`/admin/tenants/${encodeURIComponent(res.orgId)}/clone-config`, {
                 method: 'POST',
-                body: JSON.stringify({ sourceOrgId: cloneFromOrgId }),
+                body: JSON.stringify({ sourceOrgId: wiz.cloneFromOrgId }),
               });
               cloneNote = ` · Cloned ${(cloneRes.clonedKeys || []).length} config section(s)`;
             } catch (cloneErr) {
@@ -10040,18 +10273,20 @@ async function pgAdminConsole(el) {
             }
           }
           toast(`Created ${res.portalUrl} — ${res.campaignsCreated} campaigns seeded${cloneNote}`, 'success');
+          finish();
           const updatedOrgs = await api('/admin/organizations');
           orgsData.organizations = updatedOrgs.organizations || [];
           renderTabContent();
           const goPreview = await window._confirmDialog({
             title: 'Provision complete',
-            message: `${vals.businessName} is live at ${res.portalUrl}${res.temporaryPassword ? `\n\nOwner temporary password for ${vals.ownerEmail}:\n${res.temporaryPassword}\n(share securely — this is shown once)` : ''}`,
+            message: `${wiz.businessName} is live at ${res.portalUrl}${res.temporaryPassword ? `\n\nOwner temporary password for ${wiz.ownerEmail}:\n${res.temporaryPassword}\n(share securely — this is shown once)` : ''}`,
             okLabel: 'Preview as this tenant',
             cancelLabel: 'Done',
           });
-          if (goPreview) window._workInTenant(res.orgId, vals.businessName);
+          if (goPreview) window._workInTenant(res.orgId, wiz.businessName);
         } catch (err) {
           toast(err.message || 'Provision failed', 'error');
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="fas fa-plus mr-1"></i> CREATE BUSINESS'; }
         }
       });
     };
