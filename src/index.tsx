@@ -12331,7 +12331,7 @@ function getAppHtml(mode: 'login' | 'app' = 'app'): string {
   </script>
   <script src="/static/demo-experience.js?v=20260819-stripe-live"></script>
   <script src="/static/platform-guide.js?v=20260819-platform-guide"></script>
-  <script src="/static/app.js?v=20260822-device-lock"></script>
+  <script src="/static/app.js?v=20260822-tenant-wizard"></script>
 </body>
 </html>`;
 }
