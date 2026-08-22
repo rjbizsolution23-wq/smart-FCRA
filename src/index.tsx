@@ -1020,18 +1020,33 @@ async function authMiddleware(c: any, next: any) {
     }
   }
 
-  // Staff/admin MFA gate — elevated routes always; optional full gate via STAFF_MFA_REQUIRED_ALL
+  // Staff/admin MFA gate — elevated (destructive/data-mutating) actions always; optional full
+  // gate via STAFF_MFA_REQUIRED_ALL. NOTE: this only flags specific mutating method+path
+  // combinations as "elevated" — read-only GET list views (e.g. viewing the Demo Signups
+  // inbox or the Privacy Queue inside Tenants & Software) must stay reachable without MFA,
+  // since those are informational dashboards, not destructive actions.
   if (
     (session.user_role === 'admin' || session.user_role === 'super_admin') &&
     session.mfa_enabled !== 1
   ) {
     const mfaSafePaths = ['/auth/mfa', '/auth/logout', '/auth/me', '/auth/change-password'];
-    const mfaElevatedPaths = ['/admin/backup', '/admin/demo', '/admin/privacy-requests', '/billing/cancel'];
+    const reqPath = c.req.path;
+    const reqMethod = c.req.method;
+    const mfaElevatedActions: Array<{ method: string; test: (p: string) => boolean }> = [
+      // Full DB snapshot export to R2 — destructive/sensitive, always gated.
+      { method: 'POST', test: (p) => p.includes('/admin/backup') },
+      // Creating/loading real sandbox demo data — mutates records, always gated.
+      { method: 'POST', test: (p) => p.includes('/admin/demo/prepare') || p.includes('/admin/demo/load-case') },
+      // Fulfilling a CCPA/GDPR privacy request (export/delete real client data) — always gated.
+      { method: 'POST', test: (p) => p.includes('/admin/privacy-requests') && p.includes('/fulfill') },
+      // Cancelling a paid subscription — always gated.
+      { method: 'POST', test: (p) => p.includes('/billing/cancel') },
+    ];
     const requireAll = ['true', '1', 'yes'].includes(String(c.env.STAFF_MFA_REQUIRED_ALL || '').toLowerCase());
     const needsMfa =
       requireAll
-        ? !mfaSafePaths.some((p) => c.req.path.includes(p))
-        : mfaElevatedPaths.some((p) => c.req.path.includes(p));
+        ? !mfaSafePaths.some((p) => reqPath.includes(p))
+        : mfaElevatedActions.some((rule) => rule.method === reqMethod && rule.test(reqPath));
     if (needsMfa) {
       return c.json({
         error: requireAll
