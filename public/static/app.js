@@ -6614,6 +6614,7 @@ Status: Discharged`;
       const d = await api('/team/devices');
       const policy = d.policy || { enabled: false, maxDevices: 1 };
       const members = d.members || [];
+      const canEditPolicy = !!d.policyEditable;
 
       el.innerHTML = `<div class="fade-in space-y-6">
         <div>
@@ -6624,22 +6625,23 @@ Status: Discharged`;
         <div class="glass rounded-xl p-5 border border-gray-700">
           <div class="flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <h2 class="text-sm font-semibold text-white mb-1"><i class="fas fa-lock mr-1.5 text-amber-400"></i>Device / Location Lock</h2>
-              <p class="text-xs text-gray-400 max-w-xl">When enabled, each team member can only be signed in on <strong>${policy.maxDevices}</strong> device${policy.maxDevices > 1 ? 's' : ''} at a time. A login attempt from a new device/location beyond that limit is blocked until you raise the limit here or the user signs out elsewhere. Additional devices or seats require upgrading — contact billing to add more.</p>
+              <h2 class="text-sm font-semibold text-white mb-1"><i class="fas fa-lock mr-1.5 text-amber-400"></i>Device / Location Lock <span class="text-[10px] uppercase tracking-wide text-indigo-300 font-bold ml-1">Platform-wide</span></h2>
+              <p class="text-xs text-gray-400 max-w-xl">This policy is set once for the entire platform by the master RJ Business Solutions account and applies to every tenant's logins — it is not configurable per organization. When enabled, each team member in any org can only be signed in on <strong>${policy.maxDevices}</strong> device${policy.maxDevices > 1 ? 's' : ''} at a time.</p>
+              ${!canEditPolicy ? `<p class="text-[11px] text-amber-300/90 mt-2"><i class="fas fa-lock mr-1"></i>Only the platform owner (RJ Business Solutions master account) can change this setting. Contact them to request a change.</p>` : ''}
             </div>
             <div class="flex items-center gap-3">
-              <label class="flex items-center gap-2 cursor-pointer">
+              <label class="flex items-center gap-2 ${canEditPolicy ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}">
                 <span class="text-xs text-gray-400">${policy.enabled ? 'Enabled' : 'Disabled'}</span>
-                <input type="checkbox" id="device-lock-toggle" class="sr-only peer" ${policy.enabled ? 'checked' : ''}>
-                <span onclick="document.getElementById('device-lock-toggle').click()" class="relative inline-block w-11 h-6 rounded-full transition cursor-pointer ${policy.enabled ? 'bg-emerald-600' : 'bg-gray-700'}"><span class="absolute top-0.5 ${policy.enabled ? 'right-0.5' : 'left-0.5'} w-5 h-5 rounded-full bg-white transition"></span></span>
+                <input type="checkbox" id="device-lock-toggle" class="sr-only peer" ${policy.enabled ? 'checked' : ''} ${canEditPolicy ? '' : 'disabled'}>
+                <span ${canEditPolicy ? `onclick="document.getElementById('device-lock-toggle').click()"` : ''} class="relative inline-block w-11 h-6 rounded-full transition ${canEditPolicy ? 'cursor-pointer' : 'cursor-not-allowed'} ${policy.enabled ? 'bg-emerald-600' : 'bg-gray-700'}"><span class="absolute top-0.5 ${policy.enabled ? 'right-0.5' : 'left-0.5'} w-5 h-5 rounded-full bg-white transition"></span></span>
               </label>
             </div>
           </div>
-          <div class="mt-4 flex items-center gap-3 flex-wrap">
+          ${canEditPolicy ? `<div class="mt-4 flex items-center gap-3 flex-wrap">
             <label class="text-xs text-gray-400">Max concurrent devices per user</label>
             <input type="number" id="device-lock-max" min="1" max="50" value="${policy.maxDevices}" class="w-20 bg-gray-800/80 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-sm outline-none">
-            <button id="device-lock-save" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-xs font-semibold transition">Save Policy</button>
-          </div>
+            <button id="device-lock-save" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-xs font-semibold transition">Save Platform Policy</button>
+          </div>` : ''}
         </div>
 
         <div>
@@ -6689,7 +6691,7 @@ Status: Discharged`;
       </div>`;
 
       const saveBtn = $('#device-lock-save');
-      if (saveBtn) saveBtn.onclick = async () => {
+      if (saveBtn && canEditPolicy) saveBtn.onclick = async () => {
         const enabled = $('#device-lock-toggle').checked;
         const maxDevices = Number($('#device-lock-max').value) || 1;
         saveBtn.disabled = true;
@@ -11342,24 +11344,27 @@ async function pgAdminConsole(el) {
                 </div>
                 <p class="text-xs text-gray-400 mt-2">${escapeHtml(t.impact)}</p>
                 <div class="text-[11px] text-gray-500 mt-2">Reports to: ${(t.reportsTo||[]).join(', ')} · $${t.monthlyFee}/mo · match ${t.matchScore}</div>
-                <button data-product="${escapeHtml(t.id)}" class="tl-checkout mt-3 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold px-3 py-2 rounded-lg">Sign up on platform</button>
+                <button data-product="${escapeHtml(t.id)}" class="tl-checkout mt-3 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold px-3 py-2 rounded-lg"><i class="fas fa-paper-plane mr-1"></i>Request from my CRO</button>
               </div>`).join('')}
           </div>
-          ${orders.length ? `<div class="glass rounded-xl border border-gray-800 p-4"><h3 class="text-xs font-bold uppercase text-white mb-2">Your enrollments</h3>
+          <div class="glass rounded-xl border border-teal-500/20 bg-teal-950/10 p-3 text-[11px] text-teal-200/90">
+            <i class="fas fa-info-circle mr-1"></i>Boost Tools are ordered and paid for through your organization, not self-checkout. Tap "Request from my CRO" and your organization will reach out to you directly to complete the order and take payment.
+          </div>
+          ${orders.length ? `<div class="glass rounded-xl border border-gray-800 p-4"><h3 class="text-xs font-bold uppercase text-white mb-2">Your requests</h3>
             ${orders.map(o=>`<div class="text-xs text-gray-300 py-1 border-b border-gray-800/60 flex justify-between"><span>${escapeHtml(o.product_name)}</span><span class="font-mono text-teal-300">${escapeHtml(o.status)} · $${((o.amount_cents||0)/100).toFixed(2)}</span></div>`).join('')}
           </div>` : ''}
         </div>`;
       document.querySelectorAll('.tl-checkout').forEach(btn => {
         btn.onclick = async () => {
+          btn.disabled = true;
           try {
             const res = await api('/client-portal/tradelines/checkout', {
               method: 'POST',
               body: JSON.stringify(portalClientBody({ productId: btn.getAttribute('data-product') })),
             });
-            if (res.freePath) { toast('No charge for this path — advisor will provision', 'success'); return; }
-            if (res.url) location.href = res.url;
-            else toast('Checkout unavailable', 'error');
-          } catch (err) { toast(err.message, 'error'); }
+            toast(res.message || `Request sent to ${res.croName || 'your organization'} — they will reach out to you directly.`, 'success');
+            await pgClientTradelines(el);
+          } catch (err) { toast(err.message, 'error'); btn.disabled = false; }
         };
       });
     } catch (err) {

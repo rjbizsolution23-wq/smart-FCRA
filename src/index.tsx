@@ -236,9 +236,10 @@ import {
   sessionsListScope,
   touchSessionActivity,
   writeSessionEvent,
-  resolveDeviceLockPolicy,
+  resolveGlobalDeviceLockPolicy,
   checkDeviceLimit,
   listUserDevices,
+  PLATFORM_MASTER_ORG_ID,
 } from './lib/data-compliance';
 import { evaluateIdentityTheftGate } from './engine/dispute-attestation';
 
@@ -2836,10 +2837,12 @@ app.post('/api/auth/login', async (c) => {
   const ip = c.req.header('CF-Connecting-IP') || 'unknown';
   const ua = c.req.header('User-Agent') || 'unknown';
 
-  // Device/IP lock — "no password sharing" enforcement. Default OFF; org opts in via
-  // Settings -> Security & Devices. Blocks a NEW device from logging in once the org's
-  // max-concurrent-devices limit is already held by other device(s) for this user.
-  const devicePolicy = resolveDeviceLockPolicy(orgSettings);
+  // Device/IP lock — "no password sharing" enforcement. Default OFF; PLATFORM-WIDE policy
+  // controlled only by the master RJ Business Solutions account (org_platform_master) —
+  // no individual tenant (incl. Positive Money, etc.) can set its own device-lock policy.
+  // Blocks a NEW device from logging in once the platform's max-concurrent-devices limit
+  // is already held by other device(s) for this user.
+  const devicePolicy = await resolveGlobalDeviceLockPolicy(c.env.DB);
   const effectiveDeviceId = String(deviceId || '').slice(0, 120) || null;
   if (devicePolicy.enabled && effectiveDeviceId && !isBootstrap) {
     const conflict = await checkDeviceLimit(c.env.DB, {
@@ -2909,9 +2912,8 @@ app.post('/api/auth/mfa/challenge', async (c) => {
 
   const ip = c.req.header('CF-Connecting-IP') || 'unknown';
   const ua = c.req.header('User-Agent') || 'unknown';
-  let mfaOrgSettings: any = {};
-  try { mfaOrgSettings = typeof user.org_settings === 'string' ? JSON.parse(user.org_settings || '{}') : (user.org_settings || {}); } catch { mfaOrgSettings = {}; }
-  const mfaDevicePolicy = resolveDeviceLockPolicy(mfaOrgSettings);
+  // Platform-wide device-lock policy (org_platform_master only) — see /api/auth/login.
+  const mfaDevicePolicy = await resolveGlobalDeviceLockPolicy(c.env.DB);
   const mfaDeviceId = String(deviceId || '').slice(0, 120) || null;
   if (mfaDevicePolicy.enabled && mfaDeviceId) {
     const conflict = await checkDeviceLimit(c.env.DB, { userId: user.id, deviceId: mfaDeviceId, maxDevices: mfaDevicePolicy.maxDevices });
@@ -6319,6 +6321,13 @@ app.get('/api/client-portal/tradelines', authMiddleware, async (c) => {
   });
 });
 
+/**
+ * Client portal Boost Tools "purchasing" flow — by owner instruction this is NOT a
+ * self-service Stripe checkout. Clients cannot pay/purchase tradelines directly from the
+ * portal. Instead this records a request and notifies the client's OWN organization (their
+ * CRO / credit repair business, resolved via loadOrgBrand(user.org_id)) so staff can reach
+ * out to the client, place the order, and collect payment through their normal process.
+ */
 app.post('/api/client-portal/tradelines/checkout', authMiddleware, async (c) => {
   const user = c.get('user');
   const body = await c.req.json();
@@ -6326,63 +6335,59 @@ app.post('/api/client-portal/tradelines/checkout', authMiddleware, async (c) => 
   if (!client) return c.json({ error: 'Client not found' }, 404);
   const product = TRADELINE_CATALOG.find((p) => p.id === body.productId);
   if (!product) return c.json({ error: 'Unknown boost product' }, 400);
-  if (!c.env.STRIPE_API_KEY) return c.json({ error: 'Stripe is not configured' }, 503);
-  const blocked = productionStripeBlockReason(c.env);
-  if (blocked) return c.json({ error: blocked, code: 'STRIPE_LIVE_REQUIRED' }, 503);
-
-  const amountCents = Math.round(Number(product.monthlyFee || 0) * 100);
-  if (amountCents <= 0) {
-    return c.json({ error: 'This path is $0 — complete setup with your advisor (no card charge).', freePath: true, product }, 200);
-  }
 
   const orderId = generateId();
-  const stripe = getStripe(c.env);
-  const base = portalBaseUrl(c.env, c.req.url);
-  const session = await stripe.checkout.sessions.create({
-    mode: 'subscription',
-    payment_method_types: ['card'],
-    line_items: [{
-      price_data: {
-        currency: 'usd',
-        unit_amount: amountCents,
-        recurring: { interval: 'month' },
-        product_data: {
-          name: product.name,
-          description: product.impact,
-          metadata: { productId: product.id, category: product.category },
-        },
-      },
-      quantity: 1,
-    }],
-    success_url: `${base}/?page=client-tradelines&checkout=success&order=${orderId}`,
-    cancel_url: `${base}/?page=client-tradelines&checkout=cancelled`,
-    customer_email: client.email || user.email,
-    metadata: {
-      type: 'tradeline',
-      orderId,
-      orgId: user.org_id,
-      clientId: client.id,
-      productId: product.id,
-    },
-    subscription_data: {
-      metadata: { type: 'tradeline', orderId, clientId: client.id, productId: product.id, orgId: user.org_id },
-    },
-  });
+  const amountCents = Math.round(Number(product.monthlyFee || 0) * 100);
+  const orgBrand = await loadOrgBrand(c.env, user.org_id);
+  const croName = orgBrand.name || 'your credit repair organization';
+  const croEmail = orgBrand.supportEmail || TRADELINE_OPS_EMAIL_DEFAULT;
 
   await c.env.DB.prepare(
-    `INSERT INTO tradeline_orders (id, org_id, client_id, user_id, product_id, product_name, amount_cents, stripe_session_id, status, metadata_json, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, datetime('now'))`
+    `INSERT INTO tradeline_orders (id, org_id, client_id, user_id, product_id, product_name, amount_cents, status, metadata_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'requested', ?, datetime('now'))`
   ).bind(
-    orderId, user.org_id, client.id, user.id, product.id, product.name, amountCents, session.id,
+    orderId, user.org_id, client.id, user.id, product.id, product.name, amountCents,
     JSON.stringify({ reportsTo: product.reportsTo, category: product.category }),
   ).run();
 
+  // Notify this org's own staff (admins/super_admins) — the client's CRO — so they can
+  // reach out to place the order and collect payment via their own process.
+  let staffNotified = 0;
+  try {
+    const staff = await c.env.DB.prepare(
+      `SELECT email FROM users WHERE org_id = ? AND role IN ('admin','super_admin') AND is_active = 1`,
+    ).bind(user.org_id).all();
+    const staffEmails = (staff?.results || []).map((r: any) => r.email).filter(Boolean);
+    for (const to of staffEmails) {
+      const mail = await sendAppEmail(c.env, {
+        to,
+        subject: `New Boost Tools request — ${product.name} · ${client.first_name || ''} ${client.last_name || ''}`.trim(),
+        html: `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto">
+          <h2>${croName}</h2>
+          <p>Your client <strong>${client.first_name || ''} ${client.last_name || ''}</strong> (${client.email || ''}) requested <strong>${product.name}</strong> ($${(product.monthlyFee || 0).toFixed(2)}/mo) from the client portal Boost Tools.</p>
+          <p>Reach out to the client to complete enrollment and collect payment through your normal process. Internal request id: <code>${orderId}</code>.</p>
+        </div>`,
+        text: `New Boost Tools request from ${client.first_name || ''} ${client.last_name || ''} (${client.email || ''}): ${product.name} $${(product.monthlyFee || 0).toFixed(2)}/mo. Request id ${orderId}.`,
+        purpose: 'support',
+      }).catch(() => null);
+      if (mail?.sent) staffNotified++;
+    }
+  } catch { /* soft — request is still recorded even if staff email fails */ }
+
   await writeSecurityAudit(c.env, {
-    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'tradeline_checkout_started',
+    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'tradeline_request_created',
     resourceType: 'tradeline_order', resourceId: orderId, ip: c.req.header('CF-Connecting-IP'),
+    detail: { productId: product.id, staffNotified },
   });
 
-  return c.json({ ok: true, url: session.url, orderId });
+  return c.json({
+    ok: true,
+    orderId,
+    requested: true,
+    croName,
+    croEmail,
+    message: `Request sent to ${croName}. They will reach out to you directly to complete your ${product.name} order and take payment.`,
+  });
 });
 
 app.get('/api/client-portal/underwriting', authMiddleware, async (c) => {
@@ -10381,19 +10386,22 @@ app.post('/api/team/invite', authMiddleware, async (c) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// SECURITY & DEVICES — device/IP lock policy, per-user device visibility,
-// admin pause/lockout. Org-scoped admin feature (role === 'admin' | 'super_admin').
+// SECURITY & DEVICES — device/IP lock policy is now a SINGLE PLATFORM-WIDE
+// setting stored on org_platform_master (the master RJ Business Solutions
+// account) and applies to every tenant's logins uniformly. No individual
+// tenant admin (Positive Money or any other org) can set their own
+// independent device-lock policy — only the platform owner can, via the PUT
+// below. Per-member device visibility/pause/revoke below remains org-scoped
+// (role === 'admin' | 'super_admin' managing their own team's sessions).
 // ═══════════════════════════════════════════════════════════════
 
-/** GET the org's device-lock policy + a device-count summary per team member. */
+/** GET the platform-wide device-lock policy (read-only for tenants) + this org's team device summary. */
 app.get('/api/team/devices', authMiddleware, async (c) => {
   const user = c.get('user');
   if (user.role !== 'admin' && user.role !== 'super_admin') return c.json({ error: 'Admin only' }, 403);
 
-  const org = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
-  let settings: any = {};
-  try { settings = JSON.parse(org?.settings || '{}'); } catch { settings = {}; }
-  const policy = resolveDeviceLockPolicy(settings);
+  const policy = await resolveGlobalDeviceLockPolicy(c.env.DB);
+  const canEditPolicy = isPlatformOwnerUser(user, c.env);
 
   const members = await c.env.DB.prepare(
     'SELECT id, name, email, role, is_active, locked_at, locked_reason, last_login FROM users WHERE org_id = ? ORDER BY name',
@@ -10419,31 +10427,33 @@ app.get('/api/team/devices', authMiddleware, async (c) => {
   }));
 
   return c.json({
-    policy: { enabled: policy.enabled, maxDevices: policy.enabled ? policy.maxDevices : (settings.device_lock?.maxDevices || 1) },
+    policy: { enabled: policy.enabled, maxDevices: policy.enabled ? policy.maxDevices : 1 },
+    policyEditable: canEditPolicy,
+    policyScope: 'platform',
     members: withDevices,
   });
 });
 
-/** PUT to toggle device-lock enabled/maxDevices for this org. Admin only. */
+/** PUT to toggle the PLATFORM-WIDE device-lock policy. Platform owner only — not org admins. */
 app.put('/api/team/devices/policy', authMiddleware, async (c) => {
   const user = c.get('user');
-  if (user.role !== 'admin' && user.role !== 'super_admin') return c.json({ error: 'Admin only' }, 403);
+  if (!isPlatformOwnerUser(user, c.env)) return c.json({ error: PLATFORM_OWNER_ONLY_ERROR }, 403);
 
   const body = await c.req.json().catch(() => ({}));
   const enabled = !!body.enabled;
   const maxDevices = Math.max(1, Math.min(50, Number(body.maxDevices) || 1));
 
-  const org = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
+  const org = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(PLATFORM_MASTER_ORG_ID).first() as any;
   let settings: any = {};
   try { settings = JSON.parse(org?.settings || '{}'); } catch { settings = {}; }
   settings.device_lock = { enabled, maxDevices };
 
   await c.env.DB.prepare('UPDATE organizations SET settings = ?, updated_at = datetime("now") WHERE id = ?')
-    .bind(JSON.stringify(settings), user.org_id).run();
+    .bind(JSON.stringify(settings), PLATFORM_MASTER_ORG_ID).run();
 
   await writeSecurityAudit(c.env, {
-    orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'device_lock_policy_updated',
-    ip: c.req.header('CF-Connecting-IP'), detail: { enabled, maxDevices },
+    orgId: PLATFORM_MASTER_ORG_ID, actorUserId: user.id, actorRole: user.role, action: 'device_lock_policy_updated',
+    ip: c.req.header('CF-Connecting-IP'), detail: { enabled, maxDevices, scope: 'platform' },
   });
 
   return c.json({ ok: true, policy: { enabled, maxDevices } });
