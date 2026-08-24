@@ -236,10 +236,9 @@ import {
   sessionsListScope,
   touchSessionActivity,
   writeSessionEvent,
-  resolveGlobalDeviceLockPolicy,
+  resolveOrgDeviceLockPolicy,
   checkDeviceLimit,
   listUserDevices,
-  PLATFORM_MASTER_ORG_ID,
 } from './lib/data-compliance';
 import { evaluateIdentityTheftGate } from './engine/dispute-attestation';
 
@@ -2730,7 +2729,7 @@ app.post('/api/auth/register', async (c) => {
 });
 
 app.post('/api/auth/login', async (c) => {
-  const { email, password, deviceId, deviceLabel } = await c.req.json();
+  const { email, password, deviceId, deviceLabel, forceSignOutOthers } = await c.req.json();
   if (!email || !password) return c.json({ error: 'Email and password required' }, 400);
 
   // Optional env-based platform bootstrap (NEVER hardcode credentials in source)
@@ -2837,26 +2836,40 @@ app.post('/api/auth/login', async (c) => {
   const ip = c.req.header('CF-Connecting-IP') || 'unknown';
   const ua = c.req.header('User-Agent') || 'unknown';
 
-  // Device/IP lock — "no password sharing" enforcement. Default OFF; PLATFORM-WIDE policy
-  // controlled only by the master RJ Business Solutions account (org_platform_master) —
-  // no individual tenant (incl. Positive Money, etc.) can set its own device-lock policy.
-  // Blocks a NEW device from logging in once the platform's max-concurrent-devices limit
-  // is already held by other device(s) for this user.
-  const devicePolicy = await resolveGlobalDeviceLockPolicy(c.env.DB);
+  // Device/IP lock — "no password sharing" enforcement. Default OFF; PER-TENANT policy
+  // (each org keeps its own enabled/maxDevices, e.g. Positive Money = 3), but only the
+  // platform owner (master RJ Business Solutions account) can change any org's setting —
+  // see PUT /api/team/devices/policy. Blocks a NEW device from logging in once this org's
+  // max-concurrent-devices limit is already held by other device(s) for this user.
+  const devicePolicy = await resolveOrgDeviceLockPolicy(c.env.DB, user.org_id);
   const effectiveDeviceId = String(deviceId || '').slice(0, 120) || null;
   if (devicePolicy.enabled && effectiveDeviceId && !isBootstrap) {
-    const conflict = await checkDeviceLimit(c.env.DB, {
-      userId: user.id, deviceId: effectiveDeviceId, maxDevices: devicePolicy.maxDevices,
-    });
-    if (conflict) {
-      await writeSessionEvent(c.env, {
-        orgId: user.org_id, userId: user.id, eventType: 'device_lock_blocked', ip, ua, path: '/api/auth/login',
-        detail: { activeDevices: conflict.activeDevices, maxDevices: devicePolicy.maxDevices },
+    // Password is already verified above at this point, so it's safe to let the user
+    // self-recover from a device-limit lockout (e.g. stale/forgotten sessions eating all
+    // slots) by explicitly opting into signing out their other devices, rather than being
+    // permanently deadlocked out of their own account until an admin/owner intervenes.
+    if (forceSignOutOthers === true) {
+      await revokeSessions(c.env.DB, { userId: user.id, allForUser: true });
+      await writeSecurityAudit(c.env, {
+        orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'device_lock_self_signout',
+        ip, ua, detail: { reason: 'login_forceSignOutOthers' },
       });
-      return c.json({
-        error: 'This account is already signed in on another device or location. Only one active device is allowed on your plan. Ask your administrator to allow more devices, or sign out there first.',
-        code: 'DEVICE_LIMIT_REACHED',
-      }, 403);
+    } else {
+      const conflict = await checkDeviceLimit(c.env.DB, {
+        userId: user.id, deviceId: effectiveDeviceId, maxDevices: devicePolicy.maxDevices,
+      });
+      if (conflict) {
+        await writeSessionEvent(c.env, {
+          orgId: user.org_id, userId: user.id, eventType: 'device_lock_blocked', ip, ua, path: '/api/auth/login',
+          detail: { activeDevices: conflict.activeDevices, maxDevices: devicePolicy.maxDevices },
+        });
+        return c.json({
+          error: `This account is already signed in on ${conflict.activeDevices} other device(s)/location(s). Only ${devicePolicy.maxDevices} concurrent device(s) allowed. Sign out your other devices to continue, or ask your administrator to allow more.`,
+          code: 'DEVICE_LIMIT_REACHED',
+          activeDevices: conflict.activeDevices,
+          maxDevices: devicePolicy.maxDevices,
+        }, 403);
+      }
     }
   }
 
@@ -2891,7 +2904,7 @@ app.post('/api/auth/login', async (c) => {
 });
 
 app.post('/api/auth/mfa/challenge', async (c) => {
-  const { userId, code, tempToken, deviceId, deviceLabel } = await c.req.json();
+  const { userId, code, tempToken, deviceId, deviceLabel, forceSignOutOthers } = await c.req.json();
   if (!userId || !code || !tempToken) return c.json({ error: 'All fields required' }, 400);
 
   const challenge = await c.env.DB.prepare(
@@ -2912,16 +2925,28 @@ app.post('/api/auth/mfa/challenge', async (c) => {
 
   const ip = c.req.header('CF-Connecting-IP') || 'unknown';
   const ua = c.req.header('User-Agent') || 'unknown';
-  // Platform-wide device-lock policy (org_platform_master only) — see /api/auth/login.
-  const mfaDevicePolicy = await resolveGlobalDeviceLockPolicy(c.env.DB);
+  // Per-tenant device-lock policy (owner-controlled only) — see /api/auth/login.
+  const mfaDevicePolicy = await resolveOrgDeviceLockPolicy(c.env.DB, user.org_id);
   const mfaDeviceId = String(deviceId || '').slice(0, 120) || null;
   if (mfaDevicePolicy.enabled && mfaDeviceId) {
-    const conflict = await checkDeviceLimit(c.env.DB, { userId: user.id, deviceId: mfaDeviceId, maxDevices: mfaDevicePolicy.maxDevices });
-    if (conflict) {
-      return c.json({
-        error: 'This account is already signed in on another device or location. Only one active device is allowed on your plan. Ask your administrator to allow more devices, or sign out there first.',
-        code: 'DEVICE_LIMIT_REACHED',
-      }, 403);
+    // See /api/auth/login for rationale — code (TOTP) is already verified above at this
+    // point, so self-recovery via forceSignOutOthers is safe here too.
+    if (forceSignOutOthers === true) {
+      await revokeSessions(c.env.DB, { userId: user.id, allForUser: true });
+      await writeSecurityAudit(c.env, {
+        orgId: user.org_id, actorUserId: user.id, actorRole: user.role, action: 'device_lock_self_signout',
+        ip, ua, detail: { reason: 'mfa_forceSignOutOthers' },
+      });
+    } else {
+      const conflict = await checkDeviceLimit(c.env.DB, { userId: user.id, deviceId: mfaDeviceId, maxDevices: mfaDevicePolicy.maxDevices });
+      if (conflict) {
+        return c.json({
+          error: `This account is already signed in on ${conflict.activeDevices} other device(s)/location(s). Only ${mfaDevicePolicy.maxDevices} concurrent device(s) allowed. Sign out your other devices to continue, or ask your administrator to allow more.`,
+          code: 'DEVICE_LIMIT_REACHED',
+          activeDevices: conflict.activeDevices,
+          maxDevices: mfaDevicePolicy.maxDevices,
+        }, 403);
+      }
     }
   }
 
@@ -10386,21 +10411,23 @@ app.post('/api/team/invite', authMiddleware, async (c) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// SECURITY & DEVICES — device/IP lock policy is now a SINGLE PLATFORM-WIDE
-// setting stored on org_platform_master (the master RJ Business Solutions
-// account) and applies to every tenant's logins uniformly. No individual
-// tenant admin (Positive Money or any other org) can set their own
-// independent device-lock policy — only the platform owner can, via the PUT
-// below. Per-member device visibility/pause/revoke below remains org-scoped
-// (role === 'admin' | 'super_admin' managing their own team's sessions).
+// SECURITY & DEVICES — device/IP lock policy is PER-TENANT (each org keeps its
+// own enabled/maxDevices, e.g. Positive Money = 3 devices), but CONTROL is
+// centralized: only the platform owner (master RJ Business Solutions account)
+// can change any org's device-lock policy via the PUT below — a tenant's own
+// admin can view it but not edit it. The owner edits a specific tenant's
+// policy by acting-in-org (X-Acting-Org-Id header, same mechanism used
+// elsewhere) or by passing an explicit orgId in the PUT body. Per-member
+// device visibility/pause/revoke below remains org-scoped (role === 'admin' |
+// 'super_admin' managing their own team's sessions).
 // ═══════════════════════════════════════════════════════════════
 
-/** GET the platform-wide device-lock policy (read-only for tenants) + this org's team device summary. */
+/** GET this org's device-lock policy (read-only for tenant admins) + team device summary. */
 app.get('/api/team/devices', authMiddleware, async (c) => {
   const user = c.get('user');
   if (user.role !== 'admin' && user.role !== 'super_admin') return c.json({ error: 'Admin only' }, 403);
 
-  const policy = await resolveGlobalDeviceLockPolicy(c.env.DB);
+  const policy = await resolveOrgDeviceLockPolicy(c.env.DB, user.org_id);
   const canEditPolicy = isPlatformOwnerUser(user, c.env);
 
   const members = await c.env.DB.prepare(
@@ -10429,12 +10456,18 @@ app.get('/api/team/devices', authMiddleware, async (c) => {
   return c.json({
     policy: { enabled: policy.enabled, maxDevices: policy.enabled ? policy.maxDevices : 1 },
     policyEditable: canEditPolicy,
-    policyScope: 'platform',
+    policyScope: 'tenant',
+    orgId: user.org_id,
     members: withDevices,
   });
 });
 
-/** PUT to toggle the PLATFORM-WIDE device-lock policy. Platform owner only — not org admins. */
+/**
+ * PUT to set a tenant's device-lock policy. Platform owner only — not org admins.
+ * Targets whichever org the owner is currently acting-in (X-Acting-Org-Id via
+ * authMiddleware, reflected as user.org_id), or an explicit body.orgId override
+ * (validated against the organizations table) for direct admin-console use.
+ */
 app.put('/api/team/devices/policy', authMiddleware, async (c) => {
   const user = c.get('user');
   if (!isPlatformOwnerUser(user, c.env)) return c.json({ error: PLATFORM_OWNER_ONLY_ERROR }, 403);
@@ -10443,20 +10476,27 @@ app.put('/api/team/devices/policy', authMiddleware, async (c) => {
   const enabled = !!body.enabled;
   const maxDevices = Math.max(1, Math.min(50, Number(body.maxDevices) || 1));
 
-  const org = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(PLATFORM_MASTER_ORG_ID).first() as any;
+  let targetOrgId = user.org_id;
+  if (body.orgId && String(body.orgId).trim()) {
+    const target = await c.env.DB.prepare('SELECT id FROM organizations WHERE id = ?').bind(String(body.orgId).trim()).first() as any;
+    if (!target?.id) return c.json({ error: 'Unknown orgId' }, 400);
+    targetOrgId = target.id;
+  }
+
+  const org = await c.env.DB.prepare('SELECT settings FROM organizations WHERE id = ?').bind(targetOrgId).first() as any;
   let settings: any = {};
   try { settings = JSON.parse(org?.settings || '{}'); } catch { settings = {}; }
   settings.device_lock = { enabled, maxDevices };
 
   await c.env.DB.prepare('UPDATE organizations SET settings = ?, updated_at = datetime("now") WHERE id = ?')
-    .bind(JSON.stringify(settings), PLATFORM_MASTER_ORG_ID).run();
+    .bind(JSON.stringify(settings), targetOrgId).run();
 
   await writeSecurityAudit(c.env, {
-    orgId: PLATFORM_MASTER_ORG_ID, actorUserId: user.id, actorRole: user.role, action: 'device_lock_policy_updated',
-    ip: c.req.header('CF-Connecting-IP'), detail: { enabled, maxDevices, scope: 'platform' },
+    orgId: targetOrgId, actorUserId: user.id, actorRole: user.role, action: 'device_lock_policy_updated',
+    ip: c.req.header('CF-Connecting-IP'), detail: { enabled, maxDevices, scope: 'tenant', orgId: targetOrgId },
   });
 
-  return c.json({ ok: true, policy: { enabled, maxDevices } });
+  return c.json({ ok: true, orgId: targetOrgId, policy: { enabled, maxDevices } });
 });
 
 /** POST to revoke a single device/session for a team member. Admin only (or self). */

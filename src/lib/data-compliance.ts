@@ -305,18 +305,19 @@ export function resolveDeviceLockPolicy(settings: any): DeviceLockPolicy {
 }
 
 /**
- * Device-lock is a SINGLE platform-wide policy, not a per-tenant toggle. It is stored
- * on the master RJ Business Solutions org (org_platform_master) and applies to every
- * org/tenant's logins uniformly — no tenant admin (including Positive Money, etc.) can
- * set their own independent device-lock policy. Only the platform owner can change it
- * (see PUT /api/team/devices/policy, gated by isPlatformOwnerUser).
+ * Device-lock is a PER-TENANT policy (each org keeps its own enabled/maxDevices — e.g.
+ * Positive Money = 3 devices), but CONTROL of it is centralized: only the platform owner
+ * (master RJ Business Solutions account) may change any org's policy. Individual tenant
+ * admins can view their own org's policy but cannot edit it themselves — see
+ * PUT /api/team/devices/policy, gated by isPlatformOwnerUser, which writes to whichever
+ * org the owner is acting as (X-Acting-Org-Id) or an explicit orgId in the request body.
  */
 export const PLATFORM_MASTER_ORG_ID = 'org_platform_master';
 
-export async function resolveGlobalDeviceLockPolicy(db: SessionDb): Promise<DeviceLockPolicy> {
+export async function resolveOrgDeviceLockPolicy(db: SessionDb, orgId: string): Promise<DeviceLockPolicy> {
   try {
     const row = await db.prepare('SELECT settings FROM organizations WHERE id = ?')
-      .bind(PLATFORM_MASTER_ORG_ID).first() as any;
+      .bind(orgId).first() as any;
     const settings = row?.settings ? JSON.parse(row.settings) : {};
     return resolveDeviceLockPolicy(settings);
   } catch {
