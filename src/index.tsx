@@ -2143,8 +2143,23 @@ app.get('/forms/:slug', (c) => {
   return c.redirect(`/static/brand/forms/${file}`, 302);
 });
 
+/**
+ * Resolve which org public/self-serve signup should land in for THIS request.
+ * Prefers the tenant already resolved from the Host header (subdomain or
+ * verified custom domain) so a visitor at e.g. positivemoney.smartfcra.com
+ * signs up under Positive Money instead of always landing in the platform
+ * default org. Falls back to resolvePublicSignupOrgId() (env override or
+ * org_platform_master) when the host isn't a recognized tenant (e.g. the
+ * bare smartfcra.com apex, localhost, or pages.dev preview).
+ */
+function resolveRequestSignupOrgId(c: any): string {
+  const tenant = c.get('tenantHostOrg');
+  if (tenant?.id) return tenant.id;
+  return resolvePublicSignupOrgId(c.env);
+}
+
 app.get('/api/public/mfsn-signup/meta', async (c) => {
-  const orgId = resolvePublicSignupOrgId(c.env);
+  const orgId = resolveRequestSignupOrgId(c);
   const org = await c.env.DB.prepare('SELECT id, name FROM organizations WHERE id = ?').bind(orgId).first() as any;
   const brand = await loadOrgBrand(c.env, orgId);
   const partner = resolvePartnerMfsnCredentials(c.env);
@@ -2216,7 +2231,7 @@ app.post('/api/public/mfsn-signup', async (c) => {
     }, 403);
   }
 
-  const orgId = resolvePublicSignupOrgId(c.env);
+  const orgId = resolveRequestSignupOrgId(c);
   const org = await c.env.DB.prepare('SELECT id, name FROM organizations WHERE id = ?').bind(orgId).first() as any;
   if (!org) {
     return c.json({ error: 'Signup organization is not configured. Contact support.' }, 503);
