@@ -1570,8 +1570,9 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     if (lf) lf.onsubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
+      const doLogin = (forceSignOutOthers) => api('/auth/login', { method:'POST', body:JSON.stringify({email:fd.get('email'),password:fd.get('password'),deviceId:getDeviceId(),deviceLabel:getDeviceLabel(), ...(forceSignOutOthers ? { forceSignOutOthers: true } : {})})});
       try {
-        const d = await api('/auth/login', { method:'POST', body:JSON.stringify({email:fd.get('email'),password:fd.get('password'),deviceId:getDeviceId(),deviceLabel:getDeviceLabel()})});
+        const d = await doLogin(false);
         if (d.mfaRequired) {
           $('#mfa-user-id').value = d.userId;
           $('#mfa-temp-token').value = d.tempToken;
@@ -1588,7 +1589,28 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
           const msg = $('#verify-pending-msg');
           if (msg) msg.textContent = err.message;
           window._switchAuthPanel('verify');
-        } else if (err.code === 'DEVICE_LIMIT_REACHED' || err.code === 'ACCOUNT_LOCKED') {
+        } else if (err.code === 'DEVICE_LIMIT_REACHED') {
+          // Password is already correct at this point — offer a self-service escape hatch
+          // instead of a dead end (e.g. a forgotten/stale browser tab eating the device slot).
+          if (confirm(`${err.message}\n\nSign out your other device(s) now and log in here instead?`)) {
+            try {
+              const d2 = await doLogin(true);
+              if (d2.mfaRequired) {
+                $('#mfa-user-id').value = d2.userId;
+                $('#mfa-temp-token').value = d2.tempToken;
+                window._forceSignOutOthersOnMfa = true;
+                window._switchAuthPanel('mfa');
+                return;
+              }
+              setState({token:d2.token,user:d2.user,org:d2.org});
+              toast('Signed out other devices — welcome back!','success');
+              history.replaceState({}, '', '/app');
+              render();
+              maybeStartPendingCheckout();
+            } catch (err2) { toast(err2.message, 'error'); }
+          }
+          return;
+        } else if (err.code === 'ACCOUNT_LOCKED') {
           toast(err.message, 'error');
           return;
         }
@@ -1598,14 +1620,31 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
     if (mf) mf.onsubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
+      const doMfa = (forceSignOutOthers) => api('/auth/mfa/challenge', { method:'POST', body:JSON.stringify({ userId: fd.get('userId'), tempToken: fd.get('tempToken'), code: fd.get('code'), deviceId:getDeviceId(), deviceLabel:getDeviceLabel(), ...(forceSignOutOthers ? { forceSignOutOthers: true } : {}) })});
       try {
-        const d = await api('/auth/mfa/challenge', { method:'POST', body:JSON.stringify({ userId: fd.get('userId'), tempToken: fd.get('tempToken'), code: fd.get('code'), deviceId:getDeviceId(), deviceLabel:getDeviceLabel() })});
+        const d = await doMfa(!!window._forceSignOutOthersOnMfa);
+        window._forceSignOutOthersOnMfa = false;
         setState({token:d.token,user:d.user,org:d.org});
         toast('MFA verified','success');
         history.replaceState({}, '', '/app');
         render();
         maybeStartPendingCheckout();
-      } catch(err) { toast(err.message,'error'); }
+      } catch(err) {
+        if (err.code === 'DEVICE_LIMIT_REACHED') {
+          if (confirm(`${err.message}\n\nSign out your other device(s) now and continue?`)) {
+            try {
+              const d2 = await doMfa(true);
+              setState({token:d2.token,user:d2.user,org:d2.org});
+              toast('Signed out other devices — welcome back!','success');
+              history.replaceState({}, '', '/app');
+              render();
+              maybeStartPendingCheckout();
+            } catch (err2) { toast(err2.message, 'error'); }
+          }
+          return;
+        }
+        toast(err.message,'error');
+      }
     };
     if (ff) ff.onsubmit = async (e) => {
       e.preventDefault();
@@ -6625,9 +6664,9 @@ Status: Discharged`;
         <div class="glass rounded-xl p-5 border border-gray-700">
           <div class="flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <h2 class="text-sm font-semibold text-white mb-1"><i class="fas fa-lock mr-1.5 text-amber-400"></i>Device / Location Lock <span class="text-[10px] uppercase tracking-wide text-indigo-300 font-bold ml-1">Platform-wide</span></h2>
-              <p class="text-xs text-gray-400 max-w-xl">This policy is set once for the entire platform by the master RJ Business Solutions account and applies to every tenant's logins — it is not configurable per organization. When enabled, each team member in any org can only be signed in on <strong>${policy.maxDevices}</strong> device${policy.maxDevices > 1 ? 's' : ''} at a time.</p>
-              ${!canEditPolicy ? `<p class="text-[11px] text-amber-300/90 mt-2"><i class="fas fa-lock mr-1"></i>Only the platform owner (RJ Business Solutions master account) can change this setting. Contact them to request a change.</p>` : ''}
+              <h2 class="text-sm font-semibold text-white mb-1"><i class="fas fa-lock mr-1.5 text-amber-400"></i>Device / Location Lock <span class="text-[10px] uppercase tracking-wide text-indigo-300 font-bold ml-1">Owner-controlled</span></h2>
+              <p class="text-xs text-gray-400 max-w-xl">This is your organization's own device policy, but only the platform owner (RJ Business Solutions master account) can change it — it keeps every org's limit independent (e.g. your org may have a different limit than others). When enabled, each team member can only be signed in on <strong>${policy.maxDevices}</strong> device${policy.maxDevices > 1 ? 's' : ''} at a time.</p>
+              ${!canEditPolicy ? `<p class="text-[11px] text-amber-300/90 mt-2"><i class="fas fa-lock mr-1"></i>Only the platform owner can change this setting. Contact them to request a change. If you're locked out because all your device slots are in use, sign out an old device below.</p>` : ''}
             </div>
             <div class="flex items-center gap-3">
               <label class="flex items-center gap-2 ${canEditPolicy ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}">
@@ -6640,7 +6679,7 @@ Status: Discharged`;
           ${canEditPolicy ? `<div class="mt-4 flex items-center gap-3 flex-wrap">
             <label class="text-xs text-gray-400">Max concurrent devices per user</label>
             <input type="number" id="device-lock-max" min="1" max="50" value="${policy.maxDevices}" class="w-20 bg-gray-800/80 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-sm outline-none">
-            <button id="device-lock-save" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-xs font-semibold transition">Save Platform Policy</button>
+            <button id="device-lock-save" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-xs font-semibold transition">Save Policy</button>
           </div>` : ''}
         </div>
 
