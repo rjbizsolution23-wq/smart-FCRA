@@ -170,3 +170,4 @@ For custom business customizations or enterprise licensing options, reach out to
 ---
 © 2026 Rick Jefferson | RJ Business Solutions. All rights reserved. Registered trademark.
 <!-- deploy-trigger: 2026-08-27T19:30:55Z redeploy after Actions billing fix -->
+<!-- cf-secrets-verify: 2026-08-27T19:45:56Z verify GitHub Actions can deploy to Cloudflare Pages -->
