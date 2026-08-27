@@ -21,7 +21,7 @@ export type ContractParty = {
 };
 
 export const ESIGN_DISCLOSURE_VERSION = 'esign-ueta-v1.0-2026-07';
-export const CROA_TEMPLATE_VERSION = 'croa-service-v1.0-2026-07';
+export const CROA_TEMPLATE_VERSION = 'croa-service-v1.1-2026-08';
 export const LPOA_TEMPLATE_VERSION = 'lpoa-limited-v1.0-2026-07';
 export const REP_AUTH_TEMPLATE_VERSION = 'rep-auth-v1.0-2026-07';
 
@@ -85,6 +85,9 @@ Company is NOT a law firm unless separately disclosed in writing. Litigation adv
 2. FEES (CROA § 1679b / § 1679c)
 Monthly / program fee: ${fee}.
 IMPORTANT — ADVANCE FEE RESTRICTIONS: Under the Telemarketing Sales Rule (16 C.F.R. § 310.4(a)(2)) and CROA, Company does not charge or collect fees for credit repair services before those services are fully performed, except as expressly permitted by law. Any subscription for software/portal access is disclosed separately from credit-repair performance fees.
+
+2A. VOLUNTARY SIX-MONTH BILLING HOLD (Company Policy — Stricter Than Law Requires)
+In addition to, and independent of, the statutory advance-fee restrictions above, Company will NOT invoice, charge, or collect any fee for covered credit-repair services until at least six (6) months (180 days) have elapsed after the specific service is recorded in Company's system as fully performed and completed. This billing hold applies per-service (each dispute round, analysis, or deliverable has its own completion date and its own six-month hold) and is enforced automatically by Company's billing system — not merely a manual promise. This provision may be more protective of You than CROA/TSR require and does not reduce or waive any right You have under CROA, TSR, or applicable state law; it only adds an additional delay before any billing event may occur. This section survives even if a portion of Section 2's statutory advance-fee language is judicially narrowed or superseded.
 
 3. CONSUMER RIGHTS NOTICE (CROA § 1679c — REQUIRED)
 You have a right to dispute inaccurate information in your credit report by contacting the consumer reporting agency directly. You do not need a credit repair company to do this. You may cancel this contract without penalty anytime before midnight of the third business day after signing. See cancellation form below.

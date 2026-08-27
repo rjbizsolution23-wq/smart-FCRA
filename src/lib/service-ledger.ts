@@ -23,14 +23,14 @@ export async function recordServiceCompleted(opts: {
   }
 }
 
-export async function hasCompletedService(db: D1Database, clientId: string, orgId: string, serviceType: string): Promise<{ yes: boolean; recordId: string | null }> {
+export async function hasCompletedService(db: D1Database, clientId: string, orgId: string, serviceType: string): Promise<{ yes: boolean; recordId: string | null; performedAt: string | null }> {
   try {
     const row = await db.prepare(
-      `SELECT id FROM service_records WHERE client_id = ? AND org_id = ? AND service_type = ? AND status = 'COMPLETED' ORDER BY performed_at DESC LIMIT 1`
+      `SELECT id, performed_at FROM service_records WHERE client_id = ? AND org_id = ? AND service_type = ? AND status = 'COMPLETED' ORDER BY performed_at DESC LIMIT 1`
     ).bind(clientId, orgId, serviceType).first() as any;
-    return { yes: !!row?.id, recordId: row?.id || null };
+    return { yes: !!row?.id, recordId: row?.id || null, performedAt: row?.performed_at || null };
   } catch {
-    return { yes: false, recordId: null };
+    return { yes: false, recordId: null, performedAt: null };
   }
 }
 
@@ -78,7 +78,9 @@ export async function assertCoveredChargeAllowed(opts: {
   generateId: () => string;
 }): Promise<{ allowed: boolean; eval: BillingEvalResult; decisionId: string; serviceRecordId: string | null }> {
   const covered = isCoveredCreditRepairService(opts.serviceType);
-  const completed = covered ? await hasCompletedService(opts.db, opts.clientId, opts.orgId, opts.serviceType) : { yes: true, recordId: null };
+  const completed = covered
+    ? await hasCompletedService(opts.db, opts.clientId, opts.orgId, opts.serviceType)
+    : { yes: true, recordId: null, performedAt: null };
   const evalResult = evaluateBillableEvent({
     serviceType: opts.serviceType,
     salesChannel: opts.salesChannel || 'ONLINE',
@@ -87,6 +89,7 @@ export async function assertCoveredChargeAllowed(opts: {
     serviceFullyPerformed: completed.yes,
     coveredCreditRepair: covered,
     tsrApplies: opts.tsrApplies,
+    serviceCompletedAt: completed.performedAt,
   });
   const decisionId = opts.generateId();
   try {

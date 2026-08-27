@@ -18,7 +18,7 @@ import { computeNextBestAction, CASE_STAGE_LABELS, type NbaContext } from '../en
 import { getLearnedIntelligenceSummary } from './client-learned-intelligence';
 import { describeRealAiStack } from '../data/ai-model-registry';
 import { aggregateUtilization } from '../engine/utilization';
-import { evaluateBillableEvent, isCoveredCreditRepairService, BILLING_POLICY_VERSION } from './billing-compliance';
+import { evaluateBillableEvent, isCoveredCreditRepairService, BILLING_POLICY_VERSION, BILLING_HOLD_DAYS_AFTER_COMPLETION } from './billing-compliance';
 import { findingHasForbiddenLabel } from '../engine/metro2-findings';
 import {
   accountFromParsed,
@@ -69,7 +69,7 @@ const CONSUMER_RIGHTS = {
     {
       id: 'croa',
       title: 'Credit repair (CROA)',
-      body: 'The Credit Repair Organizations Act requires specified consumer disclosures, a written contract, and cancellation rights. It prohibits charging for covered credit-repair services before the promised service has been fully performed.',
+      body: 'The Credit Repair Organizations Act requires specified consumer disclosures, a written contract, and cancellation rights. It prohibits charging for covered credit-repair services before the promised service has been fully performed. This company voluntarily goes further: it will not invoice or collect payment for a covered service until six (6) months after that service is recorded as completed.',
       source: 'Federal Trade Commission',
     },
     {
@@ -1038,8 +1038,9 @@ export function registerClientIntelligenceRoutes(
       ledger,
       investigationClocks: clocks,
       mailPostage,
-      croaNotice: 'Covered credit-repair charges are blocked until a completion record exists. Platform software subscriptions are billed separately.',
-      notice: 'You are billed only after covered credit-repair work is recorded as performed. Invoices from Stripe appear when a charge is allowed and collected.',
+      croaNotice: 'Covered credit-repair charges are blocked until a completion record exists, and then held for an additional six (6) months (180 days) after that completion date under Company policy. Platform software subscriptions are billed separately.',
+      notice: 'You are billed only after covered credit-repair work is recorded as performed, and never sooner than six months after that completion date. Invoices from Stripe appear only once both the legal completion requirement and the six-month policy hold have been satisfied.',
+      billingHoldDays: BILLING_HOLD_DAYS_AFTER_COMPLETION,
       cancelPage: 'client-cancel',
     });
   });
@@ -1056,7 +1057,7 @@ export function registerClientIntelligenceRoutes(
       const serviceType = body.serviceType || 'credit_report_analysis';
       const completed = client ? await softFirst(
         c.env.DB,
-        `SELECT id FROM service_records WHERE client_id = ? AND org_id = ? AND service_type = ? AND status = 'COMPLETED' LIMIT 1`,
+        `SELECT id, performed_at FROM service_records WHERE client_id = ? AND org_id = ? AND service_type = ? AND status = 'COMPLETED' ORDER BY performed_at DESC LIMIT 1`,
         client.id, user.org_id, serviceType,
       ) : null;
       const evalResult = evaluateBillableEvent({
@@ -1068,6 +1069,7 @@ export function registerClientIntelligenceRoutes(
         serviceFullyPerformed: !!completed,
         coveredCreditRepair: isCoveredCreditRepairService(serviceType),
         tsrApplies: body.tsrApplies,
+        serviceCompletedAt: (completed as any)?.performed_at || null,
       });
       const decisionId = generateId();
       await c.env.DB.prepare(

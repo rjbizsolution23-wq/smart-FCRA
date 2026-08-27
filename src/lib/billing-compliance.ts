@@ -15,6 +15,10 @@ export type BillingEvalInput = {
   serviceFullyPerformed: boolean;
   coveredCreditRepair: boolean;
   tsrApplies?: boolean;
+  /** ISO timestamp the service_records completion row was written. Preferred over daysSinceCompletion. */
+  serviceCompletedAt?: string | null;
+  /** Pre-computed days elapsed since completion. Overrides serviceCompletedAt if both are supplied. */
+  daysSinceCompletion?: number;
 };
 
 export type BillingEvalResult = {
@@ -24,11 +28,36 @@ export type BillingEvalResult = {
   policyVersion: string;
 };
 
-export const BILLING_POLICY_VERSION = '2026.08.1';
+export const BILLING_POLICY_VERSION = '2026.08.2';
+
+/**
+ * Company billing-hold policy: on top of the statutory CROA/TSR "no charge before
+ * the service is fully performed" floor, this company does not invoice or collect
+ * any fee for covered credit-repair services until six (6) months (180 days) have
+ * elapsed AFTER the service completion record was written. This is a voluntary,
+ * stricter-than-required consumer-protection commitment stated in the CROA Service
+ * Agreement (see src/data/legal-contracts.ts) and enforced here, not just on paper.
+ */
+export const BILLING_HOLD_DAYS_AFTER_COMPLETION = 180; // ~6 months
+
+function computeDaysSinceCompletion(input: BillingEvalInput): number | null {
+  if (typeof input.daysSinceCompletion === 'number' && Number.isFinite(input.daysSinceCompletion)) {
+    return input.daysSinceCompletion;
+  }
+  if (input.serviceCompletedAt) {
+    const completed = new Date(input.serviceCompletedAt).getTime();
+    if (!Number.isNaN(completed)) {
+      return Math.floor((Date.now() - completed) / (24 * 60 * 60 * 1000));
+    }
+  }
+  return null;
+}
 
 /**
  * CROA prohibits charging for covered credit-repair services before the
  * promised service has been fully performed. TSR can add telemarketing restrictions.
+ * Company policy additionally holds billing for BILLING_HOLD_DAYS_AFTER_COMPLETION
+ * days after that completion is recorded (see constant above).
  */
 export function evaluateBillableEvent(input: BillingEvalInput): BillingEvalResult {
   const requirements: string[] = [];
@@ -60,6 +89,26 @@ export function evaluateBillableEvent(input: BillingEvalInput): BillingEvalResul
       explanation,
       policyVersion: BILLING_POLICY_VERSION,
     };
+  }
+  if (input.coveredCreditRepair && input.serviceFullyPerformed) {
+    const daysSince = computeDaysSinceCompletion(input);
+    if (daysSince === null || daysSince < BILLING_HOLD_DAYS_AFTER_COMPLETION) {
+      explanation.push(
+        `Company policy: no charge or invoice for covered credit-repair services until ${BILLING_HOLD_DAYS_AFTER_COMPLETION} days (6 months) after the service completion record was written.`,
+      );
+      if (daysSince !== null) {
+        explanation.push(`${daysSince} of ${BILLING_HOLD_DAYS_AFTER_COMPLETION} required days elapsed since completion.`);
+      }
+      return {
+        result: 'BLOCK',
+        requirements: [
+          ...requirements,
+          `Six-month (${BILLING_HOLD_DAYS_AFTER_COMPLETION}-day) post-completion billing hold has not elapsed.`,
+        ],
+        explanation,
+        policyVersion: BILLING_POLICY_VERSION,
+      };
+    }
   }
   if (requirements.length) {
     return {

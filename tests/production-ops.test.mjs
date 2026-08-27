@@ -17,7 +17,7 @@ const { inspectUpload, sniffMime } = await import(pathToFileURL(path.join(root, 
 const { computeFcra611Clock, parseMailingAddress, craAddressForRecipient, FCRA_611_DAYS, FCRA_611_OPERATIONAL_DAYS } = await import(
   pathToFileURL(path.join(root, 'src/lib/investigation-clocks.ts')).href
 );
-const { evaluateBillableEvent, isCoveredCreditRepairService } = await import(
+const { evaluateBillableEvent, isCoveredCreditRepairService, BILLING_HOLD_DAYS_AFTER_COMPLETION } = await import(
   pathToFileURL(path.join(root, 'src/lib/billing-compliance.ts')).href
 );
 const { click2mailConfigured } = await import(pathToFileURL(path.join(root, 'src/lib/click2mail.ts')).href);
@@ -71,6 +71,19 @@ const { click2mailConfigured } = await import(pathToFileURL(path.join(root, 'src
     coveredCreditRepair: true,
   });
   assert(blocked.result === 'BLOCK', 'no charge before completion record');
+
+  const completedTooSoon = evaluateBillableEvent({
+    serviceType: 'credit_report_analysis',
+    salesChannel: 'ONLINE',
+    contractSigned: true,
+    croaDisclosuresAcknowledged: true,
+    serviceFullyPerformed: true,
+    coveredCreditRepair: true,
+    serviceCompletedAt: new Date().toISOString(),
+  });
+  assert(completedTooSoon.result === 'BLOCK', 'six-month post-completion billing hold blocks immediate charge');
+  assert(BILLING_HOLD_DAYS_AFTER_COMPLETION === 180, 'billing hold constant is 180 days (~6 months)');
+
   const allowed = evaluateBillableEvent({
     serviceType: 'credit_report_analysis',
     salesChannel: 'ONLINE',
@@ -78,8 +91,9 @@ const { click2mailConfigured } = await import(pathToFileURL(path.join(root, 'src
     croaDisclosuresAcknowledged: true,
     serviceFullyPerformed: true,
     coveredCreditRepair: true,
+    serviceCompletedAt: new Date(Date.now() - (BILLING_HOLD_DAYS_AFTER_COMPLETION + 1) * 24 * 60 * 60 * 1000).toISOString(),
   });
-  assert(allowed.result === 'ALLOW', 'charge after completion');
+  assert(allowed.result === 'ALLOW', 'charge allowed after completion + six-month hold elapsed');
 }
 
 {

@@ -2817,7 +2817,7 @@ Website: https://rickjeffersonsolutions.com | Support: support@rjbusinesssolutio
 
   function renderDocsList(docs) {
     if (!docs.length) return '<div class="text-center py-8 text-gray-500"><i class="fas fa-file-contract text-3xl mb-3"></i><p>No documents yet</p></div>';
-    return `<div class="space-y-2">${docs.map(d=>`<div onclick="window._viewDoc('${d.id}')" class="glass rounded-lg p-4 card-hover cursor-pointer"><div class="flex items-center justify-between"><div><div class="text-sm font-medium text-white"><i class="fas fa-file-contract mr-2 text-purple-400"></i>${d.title}</div><div class="text-xs text-gray-400">${d.doc_type} &bull; ${shortDate(d.created_at)}</div></div><span class="px-2 py-0.5 rounded text-[10px] font-medium ${d.status==='draft'?'bg-yellow-900/30 text-yellow-400':'bg-green-900/30 text-green-400'}">${d.status}</span></div></div>`).join('')}</div>`;
+    return `<div class="space-y-2">${docs.map(d=>`<div onclick="window._viewDoc('${d.id}')" class="glass rounded-lg p-4 card-hover cursor-pointer"><div class="flex items-center justify-between gap-3"><div class="min-w-0"><div class="text-sm font-medium text-white truncate"><i class="fas fa-file-contract mr-2 text-purple-400"></i>${d.title}</div><div class="text-xs text-gray-400">${d.doc_type} &bull; ${shortDate(d.created_at)}</div></div><div class="flex items-center gap-2 shrink-0"><span class="px-2 py-0.5 rounded text-[10px] font-medium ${d.status==='draft'?'bg-yellow-900/30 text-yellow-400':'bg-green-900/30 text-green-400'}">${d.status}</span><button onclick="event.stopPropagation();window._downloadDocPdf('${d.id}','${escapeHtml((d.title||'document').replace(/[^a-z0-9]+/gi,'-'))}')" title="Download mail-ready PDF" class="bg-emerald-600/20 border border-emerald-500/30 hover:bg-emerald-600/30 text-emerald-300 px-2.5 py-1 rounded-lg text-[10px] font-semibold transition"><i class="fas fa-file-pdf mr-1"></i>PDF</button></div></div></div>`).join('')}</div>`;
   }
 
   function renderActivityList(activity) {
@@ -4709,27 +4709,86 @@ async function pgOnboardingWizard(el, data) {
     </div>`;
   }
 
+  // Renders a results panel listing every generated document with a per-item
+  // "Download PDF" button plus a "Download All PDFs" action, so bulk-generated
+  // letters are never left as unformatted text with no way to get a PDF.
+  function renderBulkGenerateResults(el, documents) {
+    if (!el) return;
+    if (!documents || !documents.length) {
+      el.innerHTML = `<div class="glass rounded-xl p-5 border border-red-500/30 text-center text-sm text-red-300">No documents were generated.</div>`;
+      return;
+    }
+    el.classList.remove('hidden');
+    el.innerHTML = `<div class="glass rounded-xl p-5 fade-in space-y-3">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-bold text-white"><i class="fas fa-check-circle text-emerald-400 mr-2"></i>${documents.length} document(s) generated — mail-ready PDFs</h3>
+        <button id="bulk-download-all-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs font-bold transition shadow-lg shadow-emerald-600/20"><i class="fas fa-file-pdf mr-1"></i>Download All PDFs</button>
+      </div>
+      <div class="space-y-2">
+        ${documents.map(d => `<div class="flex items-center justify-between bg-gray-800/40 rounded-lg p-3">
+          <div class="min-w-0"><div class="text-sm font-medium text-white truncate">${escapeHtml(d.title)}</div><div class="text-xs text-gray-400">${escapeHtml(d.docType || d.doc_type || '')}</div></div>
+          <div class="flex gap-2 shrink-0">
+            <button onclick="window._downloadDocPdf('${d.id}','${escapeHtml((d.title||'letter').replace(/[^a-z0-9]+/gi,'-'))}')" class="bg-emerald-600/20 border border-emerald-500/30 hover:bg-emerald-600/30 text-emerald-300 px-3 py-1.5 rounded-lg text-xs font-semibold transition"><i class="fas fa-file-pdf mr-1"></i>PDF</button>
+            <button onclick="window._viewDoc('${d.id}')" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition"><i class="fas fa-eye mr-1"></i>View</button>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+    const allBtn = document.getElementById('bulk-download-all-btn');
+    if (allBtn) {
+      allBtn.onclick = async () => {
+        allBtn.disabled = true;
+        const original = allBtn.innerHTML;
+        allBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Downloading...';
+        for (const d of documents) {
+          await window._downloadDocPdf(d.id, (d.title || 'letter').replace(/[^a-z0-9]+/gi, '-'));
+          await new Promise(r => setTimeout(r, 400)); // stagger browser downloads
+        }
+        allBtn.disabled = false;
+        allBtn.innerHTML = original;
+      };
+    }
+  }
+
   window._bulkGenerate = async function(clientId, reportId) {
     try {
-      toast('Generating all dispute documents...', 'info');
+      toast('Generating all dispute documents as mail-ready PDFs...', 'info');
       const result = await api('/documents/generate-bulk', { method:'POST', body:JSON.stringify({
         clientId, reportId,
         docTypes: ['bureau-dispute','furnisher-dispute','debt-validation','609-disclosure','method-of-verification','cease-desist','intent-to-sue','cfpb-complaint','state-ag-complaint','goodwill-letter'],
         bureau: 'Equifax',
       })});
       toast(`Generated ${result.count} documents!`, 'success');
+      let resultsEl = document.getElementById('bulk-gen-results');
+      if (!resultsEl) {
+        resultsEl = document.createElement('div');
+        resultsEl.id = 'bulk-gen-results';
+        const anchor = document.querySelector('#page-content');
+        if (anchor) anchor.appendChild(resultsEl);
+      }
+      renderBulkGenerateResults(resultsEl, result.documents);
+      resultsEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch(err) { toast(err.message, 'error'); }
   };
 
   window._bulkGenerateLitigation = async function(clientId, reportId) {
     try {
-      toast('Generating complete court litigation package...', 'info');
+      toast('Generating complete court litigation package as mail-ready PDFs...', 'info');
       const result = await api('/documents/generate-bulk', { method:'POST', body:JSON.stringify({
         clientId, reportId,
         docTypes: ['fed-complaint','fed-affidavit','state-complaint','civil-coversheet','motion-summary-judg'],
         bureau: 'Equifax',
       })});
       toast(`Generated ${result.count} litigation documents successfully!`, 'success');
+      let resultsEl = document.getElementById('bulk-gen-results');
+      if (!resultsEl) {
+        resultsEl = document.createElement('div');
+        resultsEl.id = 'bulk-gen-results';
+        const anchor = document.querySelector('#page-content');
+        if (anchor) anchor.appendChild(resultsEl);
+      }
+      renderBulkGenerateResults(resultsEl, result.documents);
+      resultsEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch(err) { toast(err.message, 'error'); }
   };
 
@@ -6236,7 +6295,7 @@ Status: Discharged`;
       const d = await api('/documents');
       el.innerHTML = `<div class="fade-in">
         <div class="flex items-center justify-between mb-6"><div><h1 class="text-xl font-bold text-white">Documents</h1><p class="text-sm text-gray-400">${d.documents.length} generated</p></div></div>
-        ${d.documents.length?`<div class="space-y-2">${d.documents.map(dc=>`<div onclick="window._viewDoc('${dc.id}')" class="glass rounded-xl p-4 card-hover cursor-pointer"><div class="flex items-center justify-between"><div><div class="text-sm font-medium text-white"><i class="fas fa-file-contract mr-2 text-purple-400"></i>${dc.title}</div><div class="text-xs text-gray-400">${dc.first_name} ${dc.last_name} &bull; ${dc.doc_type} &bull; ${shortDate(dc.created_at)}</div></div><span class="px-2 py-0.5 rounded text-[10px] font-medium ${dc.status==='draft'?'bg-yellow-900/30 text-yellow-400':'bg-green-900/30 text-green-400'}">${dc.status}</span></div></div>`).join('')}</div>`:'<div class="glass rounded-xl p-8 text-center border border-gray-700"><i class="fas fa-folder-open text-3xl text-gray-600 mb-3"></i><h3 class="text-sm font-semibold text-white mb-1">No documents yet</h3><p class="text-xs text-gray-500">Generate your first legal document from a client profile</p></div>'}
+        ${d.documents.length?`<div class="space-y-2">${d.documents.map(dc=>`<div onclick="window._viewDoc('${dc.id}')" class="glass rounded-xl p-4 card-hover cursor-pointer"><div class="flex items-center justify-between gap-3"><div class="min-w-0"><div class="text-sm font-medium text-white truncate"><i class="fas fa-file-contract mr-2 text-purple-400"></i>${dc.title}</div><div class="text-xs text-gray-400">${dc.first_name} ${dc.last_name} &bull; ${dc.doc_type} &bull; ${shortDate(dc.created_at)}</div></div><div class="flex items-center gap-2 shrink-0"><span class="px-2 py-0.5 rounded text-[10px] font-medium ${dc.status==='draft'?'bg-yellow-900/30 text-yellow-400':'bg-green-900/30 text-green-400'}">${dc.status}</span><button onclick="event.stopPropagation();window._downloadDocPdf('${dc.id}','${escapeHtml((dc.title||'document').replace(/[^a-z0-9]+/gi,'-'))}')" title="Download mail-ready PDF" class="bg-emerald-600/20 border border-emerald-500/30 hover:bg-emerald-600/30 text-emerald-300 px-2.5 py-1 rounded-lg text-[10px] font-semibold transition"><i class="fas fa-file-pdf mr-1"></i>PDF</button></div></div></div>`).join('')}</div>`:'<div class="glass rounded-xl p-8 text-center border border-gray-700"><i class="fas fa-folder-open text-3xl text-gray-600 mb-3"></i><h3 class="text-sm font-semibold text-white mb-1">No documents yet</h3><p class="text-xs text-gray-500">Generate your first legal document from a client profile</p></div>'}
       </div>`;
     } catch(err) {
       el.innerHTML = `<div class="fade-in"><div class="glass rounded-xl p-8 border border-red-500/30 text-center"><i class="fas fa-exclamation-triangle text-3xl text-red-400 mb-3"></i><h3 class="text-lg font-bold text-white mb-1">Failed to load documents</h3><p class="text-sm text-gray-400">${err.message}</p><button onclick="window._nav('documents')" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">Retry</button></div></div>`;
@@ -6252,10 +6311,46 @@ Status: Discharged`;
     el.innerHTML = `<div class="fade-in">
       <button onclick="window._nav('documents')" class="text-gray-400 hover:text-white text-sm mb-4 inline-flex items-center gap-1.5 transition"><i class="fas fa-arrow-left text-xs"></i>Back</button>
       <div class="flex items-center justify-between mb-4"><h1 class="text-xl font-bold text-white">${dc.title}</h1>
-        <div class="flex gap-2"><button id="ai-rewrite-btn" onclick="window._aiRewrite('${dc.id}')" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-robot mr-1"></i>AI Rewrite</button><button onclick="window._copyDoc()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-copy mr-1"></i>Copy</button><button onclick="window._emailDoc()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-envelope mr-1"></i>Email</button><button onclick="window._mailDoc('${dc.id}','${encodeURIComponent(client.first_name||'')}','${encodeURIComponent(client.last_name||'')}','${encodeURIComponent(client.address_line1||'')}','${encodeURIComponent(client.city||'')}','${encodeURIComponent(client.state||'')}','${encodeURIComponent(client.zip||'')}','${encodeURIComponent(dc.client_id||'')}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-paper-plane mr-1"></i>Mail</button><button onclick="window._printDoc()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-print mr-1"></i>Print</button></div>
+        <div class="flex gap-2"><button id="doc-download-pdf-btn" onclick="window._downloadDocPdf('${dc.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs font-bold transition shadow-lg shadow-emerald-600/20"><i class="fas fa-file-pdf mr-1"></i>Download PDF</button><button id="ai-rewrite-btn" onclick="window._aiRewrite('${dc.id}')" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-robot mr-1"></i>AI Rewrite</button><button onclick="window._copyDoc()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-copy mr-1"></i>Copy</button><button onclick="window._emailDoc()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-envelope mr-1"></i>Email</button><button onclick="window._mailDoc('${dc.id}','${encodeURIComponent(client.first_name||'')}','${encodeURIComponent(client.last_name||'')}','${encodeURIComponent(client.address_line1||'')}','${encodeURIComponent(client.city||'')}','${encodeURIComponent(client.state||'')}','${encodeURIComponent(client.zip||'')}','${encodeURIComponent(dc.client_id||'')}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-paper-plane mr-1"></i>Mail</button><button onclick="window._printDoc()" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition"><i class="fas fa-print mr-1"></i>Print</button></div>
       </div>
+      <div class="glass rounded-xl p-3 mb-3 border border-emerald-500/20 bg-emerald-950/10 text-[11px] text-emerald-300 flex items-center gap-2"><i class="fas fa-info-circle"></i>This is a formatted plain-text preview. Always use <strong>Download PDF</strong> for the mail-ready, court-ready, print-ready version — never send or submit the raw preview text.</div>
       <div class="glass rounded-xl p-6"><pre id="doc-content" class="whitespace-pre-wrap text-sm text-gray-200 font-mono leading-relaxed">${dc.content}</pre></div>
     </div>`;
+  };
+
+  // Universal PDF download helper — every generated letter/document must be
+  // downloadable as a properly formatted, mail-ready PDF (never raw text/markdown).
+  // Reused across _viewDoc, bulk-generate results, and the client portal e-sign
+  // workspace, so it resolves the triggering button (via the click event) rather
+  // than assuming a single hardcoded button id.
+  window._downloadDocPdf = async function(id, filenameHint) {
+    const btn = (typeof event !== 'undefined' && event && event.currentTarget && event.currentTarget.tagName === 'BUTTON')
+      ? event.currentTarget
+      : (document.getElementById('doc-download-pdf-btn') || document.getElementById('client-doc-download-pdf-btn'));
+    const originalHtml = btn ? btn.innerHTML : null;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Preparing PDF...'; }
+    try {
+      const headers = {};
+      if (state.token) headers['Authorization'] = `Bearer ${state.token}`;
+      const res = await fetch(`/api/documents/${id}/pdf`, { headers });
+      if (!res.ok) {
+        let msg = 'PDF generation failed';
+        try { const j = await res.json(); msg = j.error || msg; } catch {}
+        throw new Error(msg);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(filenameHint || 'Dispute-Letter-' + id).replace(/[^a-z0-9\-_]+/gi, '-')}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast('Mail-ready PDF downloaded!', 'success');
+    } catch (err) {
+      toast(err.message || 'PDF download failed', 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+    }
   };
 
   window._copyDoc = function() { const c = $('#doc-content')?.textContent; if (c) { navigator.clipboard.writeText(c); toast('Copied!','success'); } };
@@ -12929,9 +13024,15 @@ async function pgAdminConsole(el) {
             <div class="lg:col-span-2 space-y-6">
               <!-- Preview Card -->
               <div class="glass rounded-2xl border border-gray-800 overflow-hidden flex flex-col">
-                <div class="bg-gray-900 px-5 py-4 border-b border-gray-800 flex items-center justify-between">
-                  <h3 class="text-sm font-bold text-white">${escapeHtml(activeDoc.title || activeDoc.doc_type)}</h3>
-                  <span class="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase ${activeDoc.status === 'signed' ? 'bg-green-500/10 text-green-400' : 'bg-amber-500/10 text-amber-400'}">${activeDoc.status}</span>
+                <div class="bg-gray-900 px-5 py-4 border-b border-gray-800 flex items-center justify-between gap-3">
+                  <h3 class="text-sm font-bold text-white truncate">${escapeHtml(activeDoc.title || activeDoc.doc_type)}</h3>
+                  <div class="flex items-center gap-2 shrink-0">
+                    <span class="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase ${activeDoc.status === 'signed' ? 'bg-green-500/10 text-green-400' : 'bg-amber-500/10 text-amber-400'}">${activeDoc.status}</span>
+                    <button id="client-doc-download-pdf-btn" onclick="window._downloadDocPdf('${activeDoc.id}','${escapeHtml((activeDoc.title || activeDoc.doc_type || 'document').replace(/[^a-z0-9]+/gi,'-'))}')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold transition shadow-lg shadow-emerald-600/20 flex items-center gap-1.5"><i class="fas fa-file-pdf"></i>Download PDF</button>
+                  </div>
+                </div>
+                <div class="px-5 pt-3 bg-gray-900 border-b border-gray-800">
+                  <div class="rounded-lg p-2.5 mb-3 border border-emerald-500/20 bg-emerald-950/10 text-[10.5px] text-emerald-300 flex items-center gap-2"><i class="fas fa-info-circle"></i>This is a formatted preview only. Always use <strong>Download PDF</strong> to get the official mail-ready, submission-ready copy of this document.</div>
                 </div>
                 <div class="p-6 bg-white text-gray-900 min-h-[350px] text-xs font-serif leading-relaxed select-text space-y-4 shadow-inner max-h-[500px] overflow-y-auto">
                   ${activeDoc.content ? escapeHtml(activeDoc.content).replace(/\n/g, '<br>') : `
@@ -14540,6 +14641,7 @@ async function pgAdminConsole(el) {
                     <td class="p-3.5 text-right">
                       <div class="flex items-center justify-end gap-1.5">
                         <button onclick="window._viewDoc('${d.id}')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2.5 py-1 rounded text-[10px] font-semibold transition" title="View Document"><i class="fas fa-eye"></i> View</button>
+                        <button onclick="window._downloadDocPdf('${d.id}','${escapeHtml((d.title||'document').replace(/[^a-z0-9]+/gi,'-'))}')" class="bg-emerald-600/20 border border-emerald-500/30 hover:bg-emerald-600/30 text-emerald-300 px-2.5 py-1 rounded text-[10px] font-semibold transition" title="Download mail-ready PDF"><i class="fas fa-file-pdf"></i> PDF</button>
                       </div>
                     </td>
                   </tr>
@@ -14574,6 +14676,7 @@ async function pgAdminConsole(el) {
               </div>
               <div class="flex items-center gap-2">
                 <button onclick="window._viewDoc('${d.id}')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1"><i class="fas fa-eye text-[10px]"></i> Preview</button>
+                <button onclick="window._downloadDocPdf('${d.id}','${escapeHtml((d.title||'document').replace(/[^a-z0-9]+/gi,'-'))}')" class="bg-emerald-600/20 border border-emerald-500/30 hover:bg-emerald-600/30 text-emerald-300 px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1" title="Download mail-ready PDF"><i class="fas fa-file-pdf text-[10px]"></i> PDF</button>
                 <button onclick="window._mailDoc('${d.id}','${encodeURIComponent(client.first_name||'')}','${encodeURIComponent(client.last_name||'')}','${encodeURIComponent(client.address_line1||'')}','${encodeURIComponent(client.city||'')}','${encodeURIComponent(client.state||'')}','${encodeURIComponent(client.zip||'')}')" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 shadow-lg shadow-green-600/10"><i class="fas fa-paper-plane text-[10px]"></i> Send Certified Mail</button>
               </div>
             </div>
@@ -15686,7 +15789,10 @@ async function pgAdminConsole(el) {
                             <div class="text-[10px] text-gray-500 font-mono mt-0.5">Lob Automated Mailroom</div>
                           </td>
                           <td class="p-3.5 text-right">
-                            <button onclick="window._viewDoc('${doc.id}')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition"><i class="fas fa-eye"></i> View</button>
+                            <div class="flex items-center justify-end gap-1.5">
+                              <button onclick="window._viewDoc('${doc.id}')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition"><i class="fas fa-eye"></i> View</button>
+                              <button onclick="window._downloadDocPdf('${doc.id}','${escapeHtml((doc.title||'document').replace(/[^a-z0-9]+/gi,'-'))}')" class="bg-emerald-600/20 border border-emerald-500/30 hover:bg-emerald-600/30 text-emerald-300 px-3 py-1.5 rounded-lg text-xs font-semibold transition" title="Download mail-ready PDF"><i class="fas fa-file-pdf"></i> PDF</button>
+                            </div>
                           </td>
                         </tr>
                       `;
@@ -15771,7 +15877,10 @@ async function pgAdminConsole(el) {
                               <div class="text-[10px] text-gray-500 font-mono mt-0.5">Lob Automated Mailroom</div>
                             </td>
                             <td class="p-3.5 text-right">
-                              <button onclick="window._viewDoc('${doc.id}')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition"><i class="fas fa-eye"></i> View</button>
+                              <div class="flex items-center justify-end gap-1.5">
+                                <button onclick="window._viewDoc('${doc.id}')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition"><i class="fas fa-eye"></i> View</button>
+                                <button onclick="window._downloadDocPdf('${doc.id}','${escapeHtml((doc.title||'document').replace(/[^a-z0-9]+/gi,'-'))}')" class="bg-emerald-600/20 border border-emerald-500/30 hover:bg-emerald-600/30 text-emerald-300 px-3 py-1.5 rounded-lg text-xs font-semibold transition" title="Download mail-ready PDF"><i class="fas fa-file-pdf"></i> PDF</button>
+                              </div>
                             </td>
                           </tr>
                         `;
@@ -15805,6 +15914,7 @@ async function pgAdminConsole(el) {
                       </div>
                       <div class="flex items-center justify-end gap-1.5 border-t border-gray-900 pt-3">
                         <button onclick="window._viewDoc('${doc.id}')" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1"><i class="fas fa-eye text-[10px]"></i> Preview</button>
+                        <button onclick="window._downloadDocPdf('${doc.id}','${escapeHtml((doc.title||'document').replace(/[^a-z0-9]+/gi,'-'))}')" class="bg-emerald-600/20 border border-emerald-500/30 hover:bg-emerald-600/30 text-emerald-300 px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1" title="Download mail-ready PDF"><i class="fas fa-file-pdf text-[10px]"></i> PDF</button>
                         <button onclick="window._nav('client-detail', { clientId: '${doc.client_id}' })" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 shadow-lg shadow-blue-600/10"><i class="fas fa-external-link-alt text-[10px]"></i> Open Workspace</button>
                       </div>
                     </div>
