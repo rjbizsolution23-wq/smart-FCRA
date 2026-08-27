@@ -148,10 +148,11 @@ export const EDUCATION_LIBRARY: Lesson[] = [
     level: 4,
     title: 'CROA, TSR & Your Rights in the Portal',
     summary: 'Why Cancel Services and consents are product features.',
-    content: `The Credit Repair Organizations Act requires clear contracts, cancellation rights, and bans advance fees for promised deletions. The Telemarketing Sales Rule adds cooling-off and disclosure requirements. Smart FCRA stores consents with timestamps, blocks marketing when consumer-rights lane is active, and exposes Cancel Services in the portal — not buried in email. You can revoke marketing SMS/email in Privacy & Security without losing case-status messages.`,
+    content: `The Credit Repair Organizations Act requires clear contracts, cancellation rights, and bans advance fees for promised deletions. The Telemarketing Sales Rule adds cooling-off and disclosure requirements. Smart FCRA stores consents with timestamps, blocks marketing when consumer-rights lane is active, and exposes Cancel Services in the portal — not buried in email. You can revoke marketing SMS/email in Privacy & Security without losing case-status messages. Your firm's contract also adds a voluntary six-month billing hold: no invoice or charge for covered credit-repair services until six months after that service is recorded as completed — enforced automatically by the billing engine, not just promised in writing.`,
     quiz: [
       { q: 'CROA requires:', choices: ['Guaranteed deletions', 'Written contract + cancel rights', 'Upfront fees before work', 'No disclosures'], answer: 1 },
       { q: 'Marketing messages require:', choices: ['No consent', 'Separate opt-in per lane', 'Only verbal OK', 'Staff SMS'], answer: 1 },
+      { q: 'This contract\'s billing hold after service completion is:', choices: ['Immediate', 'Six months (180 days)', 'One week', 'Not disclosed'], answer: 1 },
     ],
   },
   {

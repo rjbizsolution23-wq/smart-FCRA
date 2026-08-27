@@ -164,16 +164,32 @@ const { recommendLetterStrategy } = await import(
     coveredCreditRepair: true,
   });
   assert(tsr.result === 'BLOCK', 'TSR also blocks');
-  const ok = evaluateBillableEvent({
+
+  // Completed but recorded seconds ago — company's voluntary 6-month billing hold still blocks.
+  const tooSoon = evaluateBillableEvent({
     serviceType: 'credit_report_analysis',
     salesChannel: 'ONLINE',
     contractSigned: true,
     croaDisclosuresAcknowledged: true,
     serviceFullyPerformed: true,
     coveredCreditRepair: true,
+    serviceCompletedAt: new Date().toISOString(),
   });
-  assert(ok.result === 'ALLOW', 'completed service may bill');
-  console.log('✓ billing compliance CROA/TSR');
+  assert(tooSoon.result === 'BLOCK', 'six-month billing hold blocks charge right after completion');
+  assert(tooSoon.explanation.some((e) => /six.month|180/i.test(e)), 'explanation cites six-month hold');
+
+  // Completed 181 days ago — hold satisfied, statutory + policy gates both clear.
+  const holdSatisfied = evaluateBillableEvent({
+    serviceType: 'credit_report_analysis',
+    salesChannel: 'ONLINE',
+    contractSigned: true,
+    croaDisclosuresAcknowledged: true,
+    serviceFullyPerformed: true,
+    coveredCreditRepair: true,
+    serviceCompletedAt: new Date(Date.now() - 181 * 24 * 60 * 60 * 1000).toISOString(),
+  });
+  assert(holdSatisfied.result === 'ALLOW', 'completed service may bill once six-month hold has elapsed');
+  console.log('✓ billing compliance CROA/TSR + six-month billing hold');
 }
 
 {
