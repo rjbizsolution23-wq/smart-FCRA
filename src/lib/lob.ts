@@ -41,6 +41,8 @@ export type LobAddress = {
   address_zip?: string;
 };
 
+export const LOB_LETTER_PAGE_CSS = '@page { size: Letter; margin: 0.75in; }';
+
 const LOB_API = 'https://api.lob.com/v1';
 
 /** Lob keys are lowercase prefixes (test_ / live_ / test_pub_ / live_pub_). */
@@ -186,13 +188,15 @@ export function letterHtmlFromPlainText(title: string, content: string): string 
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
   const body = escape(content).replace(/\n/g, '<br/>');
-  return `<html><head><meta charset="utf-8"/><style>
-    @page { margin: 0.75in; }
-    body { font-family: Georgia, 'Times New Roman', serif; font-size: 12pt; line-height: 1.45; color: #111; }
-    h1 { font-size: 14pt; margin: 0 0 16px; }
+  return `<!doctype html><html><head><meta charset="utf-8"/><style>
+    ${LOB_LETTER_PAGE_CSS}
+    html, body { width: 8.5in; min-height: 11in; margin: 0; padding: 0; }
+    body { box-sizing: border-box; font-family: Georgia, 'Times New Roman', serif; font-size: 11pt; line-height: 1.4; color: #111; }
+    h1 { font-size: 14pt; line-height: 1.25; margin: 0 0 16pt; page-break-after: avoid; }
+    .letter-body { overflow-wrap: anywhere; white-space: normal; widows: 3; orphans: 3; }
   </style></head><body>
     <h1>${escape(title || 'Dispute Letter')}</h1>
-    <div>${body}</div>
+    <div class="letter-body">${body}</div>
   </body></html>`;
 }
 

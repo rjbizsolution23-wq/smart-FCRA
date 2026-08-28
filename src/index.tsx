@@ -55,6 +55,7 @@ import { MASTER_BUSINESS_VENDORS } from './data/funding/business-credit';
 import { buildInstitutionalProfile, slimInstitutionalReport } from './data/funding/profile-from-client';
 import { DOCUMENT_TYPES, type DocumentData } from './engine/documents';
 import { generatePDFReport, type PDFReportData, generatePDFFromText } from './engine/pdf-generator';
+import { pdfResponse } from './lib/pdf-response';
 import { turnstilePublicConfig, verifyTurnstileToken } from './lib/turnstile';
 import {
   DEMO_ORG_ID,
@@ -161,7 +162,7 @@ import sampleMfsnReport from './data/sample-mfsn-report.json';
 import { spaAppSource, pwaSwSource, pwaManifestSource, marketingLandingHtml, marketingCompareHtml, marketingDemoHtml, demoExperienceSource, platformGuideSource } from './generated/spa-source';
 import { persistCreditTwinFromParsed } from './lib/credit-twin';
 import { registerClientIntelligenceRoutes } from './lib/client-intelligence-routes';
-import { inspectUpload, decodeBase64Bytes, sanitizeFileName } from './lib/upload-hygiene';
+import { inspectUpload, decodeBase64Bytes, sanitizeFileName, validateCreditReportIngest } from './lib/upload-hygiene';
 import { vaultOriginalFromBody } from './lib/report-vault';
 import { persistInvestigationClock, closeInvestigationClock, FCRA_611_OPERATIONAL_DAYS } from './lib/investigation-clocks';
 import { recordServiceCompleted, assertCoveredChargeAllowed, writeBillingLedger } from './lib/service-ledger';
@@ -3688,13 +3689,17 @@ app.post('/api/client-portal/onboard', authMiddleware, async (c) => {
   }
 
   const body = await c.req.json();
-  const rawText = String(body.rawText || '').trim();
   const bureau = body.bureau || 'Unknown';
   const fileName = String(body.fileName || 'client-upload.txt').slice(0, 180);
-
-  if (!rawText || rawText.length < 80) {
-    return c.json({ error: 'Credit report text required (minimum 80 characters)' }, 400);
-  }
+  const ingest = await validateCreditReportIngest({
+    rawText: body.rawText,
+    fileBase64: body.fileBase64,
+    fileName,
+    declaredMime: body.mimeType,
+    ocrUsed: body.ocrUsed,
+  });
+  if (!ingest.ok) return c.json({ error: ingest.message, code: ingest.code }, ingest.httpStatus);
+  const rawText = ingest.rawText;
 
   const pp = body.permissiblePurposeConsent === true || client.permissible_purpose_consent === 1;
   const croa = body.croaContractAgreed === true || client.croa_contract_agreed === 1;
@@ -7014,9 +7019,12 @@ app.post('/api/reports/upload', authMiddleware, async (c) => {
   if (!planCheck.allowed) return c.json({ error: planCheck.message }, 403);
 
   const body = await c.req.json();
-  const { clientId, bureau, rawText, fileName, replaceCurrent, autoWorkflow, fileBase64, mimeType, ocrUsed } = body;
+  const { clientId, bureau, fileName, replaceCurrent, autoWorkflow, fileBase64, mimeType, ocrUsed } = body;
 
-  if (!clientId || !rawText) return c.json({ error: 'Client ID and report text required' }, 400);
+  if (!clientId) return c.json({ error: 'Client ID required' }, 400);
+  const ingest = await validateCreditReportIngest({ rawText: body.rawText, fileBase64, fileName, declaredMime: mimeType, ocrUsed });
+  if (!ingest.ok) return c.json({ error: ingest.message, code: ingest.code }, ingest.httpStatus);
+  const rawText = ingest.rawText;
 
   // Compliance Consent Check
   const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind(clientId, user.org_id).first() as any;
@@ -7232,9 +7240,10 @@ app.post('/api/reports/onboard', authMiddleware, async (c) => {
   if (!reportCheck.allowed) return c.json({ error: reportCheck.message }, 403);
 
   const body = await c.req.json();
-  const { rawText, fileName, bureau, clientId: bodyClientId, fileBase64, mimeType, ocrUsed } = body;
-
-  if (!rawText) return c.json({ error: 'Report text required for onboarding' }, 400);
+  const { fileName, bureau, clientId: bodyClientId, fileBase64, mimeType, ocrUsed } = body;
+  const ingest = await validateCreditReportIngest({ rawText: body.rawText, fileBase64, fileName, declaredMime: mimeType, ocrUsed });
+  if (!ingest.ok) return c.json({ error: ingest.message, code: ingest.code }, ingest.httpStatus);
+  const rawText = ingest.rawText;
 
   // 1. Parse credit report text with intelligent bureau detection
   const parsed = parseCreditReportText(rawText, { bureauHint: bureau, fileName });
@@ -8983,6 +8992,7 @@ app.get('/api/reports/:id/pdf', authMiddleware, async (c) => {
   const violations = await c.env.DB.prepare('SELECT * FROM violations WHERE report_id = ? AND org_id = ? ORDER BY severity ASC').bind(id, user.org_id).all();
   const litScore = calculateLitigationScore((violations?.results || []) as any);
   const client = await c.env.DB.prepare('SELECT * FROM clients WHERE id = ? AND org_id = ?').bind((report as any).client_id, user.org_id).first();
+  const reportOrg = await c.env.DB.prepare('SELECT name FROM organizations WHERE id = ?').bind(user.org_id).first() as any;
 
   const pdfViolations: PDFReportData['violations'] = (violations?.results || []).map((v: any) => ({
     id: v.id,
@@ -9028,17 +9038,12 @@ app.get('/api/reports/:id/pdf', authMiddleware, async (c) => {
     litigationScore: litScore.score,
     generatedDate: new Date().toISOString().split('T')[0],
     reportId: id,
-    orgName: 'RJ Business Solutions',
+    orgName: reportOrg?.name || 'Smart FCRA',
   };
 
   const pdfBytes = generatePDFReport(reportData);
 
-  return new Response(pdfBytes, {
-    headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="FCRA-Report-${id}.pdf"`,
-    },
-  });
+  return pdfResponse(pdfBytes, `FCRA-Report-${id}`);
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -9868,11 +9873,11 @@ app.post('/api/documents/:id/ai-rewrite', authMiddleware, async (c) => {
 
   try {
     const systemPrompt = `You are an expert consumer advocate and legal drafting specialist.
-Rewrite the provided credit bureau dispute letter to bypass OCR template-matching scanners by semantically restructuring sentences and format while remaining authentic.
+Rewrite the provided credit bureau dispute letter for clarity, factual precision, and a natural consumer-specific voice. Do not attempt to evade screening, identity, fraud, or document-review controls.
 
 CRITICAL:
 1. Preserve exactly: names, addresses, SSN last4, DOB, creditor names, account numbers, amounts, dates, and statutory citations (FCRA 15 U.S.C. § 1681 et seq.).
-2. Rewrite all other prose. Professional, firm, assertive tone.
+2. Rewrite all other prose in a professional, firm, accurate tone without adding claims or facts.
 3. Return ONLY the rewritten plain-text letter — no markdown, no preamble.`;
 
     const result = await generateOrgAiText({
@@ -10161,12 +10166,7 @@ app.get('/api/documents/:id/pdf', authMiddleware, async (c) => {
   const brandedBody = brandLetterContent(doc.content || '', firmLh);
   const pdfBytes = generatePDFFromText(doc.title, brandedBody, customLetterhead);
 
-  return new Response(pdfBytes, {
-    headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="DisputeLetter-${id}.pdf"`,
-    },
-  });
+  return pdfResponse(pdfBytes, `DisputeLetter-${id}`);
 });
 
 // ═══════════════════════════════════════════════════════════════

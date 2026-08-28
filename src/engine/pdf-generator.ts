@@ -1,6 +1,13 @@
 import { jsPDF } from 'jspdf';
 import { registerBrandFonts, setPdfFont } from './pdf-fonts';
 
+/** U.S. Letter is the required print-and-mail page size for Smart FCRA documents. */
+export const US_LETTER_PDF = {
+  widthMm: 215.9,
+  heightMm: 279.4,
+  marginMm: 19.05,
+} as const;
+
 export interface PDFReportData {
   clientName: string;
   clientAddress: string;
@@ -20,16 +27,16 @@ export interface PDFReportData {
 }
 
 export function generatePDFReport(data: PDFReportData): Uint8Array {
-  // Create jsPDF instance (standard portrait, mm, a4)
+  // Keep downloads, browser printing, and U.S. print-and-mail vendors on 8.5 x 11 in.
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
-    format: 'a4',
+    format: 'letter',
   });
 
-  const pageWidth = 210;
-  const pageHeight = 297;
-  const margin = 20;
+  const pageWidth = US_LETTER_PDF.widthMm;
+  const pageHeight = US_LETTER_PDF.heightMm;
+  const margin = US_LETTER_PDF.marginMm;
   const contentWidth = pageWidth - 2 * margin;
 
   let y = margin;
@@ -68,7 +75,7 @@ export function generatePDFReport(data: PDFReportData): Uint8Array {
 
   setPdfFont(doc, font, 'normal');
   doc.setFontSize(10);
-  doc.text('RJ Business Solutions • High-Precision Violation Engine', margin, 22);
+  doc.text(`${data.orgName || 'Smart FCRA'} • Compliance review`, margin, 22);
   doc.text(`Report ID: ${data.reportId}`, pageWidth - margin - 50, 15, { align: 'left' });
   doc.text(`Generated: ${data.generatedDate}`, pageWidth - margin - 50, 22, { align: 'left' });
 
@@ -291,6 +298,13 @@ export interface CustomLetterhead {
   repAgreementAttached?: boolean; // Appends verification of Power of Attorney
 }
 
+export function documentFooterText(customLetterhead?: CustomLetterhead): string {
+  if (!customLetterhead?.orgName) return 'Generated with Smart FCRA';
+  return customLetterhead.isHiredAdvocate
+    ? `Prepared by ${customLetterhead.orgName} | Authorized consumer representative`
+    : `${customLetterhead.orgName} | Smart FCRA document`;
+}
+
 /**
  * Compiles a long text-based document template into a clean, premium, and multi-page PDF.
  * It uses Helvetica layout, a custom deep blue header band or custom uploaded graphic letterhead banner, 
@@ -300,12 +314,12 @@ export function generatePDFFromText(title: string, text: string, customLetterhea
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
-    format: 'a4',
+    format: 'letter',
   });
 
-  const pageWidth = 210;
-  const pageHeight = 297;
-  const margin = 20;
+  const pageWidth = US_LETTER_PDF.widthMm;
+  const pageHeight = US_LETTER_PDF.heightMm;
+  const margin = US_LETTER_PDF.marginMm;
   const contentWidth = pageWidth - 2 * margin;
 
   let y = customLetterhead?.logoBase64 ? 45 : 55; // Start text lower if we have a default banner
@@ -333,14 +347,15 @@ export function generatePDFFromText(title: string, text: string, customLetterhea
     if (isFirstPage && customLetterhead?.logoBase64) {
       try {
         let cleanBase64 = customLetterhead.logoBase64;
+        let imageFormat: 'PNG' | 'JPEG' = 'PNG';
         if (cleanBase64.startsWith('data:image')) {
-          const match = cleanBase64.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/);
+          const match = cleanBase64.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/i);
           if (match) {
             cleanBase64 = match[2];
+            imageFormat = /jpe?g/i.test(match[1]) ? 'JPEG' : 'PNG';
           }
         }
-        // Draw the graphic letterhead banner beautifully
-        doc.addImage(cleanBase64, 'PNG', margin, 10, contentWidth, 25);
+        doc.addImage(cleanBase64, imageFormat, margin, 10, contentWidth, 25);
       } catch (e) {
         console.warn('Failed to render graphic logo, falling back to blue banner:', e);
         drawFallbackHeader(title);
@@ -431,14 +446,10 @@ export function generatePDFFromText(title: string, text: string, customLetterhea
     setPdfFont(doc, font, 'normal');
     doc.setFontSize(8);
     setTextColor(darkGray);
-    const footerText = customLetterhead?.orgName 
-      ? `Prepared by ${customLetterhead.orgName} | Authorized Credit Representative` 
-      : 'Generated with Smart FCRA';
+    const footerText = documentFooterText(customLetterhead);
     doc.text(footerText, margin, pageHeight - 10);
     doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
   }
 
   return new Uint8Array(doc.output('arraybuffer'));
 }
-
-

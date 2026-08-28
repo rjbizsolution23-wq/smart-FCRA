@@ -13,7 +13,7 @@ function assert(cond, msg) {
   if (!cond) throw new Error(msg);
 }
 
-const { inspectUpload, sniffMime } = await import(pathToFileURL(path.join(root, 'src/lib/upload-hygiene.ts')).href);
+const { inspectUpload, sniffMime, validateCreditReportIngest } = await import(pathToFileURL(path.join(root, 'src/lib/upload-hygiene.ts')).href);
 const { computeFcra611Clock, parseMailingAddress, craAddressForRecipient, FCRA_611_DAYS, FCRA_611_OPERATIONAL_DAYS } = await import(
   pathToFileURL(path.join(root, 'src/lib/investigation-clocks.ts')).href
 );
@@ -45,6 +45,23 @@ const { click2mailConfigured } = await import(pathToFileURL(path.join(root, 'src
   const img = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, ...new Array(16).fill(0)]);
   const needOcr = await inspectUpload({ bytes: img, fileName: 'scan.jpg', category: 'credit_report', extractedText: '' });
   assert(!needOcr.ok && needOcr.ocrStatus === 'insufficient', 'image report requires OCR text');
+}
+
+{
+  const short = await validateCreditReportIngest({ rawText: 'too short' });
+  assert(!short.ok && short.code === 'REPORT_TEXT_INSUFFICIENT', 'short extraction rejected before parsing');
+
+  const activePdf = Buffer.from('%PDF-1.4\n/JavaScript (app.alert)\n' + 'x'.repeat(200)).toString('base64');
+  const review = await validateCreditReportIngest({
+    rawText: 'A'.repeat(200), fileBase64: activePdf, fileName: 'report.pdf', declaredMime: 'application/pdf',
+  });
+  assert(!review.ok && review.code === 'REPORT_FILE_REQUIRES_REVIEW', 'active PDF cannot enter automatic analysis');
+
+  const textFile = Buffer.from('plain text original ' + 'x'.repeat(100)).toString('base64');
+  const forgedOcr = await validateCreditReportIngest({
+    rawText: 'A'.repeat(200), fileBase64: textFile, fileName: 'report.txt', declaredMime: 'text/plain', ocrUsed: true,
+  });
+  assert(!forgedOcr.ok && forgedOcr.code === 'INVALID_OCR_PROVENANCE', 'OCR provenance cannot be forged for plain text');
 }
 
 {

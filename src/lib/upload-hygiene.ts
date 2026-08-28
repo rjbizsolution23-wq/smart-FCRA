@@ -5,6 +5,8 @@
  */
 
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+export const MIN_REPORT_TEXT_CHARS = 80;
+export const MAX_REPORT_TEXT_CHARS = 2_000_000;
 
 export type ScanStatus = 'clean' | 'blocked' | 'review';
 
@@ -82,11 +84,111 @@ function zipContainsExecutables(bytes: Uint8Array): boolean {
 }
 
 export function decodeBase64Bytes(fileBase64: string): Uint8Array {
-  const raw = fileBase64.includes(',') ? fileBase64.split(',').pop()! : fileBase64;
+  const raw = (fileBase64.includes(',') ? fileBase64.split(',').pop()! : fileBase64).replace(/\s+/g, '');
+  if (!raw || raw.length > Math.ceil(MAX_UPLOAD_BYTES * 4 / 3) + 8 || !/^[a-zA-Z0-9+/]*={0,2}$/.test(raw)) {
+    throw new Error('Invalid or oversized base64 file payload');
+  }
   const bin = atob(raw);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
+}
+
+export type CreditReportIngestValidation = {
+  ok: boolean;
+  rawText: string;
+  code: string;
+  message: string;
+  httpStatus: 400 | 413 | 415 | 422;
+  source: 'pasted_text' | 'pdf_text' | 'client_ocr' | 'file_text';
+  hygiene?: HygieneResult;
+};
+
+/**
+ * Validate report text and the attached original before parsing or writing any
+ * client/report rows. This prevents a blocked or review-only file from being
+ * analyzed merely because a caller also supplied trusted-looking text.
+ */
+export async function validateCreditReportIngest(opts: {
+  rawText: unknown;
+  fileBase64?: unknown;
+  fileName?: unknown;
+  declaredMime?: unknown;
+  ocrUsed?: unknown;
+}): Promise<CreditReportIngestValidation> {
+  const rawText = String(opts.rawText || '').replace(/\u0000/g, '').trim();
+  const fileName = sanitizeFileName(String(opts.fileName || 'credit-report.txt'));
+  const declaredMime = String(opts.declaredMime || '').trim().toLowerCase();
+  const hasFile = typeof opts.fileBase64 === 'string' && opts.fileBase64.trim().length > 0;
+  const ocrUsed = opts.ocrUsed === true;
+  const source: CreditReportIngestValidation['source'] = !hasFile
+    ? 'pasted_text'
+    : ocrUsed
+      ? 'client_ocr'
+      : declaredMime.includes('pdf') || /\.pdf$/i.test(fileName)
+        ? 'pdf_text'
+        : 'file_text';
+
+  if (rawText.length < MIN_REPORT_TEXT_CHARS) {
+    return {
+      ok: false, rawText, source, code: 'REPORT_TEXT_INSUFFICIENT', httpStatus: 422,
+      message: `Credit report extraction produced fewer than ${MIN_REPORT_TEXT_CHARS} characters. Complete PDF text extraction or OCR before analysis.`,
+    };
+  }
+  if (rawText.length > MAX_REPORT_TEXT_CHARS) {
+    return {
+      ok: false, rawText: '', source, code: 'REPORT_TEXT_TOO_LARGE', httpStatus: 413,
+      message: `Extracted report text exceeds the ${MAX_REPORT_TEXT_CHARS.toLocaleString('en-US')} character limit.`,
+    };
+  }
+  if (!hasFile) {
+    return { ok: true, rawText, source, code: 'OK', message: 'Pasted report text accepted', httpStatus: 400 };
+  }
+
+  let bytes: Uint8Array;
+  try {
+    bytes = decodeBase64Bytes(String(opts.fileBase64));
+  } catch {
+    return {
+      ok: false, rawText: '', source, code: 'INVALID_FILE_ENCODING', httpStatus: 400,
+      message: 'The attached report is not a valid base64 file payload.',
+    };
+  }
+
+  const hygiene = await inspectUpload({
+    bytes,
+    fileName,
+    declaredMime,
+    extractedText: rawText,
+    ocrUsed,
+    category: 'credit_report',
+  });
+  if (!hygiene.ok) {
+    return {
+      ok: false, rawText: '', source, hygiene, code: 'REPORT_FILE_REJECTED', httpStatus: 415,
+      message: hygiene.scanDetail,
+    };
+  }
+  if (hygiene.scanStatus === 'review') {
+    return {
+      ok: false, rawText: '', source, hygiene, code: 'REPORT_FILE_REQUIRES_REVIEW', httpStatus: 422,
+      message: 'The report contains active or embedded PDF content and must be reviewed before automated parsing.',
+    };
+  }
+  if (ocrUsed && !(hygiene.detectedMime === 'application/pdf' || hygiene.detectedMime.startsWith('image/'))) {
+    return {
+      ok: false, rawText: '', source, hygiene, code: 'INVALID_OCR_PROVENANCE', httpStatus: 422,
+      message: 'OCR provenance is valid only for PDF or image originals.',
+    };
+  }
+  if ((hygiene.detectedMime === 'application/pdf' || hygiene.detectedMime.startsWith('image/')) && hygiene.ocrStatus === 'insufficient') {
+    return {
+      ok: false, rawText: '', source, hygiene, code: 'OCR_INSUFFICIENT', httpStatus: 422,
+      message: 'PDF/image extraction did not produce enough text for reliable analysis.',
+    };
+  }
+
+  return { ok: true, rawText, source, hygiene, code: 'OK', message: 'Report file and extracted text accepted', httpStatus: 400 };
 }
 
 export async function sha256HexBytes(bytes: Uint8Array): Promise<string> {

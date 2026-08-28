@@ -18,6 +18,7 @@ const {
   normalizeLobMailClass,
   resolveMailClass,
   letterHtmlFromPlainText,
+  LOB_LETTER_PAGE_CSS,
   lobPublicStatus,
   lobMode,
 } = await import(pathToFileURL(path.join(root, 'src/lib/lob.ts')).href);
@@ -29,6 +30,8 @@ assert(normalizeLobKey('Live_pub_XYZ') === 'live_pub_XYZ', 'normalize Live_pub_'
 assert(normalizeLobMailClass('certified') === 'CERTIFIED', 'certified class');
 assert(resolveMailClass({}) === 'FIRST_CLASS', 'default class');
 assert(letterHtmlFromPlainText('T', 'line1\nline2').includes('<br/>'), 'html breaks');
+assert(LOB_LETTER_PAGE_CSS.includes('size: Letter'), 'mail HTML declares US Letter page size');
+assert(letterHtmlFromPlainText('T', 'line1').includes('width: 8.5in'), 'mail HTML fixes US Letter width');
 assert(lobMode({ LOB_SECRET_KEY: 'live_x' }) === 'live', 'live mode from key');
 assert(lobPublicStatus({ LOB_SECRET_KEY: 'test_x' }).label.includes('test'), 'status label');
 
