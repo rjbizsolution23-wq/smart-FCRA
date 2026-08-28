@@ -22,7 +22,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -57,7 +57,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=smart-fcra-v2
+          command: pages deploy dist --project-name=smart-fcra-v2 --branch=pr-${{ github.event.pull_request.number }}
 
       - name: Comment preview URL
         if: steps.cfcreds.outputs.missing != 'true'

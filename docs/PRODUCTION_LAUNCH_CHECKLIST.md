@@ -89,10 +89,14 @@ Add these in the GitHub repo: **Settings → Secrets and variables → Actions**
 
 | Secret | Used by |
 |---|---|
-| `CLOUDFLARE_API_TOKEN` | PR preview, production deploy, hotfix, D1 backup |
+| `CLOUDFLARE_API_TOKEN` | PR preview, manual production deploy, D1 backup |
 | `CLOUDFLARE_ACCOUNT_ID` | same |
 
-Token needs **Account / Cloudflare Pages / Edit** on project `smart-fcra-v2`.
+Add repository variable `D1_BACKUP_BUCKET` with a private, backup-only R2 bucket name such as `smart-fcra-v2-backups`. Do not use the application document bucket for full database exports.
+
+Token needs **Cloudflare Pages / Edit**, **D1 / Edit**, and **Workers R2 Storage / Edit** for the isolated v2 resources.
+
+Production deployment is manual through `production-deploy.yml`. Enter `deploy-smart-fcra-v2` when dispatching it. The workflow runs the full test gate, creates a private R2 backup, applies migrations, deploys Pages, and checks `/api/health/ready`. Automatic and duplicate production deploy workflows are intentionally disabled.
 
 ## Local QA
 

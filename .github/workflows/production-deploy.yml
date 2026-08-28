@@ -1,23 +1,29 @@
 name: SmartFCRA Supreme — Continuous Integration & Deployment
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type deploy-smart-fcra-v2 to authorize the production release'
+        required: true
+        type: string
+
+concurrency:
+  group: smart-fcra-v2-production
+  cancel-in-progress: false
 
 jobs:
   validate-and-test:
+    if: github.event.inputs.confirmation == 'deploy-smart-fcra-v2'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (v20)
+      - name: Setup Node.js (v22)
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install Dependencies
@@ -60,7 +66,8 @@ jobs:
   deploy-to-cloudflare:
     needs: validate-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    if: github.ref == 'refs/heads/main' && github.event.inputs.confirmation == 'deploy-smart-fcra-v2'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -68,7 +75,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install Dependencies
@@ -87,11 +94,27 @@ jobs:
         env:
           TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          BACKUP_BUCKET: ${{ vars.D1_BACKUP_BUCKET }}
         run: |
-          if [ -z "$TOKEN" ] || [ -z "$ACCOUNT" ]; then
-            echo "::error::Production deploy requires GitHub Actions secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID. Add them in repo Settings → Secrets and variables → Actions. Token must allow Cloudflare Pages Edit + D1 Edit on project smart-fcra-v2 / database fcra-detector-v2."
+          if [ -z "$TOKEN" ] || [ -z "$ACCOUNT" ] || [ -z "$BACKUP_BUCKET" ]; then
+            echo "::error::Production deploy requires CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, and repository variable D1_BACKUP_BUCKET."
             exit 1
           fi
+
+      - name: Back up production D1 to private R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          D1_BACKUP_BUCKET: ${{ vars.D1_BACKUP_BUCKET }}
+        run: |
+          set -euo pipefail
+          mkdir -p .backups
+          TS="$(date -u +%Y%m%d-%H%M%S)"
+          FILE=".backups/pre_release_${GITHUB_SHA}_${TS}.sql"
+          KEY="backups/d1/pre-release/${GITHUB_SHA}_${TS}.sql"
+          npx wrangler d1 export fcra-detector-v2 --remote --output="$FILE"
+          npx wrangler r2 object put "${D1_BACKUP_BUCKET}/${KEY}" --file="$FILE" --remote
+          rm -f "$FILE"
 
       - name: Apply D1 migrations (remote production)
         uses: cloudflare/wrangler-action@v3
@@ -113,3 +136,9 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           # v2 SEPARATE PROJECT — never deploy this branch/copy to original smart-fcra
           command: pages deploy dist --project-name=smart-fcra-v2
+
+      - name: Verify production readiness
+        run: |
+          curl --fail --show-error --silent \
+            --retry 12 --retry-delay 5 --retry-all-errors \
+            https://smart-fcra-v2.pages.dev/api/health/ready
